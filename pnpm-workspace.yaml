@@ -1,0 +1,12 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+# pnpm build-script gate. These prebuilt-binary deps don't need their postinstall
+# builds for our use, so installs stay non-interactive.
+allowBuilds:
+  sharp: false
+  unrs-resolver: false
+
+# apps/api is a standalone uv (Python) project — its package.json is a thin wrapper
+# (scripts only, no JS deps) purely so turbo can orchestrate `pnpm dev`/`lint`/etc.
+# alongside apps/web. `uv run` manages its own .venv; pnpm never installs Python deps.

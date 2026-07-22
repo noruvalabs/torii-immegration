@@ -1,0 +1,41 @@
+# The .NET + Next.js reference monorepo — architectural reference only, never shipped.
+.reference/
+
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+.next/
+out/
+bin/
+obj/
+
+# Tooling caches
+.turbo/
+coverage/
+*.tsbuildinfo
+.pytest_cache/
+.ruff_cache/
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+
+# Local SQLite databases (the zero-setup dev default)
+*.db
+*.sqlite
+*.sqlite3
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# IDE / editor / OS cruft
+.idea/
+.vs/
+.vscode/
+.DS_Store
+Thumbs.db

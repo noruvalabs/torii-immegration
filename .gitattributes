@@ -1,0 +1,16 @@
+# Normalize line endings: LF in the repo, checked out as-is.
+* text=auto eol=lf
+
+# Binary assets — never touch.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.woff binary
+*.woff2 binary
+
+# Lockfiles are generated — collapse in diffs / reviews.
+pnpm-lock.yaml linguist-generated=true
+uv.lock linguist-generated=true

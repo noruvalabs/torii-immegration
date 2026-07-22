@@ -1,0 +1,60 @@
+[project]
+name = "torii-api"
+version = "0.1.0"
+description = "Torii API — the immigration form-preparation system of record (FastAPI)."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.34",
+    "pydantic-settings>=2.7",
+    # System of record: SQLAlchemy 2 async. Two drivers ship so one URL switches
+    # engines with no code change — asyncpg for Postgres, aiosqlite for the
+    # zero-setup local SQLite default (see torii_api.db.engine.to_async_url).
+    "sqlalchemy[asyncio]>=2.0",
+    "alembic>=1.14",
+    "asyncpg>=0.30",
+    "aiosqlite>=0.20",
+    # Background scheduler + task queue (outbox poller, renewal reminders, the
+    # government-change monitor). Redis-backed; the API itself runs without it.
+    "arq>=0.26",
+    "structlog>=24.4",
+    # Scalar API-reference UI served at /docs.
+    "scalar-fastapi>=1.8",
+    "httpx>=0.28",
+]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.9",
+    "pyright>=1.1.390",
+    "pytest>=8.3",
+    "pytest-asyncio>=0.25",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/torii_api"]
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+# E/F pyflakes+pycodestyle, I import-sorting, UP pyupgrade, B bugbear.
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.pyright]
+include = ["src", "tests"]
+pythonVersion = "3.12"
+typeCheckingMode = "standard"
+venvPath = "."
+venv = ".venv"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+pythonpath = ["src"]

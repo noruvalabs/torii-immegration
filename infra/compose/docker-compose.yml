@@ -1,0 +1,131 @@
+# Torii — production-shaped compose (one host, behind nginx).
+#
+#   cp ../../infra/.env.example .env   # then edit
+#   docker compose up -d --wait
+#
+# Only nginx publishes a host port. Postgres and Redis are reachable only on the private
+# `data` network; the api/web/worker sit on `edge` behind nginx. Images are built in CI and
+# pulled by tag — there are deliberately no `build:` sections here (build locally with the
+# per-app Dockerfiles when iterating).
+
+name: torii
+
+services:
+  # --- PostgreSQL 17 + pgvector (system of record) ----------------------------
+  postgres:
+    image: pgvector/pgvector:pg17
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - data
+
+  # --- Redis 7 (arq queue + cron broker) --------------------------------------
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--save", "60", "1", "--loglevel", "warning"]
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - data
+
+  # --- FastAPI system of record -----------------------------------------------
+  api:
+    image: ghcr.io/${IMAGE_OWNER:-your-org}/torii-api:${TAG:-latest}
+    build:
+      context: ../../apps/api
+    restart: unless-stopped
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    # Image bakes a HEALTHCHECK (httpx /health). No host `ports:` — nginx reaches it on `edge`.
+    networks:
+      - edge
+      - data
+
+  # --- arq background worker (outbox drain + cron: reminders, change monitor) --
+  # Same image as the api, worker entrypoint. No ports; needs Postgres + Redis.
+  worker:
+    image: ghcr.io/${IMAGE_OWNER:-your-org}/torii-api:${TAG:-latest}
+    build:
+      context: ../../apps/api
+    command: ["arq", "torii_api.worker.scheduler.WorkerSettings"]
+    restart: unless-stopped
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      # The api image's HTTP healthcheck can't apply here (no server); probe importability.
+      test: ["CMD", "python", "-c", "import torii_api.worker.scheduler"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - data
+
+  # --- Next.js applicant app + admin back office ------------------------------
+  web:
+    image: ghcr.io/${IMAGE_OWNER:-your-org}/torii-web:${TAG:-latest}
+    build:
+      context: ../../apps/web
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      API_INTERNAL_BASE_URL: ${API_INTERNAL_BASE_URL:-http://api:8000}
+    depends_on:
+      api:
+        condition: service_healthy
+    # Image bakes a HEALTHCHECK (fetch /api/health). No host `ports:`.
+    networks:
+      - edge
+
+  # --- nginx edge (the only service that publishes a host port) ---------------
+  nginx:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    depends_on:
+      web:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    ports:
+      - "${NGINX_HTTP_PORT:-8080}:80"
+    volumes:
+      - ../nginx/conf.d/torii.conf:/etc/nginx/conf.d/default.conf:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost/healthz || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - edge
+
+volumes:
+  pgdata:
+  redisdata:
+
+networks:
+  # Public-facing hop: nginx ⇄ web/api. nginx is NOT on `data`, so it cannot reach Postgres.
+  edge:
+  # Private data hop: api/worker ⇄ postgres + redis only.
+  data:
