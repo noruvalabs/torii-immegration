@@ -22,6 +22,9 @@ dependencies = [
     # Scalar API-reference UI served at /docs.
     "scalar-fastapi>=1.8",
     "httpx>=0.28",
+    "pyjwt>=2.13.0",
+    "bcrypt>=5.0.0",
+    "email-validator>=2.0",
 ]
 
 [dependency-groups]

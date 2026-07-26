@@ -44,6 +44,12 @@ class Settings(BaseSettings):
     # Lead time (days) before a recorded renewal date at which reminders are sent (US-19).
     renewal_reminder_lead_days: int = 30
 
+    # --- Auth (JWT bearer tokens for applicants and staff — US-20.4, US-30) ----
+    # Dev default only; production must set TORII_JWT_SECRET_KEY from a secret store.
+    jwt_secret_key: str = "dev-only-change-me-in-production"
+    jwt_algorithm: str = "HS256"
+    jwt_access_token_expire_minutes: int = 60 * 24 * 7  # 7 days
+
     @property
     def is_sqlite(self) -> bool:
         return self.database_url.startswith("sqlite")

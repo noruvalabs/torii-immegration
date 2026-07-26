@@ -4,6 +4,7 @@ A deliberately small seed of the domain (docs/specs/01_domain.md) — enough to 
 persistence, migration, and background-work seams end to end, and the anchor the rest of the
 case pipeline grows from:
 
+* :class:`User` — an account (applicant, staff, admin) with secure credentials (US-20, US-30).
 * :class:`Jurisdiction` — a configured country/market; only ``is_live`` ones are offered in
   onboarding (US-01.3, US-29.3).
 * :class:`Case` — one row in the single canonical case pipeline, whatever channel it arrived
@@ -15,12 +16,38 @@ case pipeline grows from:
 from __future__ import annotations
 
 from datetime import datetime
+from enum import StrEnum
 
 from sqlalchemy import JSON as SAJSON
 from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from torii_api.db.base import Base, TimestampMixin
+
+
+class UserRole(StrEnum):
+    """Least-privilege roles for applicants and back-office staff (US-30)."""
+
+    APPLICANT = "applicant"
+    OPS = "ops"
+    EMPLOYER = "employer"
+    ADMIN = "admin"
+
+
+class User(TimestampMixin, Base):
+    """A platform account — applicant by default on self-registration (US-20.1)."""
+
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    email: Mapped[str] = mapped_column(String(320), unique=True, index=True)
+    password_hash: Mapped[str] = mapped_column(String(128))
+    role: Mapped[str] = mapped_column(
+        String(32), default=UserRole.APPLICANT, server_default=UserRole.APPLICANT
+    )
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1")
+
+    cases: Mapped[list[Case]] = relationship(back_populates="owner")
 
 
 class Jurisdiction(TimestampMixin, Base):
@@ -46,6 +73,8 @@ class Case(TimestampMixin, Base):
     # Human-facing reference (e.g. "JP-2026-000123"), unique across the platform.
     reference: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     jurisdiction_id: Mapped[int] = mapped_column(ForeignKey("jurisdictions.id"), index=True)
+    # Signed-in owner; NULL for anonymous / employer-initiated cases not yet claimed (US-03).
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
     # Status lifecycle string kept open here; the enum/state-machine lands with the pipeline.
     status: Mapped[str] = mapped_column(String(32), default="draft", server_default="draft")
     applicant_email: Mapped[str | None] = mapped_column(String(320), nullable=True)
@@ -54,6 +83,7 @@ class Case(TimestampMixin, Base):
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     jurisdiction: Mapped[Jurisdiction] = relationship(back_populates="cases")
+    owner: Mapped[User | None] = relationship(back_populates="cases")
 
 
 class OutboxEvent(TimestampMixin, Base):

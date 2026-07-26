@@ -13,7 +13,7 @@ Standalone [uv](https://docs.astral.sh/uv/) project (not part of the pnpm worksp
 uv sync                                     # create .venv from the lockfile
 uv run alembic upgrade head                 # apply the schema (creates ./torii.db on SQLite)
 uv run uvicorn torii_api.main:app --reload  # API on :8000
-#   GET /health   ·   Scalar docs at /docs   ·   GET /v1/jurisdictions
+#   GET /health   ·   Scalar docs at /docs   ·   GET /v1/jurisdictions   ·   POST /v1/auth/register
 ```
 
 Seed one jurisdiction to see the DB seam end to end:
@@ -22,6 +22,17 @@ Seed one jurisdiction to see the DB seam end to end:
 curl -s localhost:8000/v1/jurisdictions -H 'content-type: application/json' \
   -d '{"code":"JP","name":"Japan","is_live":true}'
 curl -s localhost:8000/v1/jurisdictions
+```
+
+Register and sign in:
+
+```bash
+curl -s localhost:8000/v1/auth/register -H 'content-type: application/json' \
+  -d '{"email":"you@example.com","password":"your-secure-password"}'
+curl -s localhost:8000/v1/auth/login -H 'content-type: application/json' \
+  -d '{"email":"you@example.com","password":"your-secure-password"}'
+# Use the returned access_token:
+curl -s localhost:8000/v1/auth/me -H "Authorization: Bearer <token>"
 ```
 
 ## Database — SQLite or Postgres, one URL
@@ -68,6 +79,8 @@ uv run alembic downgrade -1                           # roll back one
 | `TORII_REDIS_URL` | `redis://localhost:6379/0` | arq queue + cron broker |
 | `TORII_OUTBOX_POLL_INTERVAL_SECONDS` | `10` | outbox drain cadence |
 | `TORII_RENEWAL_REMINDER_LEAD_DAYS` | `30` | lead time before a renewal date to remind (US-19) |
+| `TORII_JWT_SECRET_KEY` | dev default | HMAC secret for bearer tokens — set in production |
+| `TORII_JWT_ACCESS_TOKEN_EXPIRE_MINUTES` | `10080` (7 days) | access-token lifetime |
 | `TORII_DOCS_ENABLED` | `true` | serve Scalar docs + `/openapi.json` |
 | `TORII_LOG_LEVEL` | `INFO` | structlog level |
 
