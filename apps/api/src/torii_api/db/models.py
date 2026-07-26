@@ -41,11 +41,22 @@ class User(TimestampMixin, Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     email: Mapped[str] = mapped_column(String(320), unique=True, index=True)
+    username: Mapped[str | None] = mapped_column(String(64), unique=True, index=True, nullable=True)
     password_hash: Mapped[str] = mapped_column(String(128))
     role: Mapped[str] = mapped_column(
         String(32), default=UserRole.APPLICANT, server_default=UserRole.APPLICANT
     )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1")
+    email_verified: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    email_verification_token: Mapped[str | None] = mapped_column(
+        String(128), unique=True, index=True, nullable=True
+    )
+    password_reset_token: Mapped[str | None] = mapped_column(
+        String(128), unique=True, index=True, nullable=True
+    )
+    password_reset_expires: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     cases: Mapped[list[Case]] = relationship(back_populates="owner")
 

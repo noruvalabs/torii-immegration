@@ -50,6 +50,22 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     jwt_access_token_expire_minutes: int = 60 * 24 * 7  # 7 days
 
+    # --- Email verification / password-reset tokens ---------------------------
+    email_verification_token_expire_minutes: int = 60 * 24  # 24 hours
+    password_reset_token_expire_minutes: int = 60  # 1 hour
+
+    # --- SMTP (email delivery — verification, password reset) -----------------
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_password: str = ""
+    smtp_from_email: str = "noreply@torii.app"
+    smtp_from_name: str = "Torii"
+    smtp_tls: bool = True
+
+    # --- Base URL for building email links ------------------------------------
+    app_base_url: str = "http://localhost:3000"
+
     @property
     def is_sqlite(self) -> bool:
         return self.database_url.startswith("sqlite")

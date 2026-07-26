@@ -1,7 +1,8 @@
-"""Password hashing and JWT access-token helpers."""
+"""Password hashing, JWT access-token helpers, and secure token generation."""
 
 from __future__ import annotations
 
+import secrets
 from datetime import UTC, datetime, timedelta
 
 import bcrypt
@@ -39,3 +40,15 @@ def decode_access_token(token: str, settings: Settings) -> dict[str, str | int]:
     """Decode and validate a JWT; raises ``jwt.PyJWTError`` on failure."""
     raw = jwt.decode(token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm])
     return {"sub": str(raw["sub"]), "role": str(raw["role"])}
+
+
+def generate_token() -> str:
+    """Generate a cryptographically secure URL-safe token (32 bytes = 256 bits)."""
+    return secrets.token_urlsafe(32)
+
+
+def hash_token(token: str) -> str:
+    """Hash a token with SHA-256 for storage (raw tokens are never stored)."""
+    import hashlib
+
+    return hashlib.sha256(token.encode()).hexdigest()
