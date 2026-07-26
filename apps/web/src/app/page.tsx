@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ArrowRight, ShieldCheck, FileCheck2, Languages } from "lucide-react";
+import { LandingAuthLink } from "@/components/landing-auth-link";
 
 const PILLARS = [
   {
@@ -27,12 +28,9 @@ export default function Home() {
           ⛩️
         </span>
         <span className="text-lg font-semibold tracking-tight">Torii</span>
-        <Link
-          href="/admin"
-          className="ml-auto text-sm font-medium text-muted-foreground hover:text-foreground"
-        >
-          Back office →
-        </Link>
+        <div className="ml-auto">
+          <LandingAuthLink />
+        </div>
       </header>
 
       <section className="flex flex-1 flex-col justify-center py-16">

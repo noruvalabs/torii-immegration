@@ -5,6 +5,7 @@ import { Globe, Plus } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/lib/auth-context";
 
 type Jurisdiction = { id: number; code: string; name: string; is_live: boolean };
 
@@ -12,6 +13,7 @@ type Jurisdiction = { id: number; code: string; name: string; is_live: boolean }
 const API = "/backend/v1/jurisdictions";
 
 export default function JurisdictionsPage() {
+  const { token } = useAuth();
   const [items, setItems] = useState<Jurisdiction[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -24,7 +26,9 @@ export default function JurisdictionsPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(API, { cache: "no-store" });
+      const headers: Record<string, string> = {};
+      if (token) headers.Authorization = `Bearer ${token}`;
+      const res = await fetch(API, { cache: "no-store", headers });
       if (!res.ok) throw new Error(`API returned ${res.status}`);
       setItems((await res.json()) as Jurisdiction[]);
     } catch {
@@ -32,7 +36,7 @@ export default function JurisdictionsPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [token]);
 
   useEffect(() => {
     void load();
@@ -42,9 +46,11 @@ export default function JurisdictionsPage() {
     setSubmitting(true);
     setError(null);
     try {
+      const headers: Record<string, string> = { "content-type": "application/json" };
+      if (token) headers.Authorization = `Bearer ${token}`;
       const res = await fetch(API, {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers,
         body: JSON.stringify({ code, name, is_live: isLive }),
       });
       if (res.status === 409) {

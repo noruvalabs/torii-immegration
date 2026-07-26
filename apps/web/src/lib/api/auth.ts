@@ -1,0 +1,88 @@
+const API = "/backend/v1/auth";
+
+export type User = {
+  id: number;
+  email: string;
+  username: string | null;
+  role: string;
+  is_active: boolean;
+  email_verified: boolean;
+};
+
+export type AuthResponse = {
+  access_token: string;
+  token_type: string;
+  user: User;
+};
+
+export type MessageResponse = {
+  detail: string;
+};
+
+export type ApiError = {
+  detail: string;
+};
+
+async function request<T>(path: string, options: RequestInit): Promise<T> {
+  const res = await fetch(`${API}${path}`, {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+  if (!res.ok) {
+    const body = (await res.json().catch(() => null)) as ApiError | null;
+    throw new Error(body?.detail ?? `Request failed (${res.status})`);
+  }
+
+  return res.json() as Promise<T>;
+}
+
+export function register(email: string, password: string, username?: string) {
+  return request<AuthResponse>("/register", {
+    method: "POST",
+    body: JSON.stringify({ email, password, username: username || undefined }),
+  });
+}
+
+export function login(emailOrUsername: string, password: string) {
+  return request<AuthResponse>("/login", {
+    method: "POST",
+    body: JSON.stringify({ email_or_username: emailOrUsername, password }),
+  });
+}
+
+export function getMe(token: string) {
+  return request<User>("/me", {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+export function verifyEmail(token: string) {
+  return request<MessageResponse>(`/verify-email?token=${encodeURIComponent(token)}`, {
+    method: "GET",
+  });
+}
+
+export function resendVerification(email: string) {
+  return request<MessageResponse>("/resend-verification", {
+    method: "POST",
+    body: JSON.stringify({ email }),
+  });
+}
+
+export function forgotPassword(email: string) {
+  return request<MessageResponse>("/forgot-password", {
+    method: "POST",
+    body: JSON.stringify({ email }),
+  });
+}
+
+export function resetPassword(token: string, password: string) {
+  return request<MessageResponse>("/reset-password", {
+    method: "POST",
+    body: JSON.stringify({ token, password }),
+  });
+}
