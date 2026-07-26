@@ -1,7 +1,17 @@
-import { Search } from "lucide-react";
+import { LogOut, Search } from "lucide-react";
 import { ThemeToggle } from "./theme-toggle";
+import { useAuth } from "@/lib/auth-context";
+import { useRouter } from "next/navigation";
 
 export function Topbar({ title }: { title: string }) {
+  const { user, logout } = useAuth();
+  const router = useRouter();
+
+  function handleLogout() {
+    logout();
+    router.push("/login");
+  }
+
   return (
     <header className="flex h-16 items-center gap-4 border-b bg-background/80 px-6 backdrop-blur">
       <h1 className="text-lg font-semibold tracking-tight">{title}</h1>
@@ -16,9 +26,18 @@ export function Topbar({ title }: { title: string }) {
           />
         </div>
         <ThemeToggle />
-        <div className="flex size-9 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">
-          OP
-        </div>
+        {user && (
+          <>
+            <span className="hidden text-sm text-muted-foreground sm:inline">{user.email}</span>
+            <button
+              onClick={handleLogout}
+              title="Sign out"
+              className="inline-flex size-9 items-center justify-center rounded-[var(--radius)] text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+            >
+              <LogOut className="size-4" />
+            </button>
+          </>
+        )}
       </div>
     </header>
   );
