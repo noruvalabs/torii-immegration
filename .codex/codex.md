@@ -1,6 +1,6 @@
 # Codex CLI - Torii Project
 
-Inherits all rules from `../_shared.md` at repo root. Read that file first.
+Inherits all rules from `../docs/_shared.md`. Read that file first.
 
 ## Codex-Specific Config
 
