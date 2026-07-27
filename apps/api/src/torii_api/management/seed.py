@@ -9,6 +9,7 @@ Creates:
 - 3 jurisdictions (US, JP, DE)
 - Visa categories per jurisdiction (JP: work, student, dependent; US: h1b, f1; DE: work)
 - Case actions per jurisdiction (JP: renewal, new_application, change_of_status; same for US/DE)
+- Live intake definition for JP / work / renewal (US-02)
 
 Idempotent: skips records that already exist (by email / code).
 """
@@ -25,11 +26,13 @@ from torii_api.db.base import Base
 from torii_api.db.engine import create_engine, create_session_factory, to_async_url
 from torii_api.db.models import (
     CaseAction,
+    IntakeDefinition,
     Jurisdiction,
     User,
     UserRole,
     VisaCategory,
 )
+from torii_api.services.intake import JP_WORK_RENEWAL_QUESTIONS
 
 SEED_USERS = [
     {
@@ -112,9 +115,7 @@ async def seed() -> None:
     async with session_factory() as session:
         created_users = 0
         for data in SEED_USERS:
-            existing = await session.scalar(
-                select(User).where(User.email == data["email"])
-            )
+            existing = await session.scalar(select(User).where(User.email == data["email"]))
             if existing is not None:
                 continue
             user = User(
@@ -148,6 +149,7 @@ async def seed() -> None:
             created_jurisdictions += 1
 
         created_categories = 0
+        category_ids: dict[tuple[str, str], int] = {}
         for code, categories in SEED_VISA_CATEGORIES.items():
             jid = jurisdiction_ids.get(code)
             if jid is None:
@@ -160,6 +162,7 @@ async def seed() -> None:
                     )
                 )
                 if existing is not None:
+                    category_ids[(code, data["code"])] = existing.id
                     continue
                 vc = VisaCategory(
                     jurisdiction_id=jid,
@@ -168,9 +171,12 @@ async def seed() -> None:
                     is_live=data["is_live"],
                 )
                 session.add(vc)
+                await session.flush()
+                category_ids[(code, data["code"])] = vc.id
                 created_categories += 1
 
         created_actions = 0
+        action_ids: dict[tuple[str, str], int] = {}
         for code, actions in SEED_CASE_ACTIONS.items():
             jid = jurisdiction_ids.get(code)
             if jid is None:
@@ -183,6 +189,7 @@ async def seed() -> None:
                     )
                 )
                 if existing is not None:
+                    action_ids[(code, data["code"])] = existing.id
                     continue
                 ca = CaseAction(
                     jurisdiction_id=jid,
@@ -191,14 +198,41 @@ async def seed() -> None:
                     is_live=data["is_live"],
                 )
                 session.add(ca)
+                await session.flush()
+                action_ids[(code, data["code"])] = ca.id
                 created_actions += 1
+
+        created_intake = 0
+        jp_id = jurisdiction_ids.get("JP")
+        work_id = category_ids.get(("JP", "work"))
+        renewal_id = action_ids.get(("JP", "renewal"))
+        if jp_id is not None and work_id is not None and renewal_id is not None:
+            existing_intake = await session.scalar(
+                select(IntakeDefinition).where(
+                    IntakeDefinition.jurisdiction_id == jp_id,
+                    IntakeDefinition.visa_category_id == work_id,
+                    IntakeDefinition.case_action_id == renewal_id,
+                )
+            )
+            if existing_intake is None:
+                session.add(
+                    IntakeDefinition(
+                        jurisdiction_id=jp_id,
+                        visa_category_id=work_id,
+                        case_action_id=renewal_id,
+                        questions=JP_WORK_RENEWAL_QUESTIONS,
+                        is_live=True,
+                    )
+                )
+                created_intake = 1
 
         await session.commit()
 
     await engine.dispose()
     print(
         f"Seeded {created_users} users, {created_jurisdictions} jurisdictions, "
-        f"{created_categories} visa categories, {created_actions} case actions"
+        f"{created_categories} visa categories, {created_actions} case actions, "
+        f"{created_intake} intake definitions"
     )
 
 

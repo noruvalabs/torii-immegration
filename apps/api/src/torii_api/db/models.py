@@ -8,7 +8,10 @@ case pipeline grows from:
 * :class:`Jurisdiction` — a configured country/market; only ``is_live`` ones are offered in
   onboarding (US-01.3, US-29.3).
 * :class:`Case` — one row in the single canonical case pipeline, whatever channel it arrived
-  through; carries the status lifecycle and the renewal date that drives reminders (US-19).
+  through; carries the status lifecycle, intake progress for save/resume (US-03), and the
+  renewal date that drives reminders (US-19).
+* :class:`IntakeDefinition` — branching questionnaire for a jurisdiction/category/action scope
+  (US-02); the AI service asks the API which questions apply and posts validated answers here.
 * :class:`OutboxEvent` — the transactional outbox (architecture seam 2): the API writes an
   event in the same transaction as the business change; the arq worker drains it at-least-once.
 """
@@ -17,6 +20,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import StrEnum
+from typing import Any
 
 from sqlalchemy import JSON as SAJSON
 from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
@@ -75,6 +79,7 @@ class Jurisdiction(TimestampMixin, Base):
     cases: Mapped[list[Case]] = relationship(back_populates="jurisdiction")
     visa_categories: Mapped[list[VisaCategory]] = relationship(back_populates="jurisdiction")
     case_actions: Mapped[list[CaseAction]] = relationship(back_populates="jurisdiction")
+    intake_definitions: Mapped[list[IntakeDefinition]] = relationship(back_populates="jurisdiction")
 
 
 class VisaCategory(TimestampMixin, Base):
@@ -90,6 +95,9 @@ class VisaCategory(TimestampMixin, Base):
 
     jurisdiction: Mapped[Jurisdiction] = relationship(back_populates="visa_categories")
     cases: Mapped[list[Case]] = relationship(back_populates="visa_category")
+    intake_definitions: Mapped[list[IntakeDefinition]] = relationship(
+        back_populates="visa_category"
+    )
 
 
 class CaseAction(TimestampMixin, Base):
@@ -105,6 +113,25 @@ class CaseAction(TimestampMixin, Base):
 
     jurisdiction: Mapped[Jurisdiction] = relationship(back_populates="case_actions")
     cases: Mapped[list[Case]] = relationship(back_populates="case_action")
+    intake_definitions: Mapped[list[IntakeDefinition]] = relationship(back_populates="case_action")
+
+
+class IntakeDefinition(TimestampMixin, Base):
+    """Branching intake questionnaire for one live scope (US-02)."""
+
+    __tablename__ = "intake_definitions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    jurisdiction_id: Mapped[int] = mapped_column(ForeignKey("jurisdictions.id"), index=True)
+    visa_category_id: Mapped[int] = mapped_column(ForeignKey("visa_categories.id"), index=True)
+    case_action_id: Mapped[int] = mapped_column(ForeignKey("case_actions.id"), index=True)
+    # Ordered list of question objects — see torii_api.services.intake.IntakeQuestion.
+    questions: Mapped[list[dict[str, Any]]] = mapped_column(SAJSON, default=list)
+    is_live: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+
+    jurisdiction: Mapped[Jurisdiction] = relationship(back_populates="intake_definitions")
+    visa_category: Mapped[VisaCategory] = relationship(back_populates="intake_definitions")
+    case_action: Mapped[CaseAction] = relationship(back_populates="intake_definitions")
 
 
 class Case(TimestampMixin, Base):
@@ -127,6 +154,10 @@ class Case(TimestampMixin, Base):
     # Status lifecycle string kept open here; the enum/state-machine lands with the pipeline.
     status: Mapped[str] = mapped_column(String(32), default="draft", server_default="draft")
     applicant_email: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    # Intake progress so an applicant can stop and resume (US-03.1, US-03.2).
+    intake_answers: Mapped[dict] = mapped_column(SAJSON, default=dict)
+    # Stable key for the applicant's current position in the intake flow; NULL before intake.
+    intake_step: Mapped[str | None] = mapped_column(String(128), nullable=True)
     # Recorded expiry/renewal date for a completed case (US-19.1); NULL until known.
     renewal_due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
