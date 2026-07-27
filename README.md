@@ -24,15 +24,15 @@ links to the official government source it came from.
 
 ```
 apps/api/     FastAPI — system of record (SQLAlchemy async, Alembic, arq worker/scheduler)
+apps/ai/      FastAPI — grounded assistant (Groq + Tavily), citations, guardrails
 apps/web/     Next.js — applicant app + ops/admin back office
 packages/     shared types / generated API client (scaffolded in a later PR)
 infra/        docker-compose, nginx, env templates
 docs/         product specs (docs/specs) + architecture decisions (docs/decisions)
 ```
 
-`apps/ai` — the model-facing service (RAG, intake orchestration, citation engine, OCR, assistant)
-described in [`docs/specs/03_architecture.md`](docs/specs/03_architecture.md) — is the next service
-to land; it is not yet scaffolded.
+`apps/ai` — model-facing service (assistant chat, citations, guardrails; RAG/OCR later). See
+[`apps/ai/README.md`](apps/ai/README.md) and [`docs/specs/03_architecture.md`](docs/specs/03_architecture.md).
 
 ## Quick start
 

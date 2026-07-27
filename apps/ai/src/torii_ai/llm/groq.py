@@ -1,0 +1,51 @@
+"""Groq chat client (OpenAI-compatible API)."""
+
+from __future__ import annotations
+
+from typing import Any, Protocol
+
+from openai import AsyncOpenAI
+
+from torii_ai.config import Settings
+
+
+class ChatClient(Protocol):
+    async def complete(self, *, system: str, user: str) -> str: ...
+
+
+class GroqChatClient:
+    """Thin wrapper around the OpenAI SDK pointed at Groq."""
+
+    def __init__(self, settings: Settings) -> None:
+        self._settings = settings
+        self._client = AsyncOpenAI(
+            api_key=settings.groq_api_key or "missing",
+            base_url=settings.groq_base_url,
+            timeout=settings.groq_timeout_seconds,
+        )
+
+    async def complete(self, *, system: str, user: str) -> str:
+        if not self._settings.groq_api_key:
+            raise RuntimeError("TORII_AI_GROQ_API_KEY is not configured")
+        response = await self._client.chat.completions.create(
+            model=self._settings.groq_model,
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
+            temperature=0.2,
+        )
+        content = response.choices[0].message.content
+        return content or ""
+
+
+class FakeChatClient:
+    """Deterministic stand-in for tests."""
+
+    def __init__(self, reply: str = "Test reply.") -> None:
+        self.reply = reply
+        self.calls: list[dict[str, Any]] = []
+
+    async def complete(self, *, system: str, user: str) -> str:
+        self.calls.append({"system": system, "user": user})
+        return self.reply
