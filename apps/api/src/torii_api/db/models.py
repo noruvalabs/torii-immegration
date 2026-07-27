@@ -73,6 +73,38 @@ class Jurisdiction(TimestampMixin, Base):
     is_live: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
 
     cases: Mapped[list[Case]] = relationship(back_populates="jurisdiction")
+    visa_categories: Mapped[list[VisaCategory]] = relationship(back_populates="jurisdiction")
+    case_actions: Mapped[list[CaseAction]] = relationship(back_populates="jurisdiction")
+
+
+class VisaCategory(TimestampMixin, Base):
+    """A visa category scoped to a jurisdiction (e.g. "work", "student" in JP)."""
+
+    __tablename__ = "visa_categories"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    jurisdiction_id: Mapped[int] = mapped_column(ForeignKey("jurisdictions.id"), index=True)
+    code: Mapped[str] = mapped_column(String(32), index=True)
+    name: Mapped[str] = mapped_column(String(128))
+    is_live: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+
+    jurisdiction: Mapped[Jurisdiction] = relationship(back_populates="visa_categories")
+    cases: Mapped[list[Case]] = relationship(back_populates="visa_category")
+
+
+class CaseAction(TimestampMixin, Base):
+    """An action type scoped to a jurisdiction (e.g. "renewal", "new_application" in JP)."""
+
+    __tablename__ = "case_actions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    jurisdiction_id: Mapped[int] = mapped_column(ForeignKey("jurisdictions.id"), index=True)
+    code: Mapped[str] = mapped_column(String(32), index=True)
+    name: Mapped[str] = mapped_column(String(128))
+    is_live: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+
+    jurisdiction: Mapped[Jurisdiction] = relationship(back_populates="case_actions")
+    cases: Mapped[list[Case]] = relationship(back_populates="case_action")
 
 
 class Case(TimestampMixin, Base):
@@ -84,6 +116,12 @@ class Case(TimestampMixin, Base):
     # Human-facing reference (e.g. "JP-2026-000123"), unique across the platform.
     reference: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     jurisdiction_id: Mapped[int] = mapped_column(ForeignKey("jurisdictions.id"), index=True)
+    visa_category_id: Mapped[int | None] = mapped_column(
+        ForeignKey("visa_categories.id"), nullable=True, index=True
+    )
+    case_action_id: Mapped[int | None] = mapped_column(
+        ForeignKey("case_actions.id"), nullable=True, index=True
+    )
     # Signed-in owner; NULL for anonymous / employer-initiated cases not yet claimed (US-03).
     user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
     # Status lifecycle string kept open here; the enum/state-machine lands with the pipeline.
@@ -94,6 +132,8 @@ class Case(TimestampMixin, Base):
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     jurisdiction: Mapped[Jurisdiction] = relationship(back_populates="cases")
+    visa_category: Mapped[VisaCategory | None] = relationship(back_populates="cases")
+    case_action: Mapped[CaseAction | None] = relationship(back_populates="cases")
     owner: Mapped[User | None] = relationship(back_populates="cases")
 
 
