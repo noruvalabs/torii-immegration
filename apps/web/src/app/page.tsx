@@ -48,17 +48,17 @@ export default function Home() {
 
         <div className="mt-8 flex flex-wrap gap-3">
           <Link
-            href="/admin"
+            href="/scope"
             className="inline-flex items-center gap-2 rounded-[var(--radius)] bg-primary px-5 py-3 text-sm font-medium text-primary-foreground hover:opacity-90"
           >
-            Explore the platform <ArrowRight className="size-4" />
+            Start your case <ArrowRight className="size-4" />
           </Link>
-          <a
-            href="https://github.com"
+          <Link
+            href="/admin"
             className="inline-flex items-center gap-2 rounded-[var(--radius)] border px-5 py-3 text-sm font-medium hover:bg-accent"
           >
-            Read the docs
-          </a>
+            Admin dashboard
+          </Link>
         </div>
 
         <div className="mt-16 grid gap-6 sm:grid-cols-3">
