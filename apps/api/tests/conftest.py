@@ -13,7 +13,7 @@ from collections.abc import AsyncIterator
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy.ext.asyncio import create_async_engine
+from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 from sqlalchemy.pool import StaticPool
 
 from torii_api.db.base import Base
@@ -22,15 +22,20 @@ from torii_api.main import create_app
 
 
 @pytest_asyncio.fixture
-async def client() -> AsyncIterator[AsyncClient]:
-    engine = create_async_engine(
+async def engine() -> AsyncIterator[AsyncEngine]:
+    eng = create_async_engine(
         "sqlite+aiosqlite://",
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
-    async with engine.begin() as conn:
+    async with eng.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+    yield eng
+    await eng.dispose()
 
+
+@pytest_asyncio.fixture
+async def client(engine: AsyncEngine) -> AsyncIterator[AsyncClient]:
     app = create_app()
     app.state.engine = engine
     app.state.session_factory = create_session_factory(engine)
@@ -40,7 +45,6 @@ async def client() -> AsyncIterator[AsyncClient]:
     async with app.router.lifespan_context(app):
         async with AsyncClient(transport=transport, base_url="http://test") as ac:
             yield ac
-    await engine.dispose()
 
 
 @pytest.fixture
