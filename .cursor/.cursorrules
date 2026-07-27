@@ -1,0 +1,15 @@
+# Cursor - Torii Project
+
+Inherits all rules from `../_shared.md` at repo root. Read that file first.
+
+## Cursor-Specific Config
+
+- Use .cursorrules for AI behavior rules
+- MCP servers configured in `.cursor/mcp.json`
+- Settings in `.cursor/settings.json`
+
+## Tool-Specific Notes
+
+- Cursor reads .cursorrules automatically
+- Use @file to reference files in prompts
+- Prefer asking before making large changes

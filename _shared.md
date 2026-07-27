@@ -1,11 +1,6 @@
----
-name: torii-fastapi-nextjs-consistency
-description: Project operating guide for AI coding agents working in the Torii FastAPI and Next.js monorepo. Use for Claude, Codex, OpenCode, Cursor, or any agent changing API, web, tests, linting, mobile UI, commits, or implementation patterns in this repository.
----
+# Torii FastAPI + Next.js Shared Rules
 
-# Torii FastAPI + Next.js Consistency Guide
-
-Use this file as the shared instruction set for Claude, Codex, OpenCode, Cursor, and other coding agents. Keep changes consistent with the existing repo before adding new patterns.
+All AI coding agents working in this repo must follow these rules.
 
 ## Core Rules
 
@@ -92,17 +87,12 @@ If a command cannot run because dependencies, services, or environment variables
 Before any commit:
 
 1. Review `git diff` and ensure only intended files changed.
-2. Run lint, typecheck, and tests:
-   ```bash
-   pnpm lint
-   pnpm typecheck
-   pnpm test
-   ```
+2. Run lint, typecheck, and tests
 3. For API-heavy changes, also run the API-specific gates.
 4. For web-heavy changes, also run `pnpm build` in `apps/web`.
 5. Mention any skipped or failing verification clearly in the final response or commit notes.
 
-## Response Style For Agents
+## Response Style
 
 - Be concise and practical.
 - State what changed and how it was verified.
