@@ -68,6 +68,7 @@ class ScopeIn(BaseModel):
     jurisdiction_code: str = Field(min_length=2, max_length=8, examples=["JP"])
     visa_category_code: str = Field(min_length=1, max_length=32, examples=["work"])
     action_code: str = Field(min_length=1, max_length=32, examples=["renewal"])
+    locale: str = Field(default="en", min_length=2, max_length=16)
 
 
 class CaseProgressIn(BaseModel):
@@ -89,6 +90,9 @@ class CaseOut(BaseModel):
     user_id: int | None = None
     status: str
     applicant_email: str | None = None
+    locale: str
+    host_locale: str
+    submission_reference: str | None = None
     intake_answers: dict[str, Any] = Field(default_factory=dict)
     intake_step: str | None = None
     notes: str | None = None
@@ -243,6 +247,7 @@ async def scope_case(
         case_action_id=case_action.id,
         user_id=user.id,
         status="draft",
+        locale=payload.locale,
     )
     session.add(case)
     try:
@@ -365,6 +370,7 @@ async def answer_intake(
     merged = {**current, payload.key: payload.value}
     case.intake_answers = prune_answers(questions, merged)
     case.intake_step = payload.key
+    case.review_flags_acknowledged = False
     await session.flush()
     await session.refresh(case)
     return _intake_state(case, definition)
@@ -396,6 +402,7 @@ async def save_case_progress(
     data = payload.model_dump(exclude_unset=True)
     if "intake_answers" in data and data["intake_answers"] is not None:
         case.intake_answers = data["intake_answers"]
+        case.review_flags_acknowledged = False
     if "intake_step" in data:
         case.intake_step = data["intake_step"]
     if "notes" in data:

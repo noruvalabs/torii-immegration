@@ -26,12 +26,18 @@ from torii_api.db.base import Base
 from torii_api.db.engine import create_engine, create_session_factory, to_async_url
 from torii_api.db.models import (
     CaseAction,
+    DocumentRequirementSet,
+    EligibilityRuleSet,
+    FormTemplate,
     IntakeDefinition,
     Jurisdiction,
     User,
     UserRole,
     VisaCategory,
 )
+from torii_api.services.checklist import JP_WORK_RENEWAL_DOCUMENT_REQUIREMENTS
+from torii_api.services.eligibility import JP_WORK_RENEWAL_ELIGIBILITY_RULES
+from torii_api.services.forms import JP_WORK_RENEWAL_FORM_TEMPLATE
 from torii_api.services.intake import JP_WORK_RENEWAL_QUESTIONS
 
 SEED_USERS = [
@@ -203,6 +209,7 @@ async def seed() -> None:
                 created_actions += 1
 
         created_intake = 0
+        created_workflow_definitions = 0
         jp_id = jurisdiction_ids.get("JP")
         work_id = category_ids.get(("JP", "work"))
         renewal_id = action_ids.get(("JP", "renewal"))
@@ -226,13 +233,64 @@ async def seed() -> None:
                 )
                 created_intake = 1
 
+            workflow_definitions = (
+                (
+                    EligibilityRuleSet,
+                    {"rules": JP_WORK_RENEWAL_ELIGIBILITY_RULES},
+                ),
+                (
+                    DocumentRequirementSet,
+                    {"items": JP_WORK_RENEWAL_DOCUMENT_REQUIREMENTS},
+                ),
+            )
+            for model, values in workflow_definitions:
+                existing = await session.scalar(
+                    select(model).where(
+                        model.jurisdiction_id == jp_id,
+                        model.visa_category_id == work_id,
+                        model.case_action_id == renewal_id,
+                    )
+                )
+                if existing is None:
+                    session.add(
+                        model(
+                            jurisdiction_id=jp_id,
+                            visa_category_id=work_id,
+                            case_action_id=renewal_id,
+                            is_live=True,
+                            **values,
+                        )
+                    )
+                    created_workflow_definitions += 1
+
+            existing_form = await session.scalar(
+                select(FormTemplate).where(
+                    FormTemplate.jurisdiction_id == jp_id,
+                    FormTemplate.visa_category_id == work_id,
+                    FormTemplate.case_action_id == renewal_id,
+                    FormTemplate.code == JP_WORK_RENEWAL_FORM_TEMPLATE["code"],
+                )
+            )
+            if existing_form is None:
+                session.add(
+                    FormTemplate(
+                        jurisdiction_id=jp_id,
+                        visa_category_id=work_id,
+                        case_action_id=renewal_id,
+                        is_live=True,
+                        **JP_WORK_RENEWAL_FORM_TEMPLATE,
+                    )
+                )
+                created_workflow_definitions += 1
+
         await session.commit()
 
     await engine.dispose()
     print(
         f"Seeded {created_users} users, {created_jurisdictions} jurisdictions, "
         f"{created_categories} visa categories, {created_actions} case actions, "
-        f"{created_intake} intake definitions"
+        f"{created_intake} intake definitions, "
+        f"{created_workflow_definitions} applicant workflow definitions"
     )
 
 

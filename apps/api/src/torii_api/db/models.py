@@ -23,7 +23,7 @@ from enum import StrEnum
 from typing import Any
 
 from sqlalchemy import JSON as SAJSON
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from torii_api.db.base import Base, TimestampMixin
@@ -75,11 +75,19 @@ class Jurisdiction(TimestampMixin, Base):
     code: Mapped[str] = mapped_column(String(8), unique=True, index=True)
     name: Mapped[str] = mapped_column(String(128))
     is_live: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    efile_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
 
     cases: Mapped[list[Case]] = relationship(back_populates="jurisdiction")
     visa_categories: Mapped[list[VisaCategory]] = relationship(back_populates="jurisdiction")
     case_actions: Mapped[list[CaseAction]] = relationship(back_populates="jurisdiction")
     intake_definitions: Mapped[list[IntakeDefinition]] = relationship(back_populates="jurisdiction")
+    eligibility_rule_sets: Mapped[list[EligibilityRuleSet]] = relationship(
+        back_populates="jurisdiction"
+    )
+    document_requirement_sets: Mapped[list[DocumentRequirementSet]] = relationship(
+        back_populates="jurisdiction"
+    )
+    form_templates: Mapped[list[FormTemplate]] = relationship(back_populates="jurisdiction")
 
 
 class VisaCategory(TimestampMixin, Base):
@@ -98,6 +106,13 @@ class VisaCategory(TimestampMixin, Base):
     intake_definitions: Mapped[list[IntakeDefinition]] = relationship(
         back_populates="visa_category"
     )
+    eligibility_rule_sets: Mapped[list[EligibilityRuleSet]] = relationship(
+        back_populates="visa_category"
+    )
+    document_requirement_sets: Mapped[list[DocumentRequirementSet]] = relationship(
+        back_populates="visa_category"
+    )
+    form_templates: Mapped[list[FormTemplate]] = relationship(back_populates="visa_category")
 
 
 class CaseAction(TimestampMixin, Base):
@@ -114,6 +129,13 @@ class CaseAction(TimestampMixin, Base):
     jurisdiction: Mapped[Jurisdiction] = relationship(back_populates="case_actions")
     cases: Mapped[list[Case]] = relationship(back_populates="case_action")
     intake_definitions: Mapped[list[IntakeDefinition]] = relationship(back_populates="case_action")
+    eligibility_rule_sets: Mapped[list[EligibilityRuleSet]] = relationship(
+        back_populates="case_action"
+    )
+    document_requirement_sets: Mapped[list[DocumentRequirementSet]] = relationship(
+        back_populates="case_action"
+    )
+    form_templates: Mapped[list[FormTemplate]] = relationship(back_populates="case_action")
 
 
 class IntakeDefinition(TimestampMixin, Base):
@@ -132,6 +154,66 @@ class IntakeDefinition(TimestampMixin, Base):
     jurisdiction: Mapped[Jurisdiction] = relationship(back_populates="intake_definitions")
     visa_category: Mapped[VisaCategory] = relationship(back_populates="intake_definitions")
     case_action: Mapped[CaseAction] = relationship(back_populates="intake_definitions")
+
+
+class EligibilityRuleSet(TimestampMixin, Base):
+    """Deterministic eligibility screening rules for one case scope."""
+
+    __tablename__ = "eligibility_rule_sets"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    jurisdiction_id: Mapped[int] = mapped_column(ForeignKey("jurisdictions.id"), index=True)
+    visa_category_id: Mapped[int] = mapped_column(ForeignKey("visa_categories.id"), index=True)
+    case_action_id: Mapped[int] = mapped_column(ForeignKey("case_actions.id"), index=True)
+    rules: Mapped[list[dict[str, Any]]] = mapped_column(SAJSON, default=list)
+    is_live: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+
+    jurisdiction: Mapped[Jurisdiction] = relationship(back_populates="eligibility_rule_sets")
+    visa_category: Mapped[VisaCategory] = relationship(back_populates="eligibility_rule_sets")
+    case_action: Mapped[CaseAction] = relationship(back_populates="eligibility_rule_sets")
+
+
+class DocumentRequirementSet(TimestampMixin, Base):
+    """Checklist definition for one case scope."""
+
+    __tablename__ = "document_requirement_sets"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    jurisdiction_id: Mapped[int] = mapped_column(ForeignKey("jurisdictions.id"), index=True)
+    visa_category_id: Mapped[int] = mapped_column(ForeignKey("visa_categories.id"), index=True)
+    case_action_id: Mapped[int] = mapped_column(ForeignKey("case_actions.id"), index=True)
+    items: Mapped[list[dict[str, Any]]] = mapped_column(SAJSON, default=list)
+    is_live: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+
+    jurisdiction: Mapped[Jurisdiction] = relationship(back_populates="document_requirement_sets")
+    visa_category: Mapped[VisaCategory] = relationship(
+        back_populates="document_requirement_sets"
+    )
+    case_action: Mapped[CaseAction] = relationship(back_populates="document_requirement_sets")
+
+
+class FormTemplate(TimestampMixin, Base):
+    """Versioned official form definition and explicit intake field mappings."""
+
+    __tablename__ = "form_templates"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    jurisdiction_id: Mapped[int] = mapped_column(ForeignKey("jurisdictions.id"), index=True)
+    visa_category_id: Mapped[int] = mapped_column(ForeignKey("visa_categories.id"), index=True)
+    case_action_id: Mapped[int] = mapped_column(ForeignKey("case_actions.id"), index=True)
+    code: Mapped[str] = mapped_column(String(64), index=True)
+    version: Mapped[str] = mapped_column(String(32))
+    is_live: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    official_title: Mapped[str] = mapped_column(String(256))
+    citation: Mapped[dict[str, Any]] = mapped_column(SAJSON, default=dict)
+    field_mappings: Mapped[list[dict[str, Any]]] = mapped_column(SAJSON, default=list)
+
+    jurisdiction: Mapped[Jurisdiction] = relationship(back_populates="form_templates")
+    visa_category: Mapped[VisaCategory] = relationship(back_populates="form_templates")
+    case_action: Mapped[CaseAction] = relationship(back_populates="form_templates")
+    generated_forms: Mapped[list[CaseGeneratedForm]] = relationship(
+        back_populates="form_template"
+    )
 
 
 class Case(TimestampMixin, Base):
@@ -154,6 +236,14 @@ class Case(TimestampMixin, Base):
     # Status lifecycle string kept open here; the enum/state-machine lands with the pipeline.
     status: Mapped[str] = mapped_column(String(32), default="draft", server_default="draft")
     applicant_email: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    locale: Mapped[str] = mapped_column(String(16), default="en", server_default="en")
+    host_locale: Mapped[str] = mapped_column(String(16), default="ja", server_default="ja")
+    review_flags_acknowledged: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="0"
+    )
+    submission_reference: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    packet_snapshot: Mapped[dict[str, Any] | None] = mapped_column(SAJSON, nullable=True)
+    eligibility_snapshot: Mapped[dict[str, Any] | None] = mapped_column(SAJSON, nullable=True)
     # Intake progress so an applicant can stop and resume (US-03.1, US-03.2).
     intake_answers: Mapped[dict] = mapped_column(SAJSON, default=dict)
     # Stable key for the applicant's current position in the intake flow; NULL before intake.
@@ -166,6 +256,93 @@ class Case(TimestampMixin, Base):
     visa_category: Mapped[VisaCategory | None] = relationship(back_populates="cases")
     case_action: Mapped[CaseAction | None] = relationship(back_populates="cases")
     owner: Mapped[User | None] = relationship(back_populates="cases")
+    checklist_items: Mapped[list[CaseChecklistItem]] = relationship(
+        back_populates="case", cascade="all, delete-orphan"
+    )
+    documents: Mapped[list[CaseDocument]] = relationship(
+        back_populates="case", cascade="all, delete-orphan"
+    )
+    generated_forms: Mapped[list[CaseGeneratedForm]] = relationship(
+        back_populates="case", cascade="all, delete-orphan"
+    )
+    escalations: Mapped[list[CaseEscalation]] = relationship(
+        back_populates="case", cascade="all, delete-orphan"
+    )
+
+
+class CaseDocument(TimestampMixin, Base):
+    """Applicant-provided document metadata and OCR output."""
+
+    __tablename__ = "case_documents"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    case_id: Mapped[int] = mapped_column(ForeignKey("cases.id"), index=True)
+    doc_type: Mapped[str] = mapped_column(String(64), index=True)
+    filename: Mapped[str] = mapped_column(String(256))
+    storage_key: Mapped[str] = mapped_column(String(512))
+    extracted_fields: Mapped[dict[str, Any]] = mapped_column(SAJSON, default=dict)
+    extraction_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+    confirmed: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    content_type: Mapped[str] = mapped_column(String(128))
+
+    case: Mapped[Case] = relationship(back_populates="documents")
+    checklist_items: Mapped[list[CaseChecklistItem]] = relationship(back_populates="document")
+
+
+class CaseChecklistItem(TimestampMixin, Base):
+    """Materialized document checklist item for a case."""
+
+    __tablename__ = "case_checklist_items"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    case_id: Mapped[int] = mapped_column(ForeignKey("cases.id"), index=True)
+    code: Mapped[str] = mapped_column(String(64), index=True)
+    name: Mapped[str] = mapped_column(String(256))
+    how_to_obtain: Mapped[str] = mapped_column(Text)
+    why_required: Mapped[str] = mapped_column(Text)
+    is_required: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1")
+    status: Mapped[str] = mapped_column(String(16), default="needed", server_default="needed")
+    citation: Mapped[dict[str, Any]] = mapped_column(SAJSON, default=dict)
+    document_id: Mapped[int | None] = mapped_column(
+        ForeignKey("case_documents.id"), nullable=True, index=True
+    )
+
+    case: Mapped[Case] = relationship(back_populates="checklist_items")
+    document: Mapped[CaseDocument | None] = relationship(back_populates="checklist_items")
+
+
+class CaseGeneratedForm(TimestampMixin, Base):
+    """A filled, version-pinned form generated from a live template."""
+
+    __tablename__ = "case_generated_forms"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    case_id: Mapped[int] = mapped_column(ForeignKey("cases.id"), index=True)
+    form_template_id: Mapped[int] = mapped_column(ForeignKey("form_templates.id"), index=True)
+    form_code: Mapped[str] = mapped_column(String(64), index=True)
+    form_version: Mapped[str] = mapped_column(String(32))
+    filled_fields: Mapped[dict[str, Any]] = mapped_column(SAJSON, default=dict)
+    missing_required_fields: Mapped[list[str]] = mapped_column(SAJSON, default=list)
+    citation: Mapped[dict[str, Any]] = mapped_column(SAJSON, default=dict)
+
+    case: Mapped[Case] = relationship(back_populates="generated_forms")
+    form_template: Mapped[FormTemplate] = relationship(back_populates="generated_forms")
+
+
+class CaseEscalation(TimestampMixin, Base):
+    """Applicant-requested or safety-triggered human handoff."""
+
+    __tablename__ = "case_escalations"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    case_id: Mapped[int] = mapped_column(ForeignKey("cases.id"), index=True)
+    reason: Mapped[str] = mapped_column(String(32))
+    message: Mapped[str] = mapped_column(Text)
+    consent_to_share: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    status: Mapped[str] = mapped_column(String(16), default="open", server_default="open")
+    outcome: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    case: Mapped[Case] = relationship(back_populates="escalations")
 
 
 class OutboxEvent(TimestampMixin, Base):

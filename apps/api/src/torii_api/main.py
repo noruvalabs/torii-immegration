@@ -11,6 +11,7 @@ from fastapi import FastAPI
 from torii_api import __version__
 from torii_api.api.admin import router as admin_router
 from torii_api.api.auth import router as auth_router
+from torii_api.api.case_workflow import router as case_workflow_router
 from torii_api.api.cases import router as cases_router
 from torii_api.api.docs import build_docs_router
 from torii_api.api.health import router as health_router
@@ -84,6 +85,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.include_router(build_docs_router(title=APP_TITLE))
     app.include_router(jurisdictions_router)
     app.include_router(cases_router)
+    app.include_router(case_workflow_router)
     app.include_router(admin_router)
     app.include_router(auth_router)
     return app
