@@ -10,6 +10,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+import httpx
 import structlog
 from arq import cron
 from arq.connections import RedisSettings
@@ -84,13 +85,80 @@ async def send_renewal_reminders(ctx: dict[str, Any]) -> int:
     return len(due)
 
 
+async def scrape_immigration_sources(ctx: dict[str, Any]) -> dict[str, Any]:
+    """AI-powered OPS worker: daily scrape of official immigration sources (US-25, US-26).
+
+    Calls the AI service's /ai/ops/scrape endpoint which uses Tavily to discover
+    government pages, scrapes them, and extracts structured data via LLM.
+    The extracted data is then ingested into the API as draft rules/forms (NF-9).
+    """
+    settings = get_settings()
+    ai_base = getattr(settings, "ai_service_url", "http://localhost:8001")
+    jurisdictions = getattr(settings, "scrape_jurisdictions", "JP").split(",")
+
+    results: dict[str, Any] = {}
+    for jurisdiction in jurisdictions:
+        jurisdiction = jurisdiction.strip()
+        if not jurisdiction:
+            continue
+
+        log.info("scraper.start", jurisdiction=jurisdiction)
+        try:
+            async with httpx.AsyncClient(timeout=120.0) as client:
+                # Trigger scrape
+                resp = await client.post(
+                    f"{ai_base}/ai/ops/scrape",
+                    json={
+                        "jurisdiction_code": jurisdiction,
+                        "visa_category": "work",
+                        "action": "renewal",
+                    },
+                )
+                if resp.status_code == 200:
+                    scrape_data = resp.json()
+                    log.info("scraper.done", jurisdiction=jurisdiction, data=scrape_data)
+
+                    # Trigger ingest
+                    ingest_resp = await client.post(
+                        f"{ai_base}/ai/ops/ingest",
+                        json={
+                            "jurisdiction_code": jurisdiction,
+                            "visa_category": "work",
+                            "action": "renewal",
+                            "eligibility_rules": scrape_data.get("eligibility_rules", []),
+                            "document_requirements": scrape_data.get("document_requirements", []),
+                            "intake_questions": scrape_data.get("intake_questions", []),
+                            "form_templates": scrape_data.get("form_templates", []),
+                            "source_pages": scrape_data.get("source_pages", []),
+                        },
+                    )
+                    ingest_status = "ok" if ingest_resp.status_code == 200 else "failed"
+                    results[jurisdiction] = {
+                        "scrape": scrape_data.get("status"),
+                        "ingest": ingest_status,
+                    }
+                else:
+                    log.warning(
+                        "scraper.api_failed",
+                        jurisdiction=jurisdiction,
+                        status=resp.status_code,
+                    )
+                    results[jurisdiction] = {"error": f"API returned {resp.status_code}"}
+        except Exception as exc:
+            log.error("scraper.failed", jurisdiction=jurisdiction, error=str(exc))
+            results[jurisdiction] = {"error": str(exc)}
+
+    log.info("scraper.batch_complete", results=results)
+    return results
+
+
 async def monitor_official_sources(ctx: dict[str, Any]) -> None:
     """Government-change monitor tick (US-26): crawl official sources, diff, flag for review.
 
-    Placeholder loop — it never mutates a live rule or form (NF-9). Detected changes will be
-    written as outbox events / review-queue flags for a human to approve.
+    Now delegates to the AI scraper service which uses Tavily + LLM to detect changes.
+    Detected changes are stored as draft rules/forms for human review (NF-9).
     """
-    log.info("monitor.tick")
+    await scrape_immigration_sources(ctx)
 
 
 async def startup(ctx: dict[str, Any]) -> None:
@@ -115,7 +183,12 @@ async def shutdown(ctx: dict[str, Any]) -> None:
 class WorkerSettings:
     """arq entrypoint: ``uv run arq torii_api.worker.scheduler.WorkerSettings``."""
 
-    functions = [poll_outbox, send_renewal_reminders, monitor_official_sources]
+    functions = [
+        poll_outbox,
+        send_renewal_reminders,
+        scrape_immigration_sources,
+        monitor_official_sources,
+    ]
     on_startup = startup
     on_shutdown = shutdown
     # arq reads the connection off this class attribute (resolved from TORII_REDIS_URL at import).
@@ -125,6 +198,8 @@ class WorkerSettings:
         cron(poll_outbox, second={0, 10, 20, 30, 40, 50}, run_at_startup=True),
         # Renewal reminders once a day at 08:00 (server time).
         cron(send_renewal_reminders, hour=8, minute=0),
-        # Government-change monitor, hourly on the hour.
+        # AI-powered immigration source scraping — daily at 02:00 (server time).
+        cron(scrape_immigration_sources, hour=2, minute=0),
+        # Government-change monitor, hourly on the hour (delegates to scrape_immigration_sources).
         cron(monitor_official_sources, minute=0),
     ]

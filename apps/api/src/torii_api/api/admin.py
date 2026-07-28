@@ -1,13 +1,12 @@
 """Admin user management — list, change roles, deactivate (US-30).
 
-Endpoints under ``/v1/admin/users`` let administrators manage staff and applicant
-accounts: list users, update roles, toggle active status.  All endpoints require
-the ``admin`` role.
+Endpoints under ``/v1/admin`` let administrators manage staff, applicant
+accounts, and view all cases.  All endpoints require the ``admin`` role.
 """
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict, Field
@@ -15,10 +14,10 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from torii_api.auth.deps import CurrentUserDep, require_roles
-from torii_api.db.models import User, UserRole
+from torii_api.db.models import Case, CaseEscalation, User, UserRole
 from torii_api.db.session import get_session
 
-router = APIRouter(prefix="/v1/admin/users", tags=["admin"])
+router = APIRouter(prefix="/v1/admin", tags=["admin"])
 
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
 AdminDep = Annotated[CurrentUserDep, Depends(require_roles(UserRole.ADMIN))]
@@ -50,10 +49,23 @@ class UserActiveUpdate(BaseModel):
     is_active: bool
 
 
+class AdminCaseOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    reference: str | None = None
+    status: str
+    locale: str | None = None
+    user_id: int
+    created_at: Any = None
+    updated_at: Any = None
+    applicant_email: str | None = None
+
+
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
 
-@router.get("", response_model=list[UserOut])
+@router.get("/users", response_model=list[UserOut])
 async def list_users(
     session: SessionDep,
     _admin: AdminDep,
@@ -69,7 +81,7 @@ async def list_users(
     return list(result.scalars().all())
 
 
-@router.get("/count")
+@router.get("/users/count")
 async def count_users(
     session: SessionDep,
     _admin: AdminDep,
@@ -81,7 +93,7 @@ async def count_users(
     return {row[0]: row[1] for row in result.all()}
 
 
-@router.get("/{user_id}", response_model=UserOut)
+@router.get("/users/{user_id}", response_model=UserOut)
 async def get_user(
     user_id: int,
     session: SessionDep,
@@ -97,7 +109,7 @@ async def get_user(
     return user
 
 
-@router.patch("/{user_id}/role", response_model=UserOut)
+@router.patch("/users/{user_id}/role", response_model=UserOut)
 async def update_user_role(
     user_id: int,
     payload: UserRoleUpdate,
@@ -122,7 +134,7 @@ async def update_user_role(
     return user
 
 
-@router.patch("/{user_id}/active", response_model=UserOut)
+@router.patch("/users/{user_id}/active", response_model=UserOut)
 async def toggle_user_active(
     user_id: int,
     payload: UserActiveUpdate,
@@ -145,3 +157,124 @@ async def toggle_user_active(
     await session.flush()
     await session.refresh(user)
     return user
+
+
+# ── Admin case list ──────────────────────────────────────────────────────────
+
+
+@router.get("/cases", response_model=list[AdminCaseOut])
+async def admin_list_cases(
+    session: SessionDep,
+    _admin: AdminDep,
+    status_filter: str | None = Query(default=None, alias="status"),
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=50, ge=1, le=200),
+) -> list[Case]:
+    """List all cases across all users (admin only)."""
+    stmt = select(Case).order_by(Case.created_at.desc()).offset(offset).limit(limit)
+    if status_filter is not None:
+        stmt = stmt.where(Case.status == status_filter)
+    result = await session.execute(stmt)
+    return list(result.scalars().all())
+
+
+@router.get("/cases/count")
+async def admin_count_cases(
+    session: SessionDep,
+    _admin: AdminDep,
+) -> dict[str, int]:
+    """Return case counts by status (admin only)."""
+    result = await session.execute(
+        select(Case.status, func.count()).group_by(Case.status)
+    )
+    return {row[0]: row[1] for row in result.all()}
+
+
+@router.get("/cases/{case_id}", response_model=AdminCaseOut)
+async def admin_get_case(
+    case_id: int,
+    session: SessionDep,
+    _admin: AdminDep,
+) -> Case:
+    """Get a specific case by ID (admin only)."""
+    case = await session.get(Case, case_id)
+    if case is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="case not found",
+        )
+    return case
+
+
+# ── Admin escalation list ───────────────────────────────────────────────────
+
+
+class EscalationOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    case_id: int
+    reason: str
+    message: str
+    status: str
+    outcome: str | None = None
+    created_at: Any = None
+
+
+@router.get("/escalations", response_model=list[EscalationOut])
+async def admin_list_escalations(
+    session: SessionDep,
+    _admin: AdminDep,
+    status_filter: str | None = Query(default=None, alias="status"),
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=50, ge=1, le=200),
+) -> list[CaseEscalation]:
+    """List all escalations across all cases (admin only)."""
+    stmt = (
+        select(CaseEscalation)
+        .order_by(CaseEscalation.created_at.desc())
+        .offset(offset)
+        .limit(limit)
+    )
+    if status_filter is not None:
+        stmt = stmt.where(CaseEscalation.status == status_filter)
+    result = await session.execute(stmt)
+    return list(result.scalars().all())
+
+
+@router.get("/escalations/count")
+async def admin_count_escalations(
+    session: SessionDep,
+    _admin: AdminDep,
+) -> dict[str, int]:
+    """Return escalation counts by status (admin only)."""
+    result = await session.execute(
+        select(CaseEscalation.status, func.count()).group_by(CaseEscalation.status)
+    )
+    return {row[0]: row[1] for row in result.all()}
+
+
+@router.patch("/escalations/{escalation_id}", response_model=EscalationOut)
+async def admin_update_escalation(
+    escalation_id: int,
+    payload: EscalationUpdate,
+    session: SessionDep,
+    _admin: AdminDep,
+) -> CaseEscalation:
+    """Update an escalation's status and outcome (admin only)."""
+    escalation = await session.get(CaseEscalation, escalation_id)
+    if escalation is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="escalation not found",
+        )
+    escalation.status = payload.status
+    escalation.outcome = payload.outcome
+    await session.flush()
+    await session.refresh(escalation)
+    return escalation
+
+
+class EscalationUpdate(BaseModel):
+    status: str = Field(..., pattern="^(resolved|dismissed)$")
+    outcome: str | None = None

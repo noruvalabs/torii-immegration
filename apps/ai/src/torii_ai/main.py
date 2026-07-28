@@ -13,6 +13,7 @@ from torii_ai.api.chat import router as chat_router
 from torii_ai.api.docs import build_docs_router
 from torii_ai.api.health import router as health_router
 from torii_ai.api.ocr import router as ocr_router
+from torii_ai.api.ops import router as ops_router
 from torii_ai.config import Settings, get_settings
 from torii_ai.logging import configure_logging
 
@@ -51,6 +52,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.include_router(build_docs_router(title=APP_TITLE))
     app.include_router(chat_router)
     app.include_router(ocr_router)
+    app.include_router(ops_router)
     return app
 
 

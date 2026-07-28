@@ -66,6 +66,13 @@ class Settings(BaseSettings):
     # --- Base URL for building email links ------------------------------------
     app_base_url: str = "http://localhost:3000"
 
+    # --- AI service (OPS scraper, assistant chat) ------------------------------
+    ai_service_url: str = "http://localhost:8001"
+    # Comma-separated list of jurisdiction codes to scrape daily (US-25, US-26).
+    scrape_jurisdictions: str = "JP"
+    # Service-to-service token for authenticated AI→API calls.
+    service_token: str = ""
+
     @property
     def is_sqlite(self) -> bool:
         return self.database_url.startswith("sqlite")

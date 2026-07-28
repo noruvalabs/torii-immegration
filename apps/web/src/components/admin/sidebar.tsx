@@ -4,9 +4,17 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { NAV } from "./nav";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/lib/auth-context";
 
 export function Sidebar() {
   const pathname = usePathname();
+  const { user } = useAuth();
+  const role = user?.role ?? "";
+
+  const visibleNav = NAV.map((group) => ({
+    ...group,
+    items: group.items.filter((item) => !item.roles || item.roles.includes(role)),
+  })).filter((group) => group.items.length > 0);
 
   return (
     <aside className="hidden w-64 shrink-0 flex-col border-r bg-card md:flex">
@@ -15,13 +23,13 @@ export function Sidebar() {
           ⛩️
         </span>
         <span className="text-lg font-semibold tracking-tight">Torii</span>
-        <span className="ml-auto rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-          OPS
+        <span className="ml-auto rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium uppercase text-muted-foreground">
+          {role || "GUEST"}
         </span>
       </div>
 
       <nav className="flex-1 space-y-6 overflow-y-auto px-3 py-5">
-        {NAV.map((group) => (
+        {visibleNav.map((group) => (
           <div key={group.heading}>
             <p className="px-3 pb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
               {group.heading}

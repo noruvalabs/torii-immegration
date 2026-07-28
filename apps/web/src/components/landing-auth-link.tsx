@@ -9,9 +9,10 @@ export function LandingAuthLink() {
   if (loading) return null;
 
   if (user) {
+    const dashboardHref = ["admin", "ops", "employer"].includes(user.role) ? "/admin" : "/dashboard";
     return (
       <Link
-        href="/admin"
+        href={dashboardHref}
         className="text-sm font-medium text-muted-foreground hover:text-foreground"
       >
         Dashboard →

@@ -96,6 +96,8 @@ class CaseOut(BaseModel):
     intake_answers: dict[str, Any] = Field(default_factory=dict)
     intake_step: str | None = None
     notes: str | None = None
+    created_at: Any = None
+    updated_at: Any = None
 
 
 class IntakeAnswerIn(BaseModel):

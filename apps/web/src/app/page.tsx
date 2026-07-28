@@ -54,10 +54,10 @@ export default function Home() {
             Start your case <ArrowRight className="size-4" />
           </Link>
           <Link
-            href="/admin"
+            href="/dashboard"
             className="inline-flex items-center gap-2 rounded-[var(--radius)] border px-5 py-3 text-sm font-medium hover:bg-accent"
           >
-            Admin dashboard
+            Dashboard
           </Link>
         </div>
 
