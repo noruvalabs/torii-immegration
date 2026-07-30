@@ -10,7 +10,6 @@ import {
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { AssistantChat } from "@/components/applicant/assistant-chat";
 import { useAuth } from "@/lib/auth-context";
 import {
   getCase, getCaseGuidance, getIntake, answerIntake, evaluateEligibility, getEligibility,
@@ -381,7 +380,6 @@ export default function CaseDetailPage() {
         </CardContent>
       </Card>
 
-      <AssistantChat caseId={caseData.id} locale={caseData.locale} />
     </div>
   );
 }
