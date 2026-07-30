@@ -18,6 +18,8 @@ export type NavItem = {
   icon: LucideIcon;
   /** Short gloss shown in tooltips / section headers. */
   hint?: string;
+  /** Roles that can see this item. If omitted, visible to all. */
+  roles?: string[];
 };
 
 export type NavGroup = {
@@ -35,25 +37,25 @@ export const NAV: NavGroup[] = [
   {
     heading: "Casework",
     items: [
-      { label: "Cases", href: "/admin/cases", icon: FolderKanban, hint: "The canonical case pipeline" },
-      { label: "Review queue", href: "/admin/review-queue", icon: ClipboardCheck, hint: "Escalated & low-confidence cases" },
-      { label: "Employers", href: "/admin/employers", icon: Building2, hint: "Workforce-sponsored cases" },
+      { label: "Cases", href: "/admin/cases", icon: FolderKanban, hint: "The canonical case pipeline", roles: ["admin", "ops"] },
+      { label: "Review queue", href: "/admin/review-queue", icon: ClipboardCheck, hint: "Escalated & low-confidence cases", roles: ["admin", "ops"] },
+      { label: "Employers", href: "/admin/employers", icon: Building2, hint: "Workforce-sponsored cases", roles: ["admin", "employer"] },
     ],
   },
   {
     heading: "Content & rules",
     items: [
-      { label: "Jurisdictions", href: "/admin/jurisdictions", icon: Globe, hint: "Countries, visas, eligibility" },
-      { label: "Forms & mappings", href: "/admin/forms", icon: FileText, hint: "Templates + versioned field maps" },
-      { label: "Knowledge base", href: "/admin/knowledge-base", icon: BookOpen, hint: "Official-source corpus" },
+      { label: "Jurisdictions", href: "/admin/jurisdictions", icon: Globe, hint: "Countries, visas, eligibility", roles: ["admin", "ops"] },
+      { label: "Forms & mappings", href: "/admin/forms", icon: FileText, hint: "Templates + versioned field maps", roles: ["admin", "ops"] },
+      { label: "Knowledge base", href: "/admin/knowledge-base", icon: BookOpen, hint: "Official-source corpus", roles: ["admin", "ops"] },
     ],
   },
   {
     heading: "Administration",
     items: [
-      { label: "Staff & roles", href: "/admin/staff", icon: Users },
-      { label: "Reports", href: "/admin/reports", icon: BarChart3 },
-      { label: "Settings", href: "/admin/settings", icon: Settings },
+      { label: "Staff & roles", href: "/admin/staff", icon: Users, roles: ["admin"] },
+      { label: "Reports", href: "/admin/reports", icon: BarChart3, roles: ["admin"] },
+      { label: "Settings", href: "/admin/settings", icon: Settings, roles: ["admin"] },
     ],
   },
 ];
