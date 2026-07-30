@@ -35,15 +35,63 @@ JP_WORK_RENEWAL_FORM_TEMPLATE: dict[str, Any] = {
     ],
 }
 
+US_H1B_FORM_TEMPLATE: dict[str, Any] = {
+    "code": "i129_h1b",
+    "version": "2026-04",
+    "official_title": "Petition for a Nonimmigrant Worker (Form I-129) — H-1B",
+    "citation": {
+        "authority": "U.S. Citizenship and Immigration Services",
+        "title": "Form I-129",
+        "url": "https://www.uscis.gov/i-129",
+        "source_version": "2026-04",
+    },
+    "field_mappings": [
+        {"form_field": "beneficiary.full_name", "answer_key": "full_name", "required": True},
+        {
+            "form_field": "beneficiary.passport_number",
+            "answer_key": "passport_number",
+            "required": True,
+        },
+        {"form_field": "job.title", "answer_key": "job_title", "required": True},
+        {"form_field": "petitioner.name", "answer_key": "sponsor_name", "required": False},
+        {
+            "form_field": "beneficiary.years_in_h1b",
+            "answer_key": "years_in_h1b",
+            "required": False,
+        },
+    ],
+}
+
+JP_STUDENT_NEW_APPLICATION_FORM_TEMPLATE: dict[str, Any] = {
+    "code": "student_visa_application",
+    "version": "2026-04",
+    "official_title": "Visa Application Form for Entry into Japan (Student)",
+    "citation": {
+        "authority": "Ministry of Foreign Affairs of Japan",
+        "title": "Visa Application Form",
+        "url": "https://www.mofa.go.jp/j_info/visit/visa/index.html",
+        "source_version": "2026-04",
+    },
+    "field_mappings": [
+        {"form_field": "applicant.full_name", "answer_key": "full_name", "required": True},
+        {
+            "form_field": "applicant.passport_number",
+            "answer_key": "passport_number",
+            "required": True,
+        },
+        {"form_field": "education.school_name", "answer_key": "school_name", "required": False},
+        {"form_field": "support.sponsor_type", "answer_key": "sponsor_type", "required": True},
+        {"form_field": "eligibility.has_coe", "answer_key": "has_coe", "required": True},
+    ],
+}
+
 
 class FilledForm(BaseModel):
     filled_fields: dict[str, Any]
     missing_required_fields: list[str]
 
 
-def fill_form(
-    field_mappings: list[dict[str, Any]], answers: dict[str, Any]
-) -> FilledForm:
+def fill_form(field_mappings: list[dict[str, Any]], answers: dict[str, Any]) -> FilledForm:
     """Fill only declared mappings; never infer undeclared form fields."""
     filled: dict[str, Any] = {}
     missing: list[str] = []

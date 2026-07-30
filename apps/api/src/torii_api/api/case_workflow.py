@@ -26,6 +26,7 @@ from torii_api.db.session import get_session
 from torii_api.services.checklist import ChecklistStatus, update_status, visible_requirement_items
 from torii_api.services.eligibility import EligibilityResult, evaluate_eligibility
 from torii_api.services.forms import fill_form
+from torii_api.services.guidance import next_status_for_phase
 from torii_api.services.i18n import localized
 from torii_api.services.packet import assemble_packet
 from torii_api.services.review import ReviewResult, review_packet
@@ -216,6 +217,9 @@ async def evaluate_case_eligibility(
     definition = await _scope_definition(session, case, EligibilityRuleSet)
     result = evaluate_eligibility(dict(case.intake_answers or {}), definition.rules)
     case.eligibility_snapshot = result.model_dump(mode="json")
+    new_status = next_status_for_phase("checklist", case.status)
+    if new_status is not None:
+        case.status = new_status
     await session.flush()
     return result
 
@@ -254,6 +258,15 @@ async def refresh_checklist(
         )
         session.add(created)
         new_items.append(created)
+    required_needed = [item for item in new_items if item.is_required and item.status == "needed"]
+    if new_items and not required_needed:
+        new_status = next_status_for_phase("forms", case.status)
+        if new_status is not None:
+            case.status = new_status
+    else:
+        mid = next_status_for_phase("checklist", case.status)
+        if mid is not None:
+            case.status = mid
     await session.flush()
     return new_items
 
@@ -274,7 +287,7 @@ async def patch_checklist_item(
     session: SessionDep,
     user: CurrentUserDep,
 ) -> CaseChecklistItem:
-    await _owned_case(session, case_id, user)
+    case = await _owned_case(session, case_id, user)
     item = await session.scalar(
         select(CaseChecklistItem).where(
             CaseChecklistItem.id == item_id, CaseChecklistItem.case_id == case_id
@@ -283,6 +296,12 @@ async def patch_checklist_item(
     if item is None:
         raise HTTPException(status_code=404, detail=f"checklist item {item_id} not found")
     item.status = update_status(item.status, payload.status)
+    items = await _checklist(session, case_id)
+    required_needed = [i for i in items if i.is_required and i.status == "needed"]
+    if items and not required_needed:
+        new_status = next_status_for_phase("forms", case.status)
+        if new_status is not None:
+            case.status = new_status
     await session.flush()
     return item
 
@@ -361,6 +380,9 @@ async def generate_forms(
         session.add(form)
         generated.append(form)
     case.review_flags_acknowledged = False
+    new_status = next_status_for_phase("review", case.status)
+    if new_status is not None:
+        case.status = new_status
     await session.flush()
     return generated
 
@@ -376,7 +398,11 @@ async def get_forms(
 @router.post("/{case_id}/review", response_model=ReviewResult)
 async def review_case(case_id: int, session: SessionDep, user: CurrentUserDep) -> ReviewResult:
     case = await _owned_case(session, case_id, user)
-    return await _review(session, case)
+    result = await _review(session, case)
+    if result.ready:
+        case.review_flags_acknowledged = True
+        await session.flush()
+    return result
 
 
 @router.post("/{case_id}/review/acknowledge")

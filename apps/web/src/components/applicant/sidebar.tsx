@@ -1,12 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { APPLICANT_NAV } from "./nav";
 import { cn } from "@/lib/utils";
 import { LogOut } from "lucide-react";
-import { useRouter } from "next/navigation";
 
 export function ApplicantSidebar() {
   const pathname = usePathname();

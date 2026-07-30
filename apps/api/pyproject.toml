@@ -30,6 +30,7 @@ dependencies = [
 [project.scripts]
 torii-createadmin = "torii_api.management.createadmin:main"
 torii-seed = "torii_api.management.seed:main"
+torii-scrape = "torii_api.management.scrape_gov:main"
 
 [dependency-groups]
 dev = [

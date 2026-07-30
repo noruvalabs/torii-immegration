@@ -24,7 +24,7 @@ export default function LoginPage() {
     try {
       const res = await login(emailOrUsername, password);
       setAuth(res.access_token, res.user);
-      router.push("/admin");
+      router.push(res.user.role === "applicant" ? "/dashboard" : "/admin");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");
     } finally {

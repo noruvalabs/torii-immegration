@@ -126,6 +126,30 @@ def parse_questions(raw: list[dict[str, Any]] | list[IntakeQuestion]) -> list[In
     return out
 
 
+TOP_COUNTRY_OPTIONS: list[str] = [
+    "Japan",
+    "United States",
+    "United Kingdom",
+    "Canada",
+    "Australia",
+    "Germany",
+    "France",
+    "Singapore",
+    "South Korea",
+    "United Arab Emirates",
+    "New Zealand",
+    "Netherlands",
+    "Italy",
+    "Spain",
+    "Switzerland",
+    "Ireland",
+    "Thailand",
+    "Malaysia",
+    "India",
+    "China",
+]
+
+
 # Sample JP work-renewal questionnaire used by seed + tests.
 JP_WORK_RENEWAL_QUESTIONS: list[dict[str, Any]] = [
     {
@@ -141,6 +165,12 @@ JP_WORK_RENEWAL_QUESTIONS: list[dict[str, Any]] = [
         "type": "string",
         "min_length": 5,
         "max_length": 32,
+    },
+    {
+        "key": "current_location_country",
+        "prompt": "Which country are you currently staying in?",
+        "type": "enum",
+        "options": TOP_COUNTRY_OPTIONS,
     },
     {
         "key": "years_in_japan",
@@ -175,5 +205,124 @@ JP_WORK_RENEWAL_QUESTIONS: list[dict[str, Any]] = [
         "min_length": 2,
         "max_length": 200,
         "show_when": {"key": "employment_status", "equals": "employed"},
+    },
+]
+
+US_H1B_QUESTIONS: list[dict[str, Any]] = [
+    {
+        "key": "full_name",
+        "prompt": "What is your full name as it appears on your passport?",
+        "type": "string",
+        "min_length": 2,
+        "max_length": 200,
+    },
+    {
+        "key": "passport_number",
+        "prompt": "What is your passport number?",
+        "type": "string",
+        "min_length": 5,
+        "max_length": 32,
+    },
+    {
+        "key": "current_location_country",
+        "prompt": "Which country are you currently staying in?",
+        "type": "enum",
+        "options": TOP_COUNTRY_OPTIONS,
+    },
+    {
+        "key": "job_title",
+        "prompt": "What is the specialty occupation job title for this H-1B?",
+        "type": "string",
+        "min_length": 2,
+        "max_length": 200,
+    },
+    {
+        "key": "has_bachelor_degree",
+        "prompt": (
+            "Do you hold at least a U.S. bachelor's degree "
+            "(or foreign equivalent) related to the role?"
+        ),
+        "type": "boolean",
+    },
+    {
+        "key": "has_employer_sponsor",
+        "prompt": (
+            "Do you have a U.S. employer willing to file "
+            "(or already filing) as your H-1B petitioner?"
+        ),
+        "type": "boolean",
+    },
+    {
+        "key": "sponsor_name",
+        "prompt": "What is your petitioning employer's legal name?",
+        "type": "string",
+        "min_length": 2,
+        "max_length": 200,
+        "show_when": {"key": "has_employer_sponsor", "equals": True},
+    },
+    {
+        "key": "currently_in_h1b",
+        "prompt": "Are you currently in the United States in H-1B status?",
+        "type": "boolean",
+    },
+    {
+        "key": "years_in_h1b",
+        "prompt": "How many full years have you already held H-1B status?",
+        "type": "integer",
+        "min_value": 0,
+        "max_value": 10,
+        "show_when": {"key": "currently_in_h1b", "equals": True},
+    },
+]
+
+JP_STUDENT_NEW_APPLICATION_QUESTIONS: list[dict[str, Any]] = [
+    {
+        "key": "full_name",
+        "prompt": "What is your full name as it appears on your passport?",
+        "type": "string",
+        "min_length": 2,
+        "max_length": 200,
+    },
+    {
+        "key": "passport_number",
+        "prompt": "What is your passport number?",
+        "type": "string",
+        "min_length": 5,
+        "max_length": 32,
+    },
+    {
+        "key": "current_location_country",
+        "prompt": "Which country are you currently staying in?",
+        "type": "enum",
+        "options": TOP_COUNTRY_OPTIONS,
+    },
+    {
+        "key": "has_school_acceptance",
+        "prompt": "Do you have an acceptance letter from a school in Japan?",
+        "type": "boolean",
+    },
+    {
+        "key": "school_name",
+        "prompt": "What is the school's legal name?",
+        "type": "string",
+        "min_length": 2,
+        "max_length": 200,
+        "show_when": {"key": "has_school_acceptance", "equals": True},
+    },
+    {
+        "key": "has_financial_support",
+        "prompt": "Can you prove enough funds for tuition and living costs?",
+        "type": "boolean",
+    },
+    {
+        "key": "sponsor_type",
+        "prompt": "Who is paying your expenses in Japan?",
+        "type": "enum",
+        "options": ["self", "family", "scholarship", "other"],
+    },
+    {
+        "key": "has_coe",
+        "prompt": "Do you already have a Certificate of Eligibility (COE)?",
+        "type": "boolean",
     },
 ]

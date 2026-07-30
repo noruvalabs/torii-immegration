@@ -127,7 +127,8 @@ function CaseCard({ caseData }: { caseData: Case }) {
           <div className="min-w-0 flex-1">
             <p className="font-mono text-sm font-semibold">{caseData.reference}</p>
             <p className="mt-0.5 text-xs text-muted-foreground">
-              Locale: {caseData.locale} · Updated {new Date(caseData.updated_at ?? caseData.created_at ?? "").toLocaleDateString()}
+              {caseData.scope_label ?? `Locale: ${caseData.locale}`}
+              {caseData.next_title ? ` · Next: ${caseData.next_title}` : ""}
             </p>
           </div>
           <Badge tone={sc.tone}>{sc.label}</Badge>

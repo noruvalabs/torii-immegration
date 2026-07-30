@@ -42,29 +42,44 @@ export type Case = {
   notes: string | null;
   created_at: string | null;
   updated_at: string | null;
+  jurisdiction_code?: string | null;
+  visa_category_code?: string | null;
+  case_action_code?: string | null;
+  scope_label?: string | null;
+  next_phase?: string | null;
+  next_title?: string | null;
 };
 
 export type IntakeQuestion = {
   key: string;
-  kind: "text" | "select" | "bool" | "date" | "number";
-  label: string;
-  hint?: string;
+  prompt: string;
+  type: "boolean" | "string" | "integer" | "enum";
   required?: boolean;
-  options?: { value: string; label: string }[];
-  visible_when?: Record<string, unknown>;
+  options?: string[] | null;
+  show_when?: { key: string; equals: boolean | string | number } | null;
+  min_length?: number | null;
+  max_length?: number | null;
+  min_value?: number | null;
+  max_value?: number | null;
 };
 
 export type IntakeState = {
   case_id: number;
   questions: IntakeQuestion[];
   answers: Record<string, unknown>;
-  progress: { current: number; total: number };
+  progress: { answered: number; total: number; complete: boolean };
   intake_step: string | null;
 };
 
 export type EligibilityResult = {
-  eligible: boolean;
-  checks: { key: string; label: string; passed: boolean; message: string; citation?: Record<string, unknown> }[];
+  result: "pass" | "at_risk" | "fail" | "out_of_scope";
+  findings: {
+    key: string;
+    status: "pass" | "at_risk" | "fail" | "out_of_scope";
+    message: string;
+    citation: Record<string, unknown>;
+  }[];
+  disclaimer: string;
 };
 
 export type ChecklistItem = {
@@ -104,9 +119,18 @@ export type GeneratedForm = {
 };
 
 export type ReviewResult = {
-  flags: { code: string; message: string }[];
-  forms_ok: boolean;
-  documents_ok: boolean;
+  flags: { code: string; message: string; fields?: string[] }[];
+  ready: boolean;
+};
+
+export type CaseGuidance = {
+  phase: "intake" | "eligibility" | "checklist" | "forms" | "review" | "packet" | "done" | "blocked";
+  title: string;
+  instruction: string;
+  cta_label: string;
+  blocked_reason: string | null;
+  progress: { answered: number; total: number; complete: boolean } | null;
+  scope_label: string | null;
 };
 
 export type Escalation = {
@@ -149,6 +173,10 @@ export function getCase(token: string, caseId: number) {
   return req<Case>(`/cases/${caseId}`, token);
 }
 
+export function deleteCase(token: string, caseId: number) {
+  return req<void>(`/cases/${caseId}`, token, { method: "DELETE" });
+}
+
 export function scopeCase(token: string, data: {
   jurisdiction_code: string;
   visa_category_code: string;
@@ -162,6 +190,10 @@ export function scopeCase(token: string, data: {
 }
 
 // ── Intake ─────────────────────────────────────────────────────────────────────
+
+export function getCaseGuidance(token: string, caseId: number) {
+  return req<CaseGuidance>(`/cases/${caseId}/guidance`, token);
+}
 
 export function getIntake(token: string, caseId: number) {
   return req<IntakeState>(`/cases/${caseId}/intake`, token);

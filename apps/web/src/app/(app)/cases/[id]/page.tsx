@@ -1,27 +1,27 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import Link from "next/link";
 import {
-  ArrowLeft, Check, ChevronRight, ClipboardCheck, FileText,
-  Loader2, AlertTriangle, Send, Download,
+  ArrowLeft, Check, ChevronRight, FileText,
+  Loader2, AlertTriangle, Send, Download, ExternalLink,
 } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { AssistantChat } from "@/components/applicant/assistant-chat";
 import { useAuth } from "@/lib/auth-context";
 import {
-  getCase, getIntake, answerIntake, evaluateEligibility, getEligibility,
+  getCase, getCaseGuidance, getIntake, answerIntake, evaluateEligibility, getEligibility,
   refreshChecklist, getChecklist, patchChecklistItem,
   generateForms, getForms, reviewCase, acknowledgeReview,
   buildPacket, getPacket, submitCase,
-  type Case, type IntakeState, type EligibilityResult,
+  type Case, type CaseGuidance, type IntakeState, type EligibilityResult,
   type ChecklistItem, type GeneratedForm, type ReviewResult,
 } from "@/lib/api/cases";
 
 type Step = "intake" | "eligibility" | "checklist" | "forms" | "review" | "packet";
-
 const STEPS: { key: Step; label: string }[] = [
   { key: "intake", label: "Intake" },
   { key: "eligibility", label: "Eligibility" },
@@ -31,40 +31,54 @@ const STEPS: { key: Step; label: string }[] = [
   { key: "packet", label: "Packet" },
 ];
 
+function phaseToStep(phase: string): Step {
+  if (phase === "done") return "packet";
+  if (phase === "blocked") return "intake";
+  if (STEPS.some((s) => s.key === phase)) return phase as Step;
+  return "intake";
+}
+
+function citationUrl(citation: Record<string, unknown> | undefined): string | null {
+  const url = citation?.url;
+  return typeof url === "string" && url.startsWith("http") ? url : null;
+}
+
+function citationVersion(citation: Record<string, unknown> | undefined): string | null {
+  const v = citation?.source_version;
+  return typeof v === "string" ? v : null;
+}
+
 export default function CaseDetailPage() {
   const params = useParams();
   const caseId = Number(params.id);
   const { token } = useAuth();
-  const router = useRouter();
 
   const [caseData, setCaseData] = useState<Case | null>(null);
+  const [guidance, setGuidance] = useState<CaseGuidance | null>(null);
   const [activeStep, setActiveStep] = useState<Step>("intake");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Step data
   const [intake, setIntake] = useState<IntakeState | null>(null);
   const [eligibility, setEligibility] = useState<EligibilityResult | null>(null);
   const [checklist, setChecklist] = useState<ChecklistItem[]>([]);
   const [forms, setForms] = useState<GeneratedForm[]>([]);
   const [review, setReview] = useState<ReviewResult | null>(null);
   const [packet, setPacket] = useState<Record<string, unknown> | null>(null);
-
+  const [stepError, setStepError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   const loadCase = useCallback(async () => {
     if (!token || !caseId) return;
     setLoading(true);
     try {
-      const c = await getCase(token, caseId);
+      const [c, g] = await Promise.all([
+        getCase(token, caseId),
+        getCaseGuidance(token, caseId),
+      ]);
       setCaseData(c);
-      // Determine starting step from case status
-      if (c.status === "draft") setActiveStep("intake");
-      else if (c.status === "intake_complete") setActiveStep("eligibility");
-      else if (c.status === "checklist_ready") setActiveStep("checklist");
-      else if (c.status === "forms_generated") setActiveStep("forms");
-      else if (c.status === "packet_ready") setActiveStep("packet");
-      else setActiveStep("intake");
+      setGuidance(g);
+      setActiveStep(phaseToStep(g.phase));
     } catch {
       setError("Could not load case.");
     } finally {
@@ -74,23 +88,33 @@ export default function CaseDetailPage() {
 
   useEffect(() => { void loadCase(); }, [loadCase]);
 
-  // Load step data when activeStep changes
   useEffect(() => {
     if (!token || !caseId) return;
+    setStepError(null);
     if (activeStep === "intake") {
-      getIntake(token, caseId).then(setIntake).catch(() => {});
+      getIntake(token, caseId).then(setIntake).catch(() => setStepError("Intake questionnaire is not available for this case scope."));
     } else if (activeStep === "eligibility") {
-      getEligibility(token, caseId).then(setEligibility).catch(() => setEligibility(null));
+      getEligibility(token, caseId).then(setEligibility).catch(() => { setEligibility(null); setStepError(null); });
     } else if (activeStep === "checklist") {
-      getChecklist(token, caseId).then(setChecklist).catch(() => {});
+      getChecklist(token, caseId).then(setChecklist).catch(() => setStepError("Checklist is not available for this case scope."));
     } else if (activeStep === "forms") {
-      getForms(token, caseId).then(setForms).catch(() => {});
+      getForms(token, caseId).then(setForms).catch(() => setStepError("Forms are not available for this case scope."));
     } else if (activeStep === "review") {
-      reviewCase(token, caseId).then(setReview).catch(() => {});
+      setReview(null);
     } else if (activeStep === "packet") {
-      getPacket(token, caseId).then(setPacket).catch(() => setPacket(null));
+      getPacket(token, caseId).then(setPacket).catch(() => { setPacket(null); });
     }
   }, [token, caseId, activeStep]);
+
+  async function refreshGuidance() {
+    if (!token) return;
+    try {
+      const g = await getCaseGuidance(token, caseId);
+      setGuidance(g);
+      const c = await getCase(token, caseId);
+      setCaseData(c);
+    } catch { /* ignore */ }
+  }
 
   async function handleAnswer(key: string, value: unknown) {
     if (!token) return;
@@ -98,6 +122,8 @@ export default function CaseDetailPage() {
     try {
       const state = await answerIntake(token, caseId, key, value);
       setIntake(state);
+      await refreshGuidance();
+      if (state.progress.complete) setActiveStep("eligibility");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Answer failed");
     }
@@ -110,6 +136,7 @@ export default function CaseDetailPage() {
     try {
       const result = await evaluateEligibility(token, caseId);
       setEligibility(result);
+      await refreshGuidance();
       setActiveStep("checklist");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Evaluation failed");
@@ -125,6 +152,7 @@ export default function CaseDetailPage() {
     try {
       const items = await refreshChecklist(token, caseId);
       setChecklist(items);
+      await refreshGuidance();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to refresh checklist");
     } finally {
@@ -137,6 +165,7 @@ export default function CaseDetailPage() {
     try {
       await patchChecklistItem(token, caseId, itemId, status);
       setChecklist((prev) => prev.map((i) => (i.id === itemId ? { ...i, status } : i)));
+      await refreshGuidance();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Update failed");
     }
@@ -149,6 +178,7 @@ export default function CaseDetailPage() {
     try {
       const generated = await generateForms(token, caseId);
       setForms(generated);
+      await refreshGuidance();
       setActiveStep("review");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Form generation failed");
@@ -164,6 +194,8 @@ export default function CaseDetailPage() {
     try {
       const result = await reviewCase(token, caseId);
       setReview(result);
+      await refreshGuidance();
+      if (result.ready) setActiveStep("packet");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Review failed");
     } finally {
@@ -175,9 +207,10 @@ export default function CaseDetailPage() {
     if (!token) return;
     try {
       await acknowledgeReview(token, caseId);
+      await refreshGuidance();
       setActiveStep("packet");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to acknowledge");
+      setError(e instanceof Error ? e.message : "Acknowledge failed");
     }
   }
 
@@ -186,10 +219,11 @@ export default function CaseDetailPage() {
     setSubmitting(true);
     setError(null);
     try {
-      const snap = await buildPacket(token, caseId);
-      setPacket(snap);
+      const built = await buildPacket(token, caseId);
+      setPacket(built);
+      await refreshGuidance();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Packet assembly failed");
+      setError(e instanceof Error ? e.message : "Packet build failed");
     } finally {
       setSubmitting(false);
     }
@@ -230,23 +264,42 @@ export default function CaseDetailPage() {
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
-      {/* Header */}
       <div className="flex items-start gap-4">
         <Link href="/cases" className="mt-1 text-muted-foreground hover:text-foreground">
           <ArrowLeft className="size-5" />
         </Link>
         <div className="flex-1">
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <h1 className="text-xl font-semibold tracking-tight">{caseData.reference}</h1>
             <Badge tone={caseData.status === "submitted" ? "success" : "default"}>
               {caseData.status}
             </Badge>
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
-            {caseData.locale.toUpperCase()} locale · Complete each step below.
+            {caseData.scope_label ?? "Scoped case"} · {caseData.locale.toUpperCase()}
           </p>
         </div>
       </div>
+
+      {guidance && guidance.phase !== "done" && (
+        <Card className="border-primary/30 bg-primary/5">
+          <CardContent className="flex flex-col gap-3 pt-5 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-primary">What to do next</p>
+              <h2 className="mt-1 text-base font-semibold">{guidance.title}</h2>
+              <p className="mt-1 text-sm text-muted-foreground">{guidance.instruction}</p>
+              {guidance.blocked_reason && (
+                <p className="mt-2 text-sm text-[var(--color-danger)]">{guidance.blocked_reason}</p>
+              )}
+            </div>
+            {guidance.phase !== "blocked" && (
+              <Button onClick={() => setActiveStep(phaseToStep(guidance.phase))}>
+                {guidance.cta_label}
+              </Button>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {error && (
         <p className="rounded-[var(--radius)] border border-[var(--color-danger)]/30 bg-[var(--color-danger)]/10 px-4 py-3 text-sm text-[var(--color-danger)]">
@@ -254,7 +307,6 @@ export default function CaseDetailPage() {
         </p>
       )}
 
-      {/* Step nav */}
       <div className="flex items-center gap-1 overflow-x-auto pb-2">
         {STEPS.map((s, i) => {
           const isActive = s.key === activeStep;
@@ -276,20 +328,25 @@ export default function CaseDetailPage() {
         })}
       </div>
 
-      {/* Step content */}
       <Card>
         <CardContent className="pt-5">
-          {activeStep === "intake" && intake && (
+          {stepError && (
+            <div className="rounded-[var(--radius)] border border-[var(--color-warning)]/30 bg-[var(--color-warning)]/5 px-4 py-8 text-center">
+              <AlertTriangle className="mx-auto mb-3 size-8 text-[var(--color-warning)]/50" />
+              <p className="text-sm text-muted-foreground">{stepError}</p>
+            </div>
+          )}
+          {!stepError && activeStep === "intake" && intake && (
             <IntakeStep state={intake} onAnswer={handleAnswer} />
           )}
-          {activeStep === "eligibility" && (
+          {!stepError && activeStep === "eligibility" && (
             <EligibilityStep
               result={eligibility}
               loading={submitting}
               onEvaluate={handleEvaluateEligibility}
             />
           )}
-          {activeStep === "checklist" && (
+          {!stepError && activeStep === "checklist" && (
             <ChecklistStep
               items={checklist}
               loading={submitting}
@@ -297,14 +354,14 @@ export default function CaseDetailPage() {
               onStatusChange={handleChecklistStatus}
             />
           )}
-          {activeStep === "forms" && (
+          {!stepError && activeStep === "forms" && (
             <FormsStep
               forms={forms}
               loading={submitting}
               onGenerate={handleGenerateForms}
             />
           )}
-          {activeStep === "review" && (
+          {!stepError && activeStep === "review" && (
             <ReviewStep
               result={review}
               loading={submitting}
@@ -312,7 +369,7 @@ export default function CaseDetailPage() {
               onAcknowledge={handleAcknowledgeReview}
             />
           )}
-          {activeStep === "packet" && (
+          {!stepError && activeStep === "packet" && (
             <PacketStep
               packet={packet}
               caseData={caseData}
@@ -323,11 +380,11 @@ export default function CaseDetailPage() {
           )}
         </CardContent>
       </Card>
+
+      <AssistantChat caseId={caseData.id} locale={caseData.locale} />
     </div>
   );
 }
-
-// ── Intake Step ────────────────────────────────────────────────────────────────
 
 function IntakeStep({
   state,
@@ -344,12 +401,18 @@ function IntakeStep({
 
   function handleSubmit(key: string) {
     if (drafts[key] !== undefined) {
-      onAnswer(key, drafts[key]);
+      const raw = drafts[key];
+      const q = state.questions.find((item) => item.key === key);
+      if (q?.type === "integer" && typeof raw === "string") {
+        onAnswer(key, Number.parseInt(raw, 10));
+      } else {
+        onAnswer(key, raw);
+      }
     }
   }
 
   const pct = state.progress.total > 0
-    ? Math.round((state.progress.current / state.progress.total) * 100)
+    ? Math.round((state.progress.answered / state.progress.total) * 100)
     : 0;
 
   return (
@@ -357,7 +420,8 @@ function IntakeStep({
       <div>
         <h3 className="text-sm font-medium text-muted-foreground">Intake questionnaire</h3>
         <p className="mt-1 text-xs text-muted-foreground">
-          {state.progress.current} of {state.progress.total} questions answered ({pct}%)
+          {state.progress.answered} of {state.progress.total} questions answered ({pct}%)
+          {state.progress.complete ? " · Complete — continue to eligibility" : ""}
         </p>
         <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
           <div className="h-full bg-primary transition-all" style={{ width: `${pct}%` }} />
@@ -373,56 +437,48 @@ function IntakeStep({
             return (
               <div key={q.key} className="space-y-1.5">
                 <label className="text-sm font-medium">
-                  {q.label}
-                  {q.required && <span className="ml-1 text-[var(--color-danger)]">*</span>}
+                  {q.prompt}
+                  {q.required !== false && <span className="ml-1 text-[var(--color-danger)]">*</span>}
                 </label>
-                {q.hint && <p className="text-xs text-muted-foreground">{q.hint}</p>}
-                {q.kind === "select" && q.options ? (
-                  <div className="flex gap-2">
+                {q.type === "enum" && q.options ? (
+                  <div className="flex flex-wrap gap-2">
                     {q.options.map((opt) => (
                       <button
-                        key={opt.value}
-                        onClick={() => {
-                          handleChange(q.key, opt.value);
-                          handleSubmit(q.key);
-                        }}
+                        key={opt}
+                        onClick={() => onAnswer(q.key, opt)}
                         className={`rounded-[var(--radius)] border px-3 py-2 text-sm transition-colors ${
-                          current === opt.value
+                          current === opt
                             ? "border-primary bg-primary/10 text-primary"
                             : "hover:bg-accent"
                         }`}
                       >
-                        {opt.label}
+                        {opt.replaceAll("_", " ")}
                       </button>
                     ))}
                   </div>
-                ) : q.kind === "bool" ? (
+                ) : q.type === "boolean" ? (
                   <div className="flex gap-2">
-                    {["true", "false"].map((v) => (
+                    {[true, false].map((v) => (
                       <button
-                        key={v}
-                        onClick={() => {
-                          handleChange(q.key, v === "true");
-                          handleSubmit(q.key);
-                        }}
+                        key={String(v)}
+                        onClick={() => onAnswer(q.key, v)}
                         className={`rounded-[var(--radius)] border px-4 py-2 text-sm transition-colors ${
-                          String(current) === v
+                          current === v
                             ? "border-primary bg-primary/10 text-primary"
                             : "hover:bg-accent"
                         }`}
                       >
-                        {v === "true" ? "Yes" : "No"}
+                        {v ? "Yes" : "No"}
                       </button>
                     ))}
                   </div>
                 ) : (
                   <div className="flex gap-2">
                     <input
-                      type={q.kind === "number" ? "number" : q.kind === "date" ? "date" : "text"}
+                      type={q.type === "integer" ? "number" : "text"}
                       value={String(current ?? "")}
                       onChange={(e) => handleChange(q.key, e.target.value)}
                       className="h-9 flex-1 rounded-[var(--radius)] border bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                      placeholder={q.hint ?? ""}
                     />
                     <Button onClick={() => handleSubmit(q.key)}>Save</Button>
                   </div>
@@ -442,8 +498,6 @@ function IntakeStep({
   );
 }
 
-// ── Eligibility Step ───────────────────────────────────────────────────────────
-
 function EligibilityStep({
   result,
   loading,
@@ -453,6 +507,13 @@ function EligibilityStep({
   loading: boolean;
   onEvaluate: () => void;
 }) {
+  const tone =
+    result?.result === "pass"
+      ? "success"
+      : result?.result === "at_risk"
+        ? "warning"
+        : "danger";
+
   return (
     <div className="space-y-6">
       <div>
@@ -476,39 +537,57 @@ function EligibilityStep({
       ) : (
         <div className="space-y-3">
           <div className="flex items-center gap-2">
-            <Badge tone={result.eligible ? "success" : "danger"}>
-              {result.eligible ? "Eligible" : "Issues found"}
-            </Badge>
+            <Badge tone={tone}>{result.result.replaceAll("_", " ")}</Badge>
           </div>
-          {result.checks.map((check) => (
-            <div
-              key={check.key}
-              className={`rounded-[var(--radius)] border p-4 ${
-                check.passed
-                  ? "border-[var(--color-success)]/30 bg-[var(--color-success)]/5"
-                  : "border-[var(--color-danger)]/30 bg-[var(--color-danger)]/5"
-              }`}
-            >
-              <div className="flex items-start gap-2">
-                {check.passed ? (
-                  <Check className="mt-0.5 size-4 shrink-0 text-[var(--color-success)]" />
-                ) : (
-                  <AlertTriangle className="mt-0.5 size-4 shrink-0 text-[var(--color-danger)]" />
-                )}
-                <div className="flex-1">
-                  <p className="text-sm font-medium">{check.label}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">{check.message}</p>
+          {result.findings.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              No rule failures found for the answers provided.
+            </p>
+          ) : (
+            result.findings.map((finding) => {
+              const passed = finding.status === "pass";
+              const url = citationUrl(finding.citation);
+              const version = citationVersion(finding.citation);
+              return (
+                <div
+                  key={`${finding.key}-${finding.status}`}
+                  className={`rounded-[var(--radius)] border p-4 ${
+                    passed
+                      ? "border-[var(--color-success)]/30 bg-[var(--color-success)]/5"
+                      : "border-[var(--color-danger)]/30 bg-[var(--color-danger)]/5"
+                  }`}
+                >
+                  <div className="flex items-start gap-2">
+                    {passed ? (
+                      <Check className="mt-0.5 size-4 shrink-0 text-[var(--color-success)]" />
+                    ) : (
+                      <AlertTriangle className="mt-0.5 size-4 shrink-0 text-[var(--color-danger)]" />
+                    )}
+                    <div className="flex-1">
+                      <p className="text-sm font-medium">{finding.key.replaceAll("_", " ")}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">{finding.message}</p>
+                      {url && (
+                        <a
+                          href={url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="mt-2 inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                        >
+                          Official source{version ? ` (${version})` : ""} <ExternalLink className="size-3" />
+                        </a>
+                      )}
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </div>
-          ))}
+              );
+            })
+          )}
+          <p className="text-xs text-muted-foreground">{result.disclaimer}</p>
         </div>
       )}
     </div>
   );
 }
-
-// ── Checklist Step ─────────────────────────────────────────────────────────────
 
 function ChecklistStep({
   items,
@@ -523,47 +602,65 @@ function ChecklistStep({
 }) {
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between">
+      <div className="flex items-start justify-between gap-3">
         <div>
           <h3 className="text-sm font-medium text-muted-foreground">Document checklist</h3>
           <p className="mt-1 text-xs text-muted-foreground">
-            {items.filter((i) => i.status !== "needed").length} of {items.length} completed
+            {items.filter((i) => i.status !== "needed").length} of {items.length} gathered — follow
+            how-to-obtain steps; no upload required here.
           </p>
         </div>
         <Button variant="outline" onClick={onRefresh} disabled={loading}>
-          Refresh
+          {items.length === 0 ? "Generate checklist" : "Refresh"}
         </Button>
       </div>
 
       {items.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No checklist items yet. Click refresh to generate.</p>
+        <p className="text-sm text-muted-foreground">
+          No checklist items yet. Generate your personalized list after eligibility.
+        </p>
       ) : (
         <div className="space-y-3">
-          {items.map((item) => (
-            <div
-              key={item.id}
-              className="flex items-start gap-3 rounded-[var(--radius)] border p-4"
-            >
-              <div className="mt-0.5">
-                {item.status === "uploaded" ? (
-                  <Check className="size-4 text-[var(--color-success)]" />
-                ) : item.status === "gathered" ? (
-                  <Check className="size-4 text-[var(--color-warning)]" />
-                ) : (
-                  <div className="size-4 rounded border border-muted-foreground/30" />
-                )}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <p className="text-sm font-medium">{item.name}</p>
-                  {item.is_required && <Badge tone="danger">Required</Badge>}
-                  {item.status === "uploaded" && <Badge tone="success">Uploaded</Badge>}
-                  {item.status === "gathered" && <Badge tone="warning">Gathered</Badge>}
+          {items.map((item) => {
+            const url = citationUrl(item.citation);
+            const version = citationVersion(item.citation);
+            return (
+              <div
+                key={item.id}
+                className="flex items-start gap-3 rounded-[var(--radius)] border p-4"
+              >
+                <div className="mt-0.5">
+                  {item.status !== "needed" ? (
+                    <Check className="size-4 text-[var(--color-success)]" />
+                  ) : (
+                    <div className="size-4 rounded border border-muted-foreground/30" />
+                  )}
                 </div>
-                <p className="mt-1 text-xs text-muted-foreground">{item.how_to_obtain}</p>
-                <p className="mt-0.5 text-xs text-muted-foreground italic">Why: {item.why_required}</p>
-              </div>
-              <div className="flex gap-1">
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-sm font-medium">{item.name}</p>
+                    {item.is_required && <Badge tone="danger">Required</Badge>}
+                    {item.status === "gathered" && <Badge tone="success">Gathered</Badge>}
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    <span className="font-medium text-foreground">How: </span>
+                    {item.how_to_obtain}
+                  </p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    <span className="font-medium text-foreground">Why: </span>
+                    {item.why_required}
+                  </p>
+                  {url && (
+                    <a
+                      href={url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-2 inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                    >
+                      Official source{version ? ` (${version})` : ""} <ExternalLink className="size-3" />
+                    </a>
+                  )}
+                </div>
                 {item.status === "needed" && (
                   <button
                     onClick={() => onStatusChange(item.id, "gathered")}
@@ -572,24 +669,14 @@ function ChecklistStep({
                     Mark gathered
                   </button>
                 )}
-                {item.status === "gathered" && (
-                  <button
-                    onClick={() => onStatusChange(item.id, "uploaded")}
-                    className="rounded px-2 py-1 text-xs text-muted-foreground hover:bg-accent"
-                  >
-                    Mark uploaded
-                  </button>
-                )}
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
   );
 }
-
-// ── Forms Step ─────────────────────────────────────────────────────────────────
 
 function FormsStep({
   forms,
@@ -641,11 +728,6 @@ function FormsStep({
                   </div>
                 ))}
               </div>
-              {form.missing_required_fields.length > 0 && (
-                <p className="mt-2 text-xs text-[var(--color-danger)]">
-                  Missing: {form.missing_required_fields.join(", ")}
-                </p>
-              )}
             </div>
           ))}
         </div>
@@ -653,8 +735,6 @@ function FormsStep({
     </div>
   );
 }
-
-// ── Review Step ────────────────────────────────────────────────────────────────
 
 function ReviewStep({
   result,
@@ -683,13 +763,11 @@ function ReviewStep({
 
       {!result ? (
         <p className="text-sm text-muted-foreground">Click &quot;Run review&quot; to check your packet.</p>
-      ) : result.flags.length === 0 ? (
+      ) : result.ready ? (
         <div className="flex flex-col items-center py-8 text-center">
           <Check className="mb-3 size-8 text-[var(--color-success)]" />
           <p className="text-sm font-medium">All checks passed</p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Your packet is ready for assembly.
-          </p>
+          <p className="mt-1 text-xs text-muted-foreground">Your packet is ready for assembly.</p>
           <Button onClick={onAcknowledge} className="mt-4">
             Continue to packet
           </Button>
@@ -719,8 +797,6 @@ function ReviewStep({
   );
 }
 
-// ── Packet Step ────────────────────────────────────────────────────────────────
-
 function PacketStep({
   packet,
   caseData,
@@ -734,6 +810,58 @@ function PacketStep({
   onBuild: () => void;
   onSubmit: () => void;
 }) {
+  function packetSummaryText(source: Record<string, unknown>): string {
+    const forms = Array.isArray(source.forms)
+      ? (source.forms as { form_code?: string; form_version?: string }[])
+      : [];
+    const checklist = Array.isArray(source.checklist)
+      ? (source.checklist as { name?: string; status?: string; is_required?: boolean }[])
+      : [];
+    const requiredTotal = checklist.filter((i) => i.is_required).length;
+    const requiredDone = checklist.filter(
+      (i) => i.is_required && i.status && i.status !== "needed",
+    ).length;
+    const lines = [
+      "Torii Application Packet Summary",
+      `Reference: ${String(source.reference ?? caseData.reference)}`,
+      `Scope: ${caseData.scope_label ?? caseData.locale.toUpperCase()}`,
+      `Generated at: ${new Date().toISOString()}`,
+      "",
+      "Forms",
+      forms.length === 0
+        ? "- No generated forms listed in this packet."
+        : forms
+          .map((form) => `- ${String(form.form_code ?? "form")} (v${String(form.form_version ?? "n/a")})`)
+          .join("\n"),
+      "",
+      "Checklist",
+      `- Required gathered: ${requiredDone}/${requiredTotal}`,
+      ...checklist.map(
+        (item) => `- ${String(item.name ?? "Document")}: ${String(item.status ?? "needed")}`,
+      ),
+      "",
+      "Submission",
+      "- This jurisdiction may require mail/in-person submission if e-file is unavailable.",
+    ];
+    return lines.join("\n");
+  }
+
+  function downloadPacket() {
+    if (!packet) return;
+    const filename = `${caseData.reference}-packet-summary.txt`;
+    const blob = new Blob([packetSummaryText(packet)], {
+      type: "text/plain;charset=utf-8",
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -764,20 +892,10 @@ function PacketStep({
             </p>
           </div>
 
-          {Array.isArray(packet.forms) && (
-            <div>
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Forms included
-              </p>
-              {(packet.forms as { form_code?: string; form_version?: string }[]).map((f, i) => (
-                <div key={i} className="flex items-center gap-2 py-1 text-sm">
-                  <FileText className="size-3.5 text-muted-foreground" />
-                  <span className="font-mono">{String(f.form_code)}</span>
-                  <Badge tone="muted">v{String(f.form_version)}</Badge>
-                </div>
-              ))}
-            </div>
-          )}
+          <Button variant="outline" onClick={downloadPacket}>
+            <Download className="size-4" />
+            Download summary
+          </Button>
 
           {caseData.status !== "submitted" && (
             <Button onClick={onSubmit} disabled={loading}>

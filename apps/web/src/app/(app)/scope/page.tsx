@@ -1,16 +1,22 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
+import Link from "next/link";
 import { ArrowLeft, Check, Globe, Loader2, ArrowRight } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/lib/auth-context";
+import {
+  listJurisdictions,
+  listVisaCategories,
+  listCaseActions,
+  scopeCase,
+  type Jurisdiction,
+  type VisaCategory,
+  type CaseAction,
+} from "@/lib/api/cases";
 
-type Jurisdiction = { id: number; code: string; name: string; is_live: boolean };
-type Category = { id: number; code: string; name: string; is_live: boolean };
 type CaseResult = { id: number; reference: string; status: string };
-
-const API = "/backend/v1";
 
 type Step = "jurisdiction" | "category" | "action" | "review";
 
@@ -21,72 +27,52 @@ export default function ScopePage() {
 
   // Data
   const [jurisdictions, setJurisdictions] = useState<Jurisdiction[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [actions, setActions] = useState<Category[]>([]);
+  const [categories, setCategories] = useState<VisaCategory[]>([]);
+  const [actions, setActions] = useState<CaseAction[]>([]);
 
   // Selections
   const [selectedJurisdiction, setSelectedJurisdiction] = useState<Jurisdiction | null>(null);
-  const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
-  const [selectedAction, setSelectedAction] = useState<Category | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<VisaCategory | null>(null);
+  const [selectedAction, setSelectedAction] = useState<CaseAction | null>(null);
 
   const [submitting, setSubmitting] = useState(false);
   const [createdCase, setCreatedCase] = useState<CaseResult | null>(null);
 
-  const hdrs = useCallback((): Record<string, string> => {
-    const h: Record<string, string> = { "content-type": "application/json" };
-    if (token) h.Authorization = `Bearer ${token}`;
-    return h;
-  }, [token]);
-
   // Load jurisdictions on mount
   useEffect(() => {
+    if (!token) return;
     void (async () => {
       try {
-        const res = await fetch(`${API}/jurisdictions?live_only=true`, {
-          cache: "no-store",
-          headers: hdrs(),
-        });
-        if (!res.ok) throw new Error(`API returned ${res.status}`);
-        setJurisdictions(await res.json());
+        setJurisdictions(await listJurisdictions(token, false));
       } catch {
         setError("Could not load jurisdictions. Is the API running?");
       }
     })();
-  }, [hdrs]);
+  }, [token]);
 
   // Load categories when jurisdiction is selected
   useEffect(() => {
-    if (!selectedJurisdiction) return;
+    if (!selectedJurisdiction || !token) return;
     void (async () => {
       try {
-        const res = await fetch(
-          `${API}/cases/visa-categories?jurisdiction_code=${selectedJurisdiction.code}&live_only=true`,
-          { cache: "no-store", headers: hdrs() },
-        );
-        if (!res.ok) throw new Error(`API returned ${res.status}`);
-        setCategories(await res.json());
+        setCategories(await listVisaCategories(token, selectedJurisdiction.code, false));
       } catch {
         setError("Could not load visa categories.");
       }
     })();
-  }, [selectedJurisdiction, hdrs]);
+  }, [selectedJurisdiction, token]);
 
   // Load actions when jurisdiction is selected
   useEffect(() => {
-    if (!selectedJurisdiction) return;
+    if (!selectedJurisdiction || !token) return;
     void (async () => {
       try {
-        const res = await fetch(
-          `${API}/cases/case-actions?jurisdiction_code=${selectedJurisdiction.code}&live_only=true`,
-          { cache: "no-store", headers: hdrs() },
-        );
-        if (!res.ok) throw new Error(`API returned ${res.status}`);
-        setActions(await res.json());
+        setActions(await listCaseActions(token, selectedJurisdiction.code, false));
       } catch {
         setError("Could not load case actions.");
       }
     })();
-  }, [selectedJurisdiction, hdrs]);
+  }, [selectedJurisdiction, token]);
 
   function goBack() {
     setError(null);
@@ -96,41 +82,36 @@ export default function ScopePage() {
   }
 
   function selectJurisdiction(j: Jurisdiction) {
+    if (!j.is_live) return;
     setSelectedJurisdiction(j);
     setSelectedCategory(null);
     setSelectedAction(null);
     setStep("category");
   }
 
-  function selectCategory(c: Category) {
+  function selectCategory(c: VisaCategory) {
+    if (!c.is_live) return;
     setSelectedCategory(c);
     setStep("action");
   }
 
-  function selectAction(a: Category) {
+  function selectAction(a: CaseAction) {
+    if (!a.is_live) return;
     setSelectedAction(a);
     setStep("review");
   }
 
   async function createCase() {
-    if (!selectedJurisdiction || !selectedCategory || !selectedAction) return;
+    if (!token || !selectedJurisdiction || !selectedCategory || !selectedAction) return;
     setSubmitting(true);
     setError(null);
     try {
-      const res = await fetch(`${API}/cases/scope`, {
-        method: "POST",
-        headers: hdrs(),
-        body: JSON.stringify({
-          jurisdiction_code: selectedJurisdiction.code,
-          visa_category_code: selectedCategory.code,
-          action_code: selectedAction.code,
-        }),
+      const result = await scopeCase(token, {
+        jurisdiction_code: selectedJurisdiction.code,
+        visa_category_code: selectedCategory.code,
+        action_code: selectedAction.code,
       });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.detail || `API returned ${res.status}`);
-      }
-      setCreatedCase(await res.json());
+      setCreatedCase(result);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to create case");
     } finally {
@@ -147,7 +128,7 @@ export default function ScopePage() {
         <h2 className="text-2xl font-semibold">Case created</h2>
         <p className="text-muted-foreground">
           Your case <strong className="font-mono">{createdCase.reference}</strong> is
-          ready. Next step: complete the intake questionnaire.
+          ready. We will walk you through intake, eligibility, documents, forms, and packet.
         </p>
         <Card>
           <CardContent className="flex items-center justify-between pt-5">
@@ -158,6 +139,18 @@ export default function ScopePage() {
             <Badge tone="success">{createdCase.status}</Badge>
           </CardContent>
         </Card>
+        <ol className="space-y-2 text-left text-sm text-muted-foreground">
+          <li>1. Answer intake questions</li>
+          <li>2. Check published eligibility rules</li>
+          <li>3. Gather required documents</li>
+          <li>4. Generate forms and build your packet</li>
+        </ol>
+        <Link
+          href={`/cases/${createdCase.id}`}
+          className="inline-flex items-center justify-center gap-2 rounded-[var(--radius)] bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground hover:opacity-90"
+        >
+          Continue to intake <ArrowRight className="size-4" />
+        </Link>
       </div>
     );
   }
@@ -221,13 +214,19 @@ export default function ScopePage() {
               <button
                 key={j.id}
                 onClick={() => selectJurisdiction(j)}
-                className="flex w-full items-center gap-4 rounded-[var(--radius)] border bg-card p-4 text-left transition-colors hover:bg-accent"
+                disabled={!j.is_live}
+                className={`flex w-full items-center gap-4 rounded-[var(--radius)] border bg-card p-4 text-left transition-colors ${
+                  j.is_live ? "hover:bg-accent" : "cursor-not-allowed opacity-60"
+                }`}
               >
                 <Globe className="size-5 text-muted-foreground" />
                 <div className="flex-1">
                   <p className="font-medium">{j.name}</p>
                   <p className="text-xs text-muted-foreground font-mono">{j.code}</p>
                 </div>
+                <Badge tone={j.is_live ? "success" : "muted"}>
+                  {j.is_live ? "Available" : "Coming soon"}
+                </Badge>
                 <ArrowRight className="size-4 text-muted-foreground" />
               </button>
             ))
@@ -253,12 +252,18 @@ export default function ScopePage() {
               <button
                 key={c.id}
                 onClick={() => selectCategory(c)}
-                className="flex w-full items-center gap-4 rounded-[var(--radius)] border bg-card p-4 text-left transition-colors hover:bg-accent"
+                disabled={!c.is_live}
+                className={`flex w-full items-center gap-4 rounded-[var(--radius)] border bg-card p-4 text-left transition-colors ${
+                  c.is_live ? "hover:bg-accent" : "cursor-not-allowed opacity-60"
+                }`}
               >
                 <div className="flex-1">
                   <p className="font-medium">{c.name}</p>
                   <p className="text-xs text-muted-foreground font-mono">{c.code}</p>
                 </div>
+                <Badge tone={c.is_live ? "success" : "muted"}>
+                  {c.is_live ? "Available" : "Coming soon"}
+                </Badge>
                 <ArrowRight className="size-4 text-muted-foreground" />
               </button>
             ))
@@ -284,12 +289,18 @@ export default function ScopePage() {
               <button
                 key={a.id}
                 onClick={() => selectAction(a)}
-                className="flex w-full items-center gap-4 rounded-[var(--radius)] border bg-card p-4 text-left transition-colors hover:bg-accent"
+                disabled={!a.is_live}
+                className={`flex w-full items-center gap-4 rounded-[var(--radius)] border bg-card p-4 text-left transition-colors ${
+                  a.is_live ? "hover:bg-accent" : "cursor-not-allowed opacity-60"
+                }`}
               >
                 <div className="flex-1">
                   <p className="font-medium">{a.name}</p>
                   <p className="text-xs text-muted-foreground font-mono">{a.code}</p>
                 </div>
+                <Badge tone={a.is_live ? "success" : "muted"}>
+                  {a.is_live ? "Available" : "Coming soon"}
+                </Badge>
                 <ArrowRight className="size-4 text-muted-foreground" />
               </button>
             ))

@@ -69,7 +69,7 @@ class Settings(BaseSettings):
     # --- AI service (OPS scraper, assistant chat) ------------------------------
     ai_service_url: str = "http://localhost:8001"
     # Comma-separated list of jurisdiction codes to scrape daily (US-25, US-26).
-    scrape_jurisdictions: str = "JP"
+    scrape_jurisdictions: str = "JP,US"
     # Service-to-service token for authenticated AI→API calls.
     service_token: str = ""
 

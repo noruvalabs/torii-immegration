@@ -26,6 +26,67 @@ JP_WORK_RENEWAL_ELIGIBILITY_RULES: list[dict[str, Any]] = [
     }
 ]
 
+JP_STUDENT_NEW_APPLICATION_ELIGIBILITY_RULES: list[dict[str, Any]] = [
+    {
+        "key": "has_school_acceptance",
+        "operator": "equals",
+        "value": True,
+        "failure_status": "fail",
+        "message": (
+            "An acceptance from a recognized school in Japan is required "
+            "for this student visa path."
+        ),
+        "citation": {
+            "authority": "Immigration Services Agency of Japan",
+            "title": "Certificate of Eligibility Application (Student)",
+            "url": "https://www.moj.go.jp/isa/applications/procedures/16-1.html",
+            "source_version": "2026-04",
+        },
+    },
+    {
+        "key": "has_financial_support",
+        "operator": "equals",
+        "value": True,
+        "failure_status": "at_risk",
+        "message": "You should provide evidence of funds to cover tuition and living costs.",
+        "citation": {
+            "authority": "Immigration Services Agency of Japan",
+            "title": "Certificate of Eligibility Application (Student)",
+            "url": "https://www.moj.go.jp/isa/applications/procedures/16-1.html",
+            "source_version": "2026-04",
+        },
+    },
+]
+
+US_H1B_CITATION = {
+    "authority": "U.S. Citizenship and Immigration Services",
+    "title": "H-1B Specialty Occupations",
+    "url": "https://www.uscis.gov/working-in-the-united-states/temporary-workers/h-1b-specialty-occupations",
+    "source_version": "2026-04",
+}
+
+US_H1B_ELIGIBILITY_RULES: list[dict[str, Any]] = [
+    {
+        "key": "has_bachelor_degree",
+        "operator": "equals",
+        "value": True,
+        "failure_status": "fail",
+        "message": (
+            "Published H-1B specialty occupation criteria generally require "
+            "a related bachelor's degree or equivalent."
+        ),
+        "citation": US_H1B_CITATION,
+    },
+    {
+        "key": "has_employer_sponsor",
+        "operator": "equals",
+        "value": True,
+        "failure_status": "fail",
+        "message": "An H-1B petition requires a U.S. employer petitioner.",
+        "citation": US_H1B_CITATION,
+    },
+]
+
 
 class EligibilityFinding(BaseModel):
     key: str

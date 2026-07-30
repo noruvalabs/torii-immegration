@@ -10,7 +10,6 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-import httpx
 import structlog
 from arq import cron
 from arq.connections import RedisSettings
@@ -86,78 +85,136 @@ async def send_renewal_reminders(ctx: dict[str, Any]) -> int:
 
 
 async def scrape_immigration_sources(ctx: dict[str, Any]) -> dict[str, Any]:
-    """AI-powered OPS worker: daily scrape of official immigration sources (US-25, US-26).
+    """Daily Tavily+LLM scrape via the AI service, with gov_scraper fallback.
 
-    Calls the AI service's /ai/ops/scrape endpoint which uses Tavily to discover
-    government pages, scrapes them, and extracts structured data via LLM.
-    The extracted data is then ingested into the API as draft rules/forms (NF-9).
+    Beachhead JP/US scopes are scraped, ingested, and auto-promoted when the
+    payload validates (citations + intake schema). Live seed data is never
+    demoted by a failed scrape.
     """
+    import httpx
+
+    from torii_api.services.ops_ingest import BEACHHEAD_SCOPES, ingest_scrape_result
+
     settings = get_settings()
-    ai_base = getattr(settings, "ai_service_url", "http://localhost:8001")
-    jurisdictions = getattr(settings, "scrape_jurisdictions", "JP").split(",")
+    session_factory = ctx["session_factory"]
+    jurisdictions = {
+        j.strip().upper() for j in settings.scrape_jurisdictions.split(",") if j.strip()
+    }
+    scopes = [s for s in BEACHHEAD_SCOPES if s[0] in jurisdictions]
 
-    results: dict[str, Any] = {}
-    for jurisdiction in jurisdictions:
-        jurisdiction = jurisdiction.strip()
-        if not jurisdiction:
-            continue
+    stored = {
+        "eligibility": 0,
+        "documents": 0,
+        "intake": 0,
+        "forms": 0,
+        "promoted": 0,
+        "source": "tavily",
+    }
 
-        log.info("scraper.start", jurisdiction=jurisdiction)
+    log.info("scraper.starting", scopes=scopes, ai_url=settings.ai_service_url)
+
+    ai_ok = False
+    async with session_factory() as session:
         try:
             async with httpx.AsyncClient(timeout=120.0) as client:
-                # Trigger scrape
-                resp = await client.post(
-                    f"{ai_base}/ai/ops/scrape",
-                    json={
-                        "jurisdiction_code": jurisdiction,
-                        "visa_category": "work",
-                        "action": "renewal",
-                    },
-                )
-                if resp.status_code == 200:
-                    scrape_data = resp.json()
-                    log.info("scraper.done", jurisdiction=jurisdiction, data=scrape_data)
-
-                    # Trigger ingest
-                    ingest_resp = await client.post(
-                        f"{ai_base}/ai/ops/ingest",
-                        json={
-                            "jurisdiction_code": jurisdiction,
-                            "visa_category": "work",
-                            "action": "renewal",
-                            "eligibility_rules": scrape_data.get("eligibility_rules", []),
-                            "document_requirements": scrape_data.get("document_requirements", []),
-                            "intake_questions": scrape_data.get("intake_questions", []),
-                            "form_templates": scrape_data.get("form_templates", []),
-                            "source_pages": scrape_data.get("source_pages", []),
-                        },
-                    )
-                    ingest_status = "ok" if ingest_resp.status_code == 200 else "failed"
-                    results[jurisdiction] = {
-                        "scrape": scrape_data.get("status"),
-                        "ingest": ingest_status,
-                    }
-                else:
-                    log.warning(
-                        "scraper.api_failed",
-                        jurisdiction=jurisdiction,
-                        status=resp.status_code,
-                    )
-                    results[jurisdiction] = {"error": f"API returned {resp.status_code}"}
+                for jurisdiction_code, visa_category, action in scopes:
+                    try:
+                        resp = await client.post(
+                            f"{settings.ai_service_url.rstrip('/')}/ai/ops/scrape",
+                            json={
+                                "jurisdiction_code": jurisdiction_code,
+                                "visa_category": visa_category,
+                                "action": action,
+                                "return_payload": True,
+                            },
+                        )
+                        if resp.status_code >= 300:
+                            log.warning(
+                                "scraper.ai_http_error",
+                                status=resp.status_code,
+                                jurisdiction=jurisdiction_code,
+                            )
+                            continue
+                        payload = resp.json()
+                        ai_ok = True
+                        rules = list(payload.get("eligibility_rules_payload") or [])
+                        docs = list(payload.get("document_requirements_payload") or [])
+                        questions = list(payload.get("intake_questions_payload") or [])
+                        forms = list(payload.get("form_templates_payload") or [])
+                        if not rules and not docs and not questions:
+                            log.info(
+                                "scraper.ai_empty_payload",
+                                jurisdiction=jurisdiction_code,
+                                message=payload.get("message"),
+                            )
+                            continue
+                        result = await ingest_scrape_result(
+                            session,
+                            jurisdiction_code=jurisdiction_code,
+                            visa_category=visa_category,
+                            action=action,
+                            eligibility_rules=rules,
+                            document_requirements=docs,
+                            intake_questions=questions,
+                            form_templates=forms,
+                            auto_promote=True,
+                        )
+                        for key in ("eligibility", "documents", "intake", "forms"):
+                            stored[key] += int(result.get(key) or 0)
+                        if result.get("promoted"):
+                            stored["promoted"] += 1
+                    except Exception as exc:
+                        log.warning(
+                            "scraper.ai_scope_failed",
+                            jurisdiction=jurisdiction_code,
+                            error=str(exc),
+                        )
+            await session.commit()
         except Exception as exc:
-            log.error("scraper.failed", jurisdiction=jurisdiction, error=str(exc))
-            results[jurisdiction] = {"error": str(exc)}
+            log.warning("scraper.ai_unavailable", error=str(exc))
+            await session.rollback()
 
-    log.info("scraper.batch_complete", results=results)
-    return results
+    if not ai_ok or stored["eligibility"] == 0:
+        log.info("scraper.fallback_gov_scraper")
+        stored["source"] = "gov_scraper_fallback"
+        from torii_api.services.gov_scraper import scrape_all
+
+        results = await scrape_all(sorted(jurisdictions))
+        async with session_factory() as session:
+            for code, result in results.items():
+                for action_code, rules in result.eligibility_rules.items():
+                    docs = result.document_requirements.get(action_code, [])
+                    # Map scraper action/visa keys onto beachhead scopes when possible
+                    visa = "work" if code == "JP" else "h1b"
+                    if action_code in ("renewal", "new_application"):
+                        action = action_code
+                    else:
+                        action = "renewal"
+                    if (code, visa, action) not in scopes and (code, visa, "renewal") in scopes:
+                        action = "renewal"
+                    if (code, visa, action) not in scopes:
+                        continue
+                    ingest = await ingest_scrape_result(
+                        session,
+                        jurisdiction_code=code,
+                        visa_category=visa,
+                        action=action,
+                        eligibility_rules=list(rules or []),
+                        document_requirements=list(docs or []),
+                        intake_questions=[],
+                        form_templates=[],
+                        auto_promote=False,
+                    )
+                    for key in ("eligibility", "documents", "intake", "forms"):
+                        stored[key] += int(ingest.get(key) or 0)
+            await session.commit()
+
+    log.info("scraper.batch_complete", **stored)
+    return stored
 
 
 async def monitor_official_sources(ctx: dict[str, Any]) -> None:
-    """Government-change monitor tick (US-26): crawl official sources, diff, flag for review.
-
-    Now delegates to the AI scraper service which uses Tavily + LLM to detect changes.
-    Detected changes are stored as draft rules/forms for human review (NF-9).
-    """
+    """Government-change monitor tick (US-26): delegates to daily scrape path."""
     await scrape_immigration_sources(ctx)
 
 
