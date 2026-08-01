@@ -62,6 +62,15 @@ class User(TimestampMixin, Base):
         DateTime(timezone=True), nullable=True
     )
 
+    # ── Profile fields (auto-fill for intake) ──────────────────────────────
+    full_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    nationality: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    passport_number: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    passport_expiry: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    date_of_birth: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    current_country: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    profile_complete: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+
     cases: Mapped[list[Case]] = relationship(back_populates="owner")
 
 

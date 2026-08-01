@@ -47,6 +47,27 @@ router = APIRouter(prefix="/v1/cases", tags=["cases"])
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
 
 
+# ── Profile pre-fill ─────────────────────────────────────────────────────────
+
+# Maps User profile fields to intake question keys.
+PROFILE_TO_INTAKE_MAP: dict[str, str] = {
+    "full_name": "full_name",
+    "nationality": "nationality",
+    "passport_number": "passport_number",
+    "current_country": "current_location_country",
+}
+
+
+def _prefill_from_profile(user: User) -> dict[str, Any]:
+    """Pre-fill intake answers from the user's saved profile fields."""
+    answers: dict[str, Any] = {}
+    for profile_field, intake_key in PROFILE_TO_INTAKE_MAP.items():
+        value = getattr(user, profile_field, None)
+        if value:
+            answers[intake_key] = value
+    return answers
+
+
 # ── Request / response schemas ────────────────────────────────────────────────
 
 
@@ -272,6 +293,7 @@ async def scope_case(
         user_id=user.id,
         status="draft",
         locale=payload.locale,
+        intake_answers=_prefill_from_profile(user),
     )
     session.add(case)
     try:

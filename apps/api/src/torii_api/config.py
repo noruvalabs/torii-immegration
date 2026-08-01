@@ -34,6 +34,10 @@ class Settings(BaseSettings):
     # applies them explicitly); handy to enable in dev/staging containers via env.
     migrate_on_startup: bool = False
 
+    # Run seed on service startup. Off by default; enable in dev/staging to auto-populate
+    # jurisdictions, visa categories, and workflows on first boot.
+    seed_on_startup: bool = False
+
     # --- Background scheduler / task queue (arq over Redis) --------------------
     # The API enqueues jobs here; a separate `arq` worker consumes them and runs the
     # cron schedule. The API degrades gracefully when Redis is absent (enqueue no-ops

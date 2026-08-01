@@ -58,6 +58,65 @@ JP_STUDENT_NEW_APPLICATION_ELIGIBILITY_RULES: list[dict[str, Any]] = [
     },
 ]
 
+JP_TOURIST_CITATION = {
+    "authority": "Immigration Services Agency of Japan",
+    "title": "Visa for Temporary Visitors (Tourism)",
+    "url": "https://www.moj.go.jp/isa/applications/procedures/16-1.html",
+    "source_version": "2026-04",
+}
+
+# Nationalities eligible for Japan eVISA (direct application).
+# Source: Ministry of Foreign Affairs of Japan — Visa issuance procedures.
+EVISA_DIRECT_NATIONALITIES: list[str] = [
+    "AU", "BR", "CA", "KH", "SA", "ZA", "TW", "GB", "US",
+]
+
+# Nationalities that apply via Japanese consulate (not direct eVISA).
+EVISA_CONSULATE_NATIONALITIES: list[str] = [
+    "HK", "IN", "ID", "MO", "MN", "KR", "SG", "AE",
+]
+
+# All eVISA-eligible nationalities (direct + consulate).
+EVISA_ELIGIBLE_NATIONALITIES = (
+    EVISA_DIRECT_NATIONALITIES + EVISA_CONSULATE_NATIONALITIES
+)
+
+JP_TOURIST_NEW_APPLICATION_ELIGIBILITY_RULES: list[dict[str, Any]] = [
+    {
+        "key": "visitor_nationality",
+        "operator": "nationality_in",
+        "value": EVISA_ELIGIBLE_NATIONALITIES,
+        "failure_status": "at_risk",
+        "message": (
+            "The visitor's nationality may not be eligible for Japan eVISA. "
+            "They may need to apply through an accredited agency or on paper."
+        ),
+        "citation": JP_TOURIST_CITATION,
+    },
+    {
+        "key": "intended_length_of_stay_days",
+        "operator": "max",
+        "value": 90,
+        "failure_status": "at_risk",
+        "message": (
+            "Short-term visitor visas are typically issued for stays of up to "
+            "90 days. Longer stays may require a different visa category."
+        ),
+        "citation": JP_TOURIST_CITATION,
+    },
+    {
+        "key": "visitor_has_sufficient_funds",
+        "operator": "equals",
+        "value": "visitor_own_funds",
+        "failure_status": "at_risk",
+        "message": (
+            "The visitor should demonstrate their own funds, or the guarantor "
+            "should prepare a financial sponsorship statement."
+        ),
+        "citation": JP_TOURIST_CITATION,
+    },
+]
+
 US_H1B_CITATION = {
     "authority": "U.S. Citizenship and Immigration Services",
     "title": "H-1B Specialty Occupations",
@@ -113,6 +172,8 @@ def _matches(answer: Any, operator: str, expected: Any) -> bool:
         return numeric and answer <= expected
     if operator == "in":
         return answer in expected
+    if operator == "nationality_in":
+        return isinstance(answer, str) and answer in expected
     return False
 
 

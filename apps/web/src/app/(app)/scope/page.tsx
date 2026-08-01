@@ -21,7 +21,7 @@ type CaseResult = { id: number; reference: string; status: string };
 type Step = "jurisdiction" | "category" | "action" | "review";
 
 export default function ScopePage() {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const [step, setStep] = useState<Step>("jurisdiction");
   const [error, setError] = useState<string | null>(null);
 
@@ -166,6 +166,17 @@ export default function ScopePage() {
           supported combinations are shown.
         </p>
       </div>
+
+      {user?.nationality && step === "jurisdiction" && (
+        <div className="rounded-[var(--radius)] border border-primary/20 bg-primary/5 px-4 py-3 text-sm">
+          <span className="font-medium">Based on your nationality ({user.nationality}):</span>{" "}
+          <span className="text-muted-foreground">
+            {user.nationality === "Japan"
+              ? "You may be eligible for US B1/B2 or ESTA for short-term travel."
+              : "You may be eligible for Japan eVISA for short-term tourism. Select Japan to explore."}
+          </span>
+        </div>
+      )}
 
       {/* Progress */}
       <div className="flex items-center gap-2 text-sm">

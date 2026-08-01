@@ -275,6 +275,72 @@ US_H1B_QUESTIONS: list[dict[str, Any]] = [
     },
 ]
 
+JP_TOURIST_NEW_APPLICATION_QUESTIONS: list[dict[str, Any]] = [
+    {
+        "key": "full_name",
+        "prompt": "What is your full name as it appears on your residence card?",
+        "type": "string",
+        "min_length": 2,
+        "max_length": 200,
+    },
+    {
+        "key": "residence_card_number",
+        "prompt": "What is your residence card number (在留カード番号)?",
+        "type": "string",
+        "min_length": 5,
+        "max_length": 32,
+    },
+    {
+        "key": "relationship_to_visitor",
+        "prompt": "What is your relationship to the person visiting Japan?",
+        "type": "enum",
+        "options": ["spouse", "parent", "child", "sibling", "other"],
+    },
+    {
+        "key": "visitor_full_name",
+        "prompt": "What is the visitor's full name as it appears on their passport?",
+        "type": "string",
+        "min_length": 2,
+        "max_length": 200,
+    },
+    {
+        "key": "visitor_nationality",
+        "prompt": "What is the visitor's nationality (as shown on their passport)?",
+        "type": "string",
+        "min_length": 2,
+        "max_length": 100,
+    },
+    {
+        "key": "visitor_passport_number",
+        "prompt": "What is the visitor's passport number?",
+        "type": "string",
+        "min_length": 5,
+        "max_length": 32,
+    },
+    {
+        "key": "purpose_of_visit",
+        "prompt": "What is the main purpose of the visitor's trip to Japan?",
+        "type": "enum",
+        "options": ["tourism", "visiting_family", "other"],
+    },
+    {
+        "key": "intended_length_of_stay_days",
+        "prompt": "How many days does the visitor plan to stay in Japan?",
+        "type": "integer",
+        "min_value": 1,
+        "max_value": 90,
+    },
+    {
+        "key": "visitor_has_sufficient_funds",
+        "prompt": (
+            "Will the visitor show proof of their own funds, "
+            "or are you covering their expenses?"
+        ),
+        "type": "enum",
+        "options": ["visitor_own_funds", "guarantor_covers", "both"],
+    },
+]
+
 JP_STUDENT_NEW_APPLICATION_QUESTIONS: list[dict[str, Any]] = [
     {
         "key": "full_name",

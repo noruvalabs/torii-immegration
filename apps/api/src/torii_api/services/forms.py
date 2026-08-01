@@ -86,6 +86,66 @@ JP_STUDENT_NEW_APPLICATION_FORM_TEMPLATE: dict[str, Any] = {
 }
 
 
+JP_TOURIST_NEW_APPLICATION_FORM_TEMPLATE: dict[str, Any] = {
+    "code": "guarantor_pack",
+    "version": "2026-04",
+    "official_title": "Guarantor Pack for Short-Term Visitor Visa (招へい・身元保証一式)",
+    "citation": {
+        "authority": "Ministry of Foreign Affairs of Japan",
+        "title": "Guarantee and Invitation Documents",
+        "url": "https://www.mofa.go.jp/j_info/visit/visa/pdfs/guarantee.pdf",
+        "source_version": "2026-04",
+    },
+    "field_mappings": [
+        {
+            "form_field": "guarantor.full_name",
+            "answer_key": "full_name",
+            "required": True,
+        },
+        {
+            "form_field": "guarantor.residence_card_number",
+            "answer_key": "residence_card_number",
+            "required": True,
+        },
+        {
+            "form_field": "visitor.full_name",
+            "answer_key": "visitor_full_name",
+            "required": True,
+        },
+        {
+            "form_field": "visitor.nationality",
+            "answer_key": "visitor_nationality",
+            "required": True,
+        },
+        {
+            "form_field": "visitor.passport_number",
+            "answer_key": "visitor_passport_number",
+            "required": True,
+        },
+        {
+            "form_field": "relationship",
+            "answer_key": "relationship_to_visitor",
+            "required": True,
+        },
+        {
+            "form_field": "visit.purpose",
+            "answer_key": "purpose_of_visit",
+            "required": True,
+        },
+        {
+            "form_field": "visit.length_of_stay_days",
+            "answer_key": "intended_length_of_stay_days",
+            "required": True,
+        },
+        {
+            "form_field": "financial.support_type",
+            "answer_key": "visitor_has_sufficient_funds",
+            "required": True,
+        },
+    ],
+}
+
+
 class FilledForm(BaseModel):
     filled_fields: dict[str, Any]
     missing_required_fields: list[str]

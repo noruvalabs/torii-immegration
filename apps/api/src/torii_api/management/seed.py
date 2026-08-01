@@ -41,21 +41,25 @@ from torii_api.db.models import (
 )
 from torii_api.services.checklist import (
     JP_STUDENT_NEW_APPLICATION_DOCUMENT_REQUIREMENTS,
+    JP_TOURIST_NEW_APPLICATION_DOCUMENT_REQUIREMENTS,
     JP_WORK_RENEWAL_DOCUMENT_REQUIREMENTS,
     US_H1B_DOCUMENT_REQUIREMENTS,
 )
 from torii_api.services.eligibility import (
     JP_STUDENT_NEW_APPLICATION_ELIGIBILITY_RULES,
+    JP_TOURIST_NEW_APPLICATION_ELIGIBILITY_RULES,
     JP_WORK_RENEWAL_ELIGIBILITY_RULES,
     US_H1B_ELIGIBILITY_RULES,
 )
 from torii_api.services.forms import (
     JP_STUDENT_NEW_APPLICATION_FORM_TEMPLATE,
+    JP_TOURIST_NEW_APPLICATION_FORM_TEMPLATE,
     JP_WORK_RENEWAL_FORM_TEMPLATE,
     US_H1B_FORM_TEMPLATE,
 )
 from torii_api.services.intake import (
     JP_STUDENT_NEW_APPLICATION_QUESTIONS,
+    JP_TOURIST_NEW_APPLICATION_QUESTIONS,
     JP_WORK_RENEWAL_QUESTIONS,
     US_H1B_QUESTIONS,
 )
@@ -132,7 +136,7 @@ SEED_VISA_CATEGORIES = {
         {
             "code": "tourist",
             "name": "Tourist Visa - Short-term travel (up to 90 days in many cases)",
-            "is_live": False,
+            "is_live": True,
         },
         {
             "code": "business",
@@ -206,6 +210,15 @@ WORKFLOW_SEEDS: list[dict[str, Any]] = [
         "rules": JP_STUDENT_NEW_APPLICATION_ELIGIBILITY_RULES,
         "documents": JP_STUDENT_NEW_APPLICATION_DOCUMENT_REQUIREMENTS,
         "form": JP_STUDENT_NEW_APPLICATION_FORM_TEMPLATE,
+    },
+    {
+        "jurisdiction": "JP",
+        "visa_category": "tourist",
+        "action": "new_application",
+        "questions": JP_TOURIST_NEW_APPLICATION_QUESTIONS,
+        "rules": JP_TOURIST_NEW_APPLICATION_ELIGIBILITY_RULES,
+        "documents": JP_TOURIST_NEW_APPLICATION_DOCUMENT_REQUIREMENTS,
+        "form": JP_TOURIST_NEW_APPLICATION_FORM_TEMPLATE,
     },
 ]
 

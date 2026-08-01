@@ -52,6 +52,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             await apply_migrations_in_thread(settings.database_url)
             log.info("api.migrations_applied")
 
+        if settings.seed_on_startup:
+            from torii_api.management.seed import seed
+
+            await seed()
+            log.info("api.seeded")
+
         if not getattr(app.state, "engine", None):
             app.state.engine = create_engine(settings.database_url)
         if not getattr(app.state, "session_factory", None):

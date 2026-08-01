@@ -83,7 +83,7 @@ export const dictionary = {
       eyebrow: "Built jurisdiction by jurisdiction, not all at once",
       inProgress: "In progress",
       items: {
-        jp: { name: "Japan", detail: "Work visa · renewal & new application" },
+        jp: { name: "Japan", detail: "Work visa · tourist visa (J3) · renewal & new application" },
         us: { name: "United States", detail: "H-1B specialty worker" },
         de: { name: "Germany", detail: "Work visa · in progress" },
       },
@@ -374,7 +374,7 @@ export const dictionary = {
       eyebrow: "国・地域ごとに、着実に対応を広げています",
       inProgress: "準備中",
       items: {
-        jp: { name: "日本", detail: "就労ビザ · 更新・新規申請" },
+        jp: { name: "日本", detail: "就労ビザ・観光ビザ（J3）· 更新・新規申請" },
         us: { name: "アメリカ合衆国", detail: "H-1B専門職ビザ" },
         de: { name: "ドイツ", detail: "就労ビザ · 準備中" },
       },

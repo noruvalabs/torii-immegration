@@ -178,6 +178,181 @@ JP_STUDENT_NEW_APPLICATION_DOCUMENT_REQUIREMENTS: list[dict[str, Any]] = [
 ]
 
 
+JP_TOURIST_NEW_APPLICATION_DOCUMENT_REQUIREMENTS: list[dict[str, Any]] = [
+    {
+        "code": "visitor_passport_copy",
+        "name": {
+            "en": "Copy of visitor's passport",
+            "ja": "パスポートのコピー",
+        },
+        "how_to_obtain": {
+            "en": (
+                "Ask the visitor to send a clear copy of the biographic "
+                "page of their passport."
+            ),
+            "ja": (
+                "訪問者にパスポートの顔写真ページのコピーを"
+                "送ってもらってください。"
+            ),
+        },
+        "why_required": {
+            "en": "Confirms the visitor's identity and travel document details.",
+            "ja": "訪問者の本人確認および渡航書類の詳細を確認するため。",
+        },
+        "is_required": True,
+        "citation": JP_IMMIGRATION_CITATION,
+    },
+    {
+        "code": "shomei_riyusho",
+        "name": {
+            "en": "Invitation reason statement (招へい理由書)",
+            "ja": "招へい理由書",
+        },
+        "how_to_obtain": {
+            "en": (
+                "Download the official form from the Ministry of Foreign "
+                "Affairs website and fill it out explaining why you are "
+                "inviting the visitor."
+            ),
+            "ja": (
+                "外務省の公式フォームをダウンロードし、訪問者を招待する"
+                "理由を記入してください。"
+            ),
+        },
+        "why_required": {
+            "en": (
+                "Required to explain the purpose and background of the "
+                "invitation to Japanese immigration."
+            ),
+            "ja": "日本の入管に招待の目的と経緯を説明するため。",
+        },
+        "is_required": True,
+        "citation": {
+            "authority": "Ministry of Foreign Affairs of Japan",
+            "title": "Guarantee and Invitation Documents",
+            "url": "https://www.mofa.go.jp/j_info/visit/visa/pdfs/guarantee.pdf",
+            "source_version": "2026-04",
+        },
+    },
+    {
+        "code": "mimoto_hoshosho",
+        "name": {
+            "en": "Guarantor statement (身元保証書)",
+            "ja": "身元保証書",
+        },
+        "how_to_obtain": {
+            "en": (
+                "Download the official guarantor form from the Ministry of "
+                "Foreign Affairs website. As the guarantor in Japan, you "
+                "sign this to confirm you will support the visitor financially "
+                "and ensure they depart on time."
+            ),
+            "ja": (
+                "外務省の公式保証書フォームをダウンロードし、訪問者の"
+                "費用負担と期内出国を保証する内容に記入してください。"
+            ),
+        },
+        "why_required": {
+            "en": (
+                "Required when a Japanese resident is acting as the "
+                "financial guarantor for the visitor."
+            ),
+            "ja": "日本にいる身元保証人が訪問者の費用を保証する場合に必要。",
+        },
+        "is_required": True,
+        "citation": {
+            "authority": "Ministry of Foreign Affairs of Japan",
+            "title": "Guarantee and Invitation Documents",
+            "url": "https://www.mofa.go.jp/j_info/visit/visa/pdfs/guarantee.pdf",
+            "source_version": "2026-04",
+        },
+    },
+    {
+        "code": "takuzaei_yoteihyo",
+        "name": {
+            "en": "Planned stay schedule (滞在予定表)",
+            "ja": "滞在予定表",
+        },
+        "how_to_obtain": {
+            "en": (
+                "Prepare a day-by-day itinerary of the visitor's planned "
+                "activities in Japan, including accommodation locations "
+                "and transport plans."
+            ),
+            "ja": (
+                "訪問者の日本滞在中の日別スケジュール、宿泊先、"
+                "交通手段を記載した計画表を作成してください。"
+            ),
+        },
+        "why_required": {
+            "en": (
+                "Shows the planned activities and confirms the visitor "
+                "intends to leave Japan by the stated date."
+            ),
+            "ja": "訪問者の予定と出国予定を確認するため。",
+        },
+        "is_required": True,
+        "citation": {
+            "authority": "Ministry of Foreign Affairs of Japan",
+            "title": "Guarantee and Invitation Documents",
+            "url": "https://www.mofa.go.jp/j_info/visit/visa/pdfs/guarantee.pdf",
+            "source_version": "2026-04",
+        },
+    },
+    {
+        "code": "juuminhyo",
+        "name": {
+            "en": "Resident record (住民票)",
+            "ja": "住民票",
+        },
+        "how_to_obtain": {
+            "en": (
+                "Obtain a copy of your 住民票 from your local city/ward "
+                "office. This confirms your registered address in Japan."
+            ),
+            "ja": (
+                "市区町村の窓口で住民票の写しを取得してください。"
+            ),
+        },
+        "why_required": {
+            "en": (
+                "Confirms the guarantor's registered residence in Japan."
+            ),
+            "ja": "保証人の日本における住居地を確認するため。",
+        },
+        "is_required": True,
+        "citation": JP_IMMIGRATION_CITATION,
+    },
+    {
+        "code": "kazei_shomeisho",
+        "name": {
+            "en": "Tax certificate (課税証明書)",
+            "ja": "課税証明書",
+        },
+        "how_to_obtain": {
+            "en": (
+                "Obtain a 課税証明書 from your local city/ward office. "
+                "This shows your income and tax status, demonstrating "
+                "ability to guarantee the visitor's expenses."
+            ),
+            "ja": (
+                "市区町村の窓口で課税証明書を取得してください。"
+                "所得と納税状況を示し、訪問者の費用を負担する"
+                "能力を証明します。"
+            ),
+        },
+        "why_required": {
+            "en": (
+                "Demonstrates the guarantor's financial capacity to "
+                "support the visitor's stay."
+            ),
+            "ja": "保証人の訪問者費用負担能力を証明するため。",
+        },
+        "is_required": True,
+        "citation": JP_IMMIGRATION_CITATION,
+    },
+]
+
 class ChecklistDefinitionItem(BaseModel):
     code: str
     name: str | dict[str, str]
