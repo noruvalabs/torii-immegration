@@ -277,6 +277,7 @@ class Case(TimestampMixin, Base):
     escalations: Mapped[list[CaseEscalation]] = relationship(
         back_populates="case", cascade="all, delete-orphan"
     )
+    payments: Mapped[list[Payment]] = relationship(back_populates="case")
 
 
 class CaseDocument(TimestampMixin, Base):
@@ -368,3 +369,102 @@ class OutboxEvent(TimestampMixin, Base):
     processed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True, index=True
     )
+
+
+class PaymentStatus(StrEnum):
+    """Payment lifecycle states."""
+
+    PENDING = "pending"
+    PROCESSING = "processing"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    REFUNDED = "refunded"
+    CANCELLED = "cancelled"
+
+
+class Payment(TimestampMixin, Base):
+    """Mock payment record for visa application fees."""
+
+    __tablename__ = "payments"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    case_id: Mapped[int] = mapped_column(ForeignKey("cases.id"), index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    # Unique transaction identifier
+    transaction_id: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    # Payment breakdown
+    visa_fee: Mapped[float] = mapped_column(Float, default=0.0)
+    service_fee: Mapped[float] = mapped_column(Float, default=0.0)
+    total_amount: Mapped[float] = mapped_column(Float, default=0.0)
+    currency: Mapped[str] = mapped_column(String(8), default="USD")
+    # Status tracking
+    status: Mapped[str] = mapped_column(
+        String(16), default=PaymentStatus.PENDING, server_default=PaymentStatus.PENDING
+    )
+    # Mock payment details
+    payment_method: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Additional metadata
+    metadata_json: Mapped[dict[str, Any] | None] = mapped_column(SAJSON, nullable=True)
+
+    case: Mapped[Case] = relationship(back_populates="payments")
+    user: Mapped[User] = relationship()
+
+
+class DocumentWalletItem(TimestampMixin, Base):
+    """Reusable document in user's encrypted wallet with versioning."""
+
+    __tablename__ = "document_wallet_items"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    # Document classification
+    doc_type: Mapped[str] = mapped_column(String(64), index=True)
+    # e.g., "passport", "bank_statement", "employment_letter"
+    name: Mapped[str] = mapped_column(String(256))
+    # Version tracking
+    version: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
+    is_latest: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1")
+    # Storage
+    storage_key: Mapped[str] = mapped_column(String(512))
+    filename: Mapped[str] = mapped_column(String(256))
+    content_type: Mapped[str] = mapped_column(String(128))
+    file_size: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # OCR extracted data
+    extracted_fields: Mapped[dict[str, Any]] = mapped_column(SAJSON, default=dict)
+    extraction_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # Validity tracking
+    issued_date: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    expiry_date: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    # Status
+    status: Mapped[str] = mapped_column(
+        String(16), default="active", server_default="active"
+    )
+    # active, expired, revoked
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    user: Mapped[User] = relationship()
+    versions: Mapped[list[DocumentWalletItemVersion]] = relationship(
+        back_populates="document", cascade="all, delete-orphan"
+    )
+
+
+class DocumentWalletItemVersion(TimestampMixin, Base):
+    """Historical version of a wallet document."""
+
+    __tablename__ = "document_wallet_item_versions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    document_id: Mapped[int] = mapped_column(
+        ForeignKey("document_wallet_items.id"), index=True
+    )
+    version: Mapped[int] = mapped_column(Integer)
+    storage_key: Mapped[str] = mapped_column(String(512))
+    filename: Mapped[str] = mapped_column(String(256))
+    content_type: Mapped[str] = mapped_column(String(128))
+    file_size: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    extracted_fields: Mapped[dict[str, Any]] = mapped_column(SAJSON, default=dict)
+    extraction_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    document: Mapped[DocumentWalletItem] = relationship(back_populates="versions")

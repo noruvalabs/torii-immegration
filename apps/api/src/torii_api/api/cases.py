@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -578,7 +578,7 @@ async def answer_intake(
 
     error = validate_answer(question, payload.value)
     if error is not None:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=error)
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=error)
 
     merged = {**current, payload.key: payload.value}
     case.intake_answers = prune_answers(questions, merged)
@@ -642,8 +642,12 @@ async def save_case_progress(
     return await _enrich_case(session, case)
 
 
-@router.delete("/{case_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_case(case_id: int, session: SessionDep, user: CurrentUserDep) -> None:
+@router.delete(
+    "/{case_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_class=Response,
+)
+async def delete_case(case_id: int, session: SessionDep, user: CurrentUserDep):
     """Delete a case owned by the applicant (draft/in-progress only)."""
     case = await _owned_case(session, case_id, user)
     if case.status == "submitted":
