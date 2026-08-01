@@ -7,109 +7,94 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/lib/auth-context";
 import {
-  listJurisdictions,
-  listVisaCategories,
-  listCaseActions,
+  getAllGeoData,
+  type GeoData,
+  type Destination,
+  type VisaType,
+  type ApplicationType,
+} from "@/lib/api/geo";
+import {
   scopeCase,
-  type Jurisdiction,
-  type VisaCategory,
-  type CaseAction,
 } from "@/lib/api/cases";
 
 type CaseResult = { id: number; reference: string; status: string };
 
-type Step = "jurisdiction" | "category" | "action" | "review";
+type Step = "residence" | "destination" | "visa_type" | "app_type" | "review";
 
 export default function ScopePage() {
-  const { token, user } = useAuth();
-  const [step, setStep] = useState<Step>("jurisdiction");
+  const { token } = useAuth();
+  const [step, setStep] = useState<Step>("residence");
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  // Data
-  const [jurisdictions, setJurisdictions] = useState<Jurisdiction[]>([]);
-  const [categories, setCategories] = useState<VisaCategory[]>([]);
-  const [actions, setActions] = useState<CaseAction[]>([]);
+  // Geo data
+  const [geoData, setGeoData] = useState<GeoData | null>(null);
 
   // Selections
-  const [selectedJurisdiction, setSelectedJurisdiction] = useState<Jurisdiction | null>(null);
-  const [selectedCategory, setSelectedCategory] = useState<VisaCategory | null>(null);
-  const [selectedAction, setSelectedAction] = useState<CaseAction | null>(null);
+  const [residenceCountry, setResidenceCountry] = useState<string>("JP");
+  const [selectedDestination, setSelectedDestination] = useState<Destination | null>(null);
+  const [selectedVisaType, setSelectedVisaType] = useState<VisaType | null>(null);
+  const [selectedAppType, setSelectedAppType] = useState<ApplicationType | null>(null);
 
   const [submitting, setSubmitting] = useState(false);
   const [createdCase, setCreatedCase] = useState<CaseResult | null>(null);
 
-  // Load jurisdictions on mount
+  // Load geo data on mount
   useEffect(() => {
     if (!token) return;
     void (async () => {
       try {
-        setJurisdictions(await listJurisdictions(token, false));
+        setLoading(true);
+        const data = await getAllGeoData();
+        setGeoData(data);
+        setResidenceCountry(data.detected_country.country_code);
       } catch {
-        setError("Could not load jurisdictions. Is the API running?");
+        setError("Could not load destination data. Is the API running?");
+      } finally {
+        setLoading(false);
       }
     })();
   }, [token]);
 
-  // Load categories when jurisdiction is selected
-  useEffect(() => {
-    if (!selectedJurisdiction || !token) return;
-    void (async () => {
-      try {
-        setCategories(await listVisaCategories(token, selectedJurisdiction.code, false));
-      } catch {
-        setError("Could not load visa categories.");
-      }
-    })();
-  }, [selectedJurisdiction, token]);
-
-  // Load actions when jurisdiction is selected
-  useEffect(() => {
-    if (!selectedJurisdiction || !token) return;
-    void (async () => {
-      try {
-        setActions(await listCaseActions(token, selectedJurisdiction.code, false));
-      } catch {
-        setError("Could not load case actions.");
-      }
-    })();
-  }, [selectedJurisdiction, token]);
-
   function goBack() {
     setError(null);
-    if (step === "category") setStep("jurisdiction");
-    else if (step === "action") setStep("category");
-    else if (step === "review") setStep("action");
+    if (step === "destination") setStep("residence");
+    else if (step === "visa_type") setStep("destination");
+    else if (step === "app_type") setStep("visa_type");
+    else if (step === "review") setStep("app_type");
   }
 
-  function selectJurisdiction(j: Jurisdiction) {
-    if (!j.is_live) return;
-    setSelectedJurisdiction(j);
-    setSelectedCategory(null);
-    setSelectedAction(null);
-    setStep("category");
+  function selectDestination(d: Destination) {
+    setSelectedDestination(d);
+    setSelectedVisaType(null);
+    setSelectedAppType(null);
+    setStep("visa_type");
   }
 
-  function selectCategory(c: VisaCategory) {
-    if (!c.is_live) return;
-    setSelectedCategory(c);
-    setStep("action");
+  function selectVisaType(v: VisaType) {
+    setSelectedVisaType(v);
+    setStep("app_type");
   }
 
-  function selectAction(a: CaseAction) {
-    if (!a.is_live) return;
-    setSelectedAction(a);
+  function selectAppType(a: ApplicationType) {
+    setSelectedAppType(a);
     setStep("review");
   }
 
   async function createCase() {
-    if (!token || !selectedJurisdiction || !selectedCategory || !selectedAction) return;
+    if (!token || !selectedDestination || !selectedVisaType || !selectedAppType) return;
     setSubmitting(true);
     setError(null);
     try {
+      // Map the new system to the old jurisdiction codes
+      const jurisdictionCode = selectedDestination.code;
+      const visaCategoryCode = selectedVisaType.code;
+      const actionCode = selectedAppType.code;
+
       const result = await scopeCase(token, {
-        jurisdiction_code: selectedJurisdiction.code,
-        visa_category_code: selectedCategory.code,
-        action_code: selectedAction.code,
+        jurisdiction_code: jurisdictionCode,
+        visa_category_code: visaCategoryCode,
+        action_code: actionCode,
       });
       setCreatedCase(result);
     } catch (e) {
@@ -117,6 +102,15 @@ export default function ScopePage() {
     } finally {
       setSubmitting(false);
     }
+  }
+
+  if (loading) {
+    return (
+      <div className="mx-auto max-w-lg space-y-6 py-12 text-center">
+        <Loader2 className="mx-auto size-8 animate-spin text-muted-foreground" />
+        <p className="text-sm text-muted-foreground">Loading destinations...</p>
+      </div>
+    );
   }
 
   if (createdCase) {
@@ -155,32 +149,24 @@ export default function ScopePage() {
     );
   }
 
+  const destinations = geoData?.destinations ?? [];
+  const visaTypes = geoData?.visa_types ?? [];
+  const appTypes = geoData?.application_types ?? [];
+
   return (
     <div className="mx-auto max-w-2xl space-y-6 py-8">
       <div>
         <h2 className="text-2xl font-semibold tracking-tight">
-          Start a new case
+          Start a new application
         </h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Select your country, visa type, and what you need help with. Only
-          supported combinations are shown.
+          Apply for a visa from {geoData?.detected_country.country_name ?? "your country"} to any destination worldwide.
         </p>
       </div>
 
-      {user?.nationality && step === "jurisdiction" && (
-        <div className="rounded-[var(--radius)] border border-primary/20 bg-primary/5 px-4 py-3 text-sm">
-          <span className="font-medium">Based on your nationality ({user.nationality}):</span>{" "}
-          <span className="text-muted-foreground">
-            {user.nationality === "Japan"
-              ? "You may be eligible for US B1/B2 or ESTA for short-term travel."
-              : "You may be eligible for Japan eVISA for short-term tourism. Select Japan to explore."}
-          </span>
-        </div>
-      )}
-
       {/* Progress */}
       <div className="flex items-center gap-2 text-sm">
-        {(["jurisdiction", "category", "action", "review"] as Step[]).map(
+        {(["residence", "destination", "visa_type", "app_type", "review"] as Step[]).map(
           (s, i) => (
             <div key={s} className="flex items-center gap-2">
               {i > 0 && <span className="text-muted-foreground">/</span>}
@@ -191,13 +177,15 @@ export default function ScopePage() {
                     : "text-muted-foreground"
                 }
               >
-                {s === "jurisdiction"
-                  ? "Country"
-                  : s === "category"
-                    ? "Visa type"
-                    : s === "action"
-                      ? "Action"
-                      : "Review"}
+                {s === "residence"
+                  ? "Residence"
+                  : s === "destination"
+                    ? "Destination"
+                    : s === "visa_type"
+                      ? "Visa type"
+                      : s === "app_type"
+                        ? "Application"
+                        : "Review"}
               </span>
             </div>
           ),
@@ -210,34 +198,55 @@ export default function ScopePage() {
         </p>
       )}
 
-      {/* Step: jurisdiction */}
-      {step === "jurisdiction" && (
+      {/* Step: residence */}
+      {step === "residence" && (
         <div className="space-y-3">
+          <button onClick={goBack} className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+            <ArrowLeft className="size-3.5" /> Back
+          </button>
           <h3 className="text-sm font-medium text-muted-foreground">
-            Select a country
+            Your country of residence
           </h3>
-          {jurisdictions.length === 0 ? (
+          <div className="rounded-[var(--radius)] border border-primary/20 bg-primary/5 px-4 py-3 text-sm">
+            <span className="font-medium">Auto-detected:</span>{" "}
+            <span className="text-muted-foreground">
+              {geoData?.detected_country.country_name} ({geoData?.detected_country.country_code})
+            </span>
+          </div>
+          <button
+            onClick={() => setStep("destination")}
+            className="inline-flex w-full items-center justify-center gap-2 rounded-[var(--radius)] bg-primary px-4 py-3 text-sm font-medium text-primary-foreground transition-colors hover:opacity-90"
+          >
+            Continue with {geoData?.detected_country.country_name} <ArrowRight className="size-4" />
+          </button>
+        </div>
+      )}
+
+      {/* Step: destination */}
+      {step === "destination" && (
+        <div className="space-y-3">
+          <button onClick={goBack} className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+            <ArrowLeft className="size-3.5" /> Back
+          </button>
+          <h3 className="text-sm font-medium text-muted-foreground">
+            Where are you applying to?
+          </h3>
+          {destinations.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              No live jurisdictions available.
+              No destinations available.
             </p>
           ) : (
-            jurisdictions.map((j) => (
+            destinations.map((d) => (
               <button
-                key={j.id}
-                onClick={() => selectJurisdiction(j)}
-                disabled={!j.is_live}
-                className={`flex w-full items-center gap-4 rounded-[var(--radius)] border bg-card p-4 text-left transition-colors ${
-                  j.is_live ? "hover:bg-accent" : "cursor-not-allowed opacity-60"
-                }`}
+                key={d.code}
+                onClick={() => selectDestination(d)}
+                className="flex w-full items-center gap-4 rounded-[var(--radius)] border bg-card p-4 text-left transition-colors hover:bg-accent"
               >
-                <Globe className="size-5 text-muted-foreground" />
+                <span className="text-2xl">{d.flag}</span>
                 <div className="flex-1">
-                  <p className="font-medium">{j.name}</p>
-                  <p className="text-xs text-muted-foreground font-mono">{j.code}</p>
+                  <p className="font-medium">{d.name}</p>
+                  <p className="text-xs text-muted-foreground">{d.currency}</p>
                 </div>
-                <Badge tone={j.is_live ? "success" : "muted"}>
-                  {j.is_live ? "Available" : "Coming soon"}
-                </Badge>
                 <ArrowRight className="size-4 text-muted-foreground" />
               </button>
             ))
@@ -245,36 +254,30 @@ export default function ScopePage() {
         </div>
       )}
 
-      {/* Step: category */}
-      {step === "category" && (
+      {/* Step: visa type */}
+      {step === "visa_type" && (
         <div className="space-y-3">
           <button onClick={goBack} className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
             <ArrowLeft className="size-3.5" /> Back
           </button>
           <h3 className="text-sm font-medium text-muted-foreground">
-            Select a visa type for <strong>{selectedJurisdiction?.name}</strong>
+            Visa type for <strong>{selectedDestination?.flag} {selectedDestination?.name}</strong>
           </h3>
-          {categories.length === 0 ? (
+          {visaTypes.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              No visa categories available for this jurisdiction.
+              No visa types available.
             </p>
           ) : (
-            categories.map((c) => (
+            visaTypes.map((v) => (
               <button
-                key={c.id}
-                onClick={() => selectCategory(c)}
-                disabled={!c.is_live}
-                className={`flex w-full items-center gap-4 rounded-[var(--radius)] border bg-card p-4 text-left transition-colors ${
-                  c.is_live ? "hover:bg-accent" : "cursor-not-allowed opacity-60"
-                }`}
+                key={v.code}
+                onClick={() => selectVisaType(v)}
+                className="flex w-full items-center gap-4 rounded-[var(--radius)] border bg-card p-4 text-left transition-colors hover:bg-accent"
               >
                 <div className="flex-1">
-                  <p className="font-medium">{c.name}</p>
-                  <p className="text-xs text-muted-foreground font-mono">{c.code}</p>
+                  <p className="font-medium">{v.name}</p>
+                  <p className="text-xs text-muted-foreground">{v.description}</p>
                 </div>
-                <Badge tone={c.is_live ? "success" : "muted"}>
-                  {c.is_live ? "Available" : "Coming soon"}
-                </Badge>
                 <ArrowRight className="size-4 text-muted-foreground" />
               </button>
             ))
@@ -282,40 +285,28 @@ export default function ScopePage() {
         </div>
       )}
 
-      {/* Step: action */}
-      {step === "action" && (
+      {/* Step: application type */}
+      {step === "app_type" && (
         <div className="space-y-3">
           <button onClick={goBack} className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
             <ArrowLeft className="size-3.5" /> Back
           </button>
           <h3 className="text-sm font-medium text-muted-foreground">
-            What do you need to do?
+            Application type
           </h3>
-          {actions.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No actions available for this jurisdiction.
-            </p>
-          ) : (
-            actions.map((a) => (
-              <button
-                key={a.id}
-                onClick={() => selectAction(a)}
-                disabled={!a.is_live}
-                className={`flex w-full items-center gap-4 rounded-[var(--radius)] border bg-card p-4 text-left transition-colors ${
-                  a.is_live ? "hover:bg-accent" : "cursor-not-allowed opacity-60"
-                }`}
-              >
-                <div className="flex-1">
-                  <p className="font-medium">{a.name}</p>
-                  <p className="text-xs text-muted-foreground font-mono">{a.code}</p>
-                </div>
-                <Badge tone={a.is_live ? "success" : "muted"}>
-                  {a.is_live ? "Available" : "Coming soon"}
-                </Badge>
-                <ArrowRight className="size-4 text-muted-foreground" />
-              </button>
-            ))
-          )}
+          {appTypes.map((a) => (
+            <button
+              key={a.code}
+              onClick={() => selectAppType(a)}
+              className="flex w-full items-center gap-4 rounded-[var(--radius)] border bg-card p-4 text-left transition-colors hover:bg-accent"
+            >
+              <div className="flex-1">
+                <p className="font-medium">{a.name}</p>
+                <p className="text-xs text-muted-foreground">{a.description}</p>
+              </div>
+              <ArrowRight className="size-4 text-muted-foreground" />
+            </button>
+          ))}
         </div>
       )}
 
@@ -326,21 +317,25 @@ export default function ScopePage() {
             <ArrowLeft className="size-3.5" /> Back
           </button>
           <h3 className="text-sm font-medium text-muted-foreground">
-            Confirm your case details
+            Confirm your application details
           </h3>
           <Card>
             <CardContent className="space-y-3 pt-5">
               <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Country</span>
-                <span className="font-medium">{selectedJurisdiction?.name}</span>
+                <span className="text-muted-foreground">From</span>
+                <span className="font-medium">{geoData?.detected_country.country_name}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">To</span>
+                <span className="font-medium">{selectedDestination?.flag} {selectedDestination?.name}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Visa type</span>
-                <span className="font-medium">{selectedCategory?.name}</span>
+                <span className="font-medium">{selectedVisaType?.name}</span>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Action</span>
-                <span className="font-medium">{selectedAction?.name}</span>
+                <span className="text-muted-foreground">Application</span>
+                <span className="font-medium">{selectedAppType?.name}</span>
               </div>
             </CardContent>
           </Card>
@@ -354,7 +349,7 @@ export default function ScopePage() {
                 <Loader2 className="size-4 animate-spin" /> Creating…
               </>
             ) : (
-              "Create case"
+              "Start application"
             )}
           </button>
         </div>
