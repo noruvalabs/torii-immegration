@@ -1,0 +1,32 @@
+code: US
+name: United States
+host_locale: en
+is_live: true
+efile_enabled: false
+self_filing_allowed: null
+notes: >
+  From Japan, most nonimmigrant routes are consular (DS-160 + interview at
+  US Embassy Tokyo or a consulate). Sponsor petitions (I-20, I-129) are stage 1.
+categories:
+  - code: h1b
+    name: H-1B Specialty Occupations
+    is_live: true
+  - code: tourist
+    name: Tourist / Visitor Visa (B1/B2)
+    is_live: true
+  - code: student
+    name: Student Visa (F-1)
+    is_live: true
+  - code: work
+    name: Work Visa (H-1B)
+    is_live: true
+actions:
+  - code: renewal
+    name: Renewal / Extension
+    is_live: true
+  - code: new_application
+    name: New application
+    is_live: true
+  - code: new
+    name: New Visa
+    is_live: true

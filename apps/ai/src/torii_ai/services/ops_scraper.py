@@ -35,6 +35,14 @@ JURISDICTION_QUERIES: dict[str, list[str]] = {
         "Japan residence card renewal process official",
         "Japan visa application form extension stay official",
     ],
+    "US": [
+        "H-1B specialty occupation requirements site:uscis.gov",
+        "Form I-129 H-1B petition documents checklist site:uscis.gov",
+        "H-1B extension of stay requirements USCIS",
+        "H-1B specialty occupation degree requirement official",
+        "USCIS H-1B Cap and petition filing process",
+        "I-94 arrival departure record CBP official",
+    ],
 }
 
 EXTRACT_SYSTEM = """You are an immigration data extractor. Given scraped government page content,

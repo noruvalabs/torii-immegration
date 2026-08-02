@@ -7,6 +7,15 @@ export type User = {
   role: string;
   is_active: boolean;
   email_verified: boolean;
+  // Profile fields
+  full_name: string | null;
+  nationality: string | null;
+  passport_number: string | null;
+  passport_expiry: string | null;
+  date_of_birth: string | null;
+  current_country: string | null;
+  avatar_url: string | null;
+  profile_complete: boolean;
 };
 
 export type AuthResponse = {
@@ -84,5 +93,46 @@ export function resetPassword(token: string, password: string) {
   return request<MessageResponse>("/reset-password", {
     method: "POST",
     body: JSON.stringify({ token, password }),
+  });
+}
+
+export type ProfileUpdate = {
+  full_name?: string;
+  nationality?: string;
+  passport_number?: string;
+  passport_expiry?: string;
+  date_of_birth?: string;
+  current_country?: string;
+};
+
+export function getProfile(token: string) {
+  return request<User>("/profile", {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+export function updateProfile(token: string, profile: ProfileUpdate) {
+  return request<User>("/profile", {
+    method: "PUT",
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify(profile),
+  });
+}
+
+export function uploadAvatar(token: string, file: File) {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const API = "/backend/v1/auth";
+  return fetch(`${API}/avatar`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: formData,
+  }).then(async (res) => {
+    if (!res.ok) {
+      const body = (await res.json().catch(() => null)) as { detail?: string } | null;
+      throw new Error(body?.detail ?? `Upload failed (${res.status})`);
+    }
+    return res.json() as Promise<User>;
   });
 }

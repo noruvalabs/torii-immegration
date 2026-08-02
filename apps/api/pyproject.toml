@@ -25,11 +25,14 @@ dependencies = [
     "pyjwt>=2.13.0",
     "bcrypt>=5.0.0",
     "email-validator>=2.0",
+    "python-multipart>=0.0.18",
+    "pyyaml>=6.0.3",
 ]
 
 [project.scripts]
 torii-createadmin = "torii_api.management.createadmin:main"
 torii-seed = "torii_api.management.seed:main"
+torii-scrape = "torii_api.management.scrape_gov:main"
 
 [dependency-groups]
 dev = [
@@ -37,6 +40,7 @@ dev = [
     "pyright>=1.1.390",
     "pytest>=8.3",
     "pytest-asyncio>=0.25",
+    "types-pyyaml>=6.0.12.20260724",
 ]
 
 [build-system]

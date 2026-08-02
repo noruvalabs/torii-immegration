@@ -1,4 +1,4 @@
-"""Seed the database with sample users, jurisdictions, visa categories, and actions.
+"""Seed the database with sample users and jurisdiction content packs.
 
 Usage::
 
@@ -6,10 +6,8 @@ Usage::
 
 Creates:
 - 5 users (admin, ops, employer, 2 applicants)
-- 3 jurisdictions (US, JP, DE)
-- Visa categories per jurisdiction (JP: work, student, dependent; US: h1b, f1; DE: work)
-- Case actions per jurisdiction (JP: renewal, new_application, change_of_status; same for US/DE)
-- Live intake definition for JP / work / renewal (US-02)
+- Jurisdictions / categories / actions from ``docs/jurisdictions/*/``
+- Live intake + eligibility + documents + forms from content packs
 
 Idempotent: skips records that already exist (by email / code).
 """
@@ -17,8 +15,10 @@ Idempotent: skips records that already exist (by email / code).
 from __future__ import annotations
 
 import asyncio
+from typing import Any
 
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from torii_api.auth.security import hash_password
 from torii_api.config import get_settings
@@ -35,10 +35,11 @@ from torii_api.db.models import (
     UserRole,
     VisaCategory,
 )
-from torii_api.services.checklist import JP_WORK_RENEWAL_DOCUMENT_REQUIREMENTS
-from torii_api.services.eligibility import JP_WORK_RENEWAL_ELIGIBILITY_RULES
-from torii_api.services.forms import JP_WORK_RENEWAL_FORM_TEMPLATE
-from torii_api.services.intake import JP_WORK_RENEWAL_QUESTIONS
+from torii_api.services.content_packs import (
+    list_jurisdiction_metas,
+    load_all_packs,
+    workflow_rows_from_packs,
+)
 
 SEED_USERS = [
     {
@@ -73,47 +74,361 @@ SEED_USERS = [
     },
 ]
 
-SEED_JURISDICTIONS = [
-    {"code": "US", "name": "United States", "is_live": True},
-    {"code": "JP", "name": "Japan", "is_live": True},
-    {"code": "DE", "name": "Germany", "is_live": False},
+# Extra markets without full content packs (scope browsing only).
+SEED_EXTRA_JURISDICTIONS = [
+    {"code": "GB", "name": "United Kingdom", "is_live": True},
+    {"code": "CA", "name": "Canada", "is_live": True},
+    {"code": "AU", "name": "Australia", "is_live": True},
+    {"code": "DE", "name": "Germany", "is_live": True},
+    {"code": "FR", "name": "France", "is_live": True},
+    {"code": "SG", "name": "Singapore", "is_live": True},
+    {"code": "KR", "name": "South Korea", "is_live": True},
+    {"code": "NZ", "name": "New Zealand", "is_live": True},
+    {"code": "IE", "name": "Ireland", "is_live": True},
+    {"code": "NL", "name": "Netherlands", "is_live": True},
+    {"code": "SE", "name": "Sweden", "is_live": True},
+    {"code": "NO", "name": "Norway", "is_live": True},
+    {"code": "CH", "name": "Switzerland", "is_live": True},
 ]
 
-SEED_VISA_CATEGORIES = {
-    "JP": [
-        {"code": "work", "name": "Work Visa", "is_live": True},
-        {"code": "student", "name": "Student Visa", "is_live": True},
-        {"code": "dependent", "name": "Dependent Visa", "is_live": False},
-    ],
-    "US": [
-        {"code": "h1b", "name": "H-1B Specialty Worker", "is_live": True},
-        {"code": "f1", "name": "F-1 Student", "is_live": False},
-    ],
-    "DE": [
-        {"code": "work", "name": "Work Visa", "is_live": False},
+SEED_EXTRA_CATEGORIES = [
+    {"code": "tourist", "name": "Tourist / Visitor", "is_live": True},
+    {"code": "student", "name": "Student", "is_live": True},
+    {"code": "work", "name": "Work", "is_live": True},
+]
+
+SEED_EXTRA_ACTIONS = [
+    {"code": "new", "name": "New Visa", "is_live": True},
+    {"code": "renewal", "name": "Renewal / Extension", "is_live": True},
+    {"code": "new_application", "name": "New application", "is_live": True},
+]
+
+GENERIC_QUESTIONS: list[dict[str, Any]] = [
+    {
+        "key": "full_name",
+        "prompt": "What is your full name?",
+        "type": "string",
+        "required": True,
+    },
+    {
+        "key": "nationality",
+        "prompt": "What is your nationality?",
+        "type": "string",
+        "required": True,
+    },
+    {
+        "key": "passport_number",
+        "prompt": "What is your passport number?",
+        "type": "string",
+        "required": True,
+    },
+    {
+        "key": "passport_expiry",
+        "prompt": "When does your passport expire?",
+        "type": "string",
+        "required": True,
+    },
+    {
+        "key": "purpose_of_visit",
+        "prompt": "What is the purpose of your visit?",
+        "type": "string",
+        "required": True,
+    },
+    {
+        "key": "duration_of_stay",
+        "prompt": "How long do you plan to stay?",
+        "type": "string",
+        "required": True,
+    },
+    {
+        "key": "has_return_ticket",
+        "prompt": "Do you have a return ticket?",
+        "type": "boolean",
+        "required": True,
+    },
+    {
+        "key": "has_sufficient_funds",
+        "prompt": "Do you have sufficient funds for your stay?",
+        "type": "boolean",
+        "required": True,
+    },
+]
+GENERIC_RULES: list[dict[str, Any]] = [
+    {
+        "key": "passport_expiry",
+        "operator": "not_empty",
+        "value": None,
+        "failure_status": "fail",
+        "message": "You must have a valid passport with expiry date",
+        "citation": {
+            "authority": "Torii",
+            "title": "Generic intake fallback",
+            "url": "https://www.moj.go.jp/isa/",
+        },
+    },
+    {
+        "key": "has_sufficient_funds",
+        "operator": "equals",
+        "value": True,
+        "failure_status": "fail",
+        "message": "You must demonstrate sufficient funds",
+        "citation": {
+            "authority": "Torii",
+            "title": "Generic intake fallback",
+            "url": "https://www.moj.go.jp/isa/",
+        },
+    },
+]
+GENERIC_DOCUMENTS: list[dict[str, Any]] = [
+    {
+        "code": "passport",
+        "name": "Valid Passport",
+        "is_required": True,
+        "how_to_obtain": "Valid passport from your home country",
+        "why_required": "Primary identification",
+        "citation": {
+            "authority": "Torii",
+            "title": "Generic intake fallback",
+            "url": "https://www.moj.go.jp/isa/",
+        },
+    },
+    {
+        "code": "photo",
+        "name": "Passport Photo",
+        "is_required": True,
+        "how_to_obtain": "Recent passport-style photograph",
+        "why_required": "Required for application",
+        "citation": {
+            "authority": "Torii",
+            "title": "Generic intake fallback",
+            "url": "https://www.moj.go.jp/isa/",
+        },
+    },
+    {
+        "code": "proof_of_funds",
+        "name": "Proof of Funds",
+        "is_required": True,
+        "how_to_obtain": "Bank statement or financial proof",
+        "why_required": "Demonstrates financial capability",
+        "citation": {
+            "authority": "Torii",
+            "title": "Generic intake fallback",
+            "url": "https://www.moj.go.jp/isa/",
+        },
+    },
+    {
+        "code": "travel_itinerary",
+        "name": "Travel Itinerary",
+        "is_required": True,
+        "how_to_obtain": "Flight booking and hotel reservations",
+        "why_required": "Shows travel plans",
+        "citation": {
+            "authority": "Torii",
+            "title": "Generic intake fallback",
+            "url": "https://www.moj.go.jp/isa/",
+        },
+    },
+]
+GENERIC_FORM: dict[str, Any] = {
+    "code": "generic_visa_application",
+    "version": "1.0",
+    "official_title": "Visa Application Form",
+    "citation": {
+        "authority": "Torii",
+        "title": "Generic intake fallback",
+        "url": "https://www.moj.go.jp/isa/",
+    },
+    "field_mappings": [
+        {"form_field": "full_name", "answer_key": "full_name", "required": True},
+        {"form_field": "nationality", "answer_key": "nationality", "required": True},
+        {"form_field": "passport_number", "answer_key": "passport_number", "required": True},
+        {"form_field": "purpose", "answer_key": "purpose_of_visit", "required": True},
+        {"form_field": "duration", "answer_key": "duration_of_stay", "required": True},
     ],
 }
 
-SEED_CASE_ACTIONS = {
-    "JP": [
-        {"code": "renewal", "name": "Renewal", "is_live": True},
-        {"code": "new_application", "name": "New Application", "is_live": True},
-        {"code": "change_of_status", "name": "Change of Status", "is_live": False},
-    ],
-    "US": [
-        {"code": "renewal", "name": "Renewal", "is_live": True},
-        {"code": "new_application", "name": "New Application", "is_live": True},
-    ],
-    "DE": [
-        {"code": "renewal", "name": "Renewal", "is_live": False},
-    ],
-}
+
+async def _seed_workflow(
+    session: AsyncSession,
+    *,
+    jurisdiction_id: int,
+    visa_category_id: int,
+    case_action_id: int,
+    questions: list[dict[str, Any]],
+    rules: list[dict[str, Any]],
+    documents: list[dict[str, Any]],
+    form: dict[str, Any],
+) -> int:
+    created = 0
+    existing_intake = await session.scalar(
+        select(IntakeDefinition).where(
+            IntakeDefinition.jurisdiction_id == jurisdiction_id,
+            IntakeDefinition.visa_category_id == visa_category_id,
+            IntakeDefinition.case_action_id == case_action_id,
+        )
+    )
+    if existing_intake is None:
+        session.add(
+            IntakeDefinition(
+                jurisdiction_id=jurisdiction_id,
+                visa_category_id=visa_category_id,
+                case_action_id=case_action_id,
+                questions=questions,
+                is_live=True,
+            )
+        )
+        created += 1
+    else:
+        existing_intake.questions = questions
+        existing_intake.is_live = True
+
+    for model, values in (
+        (EligibilityRuleSet, {"rules": rules}),
+        (DocumentRequirementSet, {"items": documents}),
+    ):
+        existing = await session.scalar(
+            select(model).where(
+                model.jurisdiction_id == jurisdiction_id,
+                model.visa_category_id == visa_category_id,
+                model.case_action_id == case_action_id,
+            )
+        )
+        if existing is None:
+            session.add(
+                model(
+                    jurisdiction_id=jurisdiction_id,
+                    visa_category_id=visa_category_id,
+                    case_action_id=case_action_id,
+                    is_live=True,
+                    **values,
+                )
+            )
+            created += 1
+        else:
+            for key, value in values.items():
+                setattr(existing, key, value)
+            existing.is_live = True
+
+    existing_form = await session.scalar(
+        select(FormTemplate).where(
+            FormTemplate.jurisdiction_id == jurisdiction_id,
+            FormTemplate.visa_category_id == visa_category_id,
+            FormTemplate.case_action_id == case_action_id,
+            FormTemplate.code == form["code"],
+        )
+    )
+    if existing_form is None:
+        session.add(
+            FormTemplate(
+                jurisdiction_id=jurisdiction_id,
+                visa_category_id=visa_category_id,
+                case_action_id=case_action_id,
+                is_live=True,
+                **form,
+            )
+        )
+        created += 1
+    else:
+        for key, value in form.items():
+            setattr(existing_form, key, value)
+        existing_form.is_live = True
+
+    return created
+
+
+async def _ensure_jurisdiction(
+    session: AsyncSession,
+    *,
+    code: str,
+    name: str,
+    is_live: bool,
+    jurisdiction_ids: dict[str, int],
+) -> int:
+    existing = await session.scalar(select(Jurisdiction).where(Jurisdiction.code == code))
+    if existing is not None:
+        existing.is_live = is_live
+        existing.name = name
+        jurisdiction_ids[code] = existing.id
+        return 0
+    jurisdiction = Jurisdiction(code=code, name=name, is_live=is_live)
+    session.add(jurisdiction)
+    await session.flush()
+    jurisdiction_ids[code] = jurisdiction.id
+    return 1
+
+
+async def _ensure_category(
+    session: AsyncSession,
+    *,
+    jid: int,
+    j_code: str,
+    code: str,
+    name: str,
+    is_live: bool,
+    category_ids: dict[tuple[str, str], int],
+) -> int:
+    existing = await session.scalar(
+        select(VisaCategory).where(
+            VisaCategory.jurisdiction_id == jid,
+            VisaCategory.code == code,
+        )
+    )
+    if existing is not None:
+        existing.is_live = is_live
+        existing.name = name
+        category_ids[(j_code, code)] = existing.id
+        return 0
+    vc = VisaCategory(
+        jurisdiction_id=jid,
+        code=code,
+        name=name,
+        is_live=is_live,
+    )
+    session.add(vc)
+    await session.flush()
+    category_ids[(j_code, code)] = vc.id
+    return 1
+
+
+async def _ensure_action(
+    session: AsyncSession,
+    *,
+    jid: int,
+    j_code: str,
+    code: str,
+    name: str,
+    is_live: bool,
+    action_ids: dict[tuple[str, str], int],
+) -> int:
+    existing = await session.scalar(
+        select(CaseAction).where(
+            CaseAction.jurisdiction_id == jid,
+            CaseAction.code == code,
+        )
+    )
+    if existing is not None:
+        existing.is_live = is_live
+        existing.name = name
+        action_ids[(j_code, code)] = existing.id
+        return 0
+    ca = CaseAction(
+        jurisdiction_id=jid,
+        code=code,
+        name=name,
+        is_live=is_live,
+    )
+    session.add(ca)
+    await session.flush()
+    action_ids[(j_code, code)] = ca.id
+    return 1
 
 
 async def seed() -> None:
     settings = get_settings()
     engine = create_engine(to_async_url(settings.database_url))
     session_factory = create_session_factory(engine)
+    packs = load_all_packs()
+    pack_jurisdictions = list_jurisdiction_metas()
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
@@ -121,12 +436,15 @@ async def seed() -> None:
     async with session_factory() as session:
         created_users = 0
         for data in SEED_USERS:
-            existing = await session.scalar(select(User).where(User.email == data["email"]))
+            username = data["email"].split("@")[0]
+            existing = await session.scalar(
+                select(User).where((User.email == data["email"]) | (User.username == username))
+            )
             if existing is not None:
                 continue
             user = User(
                 email=data["email"],
-                username=data["email"].split("@")[0],
+                username=username,
                 password_hash=hash_password(data["password"]),
                 role=data["role"],
                 is_active=True,
@@ -136,152 +454,117 @@ async def seed() -> None:
             created_users += 1
 
         created_jurisdictions = 0
+        created_categories = 0
+        created_actions = 0
         jurisdiction_ids: dict[str, int] = {}
-        for data in SEED_JURISDICTIONS:
-            existing = await session.scalar(
-                select(Jurisdiction).where(Jurisdiction.code == data["code"])
+        category_ids: dict[tuple[str, str], int] = {}
+        action_ids: dict[tuple[str, str], int] = {}
+
+        for meta in pack_jurisdictions:
+            created_jurisdictions += await _ensure_jurisdiction(
+                session,
+                code=meta.code.upper(),
+                name=meta.name,
+                is_live=meta.is_live,
+                jurisdiction_ids=jurisdiction_ids,
             )
-            if existing is not None:
-                jurisdiction_ids[data["code"]] = existing.id
-                continue
-            jurisdiction = Jurisdiction(
+            jid = jurisdiction_ids[meta.code.upper()]
+            for cat in meta.categories:
+                created_categories += await _ensure_category(
+                    session,
+                    jid=jid,
+                    j_code=meta.code.upper(),
+                    code=str(cat["code"]).lower(),
+                    name=str(cat["name"]),
+                    is_live=bool(cat.get("is_live", True)),
+                    category_ids=category_ids,
+                )
+            for action in meta.actions:
+                created_actions += await _ensure_action(
+                    session,
+                    jid=jid,
+                    j_code=meta.code.upper(),
+                    code=str(action["code"]).lower(),
+                    name=str(action["name"]),
+                    is_live=bool(action.get("is_live", True)),
+                    action_ids=action_ids,
+                )
+
+        for data in SEED_EXTRA_JURISDICTIONS:
+            created_jurisdictions += await _ensure_jurisdiction(
+                session,
                 code=data["code"],
                 name=data["name"],
-                is_live=data["is_live"],
+                is_live=bool(data["is_live"]),
+                jurisdiction_ids=jurisdiction_ids,
             )
-            session.add(jurisdiction)
-            await session.flush()
-            jurisdiction_ids[data["code"]] = jurisdiction.id
-            created_jurisdictions += 1
+            jid = jurisdiction_ids[data["code"]]
+            for cat in SEED_EXTRA_CATEGORIES:
+                created_categories += await _ensure_category(
+                    session,
+                    jid=jid,
+                    j_code=data["code"],
+                    code=cat["code"],
+                    name=cat["name"],
+                    is_live=bool(cat["is_live"]),
+                    category_ids=category_ids,
+                )
+            for action in SEED_EXTRA_ACTIONS:
+                created_actions += await _ensure_action(
+                    session,
+                    jid=jid,
+                    j_code=data["code"],
+                    code=action["code"],
+                    name=action["name"],
+                    is_live=bool(action["is_live"]),
+                    action_ids=action_ids,
+                )
 
-        created_categories = 0
-        category_ids: dict[tuple[str, str], int] = {}
-        for code, categories in SEED_VISA_CATEGORIES.items():
-            jid = jurisdiction_ids.get(code)
-            if jid is None:
-                continue
-            for data in categories:
-                existing = await session.scalar(
-                    select(VisaCategory).where(
-                        VisaCategory.jurisdiction_id == jid,
-                        VisaCategory.code == data["code"],
-                    )
-                )
-                if existing is not None:
-                    category_ids[(code, data["code"])] = existing.id
-                    continue
-                vc = VisaCategory(
-                    jurisdiction_id=jid,
-                    code=data["code"],
-                    name=data["name"],
-                    is_live=data["is_live"],
-                )
-                session.add(vc)
-                await session.flush()
-                category_ids[(code, data["code"])] = vc.id
-                created_categories += 1
-
-        created_actions = 0
-        action_ids: dict[tuple[str, str], int] = {}
-        for code, actions in SEED_CASE_ACTIONS.items():
-            jid = jurisdiction_ids.get(code)
-            if jid is None:
-                continue
-            for data in actions:
-                existing = await session.scalar(
-                    select(CaseAction).where(
-                        CaseAction.jurisdiction_id == jid,
-                        CaseAction.code == data["code"],
-                    )
-                )
-                if existing is not None:
-                    action_ids[(code, data["code"])] = existing.id
-                    continue
-                ca = CaseAction(
-                    jurisdiction_id=jid,
-                    code=data["code"],
-                    name=data["name"],
-                    is_live=data["is_live"],
-                )
-                session.add(ca)
-                await session.flush()
-                action_ids[(code, data["code"])] = ca.id
-                created_actions += 1
-
-        created_intake = 0
         created_workflow_definitions = 0
-        jp_id = jurisdiction_ids.get("JP")
-        work_id = category_ids.get(("JP", "work"))
-        renewal_id = action_ids.get(("JP", "renewal"))
-        if jp_id is not None and work_id is not None and renewal_id is not None:
-            existing_intake = await session.scalar(
-                select(IntakeDefinition).where(
-                    IntakeDefinition.jurisdiction_id == jp_id,
-                    IntakeDefinition.visa_category_id == work_id,
-                    IntakeDefinition.case_action_id == renewal_id,
-                )
+        for workflow in workflow_rows_from_packs(packs):
+            jid = jurisdiction_ids.get(workflow["jurisdiction"])
+            vid = category_ids.get((workflow["jurisdiction"], workflow["visa_category"]))
+            aid = action_ids.get((workflow["jurisdiction"], workflow["action"]))
+            if jid is None or vid is None or aid is None:
+                continue
+            created_workflow_definitions += await _seed_workflow(
+                session,
+                jurisdiction_id=jid,
+                visa_category_id=vid,
+                case_action_id=aid,
+                questions=workflow["questions"],
+                rules=workflow["rules"],
+                documents=workflow["documents"],
+                form=workflow["form"],
             )
-            if existing_intake is None:
-                session.add(
-                    IntakeDefinition(
-                        jurisdiction_id=jp_id,
-                        visa_category_id=work_id,
-                        case_action_id=renewal_id,
-                        questions=JP_WORK_RENEWAL_QUESTIONS,
-                        is_live=True,
-                    )
-                )
-                created_intake = 1
 
-            workflow_definitions = (
-                (
-                    EligibilityRuleSet,
-                    {"rules": JP_WORK_RENEWAL_ELIGIBILITY_RULES},
-                ),
-                (
-                    DocumentRequirementSet,
-                    {"items": JP_WORK_RENEWAL_DOCUMENT_REQUIREMENTS},
-                ),
-            )
-            for model, values in workflow_definitions:
+        # Generic fallback for live category/action combos without a content pack.
+        for (j_code, _v_code), vid in category_ids.items():
+            for (a_j_code, _a_code), aid in action_ids.items():
+                if j_code != a_j_code:
+                    continue
+                jid = jurisdiction_ids.get(j_code)
+                if jid is None:
+                    continue
                 existing = await session.scalar(
-                    select(model).where(
-                        model.jurisdiction_id == jp_id,
-                        model.visa_category_id == work_id,
-                        model.case_action_id == renewal_id,
+                    select(IntakeDefinition).where(
+                        IntakeDefinition.jurisdiction_id == jid,
+                        IntakeDefinition.visa_category_id == vid,
+                        IntakeDefinition.case_action_id == aid,
                     )
                 )
-                if existing is None:
-                    session.add(
-                        model(
-                            jurisdiction_id=jp_id,
-                            visa_category_id=work_id,
-                            case_action_id=renewal_id,
-                            is_live=True,
-                            **values,
-                        )
-                    )
-                    created_workflow_definitions += 1
-
-            existing_form = await session.scalar(
-                select(FormTemplate).where(
-                    FormTemplate.jurisdiction_id == jp_id,
-                    FormTemplate.visa_category_id == work_id,
-                    FormTemplate.case_action_id == renewal_id,
-                    FormTemplate.code == JP_WORK_RENEWAL_FORM_TEMPLATE["code"],
+                if existing is not None:
+                    continue
+                created_workflow_definitions += await _seed_workflow(
+                    session,
+                    jurisdiction_id=jid,
+                    visa_category_id=vid,
+                    case_action_id=aid,
+                    questions=GENERIC_QUESTIONS,
+                    rules=GENERIC_RULES,
+                    documents=GENERIC_DOCUMENTS,
+                    form=GENERIC_FORM,
                 )
-            )
-            if existing_form is None:
-                session.add(
-                    FormTemplate(
-                        jurisdiction_id=jp_id,
-                        visa_category_id=work_id,
-                        case_action_id=renewal_id,
-                        is_live=True,
-                        **JP_WORK_RENEWAL_FORM_TEMPLATE,
-                    )
-                )
-                created_workflow_definitions += 1
 
         await session.commit()
 
@@ -289,8 +572,8 @@ async def seed() -> None:
     print(
         f"Seeded {created_users} users, {created_jurisdictions} jurisdictions, "
         f"{created_categories} visa categories, {created_actions} case actions, "
-        f"{created_intake} intake definitions, "
-        f"{created_workflow_definitions} applicant workflow definitions"
+        f"{created_workflow_definitions} applicant workflow definitions "
+        f"from {len(packs)} content packs"
     )
 
 

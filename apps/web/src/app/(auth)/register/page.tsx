@@ -32,7 +32,7 @@ export default function RegisterPage() {
     try {
       const res = await register(email, password, username || undefined);
       setAuth(res.access_token, res.user);
-      router.push("/admin");
+      router.push(res.user.role === "applicant" ? "/dashboard" : "/admin");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Registration failed");
     } finally {

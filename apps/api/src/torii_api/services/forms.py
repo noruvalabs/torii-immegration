@@ -1,4 +1,7 @@
-"""Versioned official-form selection and explicit field mapping (US-07/08)."""
+"""Versioned official-form selection and explicit field mapping (US-07/08).
+
+Form templates are authored in ``docs/jurisdictions/*.yml``.
+"""
 
 from __future__ import annotations
 
@@ -6,34 +9,12 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from torii_api.services.eligibility import JP_IMMIGRATION_CITATION
+from torii_api.services.pack_exports import pack_form
 
-JP_WORK_RENEWAL_FORM_TEMPLATE: dict[str, Any] = {
-    "code": "extension_of_stay",
-    "version": "2026-04",
-    "official_title": "Application for Extension of Period of Stay",
-    "citation": JP_IMMIGRATION_CITATION,
-    "field_mappings": [
-        {"form_field": "applicant.full_name", "answer_key": "full_name", "required": True},
-        {
-            "form_field": "applicant.passport_number",
-            "answer_key": "passport_number",
-            "required": True,
-        },
-        {
-            "form_field": "residence.years_in_japan",
-            "answer_key": "years_in_japan",
-            "required": True,
-        },
-        {"form_field": "sponsor.name", "answer_key": "sponsor_name", "required": False},
-        {
-            "form_field": "employment.status",
-            "answer_key": "employment_status",
-            "required": True,
-        },
-        {"form_field": "employment.employer", "answer_key": "employer_name", "required": False},
-    ],
-}
+JP_WORK_RENEWAL_FORM_TEMPLATE: dict[str, Any] = pack_form("jp/work.renewal")
+US_H1B_FORM_TEMPLATE: dict[str, Any] = pack_form("us/h1b.renewal")
+JP_STUDENT_NEW_APPLICATION_FORM_TEMPLATE: dict[str, Any] = pack_form("jp/student.new_application")
+JP_TOURIST_NEW_APPLICATION_FORM_TEMPLATE: dict[str, Any] = pack_form("jp/tourist.new_application")
 
 
 class FilledForm(BaseModel):
@@ -41,9 +22,7 @@ class FilledForm(BaseModel):
     missing_required_fields: list[str]
 
 
-def fill_form(
-    field_mappings: list[dict[str, Any]], answers: dict[str, Any]
-) -> FilledForm:
+def fill_form(field_mappings: list[dict[str, Any]], answers: dict[str, Any]) -> FilledForm:
     """Fill only declared mappings; never infer undeclared form fields."""
     filled: dict[str, Any] = {}
     missing: list[str] = []

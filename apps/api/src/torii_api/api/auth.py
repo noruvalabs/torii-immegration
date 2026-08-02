@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, HTTPException, Query, UploadFile, status
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
@@ -50,6 +50,15 @@ class UserOut(BaseModel):
     role: str
     is_active: bool
     email_verified: bool
+    # Profile fields
+    full_name: str | None = None
+    nationality: str | None = None
+    passport_number: str | None = None
+    passport_expiry: str | None = None
+    date_of_birth: str | None = None
+    current_country: str | None = None
+    avatar_url: str | None = None
+    profile_complete: bool = False
 
 
 class TokenOut(BaseModel):
@@ -69,6 +78,15 @@ class ResetPasswordIn(BaseModel):
 
 class MessageOut(BaseModel):
     detail: str
+
+
+class ProfileUpdateIn(BaseModel):
+    full_name: str | None = Field(default=None, min_length=2, max_length=200)
+    nationality: str | None = Field(default=None, min_length=2, max_length=100)
+    passport_number: str | None = Field(default=None, min_length=5, max_length=32)
+    passport_expiry: str | None = Field(default=None, max_length=16)
+    date_of_birth: str | None = Field(default=None, max_length=16)
+    current_country: str | None = Field(default=None, min_length=2, max_length=100)
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -166,6 +184,61 @@ async def login(payload: LoginIn, session: SessionDep, settings: SettingsDep) ->
 @router.get("/me", response_model=UserOut)
 async def me(user: CurrentUserDep) -> User:
     """Return the signed-in user's profile."""
+    return user
+
+
+@router.get("/profile", response_model=UserOut)
+async def get_profile(user: CurrentUserDep) -> User:
+    """Return the signed-in user's full profile including saved fields."""
+    return user
+
+
+@router.put("/profile", response_model=UserOut)
+async def update_profile(
+    payload: ProfileUpdateIn, user: CurrentUserDep, session: SessionDep
+) -> User:
+    """Update the signed-in user's profile fields."""
+    update_data = payload.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(user, key, value)
+
+    # Auto-mark profile as complete when required fields are filled
+    required_fields = ["full_name", "nationality", "passport_number", "current_country"]
+    user.profile_complete = all(getattr(user, f) for f in required_fields)
+
+    await session.flush()
+    return user
+
+
+@router.post("/avatar", response_model=UserOut)
+async def upload_avatar(
+    file: UploadFile,
+    user: CurrentUserDep,
+    session: SessionDep,
+) -> User:
+    """Upload a profile avatar image."""
+    if not file.content_type or not file.content_type.startswith("image/"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="File must be an image",
+        )
+
+    content = await file.read()
+    if len(content) > 5 * 1024 * 1024:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Image must be less than 5MB",
+        )
+
+    # TODO: In production, upload to S3/CDN and get URL
+    # For now, store as data URL
+    import base64
+
+    b64 = base64.b64encode(content).decode("utf-8")
+    data_url = f"data:{file.content_type};base64,{b64}"
+    user.avatar_url = data_url
+
+    await session.flush()
     return user
 
 

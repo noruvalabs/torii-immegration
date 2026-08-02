@@ -87,3 +87,17 @@ All AI coding agents working in this repo must follow these rules.
 - Frontend changes should test user-observable behavior by role/label. Use Playwright for critical flows that must not break.
 - Do not use live network in tests. Mock at the HTTP/fetch transport boundary.
 - In responses, state what changed, how it was verified, important file paths, skipped checks, risks, and assumptions.
+
+## Product Context
+
+- Torii is a guided form-preparation platform, **not** legal advice — the UPL line in
+  `docs/specs/01_domain.md` is binding.
+- Primary user is a **foreign resident in Japan**. Japan filings are domestic/self-filed;
+  US filings are consular via the embassy or consulate in Japan.
+- Read order: `docs/specs/00_overview.md` → `01_domain.md` → `02_requirements.md` →
+  `docs/plan/00_applicant_v1.md` for sequencing.
+- **NF-1**: rule-governed output is deterministic, never model-inferred.
+  **NF-2**: nothing user-facing ships without an official-source citation.
+- Jurisdiction content lives in `docs/jurisdictions/*.yml` (loaded by seed into the API DB),
+  not as long-lived Python dict constants.
+- Do not automate government portals (`docs/decisions/0004-no-portal-automation.md` when present).

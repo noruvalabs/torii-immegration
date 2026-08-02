@@ -1,0 +1,222 @@
+scope:
+  jurisdiction: JP
+  visa_category: work
+  action: renewal
+  is_live: true
+  name: Japan work visa — extension of period of stay
+
+stages:
+  - sequence: 1
+    code: applicant_filing
+    actor: applicant
+
+intake:
+  questions:
+    - key: full_name
+      prompt: What is your full name as it appears on your passport?
+      type: string
+      min_length: 2
+      max_length: 200
+    - key: nationality
+      prompt: What is your nationality (passport country)?
+      type: enum
+      options:
+        - JP
+        - US
+        - GB
+        - CA
+        - AU
+        - DE
+        - FR
+        - SG
+        - KR
+        - AE
+        - NZ
+        - NL
+        - IT
+        - ES
+        - CH
+        - IE
+        - TH
+        - MY
+        - IN
+        - CN
+        - BD
+        - PH
+        - VN
+        - ID
+        - other
+    - key: passport_number
+      prompt: What is your passport number?
+      type: string
+      min_length: 5
+      max_length: 32
+    - key: current_location_country
+      prompt: Which country are you currently staying in?
+      type: enum
+      options:
+        - Japan
+        - United States
+        - United Kingdom
+        - Canada
+        - Australia
+        - Germany
+        - France
+        - Singapore
+        - South Korea
+        - United Arab Emirates
+        - New Zealand
+        - Netherlands
+        - Italy
+        - Spain
+        - Switzerland
+        - Ireland
+        - Thailand
+        - Malaysia
+        - India
+        - China
+    - key: years_in_japan
+      prompt: How many full years have you lived in Japan?
+      type: integer
+      min_value: 0
+      max_value: 80
+    - key: has_sponsor
+      prompt: Do you have an employer or institutional sponsor for this renewal?
+      type: boolean
+    - key: sponsor_name
+      prompt: What is your sponsor's legal name?
+      type: string
+      min_length: 2
+      max_length: 200
+      show_when:
+        key: has_sponsor
+        equals: true
+    - key: employment_status
+      prompt: What is your current employment status?
+      type: enum
+      options:
+        - employed
+        - self_employed
+        - unemployed
+    - key: employer_name
+      prompt: What is your employer's name?
+      type: string
+      min_length: 2
+      max_length: 200
+      show_when:
+        key: employment_status
+        equals: employed
+
+eligibility:
+  rules:
+    - key: years_in_japan
+      operator: min
+      value: 1
+      failure_status: fail
+      message: At least one full year in Japan is required for this renewal screening path.
+      citation:
+        authority: Immigration Services Agency of Japan
+        title: Application for Extension of Period of Stay
+        url: https://www.moj.go.jp/isa/applications/procedures/16-3.html
+        source_version: "2026-04"
+
+documents:
+  items:
+    - code: passport
+      name:
+        en: Passport
+        ja: パスポート
+      how_to_obtain:
+        en: Use your current valid passport.
+        ja: 有効なパスポート。
+      why_required:
+        en: Confirms identity and travel document details.
+      is_required: true
+      citation:
+        authority: Immigration Services Agency of Japan
+        title: Application for Extension of Period of Stay
+        url: https://www.moj.go.jp/isa/applications/procedures/16-3.html
+        source_version: "2026-04"
+    - code: residence_card
+      name:
+        en: Residence card
+        ja: 在留カード
+      how_to_obtain:
+        en: Use the residence card currently issued to you.
+      why_required:
+        en: Confirms current residence status.
+      is_required: true
+      citation:
+        authority: Immigration Services Agency of Japan
+        title: Application for Extension of Period of Stay
+        url: https://www.moj.go.jp/isa/applications/procedures/16-3.html
+        source_version: "2026-04"
+    - code: employment_contract
+      name:
+        en: Employment contract
+        ja: 雇用契約書
+      how_to_obtain:
+        en: Request a current copy from your employer.
+      why_required:
+        en: Supports current employment details.
+      is_required: true
+      show_when:
+        key: employment_status
+        equals: employed
+      citation:
+        authority: Immigration Services Agency of Japan
+        title: Application for Extension of Period of Stay
+        url: https://www.moj.go.jp/isa/applications/procedures/16-3.html
+        source_version: "2026-04"
+
+forms:
+  - code: extension_of_stay
+    version: "2026-04"
+    official_title: Application for Extension of Period of Stay
+    citation:
+      authority: Immigration Services Agency of Japan
+      title: Application for Extension of Period of Stay
+      url: https://www.moj.go.jp/isa/applications/procedures/16-3.html
+      source_version: "2026-04"
+    field_mappings:
+      - form_field: applicant.full_name
+        answer_key: full_name
+        required: true
+      - form_field: applicant.nationality
+        answer_key: nationality
+        required: true
+      - form_field: applicant.passport_number
+        answer_key: passport_number
+        required: true
+      - form_field: residence.years_in_japan
+        answer_key: years_in_japan
+        required: true
+      - form_field: sponsor.name
+        answer_key: sponsor_name
+        required: false
+      - form_field: employment.status
+        answer_key: employment_status
+        required: true
+      - form_field: employment.employer
+        answer_key: employer_name
+        required: false
+
+fees:
+  - code: extension_counter
+    amount: null
+    currency: JPY
+    channel: counter
+    published: false
+    note: >
+      Counter/online fees change 1 Oct 2026 (Cabinet Order pending confirmation).
+      Do not publish amounts until ops confirms official figures (NF-2).
+    citation:
+      authority: Immigration Services Agency of Japan
+      title: Application for Extension of Period of Stay
+      url: https://www.moj.go.jp/isa/applications/procedures/16-3.html
+      retrieved: "2026-07-30"
+
+sources:
+  - title: Application for Extension of Period of Stay
+    url: https://www.moj.go.jp/isa/applications/procedures/16-3.html
+    retrieved: "2026-07-30"

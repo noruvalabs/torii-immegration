@@ -155,12 +155,12 @@ async def update_jurisdiction(
     return jurisdiction
 
 
-@router.delete("/{jurisdiction_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{jurisdiction_id}")
 async def delete_jurisdiction(
     jurisdiction_id: int,
     session: SessionDep,
     _admin: AdminDep,
-) -> None:
+):
     """Delete a jurisdiction (admin only). Fails if it has associated cases."""
     jurisdiction = await session.get(Jurisdiction, jurisdiction_id)
     if jurisdiction is None:
@@ -273,14 +273,13 @@ async def update_visa_category(
 
 @router.delete(
     "/{jurisdiction_id}/visa-categories/{category_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
 )
 async def delete_visa_category(
     jurisdiction_id: int,
     category_id: int,
     session: SessionDep,
     _admin: AdminDep,
-) -> None:
+):
     """Delete a visa category (admin only)."""
     vc = await session.get(VisaCategory, category_id)
     if vc is None or vc.jurisdiction_id != jurisdiction_id:
@@ -393,14 +392,13 @@ async def update_case_action(
 
 @router.delete(
     "/{jurisdiction_id}/case-actions/{action_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
 )
 async def delete_case_action(
     jurisdiction_id: int,
     action_id: int,
     session: SessionDep,
     _admin: AdminDep,
-) -> None:
+):
     """Delete a case action (admin only)."""
     ca = await session.get(CaseAction, action_id)
     if ca is None or ca.jurisdiction_id != jurisdiction_id:

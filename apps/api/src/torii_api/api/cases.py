@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -19,12 +19,18 @@ from torii_api.auth.deps import CurrentUserDep
 from torii_api.db.models import (
     Case,
     CaseAction,
+    CaseChecklistItem,
+    CaseGeneratedForm,
+    DocumentRequirementSet,
+    EligibilityRuleSet,
+    FormTemplate,
     IntakeDefinition,
     Jurisdiction,
     User,
     VisaCategory,
 )
 from torii_api.db.session import get_session
+from torii_api.services.guidance import compute_guidance, next_status_for_phase
 from torii_api.services.intake import (
     IntakeProgress,
     IntakeQuestion,
@@ -39,6 +45,27 @@ from torii_api.services.intake import (
 router = APIRouter(prefix="/v1/cases", tags=["cases"])
 
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
+
+
+# ── Profile pre-fill ─────────────────────────────────────────────────────────
+
+# Maps User profile fields to intake question keys.
+PROFILE_TO_INTAKE_MAP: dict[str, str] = {
+    "full_name": "full_name",
+    "nationality": "nationality",
+    "passport_number": "passport_number",
+    "current_country": "current_location_country",
+}
+
+
+def _prefill_from_profile(user: User) -> dict[str, Any]:
+    """Pre-fill intake answers from the user's saved profile fields."""
+    answers: dict[str, Any] = {}
+    for profile_field, intake_key in PROFILE_TO_INTAKE_MAP.items():
+        value = getattr(user, profile_field, None)
+        if value:
+            answers[intake_key] = value
+    return answers
 
 
 # ── Request / response schemas ────────────────────────────────────────────────
@@ -98,6 +125,12 @@ class CaseOut(BaseModel):
     notes: str | None = None
     created_at: Any = None
     updated_at: Any = None
+    jurisdiction_code: str | None = None
+    visa_category_code: str | None = None
+    case_action_code: str | None = None
+    scope_label: str | None = None
+    next_phase: str | None = None
+    next_title: str | None = None
 
 
 class IntakeAnswerIn(BaseModel):
@@ -111,6 +144,16 @@ class IntakeStateOut(BaseModel):
     answers: dict[str, Any]
     progress: IntakeProgress
     intake_step: str | None = None
+
+
+class GuidanceOut(BaseModel):
+    phase: str
+    title: str
+    instruction: str
+    cta_label: str
+    blocked_reason: str | None = None
+    progress: IntakeProgress | None = None
+    scope_label: str | None = None
 
 
 # ── Visa categories & actions ─────────────────────────────────────────────────
@@ -250,6 +293,7 @@ async def scope_case(
         user_id=user.id,
         status="draft",
         locale=payload.locale,
+        intake_answers=_prefill_from_profile(user),
     )
     session.add(case)
     try:
@@ -278,7 +322,7 @@ async def _owned_case(session: AsyncSession, case_id: int, user: User) -> Case:
 
 
 async def _live_intake_definition(session: AsyncSession, case: Case) -> IntakeDefinition:
-    """Resolve the live intake questionnaire for the case's scope."""
+    """Resolve the intake questionnaire for the case's scope (live only)."""
     if case.visa_category_id is None or case.case_action_id is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -295,7 +339,7 @@ async def _live_intake_definition(session: AsyncSession, case: Case) -> IntakeDe
     if definition is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="no live intake definition for this case scope",
+            detail="no intake definition for this case scope",
         )
     return definition
 
@@ -312,6 +356,172 @@ def _intake_state(case: Case, definition: IntakeDefinition) -> IntakeStateOut:
     )
 
 
+async def _scope_label(
+    session: AsyncSession, case: Case
+) -> tuple[str | None, str | None, str | None, str | None]:
+    jurisdiction = await session.get(Jurisdiction, case.jurisdiction_id)
+    visa = (
+        await session.get(VisaCategory, case.visa_category_id)
+        if case.visa_category_id is not None
+        else None
+    )
+    action = (
+        await session.get(CaseAction, case.case_action_id)
+        if case.case_action_id is not None
+        else None
+    )
+    j_code = jurisdiction.code if jurisdiction else None
+    v_code = visa.code if visa else None
+    a_code = action.code if action else None
+    parts = [
+        p
+        for p in (
+            jurisdiction.name if jurisdiction else None,
+            visa.name if visa else None,
+            action.name if action else None,
+        )
+        if p
+    ]
+    label = " · ".join(parts) if parts else None
+    return j_code, v_code, a_code, label
+
+
+async def _def_flags(session: AsyncSession, case: Case) -> tuple[bool, bool, bool, bool]:
+    if case.visa_category_id is None or case.case_action_id is None:
+        return False, False, False, False
+    scope = (
+        case.jurisdiction_id,
+        case.visa_category_id,
+        case.case_action_id,
+    )
+    has_intake = (
+        await session.scalar(
+            select(IntakeDefinition.id).where(
+                IntakeDefinition.jurisdiction_id == scope[0],
+                IntakeDefinition.visa_category_id == scope[1],
+                IntakeDefinition.case_action_id == scope[2],
+                IntakeDefinition.is_live.is_(True),
+            )
+        )
+        is not None
+    )
+    has_eligibility = (
+        await session.scalar(
+            select(EligibilityRuleSet.id).where(
+                EligibilityRuleSet.jurisdiction_id == scope[0],
+                EligibilityRuleSet.visa_category_id == scope[1],
+                EligibilityRuleSet.case_action_id == scope[2],
+                EligibilityRuleSet.is_live.is_(True),
+            )
+        )
+        is not None
+    )
+    has_docs = (
+        await session.scalar(
+            select(DocumentRequirementSet.id).where(
+                DocumentRequirementSet.jurisdiction_id == scope[0],
+                DocumentRequirementSet.visa_category_id == scope[1],
+                DocumentRequirementSet.case_action_id == scope[2],
+                DocumentRequirementSet.is_live.is_(True),
+            )
+        )
+        is not None
+    )
+    has_forms = (
+        await session.scalar(
+            select(FormTemplate.id).where(
+                FormTemplate.jurisdiction_id == scope[0],
+                FormTemplate.visa_category_id == scope[1],
+                FormTemplate.case_action_id == scope[2],
+                FormTemplate.is_live.is_(True),
+            )
+        )
+        is not None
+    )
+    return has_intake, has_eligibility, has_docs, has_forms
+
+
+async def _case_guidance(session: AsyncSession, case: Case) -> GuidanceOut:
+    j_code, v_code, a_code, label = await _scope_label(session, case)
+    has_intake, has_eligibility, has_docs, has_forms = await _def_flags(session, case)
+    intake_questions: list[dict[str, Any]] | None = None
+    if has_intake:
+        definition = await session.scalar(
+            select(IntakeDefinition).where(
+                IntakeDefinition.jurisdiction_id == case.jurisdiction_id,
+                IntakeDefinition.visa_category_id == case.visa_category_id,
+                IntakeDefinition.case_action_id == case.case_action_id,
+                IntakeDefinition.is_live.is_(True),
+            )
+        )
+        if definition is not None:
+            intake_questions = list(definition.questions or [])
+
+    checklist = (
+        (
+            await session.execute(
+                select(CaseChecklistItem)
+                .where(CaseChecklistItem.case_id == case.id)
+                .order_by(CaseChecklistItem.id)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    forms = (
+        (
+            await session.execute(
+                select(CaseGeneratedForm)
+                .where(CaseGeneratedForm.case_id == case.id)
+                .order_by(CaseGeneratedForm.id)
+            )
+        )
+        .scalars()
+        .all()
+    )
+
+    guidance = compute_guidance(
+        intake_questions=intake_questions,
+        answers=dict(case.intake_answers or {}),
+        eligibility_snapshot=case.eligibility_snapshot,
+        checklist_items=[
+            {
+                "code": item.code,
+                "is_required": item.is_required,
+                "status": item.status,
+            }
+            for item in checklist
+        ],
+        generated_forms=[{"id": form.id} for form in forms],
+        review_flags_acknowledged=bool(case.review_flags_acknowledged),
+        packet_snapshot=case.packet_snapshot,
+        status=case.status,
+        has_intake_def=has_intake,
+        has_eligibility_def=has_eligibility,
+        has_document_def=has_docs,
+        has_form_def=has_forms,
+        scope_label=label,
+    )
+    _ = (j_code, v_code, a_code)
+    return GuidanceOut.model_validate(guidance.model_dump())
+
+
+async def _enrich_case(session: AsyncSession, case: Case) -> CaseOut:
+    j_code, v_code, a_code, label = await _scope_label(session, case)
+    guidance = await _case_guidance(session, case)
+    base = CaseOut.model_validate(case)
+    return base.model_copy(
+        update={
+            "jurisdiction_code": j_code,
+            "visa_category_code": v_code,
+            "case_action_code": a_code,
+            "scope_label": label,
+            "next_phase": guidance.phase,
+            "next_title": guidance.title,
+        }
+    )
+
+
 # ── List / intake / get / save ────────────────────────────────────────────────
 
 
@@ -319,12 +529,13 @@ def _intake_state(case: Case, definition: IntakeDefinition) -> IntakeStateOut:
 async def list_cases(
     session: SessionDep,
     user: CurrentUserDep,
-) -> list[Case]:
+) -> list[CaseOut]:
     """List the current user's cases (US-03.3, US-03.4)."""
     result = await session.execute(
         select(Case).where(Case.user_id == user.id).order_by(Case.created_at.desc())
     )
-    return list(result.scalars().all())
+    cases = list(result.scalars().all())
+    return [await _enrich_case(session, case) for case in cases]
 
 
 @router.get("/{case_id}/intake", response_model=IntakeStateOut)
@@ -367,15 +578,31 @@ async def answer_intake(
 
     error = validate_answer(question, payload.value)
     if error is not None:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=error)
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=error)
 
     merged = {**current, payload.key: payload.value}
     case.intake_answers = prune_answers(questions, merged)
     case.intake_step = payload.key
     case.review_flags_acknowledged = False
+    state = _intake_state(case, definition)
+    if state.progress.complete:
+        new_status = next_status_for_phase("eligibility", case.status)
+        if new_status is not None:
+            case.status = new_status
     await session.flush()
     await session.refresh(case)
     return _intake_state(case, definition)
+
+
+@router.get("/{case_id}/guidance", response_model=GuidanceOut)
+async def get_case_guidance(
+    case_id: int,
+    session: SessionDep,
+    user: CurrentUserDep,
+) -> GuidanceOut:
+    """Return the single next action for this case."""
+    case = await _owned_case(session, case_id, user)
+    return await _case_guidance(session, case)
 
 
 @router.get("/{case_id}", response_model=CaseOut)
@@ -383,9 +610,10 @@ async def get_case(
     case_id: int,
     session: SessionDep,
     user: CurrentUserDep,
-) -> Case:
+) -> CaseOut:
     """Return a saved case with answers and position so the applicant can resume (US-03.2)."""
-    return await _owned_case(session, case_id, user)
+    case = await _owned_case(session, case_id, user)
+    return await _enrich_case(session, case)
 
 
 @router.patch("/{case_id}", response_model=CaseOut)
@@ -394,7 +622,7 @@ async def save_case_progress(
     payload: CaseProgressIn,
     session: SessionDep,
     user: CurrentUserDep,
-) -> Case:
+) -> CaseOut:
     """Persist intake answers and flow position for later resume (US-03.1).
 
     Omitted fields are left unchanged. Passing ``intake_answers`` replaces the whole map
@@ -411,4 +639,18 @@ async def save_case_progress(
         case.notes = data["notes"]
     await session.flush()
     await session.refresh(case)
-    return case
+    return await _enrich_case(session, case)
+
+
+@router.delete(
+    "/{case_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_class=Response,
+)
+async def delete_case(case_id: int, session: SessionDep, user: CurrentUserDep):
+    """Delete a case owned by the applicant (draft/in-progress only)."""
+    case = await _owned_case(session, case_id, user)
+    if case.status == "submitted":
+        raise HTTPException(status_code=409, detail="cannot delete a submitted case")
+    await session.delete(case)
+    await session.flush()

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { Plus, ArrowRight, FolderKanban, Clock, CheckCircle2, AlertCircle } from "lucide-react";
+import { Plus, ArrowRight, FolderKanban, Clock, CheckCircle2, AlertCircle, User } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/lib/auth-context";
@@ -18,7 +18,7 @@ const statusConfig: Record<string, { label: string; tone: "default" | "success" 
 };
 
 export default function DashboardPage() {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const [cases, setCases] = useState<Case[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -56,6 +56,28 @@ export default function DashboardPage() {
           <Plus className="size-4" /> New case
         </Link>
       </div>
+
+      {user && !user.profile_complete && (
+        <Card className="border-primary/20 bg-primary/5">
+          <CardContent className="flex items-center gap-4 pt-5">
+            <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary/10">
+              <User className="size-5 text-primary" />
+            </div>
+            <div className="flex-1">
+              <p className="font-medium">Complete your profile</p>
+              <p className="text-sm text-muted-foreground">
+                Save your name, nationality, and passport details once — they auto-fill for every new case.
+              </p>
+            </div>
+            <Link
+              href="/profile"
+              className="inline-flex items-center gap-2 rounded-[var(--radius)] bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
+            >
+              Complete profile <ArrowRight className="size-4" />
+            </Link>
+          </CardContent>
+        </Card>
+      )}
 
       {error && (
         <p className="rounded-[var(--radius)] border border-[var(--color-danger)]/30 bg-[var(--color-danger)]/10 px-4 py-3 text-sm text-[var(--color-danger)]">
@@ -127,7 +149,8 @@ function CaseCard({ caseData }: { caseData: Case }) {
           <div className="min-w-0 flex-1">
             <p className="font-mono text-sm font-semibold">{caseData.reference}</p>
             <p className="mt-0.5 text-xs text-muted-foreground">
-              Locale: {caseData.locale} · Updated {new Date(caseData.updated_at ?? caseData.created_at ?? "").toLocaleDateString()}
+              {caseData.scope_label ?? `Locale: ${caseData.locale}`}
+              {caseData.next_title ? ` · Next: ${caseData.next_title}` : ""}
             </p>
           </div>
           <Badge tone={sc.tone}>{sc.label}</Badge>

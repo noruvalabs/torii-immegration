@@ -34,6 +34,10 @@ class Settings(BaseSettings):
     # applies them explicitly); handy to enable in dev/staging containers via env.
     migrate_on_startup: bool = False
 
+    # Run seed on service startup. Off by default; enable in dev/staging to auto-populate
+    # jurisdictions, visa categories, and workflows on first boot.
+    seed_on_startup: bool = False
+
     # --- Background scheduler / task queue (arq over Redis) --------------------
     # The API enqueues jobs here; a separate `arq` worker consumes them and runs the
     # cron schedule. The API degrades gracefully when Redis is absent (enqueue no-ops
@@ -69,9 +73,18 @@ class Settings(BaseSettings):
     # --- AI service (OPS scraper, assistant chat) ------------------------------
     ai_service_url: str = "http://localhost:8001"
     # Comma-separated list of jurisdiction codes to scrape daily (US-25, US-26).
-    scrape_jurisdictions: str = "JP"
+    scrape_jurisdictions: str = "JP,US"
     # Service-to-service token for authenticated AI→API calls.
     service_token: str = ""
+
+    # --- Content packs (docs/jurisdictions/*.yml) -------------------------------
+    # Empty = auto-detect monorepo docs/jurisdictions. Override for deploys that
+    # mount packs outside the package tree.
+    jurisdictions_dir: str = ""
+
+    # When true, GET /v1/cases/{id}/packet requires a completed payment
+    # entitlement (US-22.2). Off in unit tests unless explicitly enabled.
+    require_packet_entitlement: bool = True
 
     @property
     def is_sqlite(self) -> bool:

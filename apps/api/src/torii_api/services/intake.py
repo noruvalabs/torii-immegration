@@ -9,6 +9,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
+from torii_api.services.pack_exports import pack_questions
+
 QuestionType = Literal["boolean", "string", "integer", "enum"]
 
 
@@ -126,54 +128,35 @@ def parse_questions(raw: list[dict[str, Any]] | list[IntakeQuestion]) -> list[In
     return out
 
 
-# Sample JP work-renewal questionnaire used by seed + tests.
-JP_WORK_RENEWAL_QUESTIONS: list[dict[str, Any]] = [
-    {
-        "key": "full_name",
-        "prompt": "What is your full name as it appears on your passport?",
-        "type": "string",
-        "min_length": 2,
-        "max_length": 200,
-    },
-    {
-        "key": "passport_number",
-        "prompt": "What is your passport number?",
-        "type": "string",
-        "min_length": 5,
-        "max_length": 32,
-    },
-    {
-        "key": "years_in_japan",
-        "prompt": "How many full years have you lived in Japan?",
-        "type": "integer",
-        "min_value": 0,
-        "max_value": 80,
-    },
-    {
-        "key": "has_sponsor",
-        "prompt": "Do you have an employer or institutional sponsor for this renewal?",
-        "type": "boolean",
-    },
-    {
-        "key": "sponsor_name",
-        "prompt": "What is your sponsor's legal name?",
-        "type": "string",
-        "min_length": 2,
-        "max_length": 200,
-        "show_when": {"key": "has_sponsor", "equals": True},
-    },
-    {
-        "key": "employment_status",
-        "prompt": "What is your current employment status?",
-        "type": "enum",
-        "options": ["employed", "self_employed", "unemployed"],
-    },
-    {
-        "key": "employer_name",
-        "prompt": "What is your employer's name?",
-        "type": "string",
-        "min_length": 2,
-        "max_length": 200,
-        "show_when": {"key": "employment_status", "equals": "employed"},
-    },
+TOP_COUNTRY_OPTIONS: list[str] = [
+    "Japan",
+    "United States",
+    "United Kingdom",
+    "Canada",
+    "Australia",
+    "Germany",
+    "France",
+    "Singapore",
+    "South Korea",
+    "United Arab Emirates",
+    "New Zealand",
+    "Netherlands",
+    "Italy",
+    "Spain",
+    "Switzerland",
+    "Ireland",
+    "Thailand",
+    "Malaysia",
+    "India",
+    "China",
 ]
+
+# Authored in docs/jurisdictions/*.yml; re-exported for tests and legacy imports.
+JP_WORK_RENEWAL_QUESTIONS: list[dict[str, Any]] = pack_questions("jp/work.renewal")
+US_H1B_QUESTIONS: list[dict[str, Any]] = pack_questions("us/h1b.renewal")
+JP_TOURIST_NEW_APPLICATION_QUESTIONS: list[dict[str, Any]] = pack_questions(
+    "jp/tourist.new_application"
+)
+JP_STUDENT_NEW_APPLICATION_QUESTIONS: list[dict[str, Any]] = pack_questions(
+    "jp/student.new_application"
+)

@@ -32,6 +32,7 @@ class ScrapeRequest(BaseModel):
     jurisdiction_code: str = Field(min_length=2, max_length=8, examples=["JP"])
     visa_category: str = Field(default="work", max_length=32)
     action: str = Field(default="renewal", max_length=32)
+    return_payload: bool = False
 
 
 class ScrapeResponse(BaseModel):
@@ -43,6 +44,13 @@ class ScrapeResponse(BaseModel):
     form_templates: int
     source_pages: int
     message: str
+    eligibility_rules_payload: list[dict[str, Any]] = Field(default_factory=list)
+    document_requirements_payload: list[dict[str, Any]] = Field(default_factory=list)
+    intake_questions_payload: list[dict[str, Any]] = Field(default_factory=list)
+    form_templates_payload: list[dict[str, Any]] = Field(default_factory=list)
+    scraped_at: str = ""
+    visa_category: str = ""
+    action: str = ""
 
 
 class IngestRequest(BaseModel):
@@ -113,6 +121,15 @@ async def trigger_scrape(payload: ScrapeRequest) -> ScrapeResponse:
         form_templates=len(result.form_templates),
         source_pages=len(result.source_pages),
         message=f"Scraped {len(result.source_pages)} pages, extracted structured data.",
+        eligibility_rules_payload=result.eligibility_rules if payload.return_payload else [],
+        document_requirements_payload=(
+            result.document_requirements if payload.return_payload else []
+        ),
+        intake_questions_payload=result.intake_questions if payload.return_payload else [],
+        form_templates_payload=result.form_templates if payload.return_payload else [],
+        scraped_at=result.scraped_at,
+        visa_category=result.visa_category,
+        action=result.action,
     )
 
 
