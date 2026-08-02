@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from torii_api.api.cases import _owned_case
 from torii_api.auth.deps import CurrentUserDep
+from torii_api.config import get_settings
 from torii_api.db.models import (
     Case,
     CaseChecklistItem,
@@ -29,6 +30,7 @@ from torii_api.services.forms import fill_form
 from torii_api.services.guidance import next_status_for_phase
 from torii_api.services.i18n import localized
 from torii_api.services.packet import assemble_packet
+from torii_api.services.payment import case_has_packet_entitlement
 from torii_api.services.review import ReviewResult, review_packet
 
 router = APIRouter(prefix="/v1/cases", tags=["case-workflow"])
@@ -444,6 +446,13 @@ async def get_packet(case_id: int, session: SessionDep, user: CurrentUserDep) ->
     case = await _owned_case(session, case_id, user)
     if case.packet_snapshot is None:
         raise HTTPException(status_code=404, detail="packet has not been assembled")
+    if get_settings().require_packet_entitlement:
+        entitled = await case_has_packet_entitlement(session, case.id, user.id)
+        if not entitled:
+            raise HTTPException(
+                status_code=status.HTTP_402_PAYMENT_REQUIRED,
+                detail="packet download requires a completed payment entitlement",
+            )
     return case.packet_snapshot
 
 

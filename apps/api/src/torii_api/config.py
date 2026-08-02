@@ -77,6 +77,15 @@ class Settings(BaseSettings):
     # Service-to-service token for authenticated AI→API calls.
     service_token: str = ""
 
+    # --- Content packs (docs/jurisdictions/*.yml) -------------------------------
+    # Empty = auto-detect monorepo docs/jurisdictions. Override for deploys that
+    # mount packs outside the package tree.
+    jurisdictions_dir: str = ""
+
+    # When true, GET /v1/cases/{id}/packet requires a completed payment
+    # entitlement (US-22.2). Off in unit tests unless explicitly enabled.
+    require_packet_entitlement: bool = True
+
     @property
     def is_sqlite(self) -> bool:
         return self.database_url.startswith("sqlite")

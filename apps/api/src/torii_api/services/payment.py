@@ -157,6 +157,22 @@ async def get_payment_by_case(
     return result.scalar_one_or_none()
 
 
+async def case_has_packet_entitlement(
+    db: AsyncSession,
+    case_id: int,
+    user_id: int,
+) -> bool:
+    """True when a completed payment unlocks packet download (US-22.2)."""
+    result = await db.execute(
+        select(Payment.id).where(
+            Payment.case_id == case_id,
+            Payment.user_id == user_id,
+            Payment.status == PaymentStatus.COMPLETED,
+        )
+    )
+    return result.scalar_one_or_none() is not None
+
+
 async def get_user_payments(
     db: AsyncSession,
     user_id: int,

@@ -1,0 +1,234 @@
+scope:
+  jurisdiction: US
+  visa_category: h1b
+  action: new_application
+  is_live: true
+  name: United States H-1B — new petition / consular path
+
+stages:
+  - sequence: 1
+    code: sponsor_petition
+    actor: sponsor
+    handoff_artifact: i129_approval
+  - sequence: 2
+    code: applicant_filing
+    actor: applicant
+
+intake:
+  questions:
+    - key: full_name
+      prompt: What is your full name as it appears on your passport?
+      type: string
+      min_length: 2
+      max_length: 200
+    - key: nationality
+      prompt: What is your nationality (passport country)?
+      type: enum
+      options:
+        - JP
+        - IN
+        - CN
+        - KR
+        - GB
+        - CA
+        - AU
+        - DE
+        - FR
+        - BD
+        - PH
+        - VN
+        - other
+    - key: passport_number
+      prompt: What is your passport number?
+      type: string
+      min_length: 5
+      max_length: 32
+    - key: current_location_country
+      prompt: Which country are you currently staying in?
+      type: enum
+      options:
+        - Japan
+        - United States
+        - United Kingdom
+        - Canada
+        - Australia
+        - Germany
+        - France
+        - Singapore
+        - South Korea
+        - United Arab Emirates
+        - New Zealand
+        - Netherlands
+        - Italy
+        - Spain
+        - Switzerland
+        - Ireland
+        - Thailand
+        - Malaysia
+        - India
+        - China
+    - key: job_title
+      prompt: What is the specialty occupation job title for this H-1B?
+      type: string
+      min_length: 2
+      max_length: 200
+    - key: has_bachelor_degree
+      prompt: >
+        Do you hold at least a U.S. bachelor's degree (or foreign equivalent)
+        related to the role?
+      type: boolean
+    - key: has_employer_sponsor
+      prompt: >
+        Do you have a U.S. employer willing to file (or already filing) as your
+        H-1B petitioner?
+      type: boolean
+    - key: sponsor_name
+      prompt: What is your petitioning employer's legal name?
+      type: string
+      min_length: 2
+      max_length: 200
+      show_when:
+        key: has_employer_sponsor
+        equals: true
+    - key: currently_in_h1b
+      prompt: Are you currently in the United States in H-1B status?
+      type: boolean
+    - key: years_in_h1b
+      prompt: How many full years have you already held H-1B status?
+      type: integer
+      min_value: 0
+      max_value: 10
+      show_when:
+        key: currently_in_h1b
+        equals: true
+
+eligibility:
+  rules:
+    - key: has_bachelor_degree
+      operator: equals
+      value: true
+      failure_status: fail
+      message: >
+        Published H-1B specialty occupation criteria generally require
+        a related bachelor's degree or equivalent.
+      citation:
+        authority: U.S. Citizenship and Immigration Services
+        title: H-1B Specialty Occupations
+        url: https://www.uscis.gov/working-in-the-united-states/temporary-workers/h-1b-specialty-occupations
+        source_version: "2026-04"
+    - key: has_employer_sponsor
+      operator: equals
+      value: true
+      failure_status: fail
+      message: An H-1B petition requires a U.S. employer petitioner.
+      citation:
+        authority: U.S. Citizenship and Immigration Services
+        title: H-1B Specialty Occupations
+        url: https://www.uscis.gov/working-in-the-united-states/temporary-workers/h-1b-specialty-occupations
+        source_version: "2026-04"
+
+documents:
+  items:
+    - code: passport
+      name:
+        en: Passport
+      how_to_obtain:
+        en: Use your current valid passport biographic page.
+      why_required:
+        en: Confirms identity and travel document details.
+      is_required: true
+      citation:
+        authority: U.S. Citizenship and Immigration Services
+        title: H-1B Specialty Occupations
+        url: https://www.uscis.gov/working-in-the-united-states/temporary-workers/h-1b-specialty-occupations
+        source_version: "2026-04"
+    - code: degree_diploma
+      name:
+        en: Degree diploma / transcripts
+      how_to_obtain:
+        en: >
+          Request official transcripts or diploma from your university; include a
+          foreign credential evaluation if the degree is not from the U.S.
+      why_required:
+        en: Supports the specialty occupation education requirement.
+      is_required: true
+      citation:
+        authority: U.S. Citizenship and Immigration Services
+        title: H-1B Specialty Occupations
+        url: https://www.uscis.gov/working-in-the-united-states/temporary-workers/h-1b-specialty-occupations
+        source_version: "2026-04"
+    - code: job_offer_letter
+      name:
+        en: Job offer / employment letter
+      how_to_obtain:
+        en: >
+          Ask your petitioning employer for a signed offer or support letter
+          describing the specialty role.
+      why_required:
+        en: Documents the offered specialty occupation and employer relationship.
+      is_required: true
+      show_when:
+        key: has_employer_sponsor
+        equals: true
+      citation:
+        authority: U.S. Citizenship and Immigration Services
+        title: H-1B Specialty Occupations
+        url: https://www.uscis.gov/working-in-the-united-states/temporary-workers/h-1b-specialty-occupations
+        source_version: "2026-04"
+    - code: i94_record
+      name:
+        en: I-94 arrival/departure record
+      how_to_obtain:
+        en: >
+          Download your most recent I-94 from https://i94.cbp.dhs.gov/ if you are
+          currently in the U.S.
+      why_required:
+        en: Confirms current U.S. admission status for extension/change filings.
+      is_required: true
+      show_when:
+        key: currently_in_h1b
+        equals: true
+      citation:
+        authority: U.S. Customs and Border Protection
+        title: I-94 Website
+        url: https://i94.cbp.dhs.gov/
+        source_version: "2026-04"
+
+forms:
+  - code: i129_h1b
+    version: "2026-04"
+    official_title: Petition for a Nonimmigrant Worker (Form I-129) — H-1B
+    citation:
+      authority: U.S. Citizenship and Immigration Services
+      title: Form I-129
+      url: https://www.uscis.gov/i-129
+      source_version: "2026-04"
+    field_mappings:
+      - form_field: beneficiary.full_name
+        answer_key: full_name
+        required: true
+      - form_field: beneficiary.nationality
+        answer_key: nationality
+        required: true
+      - form_field: beneficiary.passport_number
+        answer_key: passport_number
+        required: true
+      - form_field: job.title
+        answer_key: job_title
+        required: true
+      - form_field: petitioner.name
+        answer_key: sponsor_name
+        required: false
+      - form_field: beneficiary.years_in_h1b
+        answer_key: years_in_h1b
+        required: false
+
+fees: []
+
+sources:
+  - title: H-1B Specialty Occupations
+    url: https://www.uscis.gov/working-in-the-united-states/temporary-workers/h-1b-specialty-occupations
+    retrieved: "2026-07-30"
+  - title: Form I-129
+    url: https://www.uscis.gov/i-129
+    retrieved: "2026-07-30"

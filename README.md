@@ -29,6 +29,7 @@ apps/web/     Next.js — applicant app + ops/admin back office
 packages/     shared types / generated API client (scaffolded in a later PR)
 infra/        docker-compose, nginx, env templates
 docs/         product specs (docs/specs) + architecture decisions (docs/decisions)
+              + sequencing (docs/plan) + jurisdiction content packs (docs/jurisdictions)
 ```
 
 `apps/ai` — model-facing service (assistant chat, citations, guardrails; RAG/OCR later). See

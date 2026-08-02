@@ -1,10 +1,16 @@
-"""Deterministic, non-advisory eligibility screening (US-04)."""
+"""Deterministic, non-advisory eligibility screening (US-04).
+
+Authored rules live in ``docs/jurisdictions/*.yml`` and are re-exported here for
+tests and call sites that still import constants.
+"""
 
 from __future__ import annotations
 
 from typing import Any, Literal
 
 from pydantic import BaseModel
+
+from torii_api.services.pack_exports import pack_rules
 
 EligibilityStatus = Literal["pass", "at_risk", "fail", "out_of_scope"]
 
@@ -15,136 +21,43 @@ JP_IMMIGRATION_CITATION = {
     "source_version": "2026-04",
 }
 
-JP_WORK_RENEWAL_ELIGIBILITY_RULES: list[dict[str, Any]] = [
-    {
-        "key": "years_in_japan",
-        "operator": "min",
-        "value": 1,
-        "failure_status": "fail",
-        "message": "At least one full year in Japan is required for this renewal screening path.",
-        "citation": JP_IMMIGRATION_CITATION,
-    }
-]
-
-JP_STUDENT_NEW_APPLICATION_ELIGIBILITY_RULES: list[dict[str, Any]] = [
-    {
-        "key": "has_school_acceptance",
-        "operator": "equals",
-        "value": True,
-        "failure_status": "fail",
-        "message": (
-            "An acceptance from a recognized school in Japan is required "
-            "for this student visa path."
-        ),
-        "citation": {
-            "authority": "Immigration Services Agency of Japan",
-            "title": "Certificate of Eligibility Application (Student)",
-            "url": "https://www.moj.go.jp/isa/applications/procedures/16-1.html",
-            "source_version": "2026-04",
-        },
-    },
-    {
-        "key": "has_financial_support",
-        "operator": "equals",
-        "value": True,
-        "failure_status": "at_risk",
-        "message": "You should provide evidence of funds to cover tuition and living costs.",
-        "citation": {
-            "authority": "Immigration Services Agency of Japan",
-            "title": "Certificate of Eligibility Application (Student)",
-            "url": "https://www.moj.go.jp/isa/applications/procedures/16-1.html",
-            "source_version": "2026-04",
-        },
-    },
-]
-
-JP_TOURIST_CITATION = {
-    "authority": "Immigration Services Agency of Japan",
-    "title": "Visa for Temporary Visitors (Tourism)",
-    "url": "https://www.moj.go.jp/isa/applications/procedures/16-1.html",
-    "source_version": "2026-04",
-}
+JP_WORK_RENEWAL_ELIGIBILITY_RULES: list[dict[str, Any]] = pack_rules("jp/work.renewal")
+JP_STUDENT_NEW_APPLICATION_ELIGIBILITY_RULES: list[dict[str, Any]] = pack_rules(
+    "jp/student.new_application"
+)
+JP_TOURIST_NEW_APPLICATION_ELIGIBILITY_RULES: list[dict[str, Any]] = pack_rules(
+    "jp/tourist.new_application"
+)
+US_H1B_ELIGIBILITY_RULES: list[dict[str, Any]] = pack_rules("us/h1b.renewal")
 
 # Nationalities eligible for Japan eVISA (direct application).
 # Source: Ministry of Foreign Affairs of Japan — Visa issuance procedures.
 EVISA_DIRECT_NATIONALITIES: list[str] = [
-    "AU", "BR", "CA", "KH", "SA", "ZA", "TW", "GB", "US",
+    "AU",
+    "BR",
+    "CA",
+    "KH",
+    "SA",
+    "ZA",
+    "TW",
+    "GB",
+    "US",
 ]
 
 # Nationalities that apply via Japanese consulate (not direct eVISA).
 EVISA_CONSULATE_NATIONALITIES: list[str] = [
-    "HK", "IN", "ID", "MO", "MN", "KR", "SG", "AE",
+    "HK",
+    "IN",
+    "ID",
+    "MO",
+    "MN",
+    "KR",
+    "SG",
+    "AE",
 ]
 
 # All eVISA-eligible nationalities (direct + consulate).
-EVISA_ELIGIBLE_NATIONALITIES = (
-    EVISA_DIRECT_NATIONALITIES + EVISA_CONSULATE_NATIONALITIES
-)
-
-JP_TOURIST_NEW_APPLICATION_ELIGIBILITY_RULES: list[dict[str, Any]] = [
-    {
-        "key": "visitor_nationality",
-        "operator": "nationality_in",
-        "value": EVISA_ELIGIBLE_NATIONALITIES,
-        "failure_status": "at_risk",
-        "message": (
-            "The visitor's nationality may not be eligible for Japan eVISA. "
-            "They may need to apply through an accredited agency or on paper."
-        ),
-        "citation": JP_TOURIST_CITATION,
-    },
-    {
-        "key": "intended_length_of_stay_days",
-        "operator": "max",
-        "value": 90,
-        "failure_status": "at_risk",
-        "message": (
-            "Short-term visitor visas are typically issued for stays of up to "
-            "90 days. Longer stays may require a different visa category."
-        ),
-        "citation": JP_TOURIST_CITATION,
-    },
-    {
-        "key": "visitor_has_sufficient_funds",
-        "operator": "equals",
-        "value": "visitor_own_funds",
-        "failure_status": "at_risk",
-        "message": (
-            "The visitor should demonstrate their own funds, or the guarantor "
-            "should prepare a financial sponsorship statement."
-        ),
-        "citation": JP_TOURIST_CITATION,
-    },
-]
-
-US_H1B_CITATION = {
-    "authority": "U.S. Citizenship and Immigration Services",
-    "title": "H-1B Specialty Occupations",
-    "url": "https://www.uscis.gov/working-in-the-united-states/temporary-workers/h-1b-specialty-occupations",
-    "source_version": "2026-04",
-}
-
-US_H1B_ELIGIBILITY_RULES: list[dict[str, Any]] = [
-    {
-        "key": "has_bachelor_degree",
-        "operator": "equals",
-        "value": True,
-        "failure_status": "fail",
-        "message": (
-            "Published H-1B specialty occupation criteria generally require "
-            "a related bachelor's degree or equivalent."
-        ),
-        "citation": US_H1B_CITATION,
-    },
-    {
-        "key": "has_employer_sponsor",
-        "operator": "equals",
-        "value": True,
-        "failure_status": "fail",
-        "message": "An H-1B petition requires a U.S. employer petitioner.",
-        "citation": US_H1B_CITATION,
-    },
-]
+EVISA_ELIGIBLE_NATIONALITIES = EVISA_DIRECT_NATIONALITIES + EVISA_CONSULATE_NATIONALITIES
 
 
 class EligibilityFinding(BaseModel):

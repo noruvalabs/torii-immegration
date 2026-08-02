@@ -1,0 +1,32 @@
+code: JP
+name: Japan
+host_locale: ja
+is_live: true
+efile_enabled: false
+self_filing_allowed: true
+notes: >
+  Domestic filings (extension / change of status) may be self-filed by the
+  resident. COE for new work/student applications is filed by the sponsor.
+categories:
+  - code: work
+    name: Work Visa - Employment with a Japanese company
+    is_live: true
+  - code: student
+    name: Student Visa - Study at a university or language school
+    is_live: true
+  - code: tourist
+    name: Tourist Visa - Short-term travel (guarantor pack)
+    is_live: true
+actions:
+  - code: renewal
+    name: Renewal / Extension
+    is_live: true
+  - code: new_application
+    name: New application
+    is_live: true
+  - code: change_of_status
+    name: Change of status
+    is_live: false
+  - code: new
+    name: New Visa
+    is_live: true

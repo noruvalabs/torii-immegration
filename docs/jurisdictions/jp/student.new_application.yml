@@ -1,0 +1,225 @@
+scope:
+  jurisdiction: JP
+  visa_category: student
+  action: new_application
+  is_live: true
+  name: Japan student visa — new application (COE path)
+
+stages:
+  - sequence: 1
+    code: sponsor_petition
+    actor: sponsor
+    handoff_artifact: coe
+  - sequence: 2
+    code: applicant_filing
+    actor: applicant
+
+intake:
+  questions:
+    - key: full_name
+      prompt: What is your full name as it appears on your passport?
+      type: string
+      min_length: 2
+      max_length: 200
+    - key: nationality
+      prompt: What is your nationality (passport country)?
+      type: enum
+      options:
+        - US
+        - GB
+        - CA
+        - AU
+        - DE
+        - FR
+        - SG
+        - KR
+        - IN
+        - CN
+        - BD
+        - PH
+        - VN
+        - ID
+        - TH
+        - MY
+        - other
+    - key: passport_number
+      prompt: What is your passport number?
+      type: string
+      min_length: 5
+      max_length: 32
+    - key: current_location_country
+      prompt: Which country are you currently staying in?
+      type: enum
+      options:
+        - Japan
+        - United States
+        - United Kingdom
+        - Canada
+        - Australia
+        - Germany
+        - France
+        - Singapore
+        - South Korea
+        - United Arab Emirates
+        - New Zealand
+        - Netherlands
+        - Italy
+        - Spain
+        - Switzerland
+        - Ireland
+        - Thailand
+        - Malaysia
+        - India
+        - China
+    - key: has_school_acceptance
+      prompt: Do you have an acceptance letter from a school in Japan?
+      type: boolean
+    - key: school_name
+      prompt: What is the school's legal name?
+      type: string
+      min_length: 2
+      max_length: 200
+      show_when:
+        key: has_school_acceptance
+        equals: true
+    - key: has_financial_support
+      prompt: Can you prove enough funds for tuition and living costs?
+      type: boolean
+    - key: sponsor_type
+      prompt: Who is paying your expenses in Japan?
+      type: enum
+      options:
+        - self
+        - family
+        - scholarship
+        - other
+    - key: has_coe
+      prompt: Do you already have a Certificate of Eligibility (COE)?
+      type: boolean
+
+eligibility:
+  rules:
+    - key: has_school_acceptance
+      operator: equals
+      value: true
+      failure_status: fail
+      message: >
+        An acceptance from a recognized school in Japan is required
+        for this student visa path.
+      citation:
+        authority: Immigration Services Agency of Japan
+        title: Certificate of Eligibility Application (Student)
+        url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
+        source_version: "2026-04"
+    - key: has_financial_support
+      operator: equals
+      value: true
+      failure_status: at_risk
+      message: You should provide evidence of funds to cover tuition and living costs.
+      citation:
+        authority: Immigration Services Agency of Japan
+        title: Certificate of Eligibility Application (Student)
+        url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
+        source_version: "2026-04"
+
+documents:
+  items:
+    - code: passport
+      name:
+        en: Passport
+        ja: パスポート
+      how_to_obtain:
+        en: Use your current valid passport.
+        ja: 有効なパスポート。
+      why_required:
+        en: Confirms your identity and travel document details.
+      is_required: true
+      citation:
+        authority: Immigration Services Agency of Japan
+        title: Certificate of Eligibility Application (Student)
+        url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
+        source_version: "2026-04"
+    - code: school_acceptance_letter
+      name:
+        en: School acceptance letter
+        ja: 入学許可書
+      how_to_obtain:
+        en: Request the official acceptance/admission letter from your school.
+      why_required:
+        en: Shows the purpose of stay as study in Japan.
+      is_required: true
+      citation:
+        authority: Immigration Services Agency of Japan
+        title: Certificate of Eligibility Application (Student)
+        url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
+        source_version: "2026-04"
+    - code: financial_proof
+      name:
+        en: Proof of financial support
+        ja: 経費支弁能力を証明する資料
+      how_to_obtain:
+        en: Prepare bank statements, scholarship letters, or sponsor financial documents.
+      why_required:
+        en: Shows ability to cover tuition and living expenses.
+      is_required: true
+      citation:
+        authority: Immigration Services Agency of Japan
+        title: Certificate of Eligibility Application (Student)
+        url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
+        source_version: "2026-04"
+    - code: coe_copy
+      name:
+        en: Certificate of Eligibility (if issued)
+        ja: 在留資格認定証明書（交付済みの場合）
+      how_to_obtain:
+        en: Include a copy if your school already obtained a COE for you.
+      why_required:
+        en: Helps confirm eligibility status for visa issuance processing.
+      is_required: false
+      show_when:
+        key: has_coe
+        equals: true
+      citation:
+        authority: Immigration Services Agency of Japan
+        title: Certificate of Eligibility Application (Student)
+        url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
+        source_version: "2026-04"
+
+forms:
+  - code: student_visa_application
+    version: "2026-04"
+    official_title: Visa Application Form for Entry into Japan (Student)
+    citation:
+      authority: Ministry of Foreign Affairs of Japan
+      title: Visa Application Form
+      url: https://www.mofa.go.jp/j_info/visit/visa/index.html
+      source_version: "2026-04"
+    field_mappings:
+      - form_field: applicant.full_name
+        answer_key: full_name
+        required: true
+      - form_field: applicant.nationality
+        answer_key: nationality
+        required: true
+      - form_field: applicant.passport_number
+        answer_key: passport_number
+        required: true
+      - form_field: education.school_name
+        answer_key: school_name
+        required: false
+      - form_field: support.sponsor_type
+        answer_key: sponsor_type
+        required: true
+      - form_field: eligibility.has_coe
+        answer_key: has_coe
+        required: true
+
+fees: []
+
+sources:
+  - title: Certificate of Eligibility Application (Student)
+    url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
+    retrieved: "2026-07-30"
+  - title: Visa Application Form
+    url: https://www.mofa.go.jp/j_info/visit/visa/index.html
+    retrieved: "2026-07-30"
