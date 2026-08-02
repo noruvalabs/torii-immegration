@@ -174,6 +174,8 @@ def _matches(answer: Any, operator: str, expected: Any) -> bool:
         return answer in expected
     if operator == "nationality_in":
         return isinstance(answer, str) and answer in expected
+    if operator == "not_empty":
+        return answer is not None and answer != ""
     return False
 
 

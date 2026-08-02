@@ -100,24 +100,19 @@ SEED_USERS = [
 SEED_JURISDICTIONS = [
     {"code": "US", "name": "United States", "is_live": True},
     {"code": "JP", "name": "Japan", "is_live": True},
-    {"code": "GB", "name": "United Kingdom", "is_live": False},
-    {"code": "CA", "name": "Canada", "is_live": False},
-    {"code": "AU", "name": "Australia", "is_live": False},
-    {"code": "DE", "name": "Germany", "is_live": False},
-    {"code": "FR", "name": "France", "is_live": False},
-    {"code": "SG", "name": "Singapore", "is_live": False},
-    {"code": "KR", "name": "South Korea", "is_live": False},
-    {"code": "AE", "name": "United Arab Emirates", "is_live": False},
-    {"code": "NZ", "name": "New Zealand", "is_live": False},
-    {"code": "NL", "name": "Netherlands", "is_live": False},
-    {"code": "IT", "name": "Italy", "is_live": False},
-    {"code": "ES", "name": "Spain", "is_live": False},
-    {"code": "CH", "name": "Switzerland", "is_live": False},
-    {"code": "IE", "name": "Ireland", "is_live": False},
-    {"code": "TH", "name": "Thailand", "is_live": False},
-    {"code": "MY", "name": "Malaysia", "is_live": False},
-    {"code": "IN", "name": "India", "is_live": False},
-    {"code": "CN", "name": "China", "is_live": False},
+    {"code": "GB", "name": "United Kingdom", "is_live": True},
+    {"code": "CA", "name": "Canada", "is_live": True},
+    {"code": "AU", "name": "Australia", "is_live": True},
+    {"code": "DE", "name": "Germany", "is_live": True},
+    {"code": "FR", "name": "France", "is_live": True},
+    {"code": "SG", "name": "Singapore", "is_live": True},
+    {"code": "KR", "name": "South Korea", "is_live": True},
+    {"code": "NZ", "name": "New Zealand", "is_live": True},
+    {"code": "IE", "name": "Ireland", "is_live": True},
+    {"code": "NL", "name": "Netherlands", "is_live": True},
+    {"code": "SE", "name": "Sweden", "is_live": True},
+    {"code": "NO", "name": "Norway", "is_live": True},
+    {"code": "CH", "name": "Switzerland", "is_live": True},
 ]
 
 # Live only when a full workflow is seeded below (US-01.3).
@@ -138,38 +133,139 @@ SEED_VISA_CATEGORIES = {
             "name": "Tourist Visa - Short-term travel (up to 90 days in many cases)",
             "is_live": True,
         },
-        {
-            "code": "business",
-            "name": "Business Visa - Meetings, conferences, business visits",
-            "is_live": False,
-        },
-        {
-            "code": "dependent",
-            "name": "Dependent Visa - Join a family member living in Japan",
-            "is_live": False,
-        },
     ],
     "US": [
-        {"code": "h1b", "name": "H-1B Specialty Worker", "is_live": True},
-        {"code": "f1", "name": "F-1 Student", "is_live": False},
+        {"code": "tourist", "name": "Tourist / Visitor Visa (B1/B2)", "is_live": True},
+        {"code": "student", "name": "Student Visa (F-1)", "is_live": True},
+        {"code": "work", "name": "Work Visa (H-1B)", "is_live": True},
+    ],
+    "GB": [
+        {"code": "tourist", "name": "Standard Visitor Visa", "is_live": True},
+        {"code": "student", "name": "Student Visa", "is_live": True},
+        {"code": "work", "name": "Skilled Worker Visa", "is_live": True},
+    ],
+    "CA": [
+        {"code": "tourist", "name": "Visitor Visa (TRV)", "is_live": True},
+        {"code": "student", "name": "Study Permit", "is_live": True},
+        {"code": "work", "name": "Work Permit", "is_live": True},
+    ],
+    "AU": [
+        {"code": "tourist", "name": "Visitor Visa (Subclass 600)", "is_live": True},
+        {"code": "student", "name": "Student Visa (Subclass 500)", "is_live": True},
+        {"code": "work", "name": "Skilled Worker Visa (Subclass 482)", "is_live": True},
     ],
     "DE": [
-        {"code": "work", "name": "Work Visa", "is_live": False},
+        {"code": "tourist", "name": "Schengen Tourist Visa", "is_live": True},
+        {"code": "student", "name": "Student Visa", "is_live": True},
+        {"code": "work", "name": "Work Visa", "is_live": True},
+    ],
+    "FR": [
+        {"code": "tourist", "name": "Schengen Tourist Visa", "is_live": True},
+        {"code": "student", "name": "Student Visa", "is_live": True},
+        {"code": "work", "name": "Work Visa", "is_live": True},
+    ],
+    "SG": [
+        {"code": "tourist", "name": "Tourist Visa", "is_live": True},
+        {"code": "student", "name": "Student Pass", "is_live": True},
+        {"code": "work", "name": "Employment Pass", "is_live": True},
+    ],
+    "KR": [
+        {"code": "tourist", "name": "Tourist Visa (C-3)", "is_live": True},
+        {"code": "student", "name": "Student Visa (D-2)", "is_live": True},
+        {"code": "work", "name": "Work Visa (E-7)", "is_live": True},
+    ],
+    "NZ": [
+        {"code": "tourist", "name": "Visitor Visa", "is_live": True},
+        {"code": "student", "name": "Student Visa", "is_live": True},
+        {"code": "work", "name": "Essential Skills Work Visa", "is_live": True},
+    ],
+    "IE": [
+        {"code": "tourist", "name": "Tourist Visa", "is_live": True},
+        {"code": "student", "name": "Student Visa", "is_live": True},
+        {"code": "work", "name": "Critical Skills Permit", "is_live": True},
+    ],
+    "NL": [
+        {"code": "tourist", "name": "Schengen Tourist Visa", "is_live": True},
+        {"code": "student", "name": "Student Visa", "is_live": True},
+        {"code": "work", "name": "Work Permit", "is_live": True},
+    ],
+    "SE": [
+        {"code": "tourist", "name": "Schengen Tourist Visa", "is_live": True},
+        {"code": "student", "name": "Student Residence Permit", "is_live": True},
+        {"code": "work", "name": "Work Permit", "is_live": True},
+    ],
+    "NO": [
+        {"code": "tourist", "name": "Schengen Tourist Visa", "is_live": True},
+        {"code": "student", "name": "Student Visa", "is_live": True},
+        {"code": "work", "name": "Work Permit", "is_live": True},
+    ],
+    "CH": [
+        {"code": "tourist", "name": "Schengen Tourist Visa", "is_live": True},
+        {"code": "student", "name": "Student Visa", "is_live": True},
+        {"code": "work", "name": "Work Permit", "is_live": True},
     ],
 }
 
 SEED_CASE_ACTIONS = {
     "JP": [
-        {"code": "renewal", "name": "Renewal", "is_live": True},
-        {"code": "new_application", "name": "New Application", "is_live": True},
-        {"code": "change_of_status", "name": "Change of Status", "is_live": False},
+        {"code": "new", "name": "New Visa", "is_live": True},
+        {"code": "renewal", "name": "Renewal / Extension", "is_live": True},
     ],
     "US": [
-        {"code": "renewal", "name": "Renewal", "is_live": True},
-        {"code": "new_application", "name": "New Application", "is_live": True},
+        {"code": "new", "name": "New Visa", "is_live": True},
+        {"code": "renewal", "name": "Renewal / Extension", "is_live": True},
+    ],
+    "GB": [
+        {"code": "new", "name": "New Visa", "is_live": True},
+        {"code": "renewal", "name": "Renewal / Extension", "is_live": True},
+    ],
+    "CA": [
+        {"code": "new", "name": "New Visa", "is_live": True},
+        {"code": "renewal", "name": "Renewal / Extension", "is_live": True},
+    ],
+    "AU": [
+        {"code": "new", "name": "New Visa", "is_live": True},
+        {"code": "renewal", "name": "Renewal / Extension", "is_live": True},
     ],
     "DE": [
-        {"code": "renewal", "name": "Renewal", "is_live": False},
+        {"code": "new", "name": "New Visa", "is_live": True},
+        {"code": "renewal", "name": "Renewal / Extension", "is_live": True},
+    ],
+    "FR": [
+        {"code": "new", "name": "New Visa", "is_live": True},
+        {"code": "renewal", "name": "Renewal / Extension", "is_live": True},
+    ],
+    "SG": [
+        {"code": "new", "name": "New Visa", "is_live": True},
+        {"code": "renewal", "name": "Renewal / Extension", "is_live": True},
+    ],
+    "KR": [
+        {"code": "new", "name": "New Visa", "is_live": True},
+        {"code": "renewal", "name": "Renewal / Extension", "is_live": True},
+    ],
+    "NZ": [
+        {"code": "new", "name": "New Visa", "is_live": True},
+        {"code": "renewal", "name": "Renewal / Extension", "is_live": True},
+    ],
+    "IE": [
+        {"code": "new", "name": "New Visa", "is_live": True},
+        {"code": "renewal", "name": "Renewal / Extension", "is_live": True},
+    ],
+    "NL": [
+        {"code": "new", "name": "New Visa", "is_live": True},
+        {"code": "renewal", "name": "Renewal / Extension", "is_live": True},
+    ],
+    "SE": [
+        {"code": "new", "name": "New Visa", "is_live": True},
+        {"code": "renewal", "name": "Renewal / Extension", "is_live": True},
+    ],
+    "NO": [
+        {"code": "new", "name": "New Visa", "is_live": True},
+        {"code": "renewal", "name": "Renewal / Extension", "is_live": True},
+    ],
+    "CH": [
+        {"code": "new", "name": "New Visa", "is_live": True},
+        {"code": "renewal", "name": "Renewal / Extension", "is_live": True},
     ],
 }
 
@@ -432,6 +528,79 @@ async def seed() -> None:
                 documents=workflow["documents"],
                 form=workflow["form"],
             )
+
+        # Auto-create generic workflows for ALL live combinations without one
+        GENERIC_QUESTIONS = [
+            {"key": "full_name", "prompt": "What is your full name?", "type": "string", "required": True},
+            {"key": "nationality", "prompt": "What is your nationality?", "type": "string", "required": True},
+            {"key": "passport_number", "prompt": "What is your passport number?", "type": "string", "required": True},
+            {"key": "passport_expiry", "prompt": "When does your passport expire?", "type": "string", "required": True},
+            {"key": "purpose_of_visit", "prompt": "What is the purpose of your visit?", "type": "string", "required": True},
+            {"key": "duration_of_stay", "prompt": "How long do you plan to stay?", "type": "string", "required": True},
+            {"key": "has_return_ticket", "prompt": "Do you have a return ticket?", "type": "boolean", "required": True},
+            {"key": "has_sufficient_funds", "prompt": "Do you have sufficient funds for your stay?", "type": "boolean", "required": True},
+        ]
+        GENERIC_RULES = [
+            {"key": "passport_expiry", "operator": "not_empty", "value": None,
+             "failure_status": "fail", "message": "You must have a valid passport with expiry date"},
+            {"key": "has_sufficient_funds", "operator": "equals", "value": True,
+             "failure_status": "fail", "message": "You must demonstrate sufficient funds"},
+        ]
+        GENERIC_DOCUMENTS = [
+            {"code": "passport", "name": "Valid Passport", "is_required": True,
+             "how_to_obtain": "Valid passport from your home country", "why_required": "Primary identification",
+             "citation": {"source": "generic"}},
+            {"code": "photo", "name": "Passport Photo", "is_required": True,
+             "how_to_obtain": "Recent passport-style photograph", "why_required": "Required for application",
+             "citation": {"source": "generic"}},
+            {"code": "proof_of_funds", "name": "Proof of Funds", "is_required": True,
+             "how_to_obtain": "Bank statement or financial proof", "why_required": "Demonstrates financial capability",
+             "citation": {"source": "generic"}},
+            {"code": "travel_itinerary", "name": "Travel Itinerary", "is_required": True,
+             "how_to_obtain": "Flight booking and hotel reservations", "why_required": "Shows travel plans",
+             "citation": {"source": "generic"}},
+        ]
+        GENERIC_FORM = {
+            "code": "generic_visa_application",
+            "version": "1.0",
+            "official_title": "Visa Application Form",
+            "citation": {"source": "generic"},
+            "field_mappings": [
+                {"form_field": "full_name", "answer_key": "full_name", "required": True},
+                {"form_field": "nationality", "answer_key": "nationality", "required": True},
+                {"form_field": "passport_number", "answer_key": "passport_number", "required": True},
+                {"form_field": "purpose", "answer_key": "purpose_of_visit", "required": True},
+                {"form_field": "duration", "answer_key": "duration_of_stay", "required": True},
+            ],
+        }
+
+        for (j_code, v_code), vid in category_ids.items():
+            for (a_j_code, a_code), aid in action_ids.items():
+                if j_code != a_j_code:
+                    continue
+                jid = jurisdiction_ids.get(j_code)
+                if jid is None:
+                    continue
+                # Skip if workflow already seeded
+                existing = await session.scalar(
+                    select(IntakeDefinition).where(
+                        IntakeDefinition.jurisdiction_id == jid,
+                        IntakeDefinition.visa_category_id == vid,
+                        IntakeDefinition.case_action_id == aid,
+                    )
+                )
+                if existing is not None:
+                    continue
+                created_workflow_definitions += await _seed_workflow(
+                    session,
+                    jurisdiction_id=jid,
+                    visa_category_id=vid,
+                    case_action_id=aid,
+                    questions=GENERIC_QUESTIONS,
+                    rules=GENERIC_RULES,
+                    documents=GENERIC_DOCUMENTS,
+                    form=GENERIC_FORM,
+                )
 
         await session.commit()
 

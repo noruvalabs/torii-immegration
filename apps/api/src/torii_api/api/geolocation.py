@@ -2,14 +2,10 @@
 
 from __future__ import annotations
 
-from typing import Annotated
-
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Request
 from pydantic import BaseModel
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from torii_api.auth.deps import CurrentUserDep
-from torii_api.db.session import get_session
+from torii_api.auth.deps import CurrentUserDep, SessionDep
 from torii_api.services.geolocation import (
     detect_country_from_ip,
     get_application_types,
@@ -18,8 +14,6 @@ from torii_api.services.geolocation import (
 )
 
 router = APIRouter(prefix="/v1/geo", tags=["geolocation"])
-
-SessionDep = Annotated[AsyncSession, Depends(get_session)]
 
 
 # ── Response schemas ──────────────────────────────────────────────────────────
@@ -86,12 +80,7 @@ async def list_destinations(
     current_user: CurrentUserDep,
 ) -> list[DestinationOut]:
     """List all supported destination countries (excluding user's current country)."""
-    # Get user's current country from profile
-    current_country = getattr(current_user, "current_country", None)
-    if not current_country:
-        # Default to Japan if not set
-        current_country = "JP"
-
+    current_country = getattr(current_user, "current_country", None) or "JP"
     destinations = get_destinations_excluding(current_country)
     return [DestinationOut(**d) for d in destinations]
 
@@ -113,14 +102,11 @@ async def list_application_types() -> list[ApplicationTypeOut]:
 @router.get("/all", response_model=GeoDataOut)
 async def get_all_geo_data(
     request: Request,
-    current_user: CurrentUserDep,
 ) -> GeoDataOut:
     """Get all geolocation data in one call (for frontend initialization)."""
     geo = await detect_country_from_ip(request)
 
-    # Get destinations excluding user's current country
-    current_country = getattr(current_user, "current_country", None) or geo.country_code
-    destinations = get_destinations_excluding(current_country)
+    destinations = get_destinations_excluding(geo.country_code)
     visa_types = get_visa_types()
     app_types = get_application_types()
 
@@ -146,12 +132,14 @@ async def update_residence_country(
     session: SessionDep,
     country_code: str,
 ) -> dict:
-    """Update user's residence country (if they want to change from auto-detected)."""
-    from sqlalchemy import update
+    """Update user's residence country."""
+    from sqlalchemy import update as sa_update
+
+    from torii_api.db.models import User
 
     await session.execute(
-        update(type(current_user))
-        .where(type(current_user).id == current_user.id)
+        sa_update(User)
+        .where(User.id == current_user.id)
         .values(current_country=country_code)
     )
     await session.flush()

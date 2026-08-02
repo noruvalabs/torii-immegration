@@ -1,11 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { User, Loader2, Check } from "lucide-react";
+import { User, Loader2, Check, Camera } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { useAuth } from "@/lib/auth-context";
-import { updateProfile, type ProfileUpdate } from "@/lib/api/auth";
+import { updateProfile, uploadAvatar, type ProfileUpdate } from "@/lib/api/auth";
 
 const COUNTRIES = [
   "Japan", "United States", "United Kingdom", "Canada", "Australia",
@@ -19,6 +19,10 @@ export default function ProfilePage() {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [avatar, setAvatar] = useState<string | null>(user?.avatar_url ?? null);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const [form, setForm] = useState<ProfileUpdate>({
     full_name: user?.full_name ?? "",
     nationality: user?.nationality ?? "",
@@ -30,6 +34,29 @@ export default function ProfilePage() {
 
   function update(key: keyof ProfileUpdate, value: string) {
     setForm((prev) => ({ ...prev, [key]: value }));
+  }
+
+  async function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file || !token) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      setError("Image must be less than 5MB");
+      return;
+    }
+
+    setUploadingAvatar(true);
+    setError(null);
+
+    try {
+      const updated = await uploadAvatar(token, file);
+      setAvatar(updated.avatar_url);
+      setAuth(token, updated);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to upload avatar");
+    } finally {
+      setUploadingAvatar(false);
+    }
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -73,6 +100,44 @@ export default function ProfilePage() {
       <Card>
         <CardContent>
           <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4 pt-5">
+            {/* Avatar upload */}
+            <div className="flex flex-col items-center gap-3">
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploadingAvatar}
+                className="relative group size-24 rounded-full border-2 border-dashed border-muted-foreground/25 hover:border-primary/50 transition-colors disabled:opacity-50"
+              >
+                {uploadingAvatar ? (
+                  <div className="flex items-center justify-center size-full rounded-full bg-muted">
+                    <Loader2 className="size-6 text-muted-foreground animate-spin" />
+                  </div>
+                ) : avatar ? (
+                  <img
+                    src={avatar}
+                    alt="Avatar"
+                    className="size-full rounded-full object-cover"
+                  />
+                ) : (
+                  <div className="flex flex-col items-center justify-center size-full rounded-full bg-muted">
+                    <Camera className="size-6 text-muted-foreground" />
+                    <span className="text-[10px] text-muted-foreground mt-1">Upload</span>
+                  </div>
+                )}
+                <div className="absolute inset-0 flex items-center justify-center rounded-full bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <Camera className="size-5 text-white" />
+                </div>
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleAvatarChange}
+                className="hidden"
+              />
+              <p className="text-xs text-muted-foreground">Click to upload photo</p>
+            </div>
+
             <Field label="Full name (as on passport)" required>
               <input
                 type="text"
@@ -109,20 +174,18 @@ export default function ProfilePage() {
             <div className="grid grid-cols-2 gap-4">
               <Field label="Passport expiry">
                 <input
-                  type="text"
+                  type="date"
                   value={form.passport_expiry ?? ""}
                   onChange={(e) => update("passport_expiry", e.target.value)}
                   className="w-full rounded-[var(--radius)] border bg-background px-3 py-2 text-sm"
-                  placeholder="2031-05-15"
                 />
               </Field>
               <Field label="Date of birth">
                 <input
-                  type="text"
+                  type="date"
                   value={form.date_of_birth ?? ""}
                   onChange={(e) => update("date_of_birth", e.target.value)}
                   className="w-full rounded-[var(--radius)] border bg-background px-3 py-2 text-sm"
-                  placeholder="1990-03-22"
                 />
               </Field>
             </div>
@@ -154,13 +217,6 @@ export default function ProfilePage() {
           </form>
         </CardContent>
       </Card>
-
-      <button
-        onClick={() => router.push("/dashboard")}
-        className="text-sm text-muted-foreground hover:text-foreground"
-      >
-        Skip for now
-      </button>
     </div>
   );
 }

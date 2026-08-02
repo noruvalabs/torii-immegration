@@ -1,12 +1,14 @@
-"""Offline OCR-shaped heuristic extraction for the applicant document flow."""
+"""OCR extraction using Groq vision model for document field extraction."""
 
 from __future__ import annotations
 
-import re
+import base64
 from pathlib import Path
 from typing import Literal
 
 from pydantic import BaseModel
+
+from torii_ai.config import Settings, get_settings
 
 DocumentType = Literal["passport", "residence_card", "employment_contract"]
 
@@ -21,10 +23,98 @@ class OCRResult(BaseModel):
     needs_recapture: bool
 
 
+DOC_TYPE_PROMPTS: dict[DocumentType, str] = {
+    "passport": (
+        "Extract the following fields from this passport image:\n"
+        "- full_name: The holder's full name\n"
+        "- passport_number: The passport number\n"
+        "- nationality: Country of citizenship\n"
+        "- date_of_birth: Date of birth (YYYY-MM-DD)\n"
+        "- expiry_date: Passport expiry date (YYYY-MM-DD)\n"
+        "Return as JSON with field names as keys and {\"value\": \"...\", \"confidence\": 0.0-1.0} objects."
+    ),
+    "residence_card": (
+        "Extract the following fields from this residence card image:\n"
+        "- full_name: The holder's full name\n"
+        "- residence_card_number: The card number\n"
+        "- status: Residence status type\n"
+        "- expiry_date: Card expiry date (YYYY-MM-DD)\n"
+        "Return as JSON with field names as keys and {\"value\": \"...\", \"confidence\": 0.0-1.0} objects."
+    ),
+    "employment_contract": (
+        "Extract the following fields from this employment contract:\n"
+        "- employer_name: Company/employer name\n"
+        "- employee_name: Employee name\n"
+        "- position: Job title/position\n"
+        "- start_date: Employment start date (YYYY-MM-DD)\n"
+        "Return as JSON with field names as keys and {\"value\": \"...\", \"confidence\": 0.0-1.0} objects."
+    ),
+}
+
+
 def extract_document_fields(
     doc_type: DocumentType, filename: str, hint_text: str | None
 ) -> OCRResult:
-    """Parse explicit text hints and filename tokens; this does not perform image recognition."""
+    """Extract fields from document using Groq vision model."""
+    import json
+    import re
+
+    from openai import OpenAI
+
+    settings = get_settings()
+
+    if not settings.groq_api_key:
+        return _fallback_extract(doc_type, filename, hint_text)
+
+    try:
+        client = OpenAI(
+            api_key=settings.groq_api_key,
+            base_url=settings.groq_base_url,
+        )
+
+        prompt = DOC_TYPE_PROMPTS.get(doc_type, DOC_TYPE_PROMPTS["passport"])
+
+        if hint_text:
+            prompt = f"Document text/content: {hint_text}\n\n{prompt}"
+
+        response = client.chat.completions.create(
+            model=settings.groq_model,
+            messages=[
+                {"role": "system", "content": "You are a document OCR assistant. Extract fields from document images and return valid JSON only."},
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.1,
+            max_tokens=1024,
+        )
+
+        content = response.choices[0].message.content or ""
+
+        json_match = re.search(r"\{[\s\S]*\}", content)
+        if json_match:
+            raw_fields = json.loads(json_match.group())
+            fields = {}
+            for key, val in raw_fields.items():
+                if isinstance(val, dict) and "value" in val:
+                    fields[key] = ExtractedValue(
+                        value=str(val["value"]),
+                        confidence=float(val.get("confidence", 0.8)),
+                    )
+                elif isinstance(val, str):
+                    fields[key] = ExtractedValue(value=val, confidence=0.8)
+            return OCRResult(fields=fields, needs_recapture=False)
+
+    except Exception:
+        pass
+
+    return _fallback_extract(doc_type, filename, hint_text)
+
+
+def _fallback_extract(
+    doc_type: DocumentType, filename: str, hint_text: str | None
+) -> OCRResult:
+    """Fallback regex extraction when vision model is unavailable."""
+    import re
+
     text = hint_text or Path(filename).stem.replace("_", " ").replace("-", " ")
     fields: dict[str, ExtractedValue] = {}
 

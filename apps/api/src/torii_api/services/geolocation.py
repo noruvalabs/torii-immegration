@@ -8,9 +8,6 @@ from pydantic import BaseModel
 
 log = structlog.get_logger()
 
-# Free IP geolocation API (no key required)
-GEO_API_URL = "https://ipapi.co/json/"
-
 
 class GeoLocation(BaseModel):
     """Geolocation data from IP address."""
@@ -63,58 +60,19 @@ APPLICATION_TYPES: dict[str, dict[str, str]] = {
 
 
 async def detect_country_from_ip(request: Request) -> GeoLocation:
-    """Detect country from client IP address using free geolocation API."""
-    import httpx
-
-    # Get client IP
+    """Detect country from client IP. Defaults to Japan for dev."""
     client_ip = request.client.host if request.client else "unknown"
 
-    # Handle localhost/development
-    if client_ip in ("127.0.0.1", "::1", "localhost", "unknown"):
-        log.info("geo.localhost_detected", ip=client_ip)
-        return GeoLocation(
-            ip=client_ip,
-            country_code="JP",
-            country_name="Japan",
-            is_japan=True,
-        )
+    # Default to Japan - user can change via residence endpoint
+    log.info("geo.detected", ip=client_ip, country_code="JP", is_japan=True)
 
-    try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            resp = await client.get(GEO_API_URL)
-            resp.raise_for_status()
-            data = resp.json()
-
-        country_code = data.get("country_code", "JP")
-        is_japan = country_code == "JP"
-
-        log.info(
-            "geo.detected",
-            ip=client_ip,
-            country_code=country_code,
-            is_japan=is_japan,
-        )
-
-        return GeoLocation(
-            ip=client_ip,
-            country_code=country_code,
-            country_name=data.get("country_name", "Unknown"),
-            city=data.get("city"),
-            region=data.get("region"),
-            latitude=data.get("latitude"),
-            longitude=data.get("longitude"),
-            timezone=data.get("timezone"),
-            is_japan=is_japan,
-        )
-    except Exception as e:
-        log.error("geo.detection_failed", error=str(e))
-        # Default to Japan on failure
-        return GeoLocation(
-            ip=client_ip,
-            country_code="JP",
-            country_name="Japan",
-            is_japan=True,
-        )
+    return GeoLocation(
+        ip=client_ip,
+        country_code="JP",
+        country_name="Japan",
+        city="Tokyo",
+        is_japan=True,
+    )
 
 
 def get_supported_destinations() -> list[dict[str, str | bool]]:

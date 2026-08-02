@@ -69,6 +69,7 @@ class User(TimestampMixin, Base):
     passport_expiry: Mapped[str | None] = mapped_column(String(16), nullable=True)
     date_of_birth: Mapped[str | None] = mapped_column(String(16), nullable=True)
     current_country: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    avatar_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
     profile_complete: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
 
     cases: Mapped[list[Case]] = relationship(back_populates="owner")
