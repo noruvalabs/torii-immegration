@@ -46,9 +46,13 @@ from torii_api.services.intake import (
 )
 from torii_api.services.research import (
     find_research,
+    research_documents,
     research_for_case,
+    research_forms,
     research_is_usable,
+    research_progress_steps,
     research_questions,
+    research_rules,
 )
 
 router = APIRouter(prefix="/v1/cases", tags=["cases"])
@@ -58,22 +62,28 @@ SessionDep = Annotated[AsyncSession, Depends(get_session)]
 
 # ── Profile pre-fill ─────────────────────────────────────────────────────────
 
-# Maps User profile fields to intake question keys.
-PROFILE_TO_INTAKE_MAP: dict[str, str] = {
-    "full_name": "full_name",
-    "nationality": "nationality",
-    "passport_number": "passport_number",
-    "current_country": "current_location_country",
+# Maps User profile fields to one or more intake question keys.
+PROFILE_TO_INTAKE_MAP: dict[str, list[str]] = {
+    "full_name": ["full_name"],
+    "nationality": ["nationality"],
+    "passport_number": ["passport_number"],
+    "passport_expiry": ["passport_expiry"],
+    "current_country": [
+        "current_location_country",
+        "current_residence_country",
+        "residence_country",
+    ],
 }
 
 
 def _prefill_from_profile(user: User) -> dict[str, Any]:
     """Pre-fill intake answers from the user's saved profile fields."""
     answers: dict[str, Any] = {}
-    for profile_field, intake_key in PROFILE_TO_INTAKE_MAP.items():
+    for profile_field, intake_keys in PROFILE_TO_INTAKE_MAP.items():
         value = getattr(user, profile_field, None)
         if value:
-            answers[intake_key] = value
+            for intake_key in intake_keys:
+                answers[intake_key] = value
     return answers
 
 
@@ -163,6 +173,13 @@ class IntakeStateOut(BaseModel):
     intake_step: str | None = None
 
 
+class ResearchStepOut(BaseModel):
+    key: str
+    label: str
+    detail: str = ""
+    at: str = ""
+
+
 class GuidanceOut(BaseModel):
     phase: str
     title: str
@@ -171,6 +188,8 @@ class GuidanceOut(BaseModel):
     blocked_reason: str | None = None
     progress: IntakeProgress | None = None
     scope_label: str | None = None
+    research_status: str | None = None
+    research_steps: list[ResearchStepOut] = []
 
 
 # ── Visa categories & actions ─────────────────────────────────────────────────
@@ -584,8 +603,19 @@ async def _case_guidance(session: AsyncSession, case: Case) -> GuidanceOut:
     research = await _research_for_case(session, case)
     research_status = _effective_research_status(research)
     # A usable research snapshot provides the definitions for a research-driven scope.
-    if research_status == "completed":
-        has_intake = has_eligibility = has_docs = has_forms = True
+    # Only flip flags true when the corresponding slice is present so missing form
+    # templates do not lock the applicant on a forms step that will 500/404.
+    if research_status == "completed" and research is not None:
+        payload = research.payload or {}
+        has_intake = has_intake or bool(research_questions(payload))
+        has_eligibility = has_eligibility or bool(research_rules(payload))
+        has_docs = has_docs or bool(research_documents(payload))
+        has_research_forms = bool(research_forms(payload))
+        has_forms = has_forms or has_research_forms
+        # Forms are optional when the rest of the research pack is usable —
+        # allow the workflow past checklist without a dead-end forms phase.
+        if has_intake and has_eligibility and has_docs and not has_forms:
+            has_forms = True
 
     intake_questions: list[dict[str, Any]] | None = None
     if has_intake:
@@ -648,8 +678,15 @@ async def _case_guidance(session: AsyncSession, case: Case) -> GuidanceOut:
         research_status=research_status,
         scope_label=label,
     )
+    steps = research_progress_steps(research.payload if research is not None else None)
     _ = (j_code, v_code, a_code)
-    return GuidanceOut.model_validate(guidance.model_dump())
+    return GuidanceOut.model_validate(
+        {
+            **guidance.model_dump(),
+            "research_status": research_status,
+            "research_steps": steps,
+        }
+    )
 
 
 async def _enrich_case(session: AsyncSession, case: Case) -> CaseOut:

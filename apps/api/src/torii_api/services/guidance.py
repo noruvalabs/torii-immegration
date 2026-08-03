@@ -177,8 +177,8 @@ def compute_guidance(
             phase="checklist",
             title="Gather required documents",
             instruction=(
-                f"{detail} Follow how-to-obtain steps and official source links — "
-                "no file upload is required in this step."
+                f"{detail} Reuse docs already in your wallet when they match, "
+                "or upload/scan new ones. Follow official source links for how-to-obtain."
             ),
             cta_label="Open checklist" if checklist_items else "Generate checklist",
             progress=progress,

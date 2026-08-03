@@ -7,6 +7,7 @@ source-diffing logic land on top of these seams without changing the wiring.
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -24,13 +25,44 @@ from torii_api.services.research import RESEARCH_TTL_DAYS, research_payload
 log = structlog.get_logger()
 
 
+async def _write_research_progress(
+    session_factory: Any,
+    research_id: int,
+    *,
+    key: str,
+    label: str,
+    detail: str = "",
+    status: str = ScopeResearchStatus.RUNNING,
+) -> None:
+    """Append a progress step to the in-flight research payload for the applicant UI."""
+    async with session_factory() as session:
+        research = await session.get(ScopeResearch, research_id)
+        if research is None:
+            return
+        payload = dict(research.payload or {})
+        steps = list(payload.get("_progress") or [])
+        # Replace same key (e.g. search status updates) or append new stages.
+        filtered = [s for s in steps if not (isinstance(s, dict) and s.get("key") == key)]
+        filtered.append(
+            {
+                "key": key,
+                "label": label,
+                "detail": detail,
+                "at": datetime.now(UTC).isoformat(),
+            }
+        )
+        payload["_progress"] = filtered
+        research.payload = payload
+        research.status = status
+        await session.commit()
+
+
 async def run_case_research(ctx: dict[str, Any], event: OutboxEvent) -> None:
     """Run one on-demand live-research job for a research-driven case scope.
 
-    Calls the AI service ``POST /ai/ops/scrape`` (Tavily + LLM, per-destination official
-    domains), validates the payload with the citation/schema gate, and writes the result to
-    the cached ``ScopeResearch`` row. The LLM proposes; the engine never infers (NF-1), and a
-    payload that fails the gate is stored as ``failed``, never shown uncited (NF-2).
+    Streams progress from the AI service (``POST /ai/ops/scrape/stream``), persists each
+    step for the applicant UI, validates the payload with the citation/schema gate, and
+    writes the result to the cached ``ScopeResearch`` row.
     """
     import httpx
 
@@ -44,10 +76,20 @@ async def run_case_research(ctx: dict[str, Any], event: OutboxEvent) -> None:
         return
 
     now = datetime.now(UTC)
+    await _write_research_progress(
+        session_factory,
+        research_id,
+        key="queued",
+        label="Research job started",
+        detail="Connecting to official source research worker",
+    )
+
+    data: dict[str, Any] = {}
     try:
         async with httpx.AsyncClient(timeout=180.0) as client:
-            resp = await client.post(
-                f"{settings.ai_service_url.rstrip('/')}/ai/ops/scrape",
+            async with client.stream(
+                "POST",
+                f"{settings.ai_service_url.rstrip('/')}/ai/ops/scrape/stream",
                 json={
                     "jurisdiction_code": payload.get("jurisdiction_code"),
                     "visa_category": payload.get("visa_category"),
@@ -56,10 +98,29 @@ async def run_case_research(ctx: dict[str, Any], event: OutboxEvent) -> None:
                     "residence_country": payload.get("residence_country"),
                     "return_payload": True,
                 },
-            )
-            if resp.status_code >= 300:
-                raise RuntimeError(f"scrape returned HTTP {resp.status_code}")
-            data = resp.json()
+            ) as resp:
+                if resp.status_code >= 300:
+                    raise RuntimeError(f"scrape stream returned HTTP {resp.status_code}")
+                async for line in resp.aiter_lines():
+                    if not line.strip():
+                        continue
+                    try:
+                        event_obj = json.loads(line)
+                    except Exception:  # noqa: BLE001
+                        continue
+                    etype = event_obj.get("type")
+                    if etype == "progress":
+                        await _write_research_progress(
+                            session_factory,
+                            research_id,
+                            key=str(event_obj.get("key") or "step"),
+                            label=str(event_obj.get("label") or "Working…"),
+                            detail=str(event_obj.get("detail") or ""),
+                        )
+                    elif etype == "error":
+                        raise RuntimeError(str(event_obj.get("detail") or "scrape stream error"))
+                    elif etype == "complete":
+                        data = event_obj
     except Exception as exc:  # noqa: BLE001 - a failed research job must never crash the drain
         async with session_factory() as session:
             research = await session.get(ScopeResearch, research_id)
@@ -88,7 +149,9 @@ async def run_case_research(ctx: dict[str, Any], event: OutboxEvent) -> None:
                 document_requirements=docs,
                 form_templates=forms,
             )
-            research.source_pages = list(data.get("source_pages") or [])
+            research.source_pages = list(
+                data.get("source_pages_list") or data.get("source_pages") or []
+            )
             research.researched_at = now
             research.expires_at = now + timedelta(days=RESEARCH_TTL_DAYS)
             research.error = None

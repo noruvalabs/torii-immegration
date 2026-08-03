@@ -445,23 +445,46 @@ async def generate_forms(
 ) -> list[CaseGeneratedForm]:
     case = await _owned_case(session, case_id, user)
     templates = await _effective_templates(session, case)
+    answers = dict(case.intake_answers or {})
+    # When research/live packs have no form templates, synthesize a summary form
+    # from intake answers so generate never hard-fails an otherwise ready case.
     if not templates:
-        raise HTTPException(
-            status_code=404, detail="no form templates available for this case scope"
-        )
+        if not answers:
+            raise HTTPException(
+                status_code=400,
+                detail="no form templates available and intake answers are empty",
+            )
+        mappings = [
+            {"form_field": key, "answer_key": key, "required": False}
+            for key in answers
+        ]
+        templates = [
+            _FormDescriptor(
+                code="application_summary",
+                version="auto",
+                official_title="Application summary (auto-filled)",
+                citation={
+                    "authority": "Torii",
+                    "title": "Synthesized from intake",
+                    "source_version": "auto",
+                },
+                field_mappings=mappings,
+                research_id=case.research_id,
+            )
+        ]
     await session.execute(delete(CaseGeneratedForm).where(CaseGeneratedForm.case_id == case.id))
     generated: list[CaseGeneratedForm] = []
     for template in templates:
-        filled = fill_form(template.field_mappings, dict(case.intake_answers or {}))
+        filled = fill_form(template.field_mappings, answers)
         form = CaseGeneratedForm(
             case_id=case.id,
             form_template_id=template.template_id,
-            research_id=template.research_id,
-            form_code=template.code,
-            form_version=template.version,
+            research_id=template.research_id or case.research_id,
+            form_code=(template.code or "form")[:64],
+            form_version=(template.version or "1")[:32],
             filled_fields=filled.filled_fields,
             missing_required_fields=filled.missing_required_fields,
-            citation=template.citation,
+            citation=dict(template.citation or {}),
         )
         session.add(form)
         generated.append(form)

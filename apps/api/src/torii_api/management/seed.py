@@ -76,7 +76,6 @@ SEED_USERS = [
 
 # Extra markets without full content packs (scope browsing only).
 SEED_EXTRA_JURISDICTIONS = [
-    {"code": "GB", "name": "United Kingdom", "is_live": True},
     {"code": "CA", "name": "Canada", "is_live": True},
     {"code": "AU", "name": "Australia", "is_live": True},
     {"code": "DE", "name": "Germany", "is_live": True},
@@ -365,6 +364,7 @@ async def _ensure_category(
     code: str,
     name: str,
     is_live: bool,
+    research_enabled: bool = False,
     category_ids: dict[tuple[str, str], int],
 ) -> int:
     existing = await session.scalar(
@@ -376,6 +376,7 @@ async def _ensure_category(
     if existing is not None:
         existing.is_live = is_live
         existing.name = name
+        existing.research_enabled = research_enabled
         category_ids[(j_code, code)] = existing.id
         return 0
     vc = VisaCategory(
@@ -383,6 +384,7 @@ async def _ensure_category(
         code=code,
         name=name,
         is_live=is_live,
+        research_enabled=research_enabled,
     )
     session.add(vc)
     await session.flush()
@@ -398,6 +400,7 @@ async def _ensure_action(
     code: str,
     name: str,
     is_live: bool,
+    research_enabled: bool = False,
     action_ids: dict[tuple[str, str], int],
 ) -> int:
     existing = await session.scalar(
@@ -409,6 +412,7 @@ async def _ensure_action(
     if existing is not None:
         existing.is_live = is_live
         existing.name = name
+        existing.research_enabled = research_enabled
         action_ids[(j_code, code)] = existing.id
         return 0
     ca = CaseAction(
@@ -416,6 +420,7 @@ async def _ensure_action(
         code=code,
         name=name,
         is_live=is_live,
+        research_enabled=research_enabled,
     )
     session.add(ca)
     await session.flush()
@@ -477,6 +482,7 @@ async def seed() -> None:
                     code=str(cat["code"]).lower(),
                     name=str(cat["name"]),
                     is_live=bool(cat.get("is_live", True)),
+                    research_enabled=bool(cat.get("research_enabled", False)),
                     category_ids=category_ids,
                 )
             for action in meta.actions:
@@ -487,6 +493,7 @@ async def seed() -> None:
                     code=str(action["code"]).lower(),
                     name=str(action["name"]),
                     is_live=bool(action.get("is_live", True)),
+                    research_enabled=bool(action.get("research_enabled", False)),
                     action_ids=action_ids,
                 )
 
@@ -539,12 +546,27 @@ async def seed() -> None:
             )
 
         # Generic fallback for live category/action combos without a content pack.
+        # Research-enabled scopes are skipped: they are served by the live-research pipeline.
+        research_category_ids = {
+            row[0]
+            for row in await session.execute(
+                select(VisaCategory.id).where(VisaCategory.research_enabled.is_(True))
+            )
+        }
+        research_action_ids = {
+            row[0]
+            for row in await session.execute(
+                select(CaseAction.id).where(CaseAction.research_enabled.is_(True))
+            )
+        }
         for (j_code, _v_code), vid in category_ids.items():
             for (a_j_code, _a_code), aid in action_ids.items():
                 if j_code != a_j_code:
                     continue
                 jid = jurisdiction_ids.get(j_code)
                 if jid is None:
+                    continue
+                if vid in research_category_ids or aid in research_action_ids:
                     continue
                 existing = await session.scalar(
                     select(IntakeDefinition).where(

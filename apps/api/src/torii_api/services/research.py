@@ -121,6 +121,32 @@ def research_payload(
     }
 
 
+def research_progress_steps(payload: dict[str, Any] | None) -> list[dict[str, Any]]:
+    """Return progressive step log written while research is running (for the UI)."""
+    if not isinstance(payload, dict):
+        return []
+    raw = payload.get("_progress")
+    if not isinstance(raw, list):
+        return []
+    steps: list[dict[str, Any]] = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        key = item.get("key")
+        label = item.get("label")
+        if not key or not label:
+            continue
+        steps.append(
+            {
+                "key": str(key),
+                "label": str(label),
+                "detail": str(item.get("detail") or ""),
+                "at": str(item.get("at") or ""),
+            }
+        )
+    return steps
+
+
 __all__ = [
     "PAYLOAD_DOCUMENTS",
     "PAYLOAD_FORMS",
@@ -134,6 +160,7 @@ __all__ = [
     "research_forms",
     "research_is_usable",
     "research_payload",
+    "research_progress_steps",
     "research_questions",
     "research_rules",
     "research_slice",
