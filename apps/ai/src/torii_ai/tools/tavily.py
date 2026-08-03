@@ -30,7 +30,9 @@ class TavilySearchResult:
 
 
 class SearchClient(Protocol):
-    async def search(self, query: str) -> list[TavilySearchResult]: ...
+    async def search(
+        self, query: str, domains: list[str] | None = None
+    ) -> list[TavilySearchResult]: ...
 
 
 class TavilyClient:
@@ -39,12 +41,15 @@ class TavilyClient:
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
 
-    async def search(self, query: str) -> list[TavilySearchResult]:
+    async def search(
+        self, query: str, domains: list[str] | None = None
+    ) -> list[TavilySearchResult]:
         if not self._settings.tavily_api_key:
             log.warning("tavily.skipped", reason="missing_api_key")
             return []
 
-        domains = [d.strip() for d in self._settings.tavily_include_domains.split(",") if d.strip()]
+        base = [d.strip() for d in self._settings.tavily_include_domains.split(",") if d.strip()]
+        allow = domains if domains else base
         payload: dict[str, Any] = {
             "api_key": self._settings.tavily_api_key,
             "query": query,
@@ -52,8 +57,8 @@ class TavilyClient:
             "search_depth": "basic",
             "include_answer": False,
         }
-        if domains:
-            payload["include_domains"] = domains
+        if allow:
+            payload["include_domains"] = allow
 
         try:
             async with httpx.AsyncClient(timeout=self._settings.tavily_timeout_seconds) as client:
@@ -92,8 +97,11 @@ class FakeSearchClient:
         self.results = results or []
         self.queries: list[str] = []
 
-    async def search(self, query: str) -> list[TavilySearchResult]:
+    async def search(
+        self, query: str, domains: list[str] | None = None
+    ) -> list[TavilySearchResult]:
         self.queries.append(query)
+        self.domains = domains
         return list(self.results)
 
 

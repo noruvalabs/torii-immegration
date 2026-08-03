@@ -25,25 +25,97 @@ from torii_ai.tools.tavily import SearchClient
 
 log = structlog.get_logger()
 
-# Jurisdiction-specific search queries — one set per country.
-JURISDICTION_QUERIES: dict[str, list[str]] = {
-    "JP": [
-        "Japan Immigration Services Agency visa renewal requirements site:isa.go.jp",
-        "Japan work visa extension requirements documentation site:moj.go.jp",
-        "在留資格 更新 必要書類 入管府",
-        "Japan Certificate of Eligibility COE requirements",
-        "Japan residence card renewal process official",
-        "Japan visa application form extension stay official",
-    ],
-    "US": [
-        "H-1B specialty occupation requirements site:uscis.gov",
-        "Form I-129 H-1B petition documents checklist site:uscis.gov",
-        "H-1B extension of stay requirements USCIS",
-        "H-1B specialty occupation degree requirement official",
-        "USCIS H-1B Cap and petition filing process",
-        "I-94 arrival departure record CBP official",
-    ],
+# Official domains to constrain search to, per destination country. Search is restricted to
+# these so every extracted requirement traces to a government source (NF-2). Unknown
+# destinations fall back to the settings-level allowlist.
+OFFICIAL_DOMAINS: dict[str, list[str]] = {
+    "JP": ["isa.go.jp", "moj.go.jp", "mofa.go.jp"],
+    "US": ["uscis.gov", "travel.state.gov", "state.gov", "cbp.gov", "ice.gov"],
+    "UK": ["gov.uk", "homeoffice.gov.uk"],
+    "GB": ["gov.uk", "homeoffice.gov.uk"],
+    "CA": ["canada.ca", "cic.gc.ca"],
+    "AU": ["homeaffairs.gov.au", "gov.au"],
+    "NZ": ["immigration.govt.nz", "govt.nz"],
+    "DE": ["bmi.bund.de", "auswaertiges-amt.de", "bund.de"],
+    "FR": ["france-visas.gouv.fr", "gouv.fr"],
+    "SG": ["ica.gov.sg"],
+    "KR": ["visa.go.kr", "hikorea.go.kr"],
+    "IN": ["indianvisaonline.gov.in", "mea.gov.in"],
+    "TH": ["immigration.go.th"],
+    "MY": ["imi.gov.my"],
+    "VN": ["vietnamvisa.govt.vn", "gov.vn"],
+    "PH": ["immigration.gov.ph"],
+    "ID": ["imigrasi.go.id"],
 }
+
+_COUNTRY_NAMES: dict[str, str] = {
+    "JP": "Japan",
+    "US": "United States",
+    "UK": "United Kingdom",
+    "GB": "United Kingdom",
+    "CA": "Canada",
+    "AU": "Australia",
+    "NZ": "New Zealand",
+    "DE": "Germany",
+    "FR": "France",
+    "SG": "Singapore",
+    "KR": "South Korea",
+    "IN": "India",
+    "TH": "Thailand",
+    "MY": "Malaysia",
+    "VN": "Vietnam",
+    "PH": "Philippines",
+    "ID": "Indonesia",
+    "BD": "Bangladesh",
+}
+
+
+def _country_label(code: str | None) -> str:
+    if not code:
+        return ""
+    return _COUNTRY_NAMES.get(code.upper(), code.upper())
+
+
+def build_queries(
+    *,
+    destination: str,
+    visa_category: str,
+    action: str,
+    origin_country: str | None = None,
+    residence_country: str | None = None,
+) -> list[str]:
+    """Build targeted search queries for an arbitrary country pair + purpose.
+
+    Every query names the destination country and the visa purpose so the retrieved pages
+    belong to this case even before the domain allowlist is applied.
+    """
+    dest = _country_label(destination)
+    vc = visa_category.lower().replace("_", " ")
+    act = action.lower().replace("_", " ")
+    origin = _country_label(origin_country)
+    residence = _country_label(residence_country) if residence_country else ""
+
+    queries = [
+        f"{dest} {vc} visa {act} requirements official government",
+        f"{dest} {vc} visa {act} required documents official",
+        f"{dest} visitor visa application {act} checklist documentation",
+        f"{vc} visa {act} eligibility criteria {dest} official",
+        f"{dest} visa application form official government",
+        f"{vc} visa financial requirements supporting documents {dest}",
+    ]
+    if origin:
+        queries.append(f"{dest} {vc} visa {act} for {origin} citizens official")
+    if residence and residence != dest:
+        queries.append(
+            f"{vc} visa applying from {residence} proof of residence documents"
+        )
+        queries.append(f"{dest} visa {act} from {residence} foreign resident official")
+    return queries
+
+
+def official_domains_for(destination: str) -> list[str] | None:
+    """Official-domain allowlist for a destination, or None to use settings base."""
+    return OFFICIAL_DOMAINS.get(destination.upper())
 
 EXTRACT_SYSTEM = """You are an immigration data extractor. Given scraped government page content,
 extract structured immigration data for a specific jurisdiction and visa category.
@@ -101,6 +173,10 @@ Rules:
 - Use plain language for messages — bureaucratic jargon is not acceptable.
 - source_version should be the page's date or "YYYY-MM" format.
 - If the content is insufficient for a category, return an empty list for that category.
+- When the request states an origin country and/or residence country, tailor the extracted
+  documents, questions, and rules to that applicant profile (e.g. a citizen of the origin
+  country residing in the residence country must submit proof of lawful residence there).
+  Only do this when supported by the source content — never invent requirements.
 """
 
 
@@ -111,6 +187,8 @@ class ScrapeResult:
     jurisdiction_code: str
     visa_category: str
     action: str
+    origin_country: str | None = None
+    residence_country: str | None = None
     eligibility_rules: list[dict[str, Any]] = field(default_factory=list)
     document_requirements: list[dict[str, Any]] = field(default_factory=list)
     intake_questions: list[dict[str, Any]] = field(default_factory=list)
@@ -132,22 +210,23 @@ class OpsScraper:
         jurisdiction_code: str,
         visa_category: str = "work",
         action: str = "renewal",
+        origin_country: str | None = None,
+        residence_country: str | None = None,
     ) -> ScrapeResult:
         """Scrape official sources for a jurisdiction and extract structured data."""
-        queries = JURISDICTION_QUERIES.get(jurisdiction_code, [])
-        if not queries:
-            log.warning("scraper.no_queries", jurisdiction=jurisdiction_code)
-            return ScrapeResult(
-                jurisdiction_code=jurisdiction_code,
-                visa_category=visa_category,
-                action=action,
-                scraped_at=datetime.now(UTC).isoformat(),
-            )
+        queries = build_queries(
+            destination=jurisdiction_code,
+            visa_category=visa_category,
+            action=action,
+            origin_country=origin_country,
+            residence_country=residence_country,
+        )
+        domains = official_domains_for(jurisdiction_code)
 
-        # Phase 1: Discover sources via Tavily
+        # Phase 1: Discover sources via Tavily (restricted to official destination domains)
         all_hits = []
         for query in queries:
-            hits = await self._search.search(query)
+            hits = await self._search.search(query, domains=domains)
             all_hits.extend(hits)
             log.info("scraper.search", query=query, results=len(hits))
 
@@ -159,7 +238,11 @@ class OpsScraper:
                 seen_urls.add(hit.url)
                 unique_hits.append(hit)
 
-        log.info("scraper.sources_discovered", count=len(unique_hits), jurisdiction=jurisdiction_code)
+        log.info(
+            "scraper.sources_discovered",
+            count=len(unique_hits),
+            jurisdiction=jurisdiction_code,
+        )
 
         if not unique_hits:
             log.warning("scraper.no_sources", jurisdiction=jurisdiction_code)
@@ -167,6 +250,8 @@ class OpsScraper:
                 jurisdiction_code=jurisdiction_code,
                 visa_category=visa_category,
                 action=action,
+                origin_country=origin_country,
+                residence_country=residence_country,
                 scraped_at=datetime.now(UTC).isoformat(),
             )
 
@@ -179,6 +264,8 @@ class OpsScraper:
             jurisdiction_code=jurisdiction_code,
             visa_category=visa_category,
             action=action,
+            origin_country=origin_country,
+            residence_country=residence_country,
         )
 
         return extracted
@@ -214,6 +301,8 @@ class OpsScraper:
         jurisdiction_code: str,
         visa_category: str,
         action: str,
+        origin_country: str | None = None,
+        residence_country: str | None = None,
     ) -> ScrapeResult:
         """Use LLM to extract structured data from scraped content."""
         now = datetime.now(UTC)
@@ -224,9 +313,24 @@ class OpsScraper:
             for i, c in enumerate(content)
         )
 
+        origin_label = _country_label(origin_country)
+        residence_label = _country_label(residence_country)
+        case_context = "Applicant profile: standard case for this destination."
+        if origin_label and residence_label and origin_label != residence_label:
+            case_context = (
+                f"Applicant profile: a citizen of {origin_label} currently residing in "
+                f"{residence_label}. Tailor documents/questions/rules to this profile."
+            )
+        elif origin_label:
+            case_context = (
+                f"Applicant profile: a citizen of {origin_label}. "
+                "Tailor documents/questions/rules to this profile."
+            )
+
         user_prompt = f"""Jurisdiction: {jurisdiction_code}
 Visa category: {visa_category}
 Action: {action}
+{case_context}
 Scraped date: {now.strftime('%Y-%m-%d')}
 
 Scraped content from official government sources:
@@ -254,7 +358,12 @@ Return JSON only."""
                 jurisdiction_code=jurisdiction_code,
                 visa_category=visa_category,
                 action=action,
-                source_pages=[{"url": c["url"], "title": "", "retrieved_at": now.isoformat()} for c in content],
+                origin_country=origin_country,
+                residence_country=residence_country,
+                source_pages=[
+                    {"url": c["url"], "title": "", "retrieved_at": now.isoformat()}
+                    for c in content
+                ],
                 scraped_at=now.isoformat(),
             )
 
@@ -270,6 +379,8 @@ Return JSON only."""
             jurisdiction_code=jurisdiction_code,
             visa_category=visa_category,
             action=action,
+            origin_country=origin_country,
+            residence_country=residence_country,
             eligibility_rules=data.get("eligibility_rules", []),
             document_requirements=data.get("document_requirements", []),
             intake_questions=data.get("intake_questions", []),

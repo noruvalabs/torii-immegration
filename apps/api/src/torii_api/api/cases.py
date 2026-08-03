@@ -26,6 +26,9 @@ from torii_api.db.models import (
     FormTemplate,
     IntakeDefinition,
     Jurisdiction,
+    OutboxEvent,
+    ScopeResearch,
+    ScopeResearchStatus,
     User,
     VisaCategory,
 )
@@ -40,6 +43,12 @@ from torii_api.services.intake import (
     prune_answers,
     validate_answer,
     visible_questions,
+)
+from torii_api.services.research import (
+    find_research,
+    research_for_case,
+    research_is_usable,
+    research_questions,
 )
 
 router = APIRouter(prefix="/v1/cases", tags=["cases"])
@@ -79,6 +88,7 @@ class VisaCategoryOut(BaseModel):
     code: str
     name: str
     is_live: bool
+    research_enabled: bool = False
 
 
 class CaseActionOut(BaseModel):
@@ -89,6 +99,7 @@ class CaseActionOut(BaseModel):
     code: str
     name: str
     is_live: bool
+    research_enabled: bool = False
 
 
 class ScopeIn(BaseModel):
@@ -96,6 +107,9 @@ class ScopeIn(BaseModel):
     visa_category_code: str = Field(min_length=1, max_length=32, examples=["work"])
     action_code: str = Field(min_length=1, max_length=32, examples=["renewal"])
     locale: str = Field(default="en", min_length=2, max_length=16)
+    # Cross-border cases (e.g. a Bangladeshi citizen resident in Japan). ISO-3166 alpha-2.
+    origin_country: str | None = Field(default=None, min_length=2, max_length=8)
+    residence_country: str | None = Field(default=None, min_length=2, max_length=8)
 
 
 class CaseProgressIn(BaseModel):
@@ -131,6 +145,9 @@ class CaseOut(BaseModel):
     scope_label: str | None = None
     next_phase: str | None = None
     next_title: str | None = None
+    origin_country: str | None = None
+    residence_country: str | None = None
+    research_id: int | None = None
 
 
 class IntakeAnswerIn(BaseModel):
@@ -228,12 +245,14 @@ async def scope_case(
 ) -> Case:
     """Create a new case scoped to a jurisdiction + visa category + action (US-01).
 
-    Only live combinations are accepted. Returns the newly created case in ``draft`` status.
+    A scope is selectable when it has a live content pack **or** is research-enabled
+    (requirements produced on demand by the live-research pipeline). Cross-border cases
+    record ``origin_country`` / ``residence_country``. Returns the case in ``draft`` status.
     """
     jurisdiction = await session.scalar(
         select(Jurisdiction).where(Jurisdiction.code == payload.jurisdiction_code.upper())
     )
-    if jurisdiction is None or not jurisdiction.is_live:
+    if jurisdiction is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"jurisdiction '{payload.jurisdiction_code}' is not available",
@@ -245,7 +264,7 @@ async def scope_case(
             VisaCategory.code == payload.visa_category_code.lower(),
         )
     )
-    if visa_category is None or not visa_category.is_live:
+    if visa_category is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=(
@@ -260,10 +279,20 @@ async def scope_case(
             CaseAction.code == payload.action_code.lower(),
         )
     )
-    if case_action is None or not case_action.is_live:
+    if case_action is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"action '{payload.action_code}' is not available in {jurisdiction.code}",
+        )
+
+    is_live_scope = (
+        jurisdiction.is_live and visa_category.is_live and case_action.is_live
+    )
+    is_research_scope = visa_category.research_enabled and case_action.research_enabled
+    if not is_live_scope and not is_research_scope:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="this case scope is not available",
         )
 
     from datetime import UTC, datetime
@@ -294,6 +323,8 @@ async def scope_case(
         status="draft",
         locale=payload.locale,
         intake_answers=_prefill_from_profile(user),
+        origin_country=_normalize_country_code(payload.origin_country),
+        residence_country=_normalize_country_code(payload.residence_country),
     )
     session.add(case)
     try:
@@ -303,11 +334,110 @@ async def scope_case(
             status_code=status.HTTP_409_CONFLICT,
             detail="case reference conflict — please retry",
         ) from exc
+    # Link (and queue when needed) a live-research snapshot for a scope without a live pack.
+    await _enqueue_research_if_needed(session, case, jurisdiction, visa_category, case_action)
     await session.refresh(case)
     return case
 
 
 # ── Shared helpers ────────────────────────────────────────────────────────────
+
+
+def _normalize_country_code(value: str | None) -> str | None:
+    """Normalize an ISO-3166 alpha-2 code to uppercase, or None when blank."""
+    if value is None:
+        return None
+    value = value.strip().upper()
+    return value or None
+
+
+async def _research_for_case(session: AsyncSession, case: Case) -> ScopeResearch | None:
+    """Load the research snapshot attached to a case, if any."""
+    return await research_for_case(session, case.id, case.research_id)
+
+
+def _effective_research_status(research: ScopeResearch | None) -> str | None:
+    """Collapse a snapshot into the guidance-consumable status vocabulary."""
+    if research is None:
+        return None
+    if research.status == ScopeResearchStatus.COMPLETED:
+        return "completed" if research_is_usable(research) else "stale"
+    return research.status
+
+
+async def _enqueue_research_if_needed(
+    session: AsyncSession,
+    case: Case,
+    jurisdiction: Jurisdiction,
+    visa_category: VisaCategory,
+    case_action: CaseAction,
+) -> str | None:
+    """Link (and queue) a research snapshot for a research-driven scope.
+
+    Returns the effective research status, or ``None`` when the scope has live definitions
+    and needs no research. Fresh snapshots are reused; stale/failed ones are reset and
+    re-queued via the transactional outbox (``case.research.queued``).
+    """
+    if case.visa_category_id is None or case.case_action_id is None:
+        return None
+    has_intake, has_elig, has_docs, has_forms = await _def_flags(session, case)
+    if has_intake and has_elig and has_docs and has_forms:
+        return None
+
+    origin = _normalize_country_code(case.origin_country)
+    residence = _normalize_country_code(case.residence_country)
+    research = await find_research(
+        session,
+        jurisdiction_id=case.jurisdiction_id,
+        visa_category_id=case.visa_category_id,
+        case_action_id=case.case_action_id,
+        origin_country=origin,
+        residence_country=residence,
+    )
+    if research is not None and research_is_usable(research):
+        case.research_id = research.id
+        await session.flush()
+        return "completed"
+
+    if research is None:
+        research = ScopeResearch(
+            jurisdiction_id=case.jurisdiction_id,
+            visa_category_id=case.visa_category_id,
+            case_action_id=case.case_action_id,
+            origin_country=origin,
+            residence_country=residence,
+            status=ScopeResearchStatus.QUEUED,
+            payload={},
+            source_pages=[],
+        )
+        session.add(research)
+        await session.flush()
+    else:
+        research.status = ScopeResearchStatus.QUEUED
+        research.payload = {}
+        research.source_pages = []
+        research.error = None
+        research.researched_at = None
+        research.expires_at = None
+        await session.flush()
+
+    case.research_id = research.id
+    session.add(
+        OutboxEvent(
+            topic="case.research.queued",
+            payload={
+                "research_id": research.id,
+                "case_id": case.id,
+                "jurisdiction_code": jurisdiction.code,
+                "visa_category": visa_category.code,
+                "action": case_action.code,
+                "origin_country": origin,
+                "residence_country": residence,
+            },
+        )
+    )
+    await session.flush()
+    return "queued"
 
 
 async def _owned_case(session: AsyncSession, case_id: int, user: User) -> Case:
@@ -321,8 +451,10 @@ async def _owned_case(session: AsyncSession, case_id: int, user: User) -> Case:
     return case
 
 
-async def _live_intake_definition(session: AsyncSession, case: Case) -> IntakeDefinition:
-    """Resolve the intake questionnaire for the case's scope (live only)."""
+async def _intake_questions_for_case(
+    session: AsyncSession, case: Case
+) -> list[dict[str, Any]]:
+    """Resolve intake questions for the case: live definition, else research snapshot."""
     if case.visa_category_id is None or case.case_action_id is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -336,22 +468,27 @@ async def _live_intake_definition(session: AsyncSession, case: Case) -> IntakeDe
             IntakeDefinition.is_live.is_(True),
         )
     )
-    if definition is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="no intake definition for this case scope",
-        )
-    return definition
+    if definition is not None:
+        return list(definition.questions or [])
+    research = await _research_for_case(session, case)
+    if research is not None and _effective_research_status(research) == "completed":
+        questions = research_questions(research.payload)
+        if questions:
+            return questions
+    raise HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail="no intake definition for this case scope",
+    )
 
 
-def _intake_state(case: Case, definition: IntakeDefinition) -> IntakeStateOut:
-    questions = parse_questions(definition.questions)
+def _intake_state(case: Case, questions: list[dict[str, Any]]) -> IntakeStateOut:
+    parsed = parse_questions(questions)
     answers = dict(case.intake_answers or {})
     return IntakeStateOut(
         case_id=case.id,
-        questions=visible_questions(questions, answers),
+        questions=visible_questions(parsed, answers),
         answers=answers,
-        progress=progress_for(questions, answers),
+        progress=progress_for(parsed, answers),
         intake_step=case.intake_step,
     )
 
@@ -444,6 +581,12 @@ async def _def_flags(session: AsyncSession, case: Case) -> tuple[bool, bool, boo
 async def _case_guidance(session: AsyncSession, case: Case) -> GuidanceOut:
     j_code, v_code, a_code, label = await _scope_label(session, case)
     has_intake, has_eligibility, has_docs, has_forms = await _def_flags(session, case)
+    research = await _research_for_case(session, case)
+    research_status = _effective_research_status(research)
+    # A usable research snapshot provides the definitions for a research-driven scope.
+    if research_status == "completed":
+        has_intake = has_eligibility = has_docs = has_forms = True
+
     intake_questions: list[dict[str, Any]] | None = None
     if has_intake:
         definition = await session.scalar(
@@ -456,6 +599,8 @@ async def _case_guidance(session: AsyncSession, case: Case) -> GuidanceOut:
         )
         if definition is not None:
             intake_questions = list(definition.questions or [])
+        elif research is not None:
+            intake_questions = research_questions(research.payload) or None
 
     checklist = (
         (
@@ -500,6 +645,7 @@ async def _case_guidance(session: AsyncSession, case: Case) -> GuidanceOut:
         has_eligibility_def=has_eligibility,
         has_document_def=has_docs,
         has_form_def=has_forms,
+        research_status=research_status,
         scope_label=label,
     )
     _ = (j_code, v_code, a_code)
@@ -546,8 +692,8 @@ async def get_intake(
 ) -> IntakeStateOut:
     """Return visible intake questions, answers, and progress for a case (US-02)."""
     case = await _owned_case(session, case_id, user)
-    definition = await _live_intake_definition(session, case)
-    return _intake_state(case, definition)
+    questions = await _intake_questions_for_case(session, case)
+    return _intake_state(case, questions)
 
 
 @router.put("/{case_id}/intake/answer", response_model=IntakeStateOut)
@@ -559,8 +705,7 @@ async def answer_intake(
 ) -> IntakeStateOut:
     """Validate and store one intake answer; re-branch and clear stale answers (US-02.3–02.5)."""
     case = await _owned_case(session, case_id, user)
-    definition = await _live_intake_definition(session, case)
-    questions = parse_questions(definition.questions)
+    questions = parse_questions(await _intake_questions_for_case(session, case))
     by_key = {q.key: q for q in questions}
     question = by_key.get(payload.key)
     if question is None:
@@ -584,14 +729,14 @@ async def answer_intake(
     case.intake_answers = prune_answers(questions, merged)
     case.intake_step = payload.key
     case.review_flags_acknowledged = False
-    state = _intake_state(case, definition)
+    state = _intake_state(case, [q.model_dump() for q in questions])
     if state.progress.complete:
         new_status = next_status_for_phase("eligibility", case.status)
         if new_status is not None:
             case.status = new_status
     await session.flush()
     await session.refresh(case)
-    return _intake_state(case, definition)
+    return _intake_state(case, [q.model_dump() for q in questions])
 
 
 @router.get("/{case_id}/guidance", response_model=GuidanceOut)
@@ -603,6 +748,33 @@ async def get_case_guidance(
     """Return the single next action for this case."""
     case = await _owned_case(session, case_id, user)
     return await _case_guidance(session, case)
+
+
+@router.post("/{case_id}/research")
+async def re_research_case(
+    case_id: int, session: SessionDep, user: CurrentUserDep
+) -> dict[str, str]:
+    """Force a fresh live-research run for a research-driven case (or no-op on a live scope).
+
+    Resets any stale/failed snapshot to ``queued`` and enqueues ``case.research.queued``.
+    """
+    case = await _owned_case(session, case_id, user)
+    if case.visa_category_id is None or case.case_action_id is None:
+        raise HTTPException(status_code=400, detail="case is not fully scoped")
+    jurisdiction = await session.get(Jurisdiction, case.jurisdiction_id)
+    visa_category = await session.get(VisaCategory, case.visa_category_id)
+    case_action = await session.get(CaseAction, case.case_action_id)
+    if jurisdiction is None or visa_category is None or case_action is None:
+        raise HTTPException(status_code=400, detail="case scope is incomplete")
+    status_value = await _enqueue_research_if_needed(
+        session, case, jurisdiction, visa_category, case_action
+    )
+    if status_value is None:
+        return {
+            "status": "live_scope",
+            "message": "this scope uses seeded content, no research needed",
+        }
+    return {"status": status_value, "message": "research queued"}
 
 
 @router.get("/{case_id}", response_model=CaseOut)

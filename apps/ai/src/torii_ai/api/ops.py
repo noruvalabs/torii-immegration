@@ -16,8 +16,8 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from torii_ai.config import Settings, get_settings
-from torii_ai.llm.groq import FakeChatClient, GroqClient
-from torii_ai.services.ops_scraper import OpsScraper, ScrapeResult
+from torii_ai.llm.groq import FakeChatClient, GroqChatClient
+from torii_ai.services.ops_scraper import OpsScraper
 from torii_ai.tools.tavily import FakeSearchClient, TavilyClient
 
 log = structlog.get_logger()
@@ -32,6 +32,8 @@ class ScrapeRequest(BaseModel):
     jurisdiction_code: str = Field(min_length=2, max_length=8, examples=["JP"])
     visa_category: str = Field(default="work", max_length=32)
     action: str = Field(default="renewal", max_length=32)
+    origin_country: str | None = Field(default=None, max_length=8)
+    residence_country: str | None = Field(default=None, max_length=8)
     return_payload: bool = False
 
 
@@ -75,7 +77,7 @@ class StatusResponse(BaseModel):
 def _build_scraper(settings: Settings) -> OpsScraper:
     """Build an OpsScraper with real or fake clients based on config."""
     search = TavilyClient(settings) if settings.tavily_api_key else FakeSearchClient()
-    chat = GroqClient(settings) if settings.groq_api_key else FakeChatClient()
+    chat = GroqChatClient(settings) if settings.groq_api_key else FakeChatClient()
     return OpsScraper(search=search, chat=chat, settings=settings)
 
 
@@ -98,6 +100,8 @@ async def trigger_scrape(payload: ScrapeRequest) -> ScrapeResponse:
             jurisdiction_code=payload.jurisdiction_code,
             visa_category=payload.visa_category,
             action=payload.action,
+            origin_country=payload.origin_country,
+            residence_country=payload.residence_country,
         )
     except Exception as exc:
         log.error("ops.scrape.failed", error=str(exc))
@@ -189,7 +193,9 @@ async def ingest_scraped_data(payload: IngestRequest) -> dict[str, str]:
                     },
                 )
                 if resp.status_code < 300:
-                    results.append(f"document_requirements: {len(payload.document_requirements)} items")
+                    results.append(
+                        f"document_requirements: {len(payload.document_requirements)} items"
+                    )
                 else:
                     log.warning("ops.ingest.checklist_failed", status=resp.status_code)
         except Exception as exc:
@@ -233,7 +239,11 @@ async def ingest_scraped_data(payload: IngestRequest) -> dict[str, str]:
                 if resp.status_code < 300:
                     results.append(f"form_template: {form.get('code', 'unknown')}")
                 else:
-                    log.warning("ops.ingest.form_failed", form=form.get("code"), status=resp.status_code)
+                    log.warning(
+                        "ops.ingest.form_failed",
+                        form=form.get("code"),
+                        status=resp.status_code,
+                    )
         except Exception as exc:
             log.warning("ops.ingest.form_error", form=form.get("code"), error=str(exc))
 
