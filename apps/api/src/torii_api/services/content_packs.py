@@ -90,6 +90,7 @@ class ScopeMeta(BaseModel):
     action: str
     is_live: bool = True
     name: str | None = None
+    research_enabled: bool = False
 
 
 class ContentPack(BaseModel):
