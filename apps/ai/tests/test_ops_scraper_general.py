@@ -161,3 +161,86 @@ async def test_scrape_jurisdiction_bad_llm_json_keeps_source_pages() -> None:
     assert result.eligibility_rules == []
     assert result.document_requirements == []
     assert len(result.source_pages) == 1
+
+
+@pytest.mark.asyncio
+async def test_scrape_govuk_via_content_api() -> None:
+    """gov.uk JS shell is read via its content API, not the empty HTML wrapper."""
+
+
+    settings = Settings()
+    scraper = OpsScraper(search=FakeSearchClient(), chat=FakeChatClient(), settings=settings)
+    captured: list[str] = []
+
+    class _FakeResp:
+        def __init__(self, status_code: int, payload: dict) -> None:
+            self.status_code = status_code
+            self._payload = payload
+
+        def json(self) -> dict:
+            return self._payload
+
+    class _FakeClient:
+        async def get(self, url: str):
+            captured.append(url)
+            if url == "https://www.gov.uk/api/content/standard-visitor":
+                return _FakeResp(200, {"document_type": "guide", "details": {
+                    "parts": [{"body": "<p>You must be a genuine visitor.</p>"}]}})
+            return _FakeResp(404, {})
+
+    client = _FakeClient()
+    text = await scraper._scrape_govuk(client, "https://www.gov.uk/standard-visitor")
+    assert "genuine visitor" in text
+    assert captured == ["https://www.gov.uk/api/content/standard-visitor"]
+
+
+@pytest.mark.asyncio
+async def test_scrape_govuk_follows_redirects() -> None:
+
+
+    settings = Settings()
+    scraper = OpsScraper(search=FakeSearchClient(), chat=FakeChatClient(), settings=settings)
+    captured: list[str] = []
+
+    class _FakeResp:
+        def __init__(self, payload: dict) -> None:
+            self.status_code = 200
+            self._payload = payload
+
+        def json(self) -> dict:
+            return self._payload
+
+    class _FakeClient:
+        async def get(self, url: str):
+            captured.append(url)
+            if url == "https://www.gov.uk/api/content/standard-visitor-visa":
+                return _FakeResp({"document_type": "redirect",
+                    "redirects": [{"destination": "/standard-visitor"}]})
+            return _FakeResp({"document_type": "guide", "details": {
+                "body": "<h2>What you need to do</h2><p>Apply online.</p>"}})
+
+    client = _FakeClient()
+    text = await scraper._scrape_govuk(client, "https://www.gov.uk/standard-visitor-visa")
+    assert "Apply online" in text
+    assert captured == [
+        "https://www.gov.uk/api/content/standard-visitor-visa",
+        "https://www.gov.uk/api/content/standard-visitor",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_scrape_govuk_unknown_path_returns_empty() -> None:
+
+    settings = Settings()
+    scraper = OpsScraper(search=FakeSearchClient(), chat=FakeChatClient(), settings=settings)
+
+    class _FakeResp:
+        def __init__(self) -> None:
+            self.status_code = 404
+
+    class _FakeClient:
+        async def get(self, url: str):
+            return _FakeResp()
+
+    text = await scraper._scrape_govuk(_FakeClient(), "https://www.gov.uk/not-found")
+    assert text == ""

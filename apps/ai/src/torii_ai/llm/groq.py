@@ -16,8 +16,9 @@ class ChatClient(Protocol):
 class GroqChatClient:
     """Thin wrapper around the OpenAI SDK pointed at Groq."""
 
-    def __init__(self, settings: Settings) -> None:
+    def __init__(self, settings: Settings, model: str | None = None) -> None:
         self._settings = settings
+        self._model = model or settings.groq_model
         self._client = AsyncOpenAI(
             api_key=settings.groq_api_key or "missing",
             base_url=settings.groq_base_url,
@@ -28,12 +29,13 @@ class GroqChatClient:
         if not self._settings.groq_api_key:
             raise RuntimeError("TORII_AI_GROQ_API_KEY is not configured")
         response = await self._client.chat.completions.create(
-            model=self._settings.groq_model,
+            model=self._model,
             messages=[
                 {"role": "system", "content": system},
                 {"role": "user", "content": user},
             ],
             temperature=0.2,
+            max_tokens=self._settings.groq_max_tokens,
         )
         content = response.choices[0].message.content
         return content or ""

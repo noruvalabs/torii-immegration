@@ -21,8 +21,15 @@ class Settings(BaseSettings):
     # --- Groq (OpenAI-compatible) ---------------------------------------------
     groq_api_key: str = ""
     groq_model: str = "qwen-qwq-32b"
+    # Optional non-reasoning model used for structured extraction. Reasoning models
+    # (e.g. qwen3.6-27b) emit large <think> blocks that exceed the Groq TPM ceiling on
+    # multi-page scrapes and truncate before producing JSON; a direct extractor avoids that.
+    groq_extract_model: str = "llama-3.3-70b-versatile"
     groq_base_url: str = "https://api.groq.com/openai/v1"
     groq_timeout_seconds: float = 60.0
+    # Explicit completion budget — reasoning models emit <think> blocks and otherwise
+    # truncate before producing JSON; keep (input + max_tokens) under the Groq TPM limit.
+    groq_max_tokens: int = 8000
 
     # --- Tavily search --------------------------------------------------------
     tavily_api_key: str = ""
@@ -30,6 +37,12 @@ class Settings(BaseSettings):
     tavily_max_results: int = 5
     # Prefer official hosts when searching (comma-separated include domains).
     tavily_include_domains: str = "isa.go.jp,moj.go.jp,gov,go.jp"
+
+    # --- Scraper budget -------------------------------------------------------
+    # Page cap and per-page char cap keep the extraction prompt under the LLM's
+    # token-per-minute ceiling; identical bodies are deduplicated by hash.
+    scrape_max_pages: int = 6
+    scrape_page_chars: int = 2500
 
     # --- System of record -----------------------------------------------------
     api_base_url: str = "http://localhost:8000"
