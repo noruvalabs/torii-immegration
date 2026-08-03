@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Check, Globe, Loader2, ArrowRight } from "lucide-react";
+import { ArrowLeft, Check, Loader2, ArrowRight } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/lib/auth-context";
@@ -10,28 +10,45 @@ import {
   getAllGeoData,
   type GeoData,
   type Destination,
+  type Nationality,
   type VisaType,
   type ApplicationType,
 } from "@/lib/api/geo";
+import { updateProfile } from "@/lib/api/auth";
 import {
   scopeCase,
 } from "@/lib/api/cases";
 
 type CaseResult = { id: number; reference: string; status: string };
 
-type Step = "residence" | "destination" | "visa_type" | "app_type" | "review";
+/** Combined residence + nationality, then destination → visa → app → review */
+type Step = "identity" | "destination" | "visa_type" | "app_type" | "review";
+
+function matchCountryCode(
+  profileValue: string | null | undefined,
+  options: Nationality[],
+  fallback: string,
+): string {
+  if (!profileValue) return fallback;
+  const raw = profileValue.trim();
+  const upper = raw.toUpperCase();
+  if (options.some((n) => n.code === upper)) return upper;
+  const byName = options.find((n) => n.name.toLowerCase() === raw.toLowerCase());
+  if (byName) return byName.code;
+  return fallback;
+}
 
 export default function ScopePage() {
-  const { token } = useAuth();
-  const [step, setStep] = useState<Step>("residence");
+  const { token, user } = useAuth();
+  const [step, setStep] = useState<Step>("identity");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [savingIdentity, setSavingIdentity] = useState(false);
 
-  // Geo data
   const [geoData, setGeoData] = useState<GeoData | null>(null);
 
-  // Selections
   const [residenceCountry, setResidenceCountry] = useState<string>("JP");
+  const [nationality, setNationality] = useState<string>("JP");
   const [selectedDestination, setSelectedDestination] = useState<Destination | null>(null);
   const [selectedVisaType, setSelectedVisaType] = useState<VisaType | null>(null);
   const [selectedAppType, setSelectedAppType] = useState<ApplicationType | null>(null);
@@ -39,29 +56,75 @@ export default function ScopePage() {
   const [submitting, setSubmitting] = useState(false);
   const [createdCase, setCreatedCase] = useState<CaseResult | null>(null);
 
-  // Load geo data on mount
+  // Seed residence/nationality once from profile — never re-run after Continue saves profile.
+  const seededFromProfileRef = useRef(false);
+  const userRef = useRef(user);
+  userRef.current = user;
+
   useEffect(() => {
     if (!token) return;
+    let cancelled = false;
     void (async () => {
       try {
         setLoading(true);
         const data = await getAllGeoData();
+        if (cancelled) return;
         setGeoData(data);
-        setResidenceCountry(data.detected_country.country_code);
+
+        if (!seededFromProfileRef.current) {
+          const profile = userRef.current;
+          const fallback = data.detected_country.country_code;
+          setResidenceCountry(
+            matchCountryCode(profile?.current_country, data.nationalities, fallback),
+          );
+          setNationality(
+            matchCountryCode(profile?.nationality, data.nationalities, fallback),
+          );
+          seededFromProfileRef.current = true;
+        }
       } catch {
-        setError("Could not load destination data. Is the API running?");
+        if (!cancelled) setError("Could not load destination data. Is the API running?");
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     })();
+    return () => {
+      cancelled = true;
+    };
   }, [token]);
 
   function goBack() {
     setError(null);
-    if (step === "destination") setStep("residence");
+    if (step === "destination") setStep("identity");
     else if (step === "visa_type") setStep("destination");
     else if (step === "app_type") setStep("visa_type");
     else if (step === "review") setStep("app_type");
+  }
+
+  async function confirmIdentity() {
+    if (!residenceCountry || !nationality || savingIdentity) return;
+    setError(null);
+    setSavingIdentity(true);
+    // Advance immediately so a profile save cannot yank the user back to identity.
+    setStep("destination");
+    if (token) {
+      try {
+        const natName =
+          (geoData?.nationalities ?? []).find((n) => n.code === nationality)?.name ?? nationality;
+        const resName =
+          (geoData?.nationalities ?? []).find((n) => n.code === residenceCountry)?.name ??
+          geoData?.detected_country.country_name ??
+          residenceCountry;
+        // Do not call setAuth here — updating global user re-triggered this page previously.
+        await updateProfile(token, {
+          nationality: natName,
+          current_country: resName,
+        });
+      } catch {
+        // Profile save is best-effort; scoping can continue.
+      }
+    }
+    setSavingIdentity(false);
   }
 
   function selectDestination(d: Destination) {
@@ -86,7 +149,6 @@ export default function ScopePage() {
     setSubmitting(true);
     setError(null);
     try {
-      // Map the new system to the old jurisdiction codes
       const jurisdictionCode = selectedDestination.code;
       const visaCategoryCode = selectedVisaType.code;
       const actionCode = selectedAppType.code;
@@ -95,6 +157,8 @@ export default function ScopePage() {
         jurisdiction_code: jurisdictionCode,
         visa_category_code: visaCategoryCode,
         action_code: actionCode,
+        origin_country: nationality,
+        residence_country: residenceCountry,
       });
       setCreatedCase(result);
     } catch (e) {
@@ -152,6 +216,13 @@ export default function ScopePage() {
   const destinations = geoData?.destinations ?? [];
   const visaTypes = geoData?.visa_types ?? [];
   const appTypes = geoData?.application_types ?? [];
+  const nationalities = geoData?.nationalities ?? [];
+  const residenceLabel =
+    nationalities.find((n) => n.code === residenceCountry)?.name ??
+    geoData?.detected_country.country_name ??
+    residenceCountry;
+  const nationalityLabel =
+    nationalities.find((n) => n.code === nationality)?.name ?? nationality;
 
   return (
     <div className="mx-auto max-w-2xl space-y-6 py-8">
@@ -164,9 +235,8 @@ export default function ScopePage() {
         </p>
       </div>
 
-      {/* Progress */}
-      <div className="flex items-center gap-2 text-sm">
-        {(["residence", "destination", "visa_type", "app_type", "review"] as Step[]).map(
+      <div className="flex flex-wrap items-center gap-2 text-sm">
+        {(["identity", "destination", "visa_type", "app_type", "review"] as Step[]).map(
           (s, i) => (
             <div key={s} className="flex items-center gap-2">
               {i > 0 && <span className="text-muted-foreground">/</span>}
@@ -177,8 +247,8 @@ export default function ScopePage() {
                     : "text-muted-foreground"
                 }
               >
-                {s === "residence"
-                  ? "Residence"
+                {s === "identity"
+                  ? "Residence & Nationality"
                   : s === "destination"
                     ? "Destination"
                     : s === "visa_type"
@@ -198,31 +268,98 @@ export default function ScopePage() {
         </p>
       )}
 
-      {/* Step: residence */}
-      {step === "residence" && (
-        <div className="space-y-3">
-          <button onClick={goBack} className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
-            <ArrowLeft className="size-3.5" /> Back
-          </button>
-          <h3 className="text-sm font-medium text-muted-foreground">
-            Your country of residence
-          </h3>
-          <div className="rounded-[var(--radius)] border border-primary/20 bg-primary/5 px-4 py-3 text-sm">
-            <span className="font-medium">Auto-detected:</span>{" "}
-            <span className="text-muted-foreground">
-              {geoData?.detected_country.country_name} ({geoData?.detected_country.country_code})
-            </span>
+      {/* Combined residence + nationality */}
+      {step === "identity" && (
+        <div className="space-y-6">
+          <div className="space-y-3">
+            <h3 className="text-sm font-medium text-muted-foreground">
+              Country of residence
+            </h3>
+            {(user?.current_country || geoData?.detected_country) && (
+              <div className="rounded-[var(--radius)] border border-primary/20 bg-primary/5 px-4 py-3 text-sm">
+                <span className="font-medium">
+                  {user?.current_country ? "From profile / auto-detected:" : "Auto-detected:"}
+                </span>{" "}
+                <span className="text-muted-foreground">
+                  {residenceLabel} ({residenceCountry})
+                </span>
+              </div>
+            )}
+            <div className="grid max-h-48 gap-2 overflow-y-auto sm:grid-cols-2">
+              {nationalities.map((n) => (
+                <button
+                  key={`res-${n.code}`}
+                  type="button"
+                  onClick={() => setResidenceCountry(n.code)}
+                  className={`flex items-center gap-3 rounded-[var(--radius)] border p-3 text-left text-sm transition-colors ${
+                    residenceCountry === n.code
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "bg-card hover:bg-accent"
+                  }`}
+                >
+                  <span className="text-xl">{n.flag}</span>
+                  <span className="min-w-0 flex-1 truncate font-medium">{n.name}</span>
+                  {residenceCountry === n.code && (
+                    <Check className="size-4 shrink-0 text-[var(--color-success)]" />
+                  )}
+                </button>
+              ))}
+            </div>
           </div>
+
+          <div className="space-y-3">
+            <h3 className="text-sm font-medium text-muted-foreground">
+              Nationality (passport country)
+            </h3>
+            <p className="text-xs text-muted-foreground">
+              Some visas differ by nationality. We use this to tailor official requirements.
+            </p>
+            {nationalities.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No nationality options available.</p>
+            ) : (
+              <div className="grid max-h-56 gap-2 overflow-y-auto sm:grid-cols-2">
+                {nationalities.map((n) => (
+                  <button
+                    key={`nat-${n.code}`}
+                    type="button"
+                    onClick={() => setNationality(n.code)}
+                    className={`flex items-center gap-3 rounded-[var(--radius)] border p-3 text-left text-sm transition-colors ${
+                      nationality === n.code
+                        ? "border-primary bg-primary/10 text-primary"
+                        : "bg-card hover:bg-accent"
+                    }`}
+                  >
+                    <span className="text-xl">{n.flag}</span>
+                    <span className="min-w-0 flex-1 truncate font-medium">{n.name}</span>
+                    {nationality === n.code && (
+                      <Check className="size-4 shrink-0 text-[var(--color-success)]" />
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
           <button
-            onClick={() => setStep("destination")}
-            className="inline-flex w-full items-center justify-center gap-2 rounded-[var(--radius)] bg-primary px-4 py-3 text-sm font-medium text-primary-foreground transition-colors hover:opacity-90"
+            type="button"
+            onClick={() => void confirmIdentity()}
+            disabled={!residenceCountry || !nationality || savingIdentity}
+            className="inline-flex w-full items-center justify-center gap-2 rounded-[var(--radius)] bg-primary px-4 py-3 text-sm font-medium text-primary-foreground transition-colors hover:opacity-90 disabled:pointer-events-none disabled:opacity-50"
           >
-            Continue with {geoData?.detected_country.country_name} <ArrowRight className="size-4" />
+            {savingIdentity ? (
+              <>
+                <Loader2 className="size-4 animate-spin" /> Continuing…
+              </>
+            ) : (
+              <>
+                Continue with {residenceLabel} · {nationalityLabel}
+                <ArrowRight className="size-4" />
+              </>
+            )}
           </button>
         </div>
       )}
 
-      {/* Step: destination */}
       {step === "destination" && (
         <div className="space-y-3">
           <button onClick={goBack} className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
@@ -254,7 +391,6 @@ export default function ScopePage() {
         </div>
       )}
 
-      {/* Step: visa type */}
       {step === "visa_type" && (
         <div className="space-y-3">
           <button onClick={goBack} className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
@@ -285,7 +421,6 @@ export default function ScopePage() {
         </div>
       )}
 
-      {/* Step: application type */}
       {step === "app_type" && (
         <div className="space-y-3">
           <button onClick={goBack} className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
@@ -310,7 +445,6 @@ export default function ScopePage() {
         </div>
       )}
 
-      {/* Step: review */}
       {step === "review" && (
         <div className="space-y-4">
           <button onClick={goBack} className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
@@ -322,8 +456,12 @@ export default function ScopePage() {
           <Card>
             <CardContent className="space-y-3 pt-5">
               <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">From</span>
-                <span className="font-medium">{geoData?.detected_country.country_name}</span>
+                <span className="text-muted-foreground">Residence</span>
+                <span className="font-medium">{residenceLabel}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Nationality</span>
+                <span className="font-medium">{nationalityLabel}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">To</span>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Check, Upload, Loader2, Camera, ExternalLink } from "lucide-react";
+import { Check, Upload, Loader2, Camera, ExternalLink, FolderOpen } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -27,13 +27,60 @@ function mapDocType(checklistCode: string): DocumentType {
   return "employment_contract";
 }
 
+/** Common doc matching: wallet passport can satisfy multiple checklist passport items. */
 function matchWalletToChecklist(walletDoc: WalletDocument, checklistCode: string): boolean {
   const docType = walletDoc.doc_type.toLowerCase();
+  const name = walletDoc.name.toLowerCase();
   const code = checklistCode.toLowerCase();
-  if (code.includes("passport") && docType.includes("passport")) return true;
-  if ((code.includes("residence") || code.includes("card")) && docType.includes("residence")) return true;
-  if (code.includes("employment") && docType.includes("employment")) return true;
-  return docType === code;
+  const combined = `${docType} ${name}`;
+
+  if (code.includes("passport") && !code.includes("photo")) {
+    return combined.includes("passport") && !combined.includes("photo");
+  }
+  if (code.includes("photo") || code.includes("photograph")) {
+    return combined.includes("photo") || combined.includes("photograph");
+  }
+  if (
+    code.includes("fund") ||
+    code.includes("bank") ||
+    code.includes("financial") ||
+    code.includes("finance")
+  ) {
+    return (
+      combined.includes("fund") ||
+      combined.includes("bank") ||
+      combined.includes("financial") ||
+      combined.includes("statement")
+    );
+  }
+  if (
+    code.includes("itinerary") ||
+    code.includes("travel") ||
+    code.includes("flight") ||
+    code.includes("hotel") ||
+    code.includes("accommodation")
+  ) {
+    return (
+      combined.includes("itinerary") ||
+      combined.includes("travel") ||
+      combined.includes("flight") ||
+      combined.includes("hotel") ||
+      combined.includes("accommodation") ||
+      combined.includes("booking")
+    );
+  }
+  if (code.includes("employment") || code.includes("ties") || code.includes("job")) {
+    return (
+      combined.includes("employment") ||
+      combined.includes("job") ||
+      combined.includes("employer") ||
+      combined.includes("contract")
+    );
+  }
+  if (code.includes("residence") || code.includes("card")) {
+    return combined.includes("residence") || combined.includes("card");
+  }
+  return docType === code || name.includes(code) || combined.includes(code.replaceAll("_", " "));
 }
 
 export function ChecklistStep({
@@ -51,16 +98,72 @@ export function ChecklistStep({
   const [ocrResult, setOcrResult] = useState<OCRResult | null>(null);
   const [ocrLoading, setOcrLoading] = useState(false);
   const [ocrError, setOcrError] = useState<string | null>(null);
+  const [autoAttached, setAutoAttached] = useState(false);
+  const [mode, setMode] = useState<"upload" | "scan" | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pendingItemRef = useRef<ChecklistItem | null>(null);
+  const onStatusChangeRef = useRef(onStatusChange);
+  onStatusChangeRef.current = onStatusChange;
 
   useEffect(() => {
     if (!token) return;
     getWallet().then(setWalletDocs).catch(() => {});
   }, [token]);
 
+  // Auto-attach matching wallet docs once when checklist + wallet are ready.
+  useEffect(() => {
+    if (!token || autoAttached || items.length === 0 || walletDocs.length === 0) return;
+
+    const snapshot = items.filter((i) => i.status === "needed");
+    if (snapshot.length === 0) {
+      setAutoAttached(true);
+      return;
+    }
+
+    let cancelled = false;
+    void (async () => {
+      for (const item of snapshot) {
+        if (cancelled) return;
+        const matches = walletDocs.filter(
+          (d) => d.status === "active" && matchWalletToChecklist(d, item.code),
+        );
+        const match = matches[0];
+        if (!match) continue;
+        try {
+          await registerDocument(token, caseId, {
+            doc_type: match.doc_type,
+            filename: match.filename,
+            storage_key: `wallet/${match.id}`,
+            extracted_fields: {},
+            content_type: match.content_type,
+          });
+          if (!cancelled) await onStatusChangeRef.current(item.id, "gathered");
+        } catch {
+          // Skip individual failures; user can attach manually.
+        }
+      }
+      if (!cancelled) setAutoAttached(true);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [token, caseId, walletDocs, items, autoAttached]);
+
+  // Reset auto-attach when checklist is regenerated (item ids change).
+  const itemKey = items.map((i) => i.id).join(",");
+  const prevItemKey = useRef(itemKey);
+  useEffect(() => {
+    if (prevItemKey.current !== itemKey) {
+      prevItemKey.current = itemKey;
+      setAutoAttached(false);
+    }
+  }, [itemKey]);
+
   function getMatchingWalletDocs(checklistCode: string): WalletDocument[] {
-    return walletDocs.filter((d) => d.status === "active" && matchWalletToChecklist(d, checklistCode));
+    return walletDocs.filter(
+      (d) => d.status === "active" && matchWalletToChecklist(d, checklistCode),
+    );
   }
 
   async function handleAttachWallet(itemId: number, walletDoc: WalletDocument) {
@@ -77,6 +180,7 @@ export function ChecklistStep({
       await onStatusChange(itemId, "gathered");
       setShowPicker(null);
     } catch {
+      // surface via parent if needed
     } finally {
       setAttaching(null);
     }
@@ -84,6 +188,15 @@ export function ChecklistStep({
 
   function handleUploadClick(item: ChecklistItem) {
     pendingItemRef.current = item;
+    setMode("upload");
+    setOcrResult(null);
+    setOcrError(null);
+    fileInputRef.current?.click();
+  }
+
+  function handleScanClick(item: ChecklistItem) {
+    pendingItemRef.current = item;
+    setMode("scan");
     setOcrResult(null);
     setOcrError(null);
     fileInputRef.current?.click();
@@ -94,23 +207,43 @@ export function ChecklistStep({
     const item = pendingItemRef.current;
     if (!file || !item || !token) return;
 
-    setOcrLoading(true);
-    setOcrError(null);
     setUploading(item.id);
+    setOcrError(null);
 
     try {
-      const docType = mapDocType(item.code);
-      const result = await extractFromFile(file, docType);
-      setOcrResult(result);
-
-      if (result.needs_recapture) {
-        setOcrError("Could not extract fields. Try a clearer image or mark gathered manually.");
+      if (mode === "upload") {
+        // Direct upload: store in case + wallet without requiring OCR success.
+        await registerDocument(token, caseId, {
+          doc_type: mapDocType(item.code),
+          filename: file.name,
+          storage_key: `upload/${item.id}/${file.name}`,
+          extracted_fields: {},
+          content_type: file.type || "application/octet-stream",
+        });
+        try {
+          await uploadDocument(file, mapDocType(item.code), item.name);
+          const refreshed = await getWallet();
+          setWalletDocs(refreshed);
+        } catch {
+          // Wallet is optional
+        }
+        await onStatusChange(item.id, "gathered");
+      } else {
+        // Scan path: OCR then confirm extracted fields.
+        setOcrLoading(true);
+        const docType = mapDocType(item.code);
+        const result = await extractFromFile(file, docType);
+        setOcrResult(result);
+        if (result.needs_recapture) {
+          setOcrError("Could not extract fields. Try a clearer image, use Upload, or mark gathered.");
+        }
       }
     } catch (err) {
-      setOcrError(err instanceof Error ? err.message : "OCR failed");
+      setOcrError(err instanceof Error ? err.message : "Upload failed");
     } finally {
       setOcrLoading(false);
       setUploading(null);
+      setMode(null);
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
   }
@@ -132,6 +265,8 @@ export function ChecklistStep({
         const blob = new Blob([JSON.stringify(ocrResult.fields)], { type: "application/json" });
         const file = new File([blob], `checklist-${item.code}.json`, { type: "application/json" });
         await uploadDocument(file, mapDocType(item.code), item.name);
+        const refreshed = await getWallet();
+        setWalletDocs(refreshed);
       } catch {
         // Wallet upload is optional
       }
@@ -142,6 +277,9 @@ export function ChecklistStep({
       setOcrError(err instanceof Error ? err.message : "Registration failed");
     }
   }
+
+  const requiredNeeded = items.filter((i) => i.is_required && i.status === "needed").length;
+  const gatheredCount = items.filter((i) => i.status !== "needed").length;
 
   return (
     <div className="space-y-6">
@@ -157,8 +295,9 @@ export function ChecklistStep({
         <div>
           <h3 className="text-sm font-medium text-muted-foreground">Document checklist</h3>
           <p className="mt-1 text-xs text-muted-foreground">
-            {items.filter((i) => i.status !== "needed").length} of {items.length} gathered — reuse
-            uploaded docs or scan new ones.
+            {gatheredCount} of {items.length} gathered
+            {requiredNeeded > 0 ? ` · ${requiredNeeded} required remaining` : ""}
+            {" — "}matching profile/wallet docs auto-select; otherwise upload or scan.
           </p>
         </div>
         <Button variant="outline" onClick={onRefresh} disabled={loading}>
@@ -177,6 +316,7 @@ export function ChecklistStep({
             const version = citationVersion(item.citation);
             const matchingDocs = getMatchingWalletDocs(item.code);
             const isGathered = item.status !== "needed";
+            const busy = uploading === item.id || attaching === item.id;
 
             return (
               <div
@@ -187,6 +327,8 @@ export function ChecklistStep({
                   <div className="mt-0.5">
                     {isGathered ? (
                       <Check className="size-4 text-[var(--color-success)]" />
+                    ) : matchingDocs.length > 0 ? (
+                      <div className="size-4 rounded-full border-2 border-primary bg-primary/20" />
                     ) : (
                       <div className="size-4 rounded border border-muted-foreground/30" />
                     )}
@@ -196,6 +338,9 @@ export function ChecklistStep({
                       <p className="text-sm font-medium">{item.name}</p>
                       {item.is_required && <Badge tone="danger">Required</Badge>}
                       {isGathered && <Badge tone="success">Gathered</Badge>}
+                      {!isGathered && matchingDocs.length > 0 && (
+                        <Badge tone="default">In your documents</Badge>
+                      )}
                     </div>
                     <p className="mt-1 text-xs text-muted-foreground">
                       <span className="font-medium text-foreground">How: </span>
@@ -222,15 +367,27 @@ export function ChecklistStep({
                         onClick={() => setShowPicker(showPicker === item.id ? null : item.id)}
                         className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs text-primary hover:bg-accent"
                       >
-                        <Upload className="size-3" />
-                        Reuse ({matchingDocs.length})
+                        <FolderOpen className="size-3" />
+                        Use saved ({matchingDocs.length})
                       </button>
                     )}
                     {!isGathered && (
                       <>
                         <button
                           onClick={() => handleUploadClick(item)}
-                          disabled={ocrLoading && uploading === item.id}
+                          disabled={busy}
+                          className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs text-primary hover:bg-accent disabled:opacity-50"
+                        >
+                          {busy && mode === "upload" ? (
+                            <Loader2 className="size-3 animate-spin" />
+                          ) : (
+                            <Upload className="size-3" />
+                          )}
+                          Upload
+                        </button>
+                        <button
+                          onClick={() => handleScanClick(item)}
+                          disabled={busy || ocrLoading}
                           className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs text-primary hover:bg-accent disabled:opacity-50"
                         >
                           {ocrLoading && uploading === item.id ? (
@@ -262,11 +419,11 @@ export function ChecklistStep({
                 {showPicker === item.id && (
                   <div className="mt-3 rounded-[var(--radius)] border border-dashed bg-muted/30 p-3">
                     <p className="mb-2 text-xs font-medium text-muted-foreground">
-                      {isGathered ? "Replace with:" : "Select from your documents:"}
+                      {isGathered ? "Replace with a document from your wallet:" : "Select from your documents:"}
                     </p>
                     {matchingDocs.length === 0 ? (
                       <p className="text-xs text-muted-foreground">
-                        No matching documents in your wallet. Upload a new one.
+                        No matching documents yet. Use Upload or Scan, or add docs under Documents.
                       </p>
                     ) : (
                       <div className="space-y-2">

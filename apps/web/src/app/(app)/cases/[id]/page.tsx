@@ -1,10 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import {
-  ArrowLeft, ChevronRight, Loader2, AlertTriangle,
+  ArrowLeft, ArrowRight, ChevronRight, Loader2, AlertTriangle,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -20,8 +20,8 @@ import {
   type ChecklistItem, type GeneratedForm, type ReviewResult,
 } from "@/lib/api/cases";
 import {
-  IntakeStep, EligibilityStep, ChecklistStep, FormsStep, ReviewStep, PacketStep,
-  STEPS, phaseToStep,
+  IntakeStep, EligibilityStep, ChecklistStep, FormsStep, ReviewStep, PacketStep, ResearchStep,
+  STEPS, phaseToStep, canVisitStep, nextWorkflowStep,
   type Step,
 } from "@/components/applicant/steps";
 
@@ -45,6 +45,7 @@ export default function CaseDetailPage() {
   const [stepError, setStepError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [profile, setProfile] = useState<User | null>(null);
+  const stepInitializedRef = useRef(false);
 
   const loadCase = useCallback(async () => {
     if (!token || !caseId) return;
@@ -56,7 +57,11 @@ export default function CaseDetailPage() {
       ]);
       setCaseData(c);
       setGuidance(g);
-      setActiveStep(phaseToStep(g.phase));
+      // Only jump to guidance phase on first load — never auto-advance mid-session.
+      if (!stepInitializedRef.current) {
+        setActiveStep(phaseToStep(g.phase));
+        stepInitializedRef.current = true;
+      }
       getProfile(token).then(setProfile).catch(() => {});
     } catch {
       setError("Could not load case.");
@@ -70,7 +75,9 @@ export default function CaseDetailPage() {
   useEffect(() => {
     if (!token || !caseId) return;
     setStepError(null);
-    if (activeStep === "intake") {
+    if (activeStep === "research") {
+      // ResearchStep polls the guidance endpoint itself.
+    } else if (activeStep === "intake") {
       getIntake(token, caseId).then(setIntake).catch(() => setStepError("Intake questionnaire is not available for this case scope."));
     } else if (activeStep === "eligibility") {
       getEligibility(token, caseId).then(setEligibility).catch(() => { setEligibility(null); setStepError(null); });
@@ -92,7 +99,38 @@ export default function CaseDetailPage() {
       setGuidance(g);
       const c = await getCase(token, caseId);
       setCaseData(c);
-    } catch { /* ignore */ }
+      return g;
+    } catch {
+      return null;
+    }
+  }
+
+  const handleResearchPhaseChange = useCallback((phase: string) => {
+    // Research completion is the one automatic handoff — user lands on intake to start.
+    setActiveStep(phaseToStep(phase));
+    void refreshGuidance();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token, caseId]);
+
+  function trySetStep(step: Step) {
+    if (!guidance) {
+      setActiveStep(step);
+      return;
+    }
+    if (!canVisitStep(step, guidance.phase)) {
+      setError(
+        `Complete the current phase first (${guidance.title}). Required steps cannot be skipped.`,
+      );
+      return;
+    }
+    setError(null);
+    setActiveStep(step);
+  }
+
+  function goToGuidancePhase() {
+    if (!guidance) return;
+    setError(null);
+    setActiveStep(phaseToStep(guidance.phase));
   }
 
   async function handleAnswer(key: string, value: unknown) {
@@ -102,7 +140,7 @@ export default function CaseDetailPage() {
       const state = await answerIntake(token, caseId, key, value);
       setIntake(state);
       await refreshGuidance();
-      if (state.progress.complete) setActiveStep("eligibility");
+      // Do not auto-advance when intake completes — user clicks next.
     } catch (e) {
       setError(e instanceof Error ? e.message : "Answer failed");
     }
@@ -116,7 +154,7 @@ export default function CaseDetailPage() {
       const result = await evaluateEligibility(token, caseId);
       setEligibility(result);
       await refreshGuidance();
-      setActiveStep("checklist");
+      // Stay on eligibility until user continues.
     } catch (e) {
       setError(e instanceof Error ? e.message : "Evaluation failed");
     } finally {
@@ -158,7 +196,7 @@ export default function CaseDetailPage() {
       const generated = await generateForms(token, caseId);
       setForms(generated);
       await refreshGuidance();
-      setActiveStep("review");
+      // Stay on forms until user continues.
     } catch (e) {
       setError(e instanceof Error ? e.message : "Form generation failed");
     } finally {
@@ -174,7 +212,6 @@ export default function CaseDetailPage() {
       const result = await reviewCase(token, caseId);
       setReview(result);
       await refreshGuidance();
-      if (result.ready) setActiveStep("packet");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Review failed");
     } finally {
@@ -187,7 +224,6 @@ export default function CaseDetailPage() {
     try {
       await acknowledgeReview(token, caseId);
       await refreshGuidance();
-      setActiveStep("packet");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Acknowledge failed");
     }
@@ -222,6 +258,65 @@ export default function CaseDetailPage() {
     }
   }
 
+  /** Whether the current view is complete enough to move to the server next phase. */
+  function canAdvanceFromCurrent(): boolean {
+    if (!guidance) return false;
+    const phaseStep = phaseToStep(guidance.phase);
+    // Guidance already moved past this step → phase work is done.
+    if (activeStep === "intake") {
+      return Boolean(intake?.progress.complete);
+    }
+    if (activeStep === "eligibility") {
+      return eligibility !== null;
+    }
+    if (activeStep === "checklist") {
+      const requiredOpen = checklist.filter((i) => i.is_required && i.status === "needed");
+      return checklist.length > 0 && requiredOpen.length === 0;
+    }
+    if (activeStep === "forms") {
+      return forms.length > 0;
+    }
+    if (activeStep === "review") {
+      return review !== null && (review.ready || Boolean(guidance.phase === "packet" || guidance.phase === "done"));
+    }
+    // If actively viewing a step behind guidance, allow jump to guidance phase.
+    return activeStep !== phaseStep;
+  }
+
+  function continueNext() {
+    if (!guidance) return;
+    setError(null);
+
+    if (!canAdvanceFromCurrent()) {
+      if (activeStep === "intake") {
+        setError("Answer all required intake questions before continuing.");
+      } else if (activeStep === "eligibility") {
+        setError("Run eligibility screening before continuing.");
+      } else if (activeStep === "checklist") {
+        setError("Gather all required documents before continuing.");
+      } else if (activeStep === "forms") {
+        setError("Generate forms before continuing.");
+      } else if (activeStep === "review") {
+        setError("Run review (and acknowledge flags if needed) before continuing.");
+      }
+      return;
+    }
+
+    const phaseStep = phaseToStep(guidance.phase);
+    // Prefer following guidance when it has advanced past the current step.
+    if (phaseStep !== activeStep && canVisitStep(phaseStep, guidance.phase)) {
+      setActiveStep(phaseStep);
+      return;
+    }
+    const next = nextWorkflowStep(activeStep);
+    if (next && canVisitStep(next, guidance.phase)) {
+      setActiveStep(next);
+      return;
+    }
+    // Fallback: go to whatever guidance recommends.
+    setActiveStep(phaseStep);
+  }
+
   if (loading) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center">
@@ -240,6 +335,13 @@ export default function CaseDetailPage() {
       </div>
     );
   }
+
+  const showContinue =
+    guidance &&
+    guidance.phase !== "blocked" &&
+    guidance.phase !== "done" &&
+    activeStep !== "research" &&
+    activeStep !== "packet";
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
@@ -272,7 +374,7 @@ export default function CaseDetailPage() {
               )}
             </div>
             {guidance.phase !== "blocked" && (
-              <Button onClick={() => setActiveStep(phaseToStep(guidance.phase))}>
+              <Button onClick={goToGuidancePhase}>
                 {guidance.cta_label}
               </Button>
             )}
@@ -289,15 +391,20 @@ export default function CaseDetailPage() {
       <div className="flex items-center gap-1 overflow-x-auto pb-2">
         {STEPS.map((s, i) => {
           const isActive = s.key === activeStep;
+          const allowed = !guidance || canVisitStep(s.key, guidance.phase);
           return (
             <div key={s.key} className="flex items-center">
               {i > 0 && <ChevronRight className="mx-1 size-3.5 shrink-0 text-muted-foreground" />}
               <button
-                onClick={() => setActiveStep(s.key)}
+                onClick={() => trySetStep(s.key)}
+                disabled={!allowed}
+                title={allowed ? s.label : "Complete earlier required steps first"}
                 className={`whitespace-nowrap rounded-[var(--radius)] px-3 py-1.5 text-sm font-medium transition-colors ${
                   isActive
                     ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground hover:bg-accent"
+                    : allowed
+                      ? "text-muted-foreground hover:bg-accent"
+                      : "cursor-not-allowed text-muted-foreground/40"
                 }`}
               >
                 {s.label}
@@ -314,6 +421,13 @@ export default function CaseDetailPage() {
               <AlertTriangle className="mx-auto mb-3 size-8 text-[var(--color-warning)]/50" />
               <p className="text-sm text-muted-foreground">{stepError}</p>
             </div>
+          )}
+          {!stepError && activeStep === "research" && token && (
+            <ResearchStep
+              caseId={caseId}
+              token={token}
+              onPhaseChange={handleResearchPhaseChange}
+            />
           )}
           {!stepError && activeStep === "intake" && intake && (
             <IntakeStep state={intake} profile={profile} onAnswer={handleAnswer} />
@@ -357,6 +471,21 @@ export default function CaseDetailPage() {
               onBuild={handleBuildPacket}
               onSubmit={handleSubmit}
             />
+          )}
+
+          {showContinue && (
+            <div className="mt-6 flex flex-col gap-2 border-t pt-4 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-xs text-muted-foreground">
+                Steps only unlock when required work for the current phase is complete.
+              </p>
+              <Button
+                onClick={continueNext}
+                disabled={!canAdvanceFromCurrent()}
+              >
+                Continue to next step
+                <ArrowRight className="size-4" />
+              </Button>
+            </div>
           )}
         </CardContent>
       </Card>

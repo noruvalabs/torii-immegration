@@ -29,9 +29,17 @@ export type ApplicationType = {
   description: string;
 };
 
+export type Nationality = {
+  code: string;
+  name: string;
+  currency: string;
+  flag: string;
+};
+
 export type GeoData = {
   detected_country: GeoLocation;
   destinations: Destination[];
+  nationalities: Nationality[];
   visa_types: VisaType[];
   application_types: ApplicationType[];
 };
@@ -69,6 +77,10 @@ export function getDestinations() {
 
 export function getVisaTypes() {
   return request<VisaType[]>("/visa-types", { method: "GET" });
+}
+
+export function getNationalities() {
+  return request<Nationality[]>("/nationalities", { method: "GET" });
 }
 
 export function getApplicationTypes() {
