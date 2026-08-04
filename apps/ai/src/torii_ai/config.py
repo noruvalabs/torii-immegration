@@ -31,6 +31,13 @@ class Settings(BaseSettings):
     # truncate before producing JSON; keep (input + max_tokens) under the Groq TPM limit.
     groq_max_tokens: int = 8000
 
+    # --- NVIDIA NIM (OpenAI-compatible) ----------------------------------------
+    nvidia_api_key: str = ""
+    nvidia_model: str = "openai/gpt-oss-120b"
+    nvidia_base_url: str = "https://integrate.api.nvidia.com/v1"
+    nvidia_max_tokens: int = 4096
+    nvidia_timeout_seconds: float = 120.0
+
     # --- Tavily search --------------------------------------------------------
     tavily_api_key: str = ""
     tavily_timeout_seconds: float = 20.0

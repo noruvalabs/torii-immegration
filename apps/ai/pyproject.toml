@@ -12,6 +12,7 @@ dependencies = [
     "scalar-fastapi>=1.8",
     "httpx>=0.28",
     "openai>=1.60",
+    "pymupdf>=1.25",
 ]
 
 [dependency-groups]

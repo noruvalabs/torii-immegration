@@ -73,7 +73,7 @@ export default function CaseDetailPage() {
   useEffect(() => { void loadCase(); }, [loadCase]);
 
   useEffect(() => {
-    if (!token || !caseId) return;
+    if (!token || !caseId || loading) return;
     setStepError(null);
     if (activeStep === "research") {
       // ResearchStep polls the guidance endpoint itself.
@@ -90,7 +90,7 @@ export default function CaseDetailPage() {
     } else if (activeStep === "packet") {
       getPacket(token, caseId).then(setPacket).catch(() => { setPacket(null); });
     }
-  }, [token, caseId, activeStep]);
+  }, [token, caseId, activeStep, loading]);
 
   async function refreshGuidance() {
     if (!token) return;
@@ -453,6 +453,7 @@ export default function CaseDetailPage() {
               forms={forms}
               loading={submitting}
               onGenerate={handleGenerateForms}
+              intakeAnswers={caseData.intake_answers}
             />
           )}
           {!stepError && activeStep === "review" && (

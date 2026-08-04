@@ -33,6 +33,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             service=settings.service_name,
             version=__version__,
             groq_configured=bool(settings.groq_api_key),
+            nvidia_configured=bool(settings.nvidia_api_key),
             tavily_configured=bool(settings.tavily_api_key),
         )
         app.state.settings = settings

@@ -1,6 +1,6 @@
 const AI_API = "/assistant";
 
-export type DocumentType = "passport" | "residence_card" | "employment_contract";
+export type DocumentType = "passport" | "residence_card" | "employment_contract" | "proof_of_funds" | "travel_itinerary";
 
 export type ExtractedValue = {
   value: string;

@@ -123,6 +123,7 @@ export type GeneratedForm = {
 
 export type ReviewResult = {
   flags: { code: string; message: string; fields?: string[] }[];
+  checks: { code: string; message: string; passed: boolean }[];
   ready: boolean;
 };
 

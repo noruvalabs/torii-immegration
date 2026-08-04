@@ -22,8 +22,27 @@ type ChecklistStepProps = {
 
 function mapDocType(checklistCode: string): DocumentType {
   const code = checklistCode.toLowerCase();
-  if (code.includes("passport")) return "passport";
+  if (code.includes("passport") && !code.includes("photo")) return "passport";
   if (code.includes("residence") || code.includes("card")) return "residence_card";
+  if (
+    code.includes("fund") ||
+    code.includes("bank") ||
+    code.includes("financial") ||
+    code.includes("finance") ||
+    code.includes("sponsor")
+  ) {
+    return "proof_of_funds";
+  }
+  if (
+    code.includes("itinerary") ||
+    code.includes("travel") ||
+    code.includes("flight") ||
+    code.includes("hotel") ||
+    code.includes("accommodation") ||
+    code.includes("booking")
+  ) {
+    return "travel_itinerary";
+  }
   return "employment_contract";
 }
 
@@ -286,7 +305,7 @@ export function ChecklistStep({
       <input
         ref={fileInputRef}
         type="file"
-        accept="image/*,.pdf"
+        accept="image/*,.pdf,.doc,.docx"
         className="hidden"
         onChange={handleFileChange}
       />
