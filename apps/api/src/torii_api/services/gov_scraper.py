@@ -121,7 +121,6 @@ def _extract_links(html: str, base_url: str) -> list[dict[str, str]]:
 async def scrape_japan(client: httpx.AsyncClient) -> ScrapeResult:
     """Scrape Japan Immigration Services Agency (ISA) for visa data."""
     result = ScrapeResult(jurisdiction_code="JP", scraped_at=datetime.now(UTC).isoformat())
-    base = "https://www.moj.go.jp"
 
     # 1. Scrape main procedures page for visa categories
     log.info("gov_scraper.jp.fetching", page="procedures")

@@ -6,8 +6,13 @@ the API runs with zero infrastructure; point ``TORII_DATABASE_URL`` at Postgres 
 """
 
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# One env file for the whole monorepo (see /.env.example at the repo root) — this file lives
+# at apps/api/src/torii_api/config.py, five levels below the root regardless of CWD.
+_REPO_ROOT_ENV_FILE = Path(__file__).resolve().parents[4] / ".env"
 
 
 class Settings(BaseSettings):
@@ -15,7 +20,7 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(
         env_prefix="TORII_",
-        env_file=".env",
+        env_file=_REPO_ROOT_ENV_FILE,
         extra="ignore",
     )
 

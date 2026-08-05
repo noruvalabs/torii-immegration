@@ -418,6 +418,18 @@ async def _enqueue_research_if_needed(
         await session.flush()
         return "completed"
 
+    if research is not None and research.status in (
+        ScopeResearchStatus.QUEUED,
+        ScopeResearchStatus.RUNNING,
+    ):
+        # A job is already in flight for this scope — attach the case to it instead of
+        # resetting the row and enqueueing a second concurrent outbox event (repeated
+        # retries while a job is running would otherwise race multiple scrapes against
+        # the same ScopeResearch row).
+        case.research_id = research.id
+        await session.flush()
+        return research.status
+
     if research is None:
         research = ScopeResearch(
             jurisdiction_id=case.jurisdiction_id,

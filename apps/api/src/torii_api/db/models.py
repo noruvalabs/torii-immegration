@@ -23,10 +23,10 @@ from enum import StrEnum
 from typing import Any
 
 from sqlalchemy import JSON as SAJSON
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from torii_api.db.base import Base, TimestampMixin
+from torii_api.db.base import Base, TimestampMixin, UTCDateTime
 
 
 class UserRole(StrEnum):
@@ -59,7 +59,7 @@ class User(TimestampMixin, Base):
         String(128), unique=True, index=True, nullable=True
     )
     password_reset_expires: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
+        UTCDateTime, nullable=True
     )
 
     # ── Profile fields (auto-fill for intake) ──────────────────────────────
@@ -267,8 +267,8 @@ class ScopeResearch(TimestampMixin, Base):
     payload: Mapped[dict[str, Any]] = mapped_column(SAJSON, default=dict)
     source_pages: Mapped[list[dict[str, Any]]] = mapped_column(SAJSON, default=list)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
-    researched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    researched_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+    expires_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
 
     jurisdiction: Mapped[Jurisdiction] = relationship()
     visa_category: Mapped[VisaCategory] = relationship()
@@ -308,7 +308,7 @@ class Case(TimestampMixin, Base):
     # Stable key for the applicant's current position in the intake flow; NULL before intake.
     intake_step: Mapped[str | None] = mapped_column(String(128), nullable=True)
     # Recorded expiry/renewal date for a completed case (US-19.1); NULL until known.
-    renewal_due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    renewal_due_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     # First-class origin/residence for cross-border cases (e.g. a Bangladeshi citizen resident
     # in Japan). ISO-3166 alpha-2; NULL for domestic scopes where residence == jurisdiction.
@@ -433,7 +433,7 @@ class OutboxEvent(TimestampMixin, Base):
     payload: Mapped[dict] = mapped_column(SAJSON, default=dict)
     # NULL while pending; stamped when the worker has handled it (at-least-once).
     processed_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True, index=True
+        UTCDateTime, nullable=True, index=True
     )
 
 
@@ -469,7 +469,7 @@ class Payment(TimestampMixin, Base):
     )
     # Mock payment details
     payment_method: Mapped[str | None] = mapped_column(String(32), nullable=True)
-    paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    paid_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
     # Additional metadata
     metadata_json: Mapped[dict[str, Any] | None] = mapped_column(SAJSON, nullable=True)
 

@@ -10,6 +10,7 @@ Standalone [uv](https://docs.astral.sh/uv/) project (not part of the pnpm worksp
 ## Run
 
 ```bash
+cp ../../.env.example ../../.env            # repo-root file, shared with apps/ai and apps/web
 uv sync                                     # create .venv from the lockfile
 uv run alembic upgrade head                 # apply the schema (creates ./torii.db on SQLite)
 uv run uvicorn torii_api.main:app --reload  # API on :8000
@@ -71,6 +72,9 @@ uv run alembic downgrade -1                           # roll back one
 `env.py` enables SQLite batch mode automatically, so ALTER-heavy migrations work on SQLite too.
 
 ## Configuration (`TORII_` env prefix)
+
+Loaded from the single `.env` at the repo root (see `config.py`), not a local `apps/api/.env` —
+one file covers apps/api, apps/ai, and apps/web.
 
 | Variable | Default | Purpose |
 |---|---|---|

@@ -257,7 +257,7 @@ async def run() -> None:
     print(f"  DONE — stored {stored_counts['eligibility']} eligibility rule sets,")
     print(f"          {stored_counts['documents']} document requirement sets,")
     print(f"          {stored_counts['intake']} intake definitions")
-    print(f"  All records are DRAFT (is_live=False). Review and approve via admin.")
+    print("  All records are DRAFT (is_live=False). Review and approve via admin.")
     print(f"{'='*60}")
 
 
