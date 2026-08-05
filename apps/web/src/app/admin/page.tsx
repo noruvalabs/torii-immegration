@@ -11,7 +11,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/lib/auth-context";
-import { adminListCases, adminCountCases, adminListUsers } from "@/lib/api/admin";
+import { adminListCases, adminCountCases } from "@/lib/api/admin";
 
 const API = "/backend/v1";
 
@@ -19,7 +19,6 @@ export default function DashboardPage() {
   const { token } = useAuth();
   const [caseCount, setCaseCount] = useState<Record<string, number>>({});
   const [jurisdictionCount, setJurisdictionCount] = useState<number | null>(null);
-  const [userCounts, setUserCounts] = useState<Record<string, number>>({});
   const [recentCases, setRecentCases] = useState<{ id: number; reference: string | null; status: string; created_at: string | null }[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -27,9 +26,8 @@ export default function DashboardPage() {
     if (!token) return;
     setLoading(true);
     try {
-      const [cc, uc, cases, jRes] = await Promise.allSettled([
+      const [cc, cases, jRes] = await Promise.allSettled([
         adminCountCases(token),
-        adminListUsers(token),
         adminListCases(token, { limit: 5 }),
         fetch(`${API}/jurisdictions`, {
           headers: { Authorization: `Bearer ${token}` },
@@ -37,13 +35,6 @@ export default function DashboardPage() {
       ]);
 
       if (cc.status === "fulfilled") setCaseCount(cc.value);
-      if (uc.status === "fulfilled") {
-        const counts: Record<string, number> = {};
-        for (const u of uc.value) {
-          counts[u.role] = (counts[u.role] ?? 0) + 1;
-        }
-        setUserCounts(counts);
-      }
       if (cases.status === "fulfilled") setRecentCases(cases.value);
       if (jRes.status === "fulfilled" && jRes.value.ok) {
         const data = await jRes.value.json();

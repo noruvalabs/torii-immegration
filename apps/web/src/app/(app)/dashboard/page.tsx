@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { Plus, ArrowRight, FolderKanban, Clock, CheckCircle2, AlertCircle, User } from "lucide-react";
+import { Plus, ArrowRight, FolderKanban, User } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/lib/auth-context";

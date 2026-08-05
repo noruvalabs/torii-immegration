@@ -19,13 +19,6 @@ const API = "/backend/v1/admin/users";
 
 const ROLE_OPTIONS = ["applicant", "ops", "employer", "admin"];
 
-const roleBadge: Record<string, "default" | "success" | "warning" | "danger" | "muted"> = {
-  admin: "danger",
-  ops: "warning",
-  employer: "success",
-  applicant: "default",
-};
-
 export default function StaffPage() {
   const { token, user: currentUser } = useAuth();
   const [users, setUsers] = useState<User[]>([]);
