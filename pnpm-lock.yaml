@@ -22,6 +22,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@next/env':
+        specifier: 16.2.10
+        version: 16.2.10
       clsx:
         specifier: 2.1.1
         version: 2.1.1
