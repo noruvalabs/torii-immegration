@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import base64
-from typing import Literal
 
 from fastapi import APIRouter, File, Form, UploadFile
 from pydantic import BaseModel, Field
@@ -46,8 +45,6 @@ async def _extract_from_pdf(
     doc_type: DocumentType,
 ) -> OCRResult:
     """Extract text from PDF via PyMuPDF, then send to Groq qwen for field extraction."""
-    import json
-    import re
 
     from openai import OpenAI
 
@@ -98,8 +95,6 @@ async def _extract_from_image(
     doc_type: DocumentType,
 ) -> OCRResult:
     """Send image to Groq qwen vision model for field extraction."""
-    import json
-    import re
 
     from openai import OpenAI
 

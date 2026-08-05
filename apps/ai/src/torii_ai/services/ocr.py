@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-import base64
 from pathlib import Path
 from typing import Literal
 
 from pydantic import BaseModel
 
-from torii_ai.config import Settings, get_settings
+from torii_ai.config import get_settings
 
 DocumentType = Literal["passport", "residence_card", "employment_contract", "proof_of_funds", "travel_itinerary"]
 
