@@ -29,7 +29,7 @@ export type {
   WalletDocument,
 };
 
-export type Step = "intake" | "eligibility" | "checklist" | "forms" | "review" | "packet";
+export type Step = "intake" | "eligibility" | "checklist" | "forms" | "review" | "packet" | "research";
 
 export const STEPS: { key: Step; label: string }[] = [
   { key: "intake", label: "Intake" },
@@ -40,11 +40,48 @@ export const STEPS: { key: Step; label: string }[] = [
   { key: "packet", label: "Packet" },
 ];
 
+/** Workflow order for phase gating (research is a pre-intake state). */
+export const STEP_ORDER: Step[] = [
+  "research",
+  "intake",
+  "eligibility",
+  "checklist",
+  "forms",
+  "review",
+  "packet",
+];
+
 export function phaseToStep(phase: string): Step {
   if (phase === "done") return "packet";
   if (phase === "blocked") return "intake";
+  if (phase === "research") return "research";
   if (STEPS.some((s) => s.key === phase)) return phase as Step;
   return "intake";
+}
+
+/** Highest step the applicant may open, based on server guidance phase. */
+export function maxReachableStep(phase: string): Step {
+  if (phase === "done") return "packet";
+  if (phase === "blocked") return "intake";
+  return phaseToStep(phase);
+}
+
+export function stepIndex(step: Step): number {
+  return STEP_ORDER.indexOf(step);
+}
+
+/** True when the step is at or before the guidance phase (manual nav only). */
+export function canVisitStep(target: Step, guidancePhase: string): boolean {
+  const max = maxReachableStep(guidancePhase);
+  if (target === "research") return guidancePhase === "research";
+  return stepIndex(target) <= stepIndex(max) && stepIndex(target) >= stepIndex("intake");
+}
+
+export function nextWorkflowStep(step: Step): Step | null {
+  const i = stepIndex(step);
+  if (i < 0 || i >= STEP_ORDER.length - 1) return null;
+  const next = STEP_ORDER[i + 1];
+  return next === undefined || next === "research" ? null : next;
 }
 
 export function citationUrl(citation: Record<string, unknown> | undefined): string | null {

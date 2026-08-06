@@ -29,7 +29,7 @@ export function FormsStep({ forms, loading, onGenerate }: FormsStepProps) {
 
       {forms.length === 0 ? (
         <p className="text-sm text-muted-foreground">
-          No forms generated yet. Complete intake and click generate.
+          No forms generated yet. Complete intake, then click generate. Stay on this step until you choose Continue.
         </p>
       ) : (
         <div className="space-y-4">

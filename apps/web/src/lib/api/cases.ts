@@ -48,6 +48,9 @@ export type Case = {
   scope_label?: string | null;
   next_phase?: string | null;
   next_title?: string | null;
+  origin_country?: string | null;
+  residence_country?: string | null;
+  research_id?: number | null;
 };
 
 export type IntakeQuestion = {
@@ -123,14 +126,23 @@ export type ReviewResult = {
   ready: boolean;
 };
 
+export type ResearchStepLog = {
+  key: string;
+  label: string;
+  detail: string;
+  at: string;
+};
+
 export type CaseGuidance = {
-  phase: "intake" | "eligibility" | "checklist" | "forms" | "review" | "packet" | "done" | "blocked";
+  phase: "intake" | "eligibility" | "checklist" | "forms" | "review" | "packet" | "done" | "blocked" | "research";
   title: string;
   instruction: string;
   cta_label: string;
   blocked_reason: string | null;
   progress: { answered: number; total: number; complete: boolean } | null;
   scope_label: string | null;
+  research_status?: string | null;
+  research_steps?: ResearchStepLog[];
 };
 
 export type Escalation = {
@@ -182,11 +194,17 @@ export function scopeCase(token: string, data: {
   visa_category_code: string;
   action_code: string;
   locale?: string;
+  origin_country?: string;
+  residence_country?: string;
 }) {
   return req<Case>("/cases/scope", token, {
     method: "POST",
     body: JSON.stringify(data),
   });
+}
+
+export function requestResearch(token: string, caseId: number) {
+  return req<{ status: string; message: string }>(`/cases/${caseId}/research`, token, { method: "POST" });
 }
 
 // ── Intake ─────────────────────────────────────────────────────────────────────

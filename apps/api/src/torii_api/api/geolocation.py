@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
 from torii_api.auth.deps import CurrentUserDep, SessionDep
@@ -10,6 +10,7 @@ from torii_api.services.geolocation import (
     detect_country_from_ip,
     get_application_types,
     get_destinations_excluding,
+    get_nationalities,
     get_visa_types,
 )
 
@@ -51,6 +52,7 @@ class ApplicationTypeOut(BaseModel):
 class GeoDataOut(BaseModel):
     detected_country: GeoLocationOut
     destinations: list[DestinationOut]
+    nationalities: list[DestinationOut]
     visa_types: list[VisaTypeOut]
     application_types: list[ApplicationTypeOut]
 
@@ -92,6 +94,13 @@ async def list_visa_types() -> list[VisaTypeOut]:
     return [VisaTypeOut(**vt) for vt in visa_types]
 
 
+@router.get("/nationalities", response_model=list[DestinationOut])
+async def list_nationalities() -> list[DestinationOut]:
+    """List all supported nationalities (country of origin)."""
+    nationalities = get_nationalities()
+    return [DestinationOut(**n) for n in nationalities]
+
+
 @router.get("/application-types", response_model=list[ApplicationTypeOut])
 async def list_application_types() -> list[ApplicationTypeOut]:
     """List all application types (new/renewal)."""
@@ -107,6 +116,7 @@ async def get_all_geo_data(
     geo = await detect_country_from_ip(request)
 
     destinations = get_destinations_excluding(geo.country_code)
+    nationalities = get_nationalities()
     visa_types = get_visa_types()
     app_types = get_application_types()
 
@@ -121,27 +131,39 @@ async def get_all_geo_data(
             timezone=geo.timezone,
         ),
         destinations=[DestinationOut(**d) for d in destinations],
+        nationalities=[DestinationOut(**n) for n in nationalities],
         visa_types=[VisaTypeOut(**vt) for vt in visa_types],
         application_types=[ApplicationTypeOut(**at) for at in app_types],
     )
 
 
+class ResidenceIn(BaseModel):
+    country_code: str
+
+
 @router.put("/residence")
 async def update_residence_country(
+    payload: ResidenceIn,
     current_user: CurrentUserDep,
     session: SessionDep,
-    country_code: str,
 ) -> dict:
-    """Update user's residence country."""
+    """Update user's residence country (ISO alpha-2 code or country name)."""
     from sqlalchemy import update as sa_update
 
     from torii_api.db.models import User
 
+    country_code = payload.country_code.strip()
+    if len(country_code) < 2:
+        raise HTTPException(status_code=400, detail="country_code is required")
+
     await session.execute(
         sa_update(User)
         .where(User.id == current_user.id)
-        .values(current_country=country_code)
+        .values(current_country=country_code.upper() if len(country_code) == 2 else country_code)
     )
     await session.flush()
 
-    return {"message": "Residence country updated", "country_code": country_code}
+    return {
+        "message": "Residence country updated",
+        "country_code": country_code.upper() if len(country_code) == 2 else country_code,
+    }

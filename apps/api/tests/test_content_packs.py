@@ -19,6 +19,7 @@ def test_all_packs_load_and_parse() -> None:
     assert "jp/tourist.new_application" in packs
     assert "us/h1b.renewal" in packs
     assert "us/h1b.new_application" in packs
+    assert "uk/tourist.new_application" in packs
 
     for pack in packs.values():
         parse_questions(pack.questions)
@@ -72,3 +73,26 @@ def test_jurisdiction_meta_from_packs() -> None:
     assert jp is not None and jp.code == "JP" and jp.is_live
     assert us is not None and us.code == "US"
     assert any(c["code"] == "h1b" for c in us.categories)
+
+
+def test_uk_tourist_is_research_enabled_placeholder() -> None:
+    pack = load_pack_by_scope("uk/tourist.new_application")
+    assert pack.scope.jurisdiction == "UK"
+    assert pack.scope.visa_category == "tourist"
+    assert pack.scope.action == "new_application"
+    assert pack.scope.research_enabled is True
+    assert pack.scope.is_live is False
+    # Research-driven scopes are not flattened into live workflow rows.
+    row_ids = {r["scope_id"] for r in workflow_rows_from_packs()}
+    assert "uk/tourist.new_application" not in row_ids
+
+
+def test_uk_meta_flags_research_enabled() -> None:
+    uk = load_jurisdiction_meta("uk")
+    assert uk is not None and uk.code == "UK" and uk.is_live
+    tourist = next(c for c in uk.categories if c["code"] == "tourist")
+    assert tourist["is_live"] is False
+    assert tourist["research_enabled"] is True
+    new_action = next(a for a in uk.actions if a["code"] == "new")
+    assert new_action["is_live"] is False
+    assert new_action["research_enabled"] is True

@@ -110,6 +110,9 @@ class VisaCategory(TimestampMixin, Base):
     code: Mapped[str] = mapped_column(String(32), index=True)
     name: Mapped[str] = mapped_column(String(128))
     is_live: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    # True when a scope with no seeded content pack can still be offered, with
+    # requirements produced on demand by the live-research pipeline (NF-2 gated).
+    research_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
 
     jurisdiction: Mapped[Jurisdiction] = relationship(back_populates="visa_categories")
     cases: Mapped[list[Case]] = relationship(back_populates="visa_category")
@@ -135,6 +138,7 @@ class CaseAction(TimestampMixin, Base):
     code: Mapped[str] = mapped_column(String(32), index=True)
     name: Mapped[str] = mapped_column(String(128))
     is_live: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    research_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
 
     jurisdiction: Mapped[Jurisdiction] = relationship(back_populates="case_actions")
     cases: Mapped[list[Case]] = relationship(back_populates="case_action")
@@ -226,6 +230,51 @@ class FormTemplate(TimestampMixin, Base):
     )
 
 
+class ScopeResearchStatus(StrEnum):
+    """Lifecycle of an on-demand research run for a case scope."""
+
+    QUEUED = "queued"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
+class ScopeResearch(TimestampMixin, Base):
+    """Cached citation-gated workflow content discovered live for one case scope.
+
+    Produced on demand by the live-research pipeline (``case.research.queued`` outbox event →
+    ``POST /ai/ops/scrape`` → ``ops_ingest.validated_for_promote``) when a scope has no live
+    content pack. One row per (scope + origin_country + residence_country) so the next same-scope
+    case is instant until ``expires_at``. ``payload`` mirrors the seeded definition tables
+    (``intake_definitions`` / ``eligibility_rule_sets`` / ``document_requirement_sets`` /
+    ``form_templates``) so the deterministic engine consumes it identically; global live rules are
+    never mutated here (NF-9).
+    """
+
+    __tablename__ = "scope_research"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    jurisdiction_id: Mapped[int] = mapped_column(ForeignKey("jurisdictions.id"), index=True)
+    visa_category_id: Mapped[int] = mapped_column(ForeignKey("visa_categories.id"), index=True)
+    case_action_id: Mapped[int] = mapped_column(ForeignKey("case_actions.id"), index=True)
+    origin_country: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    residence_country: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    status: Mapped[str] = mapped_column(
+        String(16), default=ScopeResearchStatus.QUEUED, server_default=ScopeResearchStatus.QUEUED
+    )
+    # One object keyed like the seeded definitions: {intake_questions, eligibility_rules,
+    # document_requirements, form_templates}. Only meaningful when status == "completed".
+    payload: Mapped[dict[str, Any]] = mapped_column(SAJSON, default=dict)
+    source_pages: Mapped[list[dict[str, Any]]] = mapped_column(SAJSON, default=list)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    researched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    jurisdiction: Mapped[Jurisdiction] = relationship()
+    visa_category: Mapped[VisaCategory] = relationship()
+    case_action: Mapped[CaseAction] = relationship()
+
+
 class Case(TimestampMixin, Base):
     """One case in the canonical pipeline — one status lifecycle, one history."""
 
@@ -261,11 +310,20 @@ class Case(TimestampMixin, Base):
     # Recorded expiry/renewal date for a completed case (US-19.1); NULL until known.
     renewal_due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # First-class origin/residence for cross-border cases (e.g. a Bangladeshi citizen resident
+    # in Japan). ISO-3166 alpha-2; NULL for domestic scopes where residence == jurisdiction.
+    origin_country: Mapped[str | None] = mapped_column(String(8), nullable=True, index=True)
+    residence_country: Mapped[str | None] = mapped_column(String(8), nullable=True, index=True)
+    # The ScopeResearch row this case consumes when its scope has no live content pack.
+    research_id: Mapped[int | None] = mapped_column(
+        ForeignKey("scope_research.id"), nullable=True, index=True
+    )
 
     jurisdiction: Mapped[Jurisdiction] = relationship(back_populates="cases")
     visa_category: Mapped[VisaCategory | None] = relationship(back_populates="cases")
     case_action: Mapped[CaseAction | None] = relationship(back_populates="cases")
     owner: Mapped[User | None] = relationship(back_populates="cases")
+    research: Mapped[ScopeResearch | None] = relationship()
     checklist_items: Mapped[list[CaseChecklistItem]] = relationship(
         back_populates="case", cascade="all, delete-orphan"
     )
@@ -329,7 +387,14 @@ class CaseGeneratedForm(TimestampMixin, Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     case_id: Mapped[int] = mapped_column(ForeignKey("cases.id"), index=True)
-    form_template_id: Mapped[int] = mapped_column(ForeignKey("form_templates.id"), index=True)
+    # NULL for research-driven forms (template lives in the ScopeResearch payload).
+    form_template_id: Mapped[int | None] = mapped_column(
+        ForeignKey("form_templates.id"), nullable=True, index=True
+    )
+    # Set (instead of form_template_id) when the form came from a research snapshot.
+    research_id: Mapped[int | None] = mapped_column(
+        ForeignKey("scope_research.id"), nullable=True, index=True
+    )
     form_code: Mapped[str] = mapped_column(String(64), index=True)
     form_version: Mapped[str] = mapped_column(String(32))
     filled_fields: Mapped[dict[str, Any]] = mapped_column(SAJSON, default=dict)
@@ -337,7 +402,7 @@ class CaseGeneratedForm(TimestampMixin, Base):
     citation: Mapped[dict[str, Any]] = mapped_column(SAJSON, default=dict)
 
     case: Mapped[Case] = relationship(back_populates="generated_forms")
-    form_template: Mapped[FormTemplate] = relationship(back_populates="generated_forms")
+    form_template: Mapped[FormTemplate | None] = relationship(back_populates="generated_forms")
 
 
 class CaseEscalation(TimestampMixin, Base):

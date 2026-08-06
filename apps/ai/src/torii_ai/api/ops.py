@@ -16,8 +16,8 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from torii_ai.config import Settings, get_settings
-from torii_ai.llm.groq import FakeChatClient, GroqClient
-from torii_ai.services.ops_scraper import OpsScraper, ScrapeResult
+from torii_ai.llm.groq import FakeChatClient, GroqChatClient
+from torii_ai.services.ops_scraper import OpsScraper
 from torii_ai.tools.tavily import FakeSearchClient, TavilyClient
 
 log = structlog.get_logger()
@@ -32,6 +32,8 @@ class ScrapeRequest(BaseModel):
     jurisdiction_code: str = Field(min_length=2, max_length=8, examples=["JP"])
     visa_category: str = Field(default="work", max_length=32)
     action: str = Field(default="renewal", max_length=32)
+    origin_country: str | None = Field(default=None, max_length=8)
+    residence_country: str | None = Field(default=None, max_length=8)
     return_payload: bool = False
 
 
@@ -75,9 +77,11 @@ class StatusResponse(BaseModel):
 def _build_scraper(settings: Settings) -> OpsScraper:
     """Build an OpsScraper with real or fake clients based on config."""
     search = TavilyClient(settings) if settings.tavily_api_key else FakeSearchClient()
-    chat = GroqClient(settings) if settings.groq_api_key else FakeChatClient()
-    return OpsScraper(search=search, chat=chat, settings=settings)
-
+    chat = GroqChatClient(settings) if settings.groq_api_key else FakeChatClient()
+    extract_chat = None
+    if settings.groq_api_key and settings.groq_extract_model:
+        extract_chat = GroqChatClient(settings, model=settings.groq_extract_model)
+    return OpsScraper(search=search, chat=chat, settings=settings, extract_chat=extract_chat)
 
 @router.post("/scrape", response_model=ScrapeResponse)
 async def trigger_scrape(payload: ScrapeRequest) -> ScrapeResponse:
@@ -98,6 +102,8 @@ async def trigger_scrape(payload: ScrapeRequest) -> ScrapeResponse:
             jurisdiction_code=payload.jurisdiction_code,
             visa_category=payload.visa_category,
             action=payload.action,
+            origin_country=payload.origin_country,
+            residence_country=payload.residence_country,
         )
     except Exception as exc:
         log.error("ops.scrape.failed", error=str(exc))
@@ -131,6 +137,87 @@ async def trigger_scrape(payload: ScrapeRequest) -> ScrapeResponse:
         visa_category=result.visa_category,
         action=result.action,
     )
+
+
+@router.post("/scrape/stream")
+async def trigger_scrape_stream(payload: ScrapeRequest):
+    """Stream NDJSON progress events while scraping, then a final complete payload.
+
+    Each line is a JSON object: ``{"type":"progress",...}`` or
+    ``{"type":"complete","scrape":{...ScrapeResponse fields...}}``.
+    """
+    import json
+
+    from fastapi.responses import StreamingResponse
+
+    settings = get_settings()
+    scraper = _build_scraper(settings)
+
+    async def generate():
+        global _last_scrape
+        try:
+            async for event in scraper.iter_scrape(
+                jurisdiction_code=payload.jurisdiction_code,
+                visa_category=payload.visa_category,
+                action=payload.action,
+                origin_country=payload.origin_country,
+                residence_country=payload.residence_country,
+            ):
+                if event.get("type") == "progress":
+                    yield json.dumps(
+                        {
+                            "type": "progress",
+                            "key": event.get("key"),
+                            "label": event.get("label"),
+                            "detail": event.get("detail") or "",
+                        }
+                    ) + "\n"
+                elif event.get("type") == "complete":
+                    result = event["result"]
+                    _last_scrape = {
+                        "jurisdiction": payload.jurisdiction_code,
+                        "at": result.scraped_at,
+                        "rules": len(result.eligibility_rules),
+                        "docs": len(result.document_requirements),
+                        "questions": len(result.intake_questions),
+                        "forms": len(result.form_templates),
+                    }
+                    complete = {
+                        "type": "complete",
+                        "status": "completed",
+                        "jurisdiction_code": result.jurisdiction_code,
+                        "eligibility_rules": len(result.eligibility_rules),
+                        "document_requirements": len(result.document_requirements),
+                        "intake_questions": len(result.intake_questions),
+                        "form_templates": len(result.form_templates),
+                        "source_pages": len(result.source_pages),
+                        "message": (
+                            f"Scraped {len(result.source_pages)} pages, "
+                            "extracted structured data."
+                        ),
+                        "eligibility_rules_payload": (
+                            result.eligibility_rules if payload.return_payload else []
+                        ),
+                        "document_requirements_payload": (
+                            result.document_requirements if payload.return_payload else []
+                        ),
+                        "intake_questions_payload": (
+                            result.intake_questions if payload.return_payload else []
+                        ),
+                        "form_templates_payload": (
+                            result.form_templates if payload.return_payload else []
+                        ),
+                        "source_pages_list": result.source_pages,
+                        "scraped_at": result.scraped_at,
+                        "visa_category": result.visa_category,
+                        "action": result.action,
+                    }
+                    yield json.dumps(complete) + "\n"
+        except Exception as exc:
+            log.error("ops.scrape.stream_failed", error=str(exc))
+            yield json.dumps({"type": "error", "detail": str(exc)}) + "\n"
+
+    return StreamingResponse(generate(), media_type="application/x-ndjson")
 
 
 @router.post("/ingest")
@@ -189,7 +276,9 @@ async def ingest_scraped_data(payload: IngestRequest) -> dict[str, str]:
                     },
                 )
                 if resp.status_code < 300:
-                    results.append(f"document_requirements: {len(payload.document_requirements)} items")
+                    results.append(
+                        f"document_requirements: {len(payload.document_requirements)} items"
+                    )
                 else:
                     log.warning("ops.ingest.checklist_failed", status=resp.status_code)
         except Exception as exc:
@@ -233,7 +322,11 @@ async def ingest_scraped_data(payload: IngestRequest) -> dict[str, str]:
                 if resp.status_code < 300:
                     results.append(f"form_template: {form.get('code', 'unknown')}")
                 else:
-                    log.warning("ops.ingest.form_failed", form=form.get("code"), status=resp.status_code)
+                    log.warning(
+                        "ops.ingest.form_failed",
+                        form=form.get("code"),
+                        status=resp.status_code,
+                    )
         except Exception as exc:
             log.warning("ops.ingest.form_error", form=form.get("code"), error=str(exc))
 

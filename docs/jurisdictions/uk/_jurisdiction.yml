@@ -1,0 +1,36 @@
+code: UK
+name: United Kingdom
+host_locale: en
+is_live: true
+efile_enabled: false
+self_filing_allowed: true
+notes: >
+  Research-driven market. Scopes in this jurisdiction are served by the
+  live-research pipeline (research_enabled) rather than a seeded content pack,
+  so requirements stay current with official gov.uk sources.
+categories:
+  - code: tourist
+    name: Standard Visitor Visa
+    is_live: false
+    research_enabled: true
+  - code: student
+    name: Student Visa
+    is_live: false
+    research_enabled: true
+  - code: work
+    name: Work Visa
+    is_live: false
+    research_enabled: true
+actions:
+  - code: new
+    name: New Visa
+    is_live: false
+    research_enabled: true
+  - code: renewal
+    name: Renewal / Extension
+    is_live: false
+    research_enabled: true
+  - code: new_application
+    name: New application
+    is_live: false
+    research_enabled: true

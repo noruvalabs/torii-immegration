@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -9,7 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from torii_api.api.cases import _owned_case
+from torii_api.api.cases import _owned_case, _research_for_case
 from torii_api.auth.deps import CurrentUserDep
 from torii_api.config import get_settings
 from torii_api.db.models import (
@@ -31,6 +32,12 @@ from torii_api.services.guidance import next_status_for_phase
 from torii_api.services.i18n import localized
 from torii_api.services.packet import assemble_packet
 from torii_api.services.payment import case_has_packet_entitlement
+from torii_api.services.research import (
+    research_documents,
+    research_forms,
+    research_is_usable,
+    research_rules,
+)
 from torii_api.services.review import ReviewResult, review_packet
 
 router = APIRouter(prefix="/v1/cases", tags=["case-workflow"])
@@ -94,7 +101,8 @@ class GeneratedFormOut(BaseModel):
 
     id: int
     case_id: int
-    form_template_id: int
+    form_template_id: int | None = None
+    research_id: int | None = None
     form_code: str
     form_version: str
     filled_fields: dict[str, Any]
@@ -122,38 +130,103 @@ class EscalationOut(BaseModel):
     outcome: str | None
 
 
-async def _scope_definition[T: (EligibilityRuleSet, DocumentRequirementSet)](
-    session: AsyncSession, case: Case, model: type[T]
-) -> T:
-    if case.visa_category_id is None or case.case_action_id is None:
-        raise HTTPException(status_code=400, detail="case is not fully scoped")
-    definition = await session.scalar(
-        select(model).where(
-            model.jurisdiction_id == case.jurisdiction_id,
-            model.visa_category_id == case.visa_category_id,
-            model.case_action_id == case.case_action_id,
-            model.is_live.is_(True),
-        )
-    )
-    if definition is None:
-        raise HTTPException(status_code=404, detail=f"no live {model.__tablename__} for case scope")
-    return definition
+@dataclass
+class _FormDescriptor:
+    """One form to generate — either from a live FormTemplate or a research snapshot."""
+
+    code: str
+    version: str
+    official_title: str
+    citation: dict[str, Any]
+    field_mappings: list[dict[str, Any]]
+    template_id: int | None = None
+    research_id: int | None = None
 
 
-async def _live_templates(session: AsyncSession, case: Case) -> list[FormTemplate]:
-    if case.visa_category_id is None or case.case_action_id is None:
-        raise HTTPException(status_code=400, detail="case is not fully scoped")
-    result = await session.execute(
-        select(FormTemplate)
-        .where(
-            FormTemplate.jurisdiction_id == case.jurisdiction_id,
-            FormTemplate.visa_category_id == case.visa_category_id,
-            FormTemplate.case_action_id == case.case_action_id,
-            FormTemplate.is_live.is_(True),
+async def _research_is_usable_for(session: AsyncSession, case: Case) -> bool:
+    research = await _research_for_case(session, case)
+    return research is not None and research_is_usable(research)
+
+
+async def _effective_rules(session: AsyncSession, case: Case) -> list[dict[str, Any]]:
+    """Eligibility rules for the case: live definition, else the research snapshot."""
+    if case.visa_category_id is not None and case.case_action_id is not None:
+        definition = await session.scalar(
+            select(EligibilityRuleSet).where(
+                EligibilityRuleSet.jurisdiction_id == case.jurisdiction_id,
+                EligibilityRuleSet.visa_category_id == case.visa_category_id,
+                EligibilityRuleSet.case_action_id == case.case_action_id,
+                EligibilityRuleSet.is_live.is_(True),
+            )
         )
-        .order_by(FormTemplate.code)
-    )
-    return list(result.scalars().all())
+        if definition is not None:
+            return list(definition.rules or [])
+    research = await _research_for_case(session, case)
+    if research is not None and research_is_usable(research):
+        return research_rules(research.payload)
+    return []
+
+
+async def _effective_documents(session: AsyncSession, case: Case) -> list[dict[str, Any]]:
+    """Document requirements for the case: live definition, else the research snapshot."""
+    if case.visa_category_id is not None and case.case_action_id is not None:
+        definition = await session.scalar(
+            select(DocumentRequirementSet).where(
+                DocumentRequirementSet.jurisdiction_id == case.jurisdiction_id,
+                DocumentRequirementSet.visa_category_id == case.visa_category_id,
+                DocumentRequirementSet.case_action_id == case.case_action_id,
+                DocumentRequirementSet.is_live.is_(True),
+            )
+        )
+        if definition is not None:
+            return list(definition.items or [])
+    research = await _research_for_case(session, case)
+    if research is not None and research_is_usable(research):
+        return research_documents(research.payload)
+    return []
+
+
+async def _effective_templates(session: AsyncSession, case: Case) -> list[_FormDescriptor]:
+    """Forms for the case: live FormTemplates, else the research snapshot's templates."""
+    if case.visa_category_id is not None and case.case_action_id is not None:
+        result = await session.execute(
+            select(FormTemplate)
+            .where(
+                FormTemplate.jurisdiction_id == case.jurisdiction_id,
+                FormTemplate.visa_category_id == case.visa_category_id,
+                FormTemplate.case_action_id == case.case_action_id,
+                FormTemplate.is_live.is_(True),
+            )
+            .order_by(FormTemplate.code)
+        )
+        live = list(result.scalars().all())
+        if live:
+            return [
+                _FormDescriptor(
+                    code=t.code,
+                    version=t.version,
+                    official_title=t.official_title,
+                    citation=dict(t.citation or {}),
+                    field_mappings=list(t.field_mappings or []),
+                    template_id=t.id,
+                )
+                for t in live
+            ]
+    research = await _research_for_case(session, case)
+    if research is not None and research_is_usable(research):
+        return [
+            _FormDescriptor(
+                code=str(form.get("code") or "form"),
+                version=str(form.get("version") or ""),
+                official_title=str(form.get("official_title") or form.get("code") or "form"),
+                citation=dict(form.get("citation") or {}),
+                field_mappings=list(form.get("field_mappings") or []),
+                research_id=research.id,
+            )
+            for form in research_forms(research.payload)
+            if isinstance(form, dict)
+        ]
+    return []
 
 
 async def _documents(session: AsyncSession, case_id: int) -> list[CaseDocument]:
@@ -186,7 +259,7 @@ def _model_dict(item: BaseModel) -> dict[str, Any]:
 
 
 async def _review(session: AsyncSession, case: Case) -> ReviewResult:
-    templates = await _live_templates(session, case)
+    templates = await _effective_templates(session, case)
     live_versions = {template.code: template.version for template in templates}
     documents = [
         DocumentOut.model_validate(item).model_dump(mode="json")
@@ -216,8 +289,12 @@ async def evaluate_case_eligibility(
     case_id: int, session: SessionDep, user: CurrentUserDep
 ) -> EligibilityResult:
     case = await _owned_case(session, case_id, user)
-    definition = await _scope_definition(session, case, EligibilityRuleSet)
-    result = evaluate_eligibility(dict(case.intake_answers or {}), definition.rules)
+    rules = await _effective_rules(session, case)
+    if not rules:
+        raise HTTPException(
+            status_code=404, detail="no eligibility rules available for this case scope"
+        )
+    result = evaluate_eligibility(dict(case.intake_answers or {}), rules)
     case.eligibility_snapshot = result.model_dump(mode="json")
     new_status = next_status_for_phase("checklist", case.status)
     if new_status is not None:
@@ -241,11 +318,15 @@ async def refresh_checklist(
     case_id: int, session: SessionDep, user: CurrentUserDep
 ) -> list[CaseChecklistItem]:
     case = await _owned_case(session, case_id, user)
-    definition = await _scope_definition(session, case, DocumentRequirementSet)
+    items = await _effective_documents(session, case)
+    if not items:
+        raise HTTPException(
+            status_code=404, detail="no document requirements available for this case scope"
+        )
     old_items = {item.code: item for item in await _checklist(session, case.id)}
     await session.execute(delete(CaseChecklistItem).where(CaseChecklistItem.case_id == case.id))
     new_items: list[CaseChecklistItem] = []
-    for item in visible_requirement_items(definition.items, dict(case.intake_answers or {})):
+    for item in visible_requirement_items(items, dict(case.intake_answers or {})):
         old = old_items.get(item.code)
         created = CaseChecklistItem(
             case_id=case.id,
@@ -363,21 +444,47 @@ async def generate_forms(
     case_id: int, session: SessionDep, user: CurrentUserDep
 ) -> list[CaseGeneratedForm]:
     case = await _owned_case(session, case_id, user)
-    templates = await _live_templates(session, case)
+    templates = await _effective_templates(session, case)
+    answers = dict(case.intake_answers or {})
+    # When research/live packs have no form templates, synthesize a summary form
+    # from intake answers so generate never hard-fails an otherwise ready case.
     if not templates:
-        raise HTTPException(status_code=404, detail="no live form templates for case scope")
+        if not answers:
+            raise HTTPException(
+                status_code=400,
+                detail="no form templates available and intake answers are empty",
+            )
+        mappings = [
+            {"form_field": key, "answer_key": key, "required": False}
+            for key in answers
+        ]
+        templates = [
+            _FormDescriptor(
+                code="application_summary",
+                version="auto",
+                official_title="Application summary (auto-filled)",
+                citation={
+                    "authority": "Torii",
+                    "title": "Synthesized from intake",
+                    "source_version": "auto",
+                },
+                field_mappings=mappings,
+                research_id=case.research_id,
+            )
+        ]
     await session.execute(delete(CaseGeneratedForm).where(CaseGeneratedForm.case_id == case.id))
     generated: list[CaseGeneratedForm] = []
     for template in templates:
-        filled = fill_form(template.field_mappings, dict(case.intake_answers or {}))
+        filled = fill_form(template.field_mappings, answers)
         form = CaseGeneratedForm(
             case_id=case.id,
-            form_template_id=template.id,
-            form_code=template.code,
-            form_version=template.version,
+            form_template_id=template.template_id,
+            research_id=template.research_id or case.research_id,
+            form_code=(template.code or "form")[:64],
+            form_version=(template.version or "1")[:32],
             filled_fields=filled.filled_fields,
             missing_required_fields=filled.missing_required_fields,
-            citation=template.citation,
+            citation=dict(template.citation or {}),
         )
         session.add(form)
         generated.append(form)

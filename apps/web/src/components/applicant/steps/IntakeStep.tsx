@@ -11,6 +11,43 @@ type IntakeStepProps = {
   onAnswer: (key: string, value: unknown) => void;
 };
 
+/** Map profile country names to common ISO codes used in intake enums. */
+const COUNTRY_ALIASES: Record<string, string> = {
+  japan: "JP",
+  "united states": "US",
+  "united kingdom": "UK",
+  canada: "CA",
+  australia: "AU",
+  germany: "DE",
+  france: "FR",
+  singapore: "SG",
+  "south korea": "KR",
+  korea: "KR",
+  bangladesh: "BD",
+  india: "IN",
+  pakistan: "PK",
+  china: "CN",
+  philippines: "PH",
+  vietnam: "VN",
+  nepal: "NP",
+  "sri lanka": "LK",
+};
+
+function matchEnumOption(value: string, options: string[]): string | null {
+  if (options.includes(value)) return value;
+  const upper = value.toUpperCase();
+  const byCode = options.find((o) => o.toUpperCase() === upper);
+  if (byCode) return byCode;
+  const byName = options.find((o) => o.toLowerCase() === value.toLowerCase());
+  if (byName) return byName;
+  const alias = COUNTRY_ALIASES[value.toLowerCase()];
+  if (alias) {
+    const hit = options.find((o) => o.toUpperCase() === alias || o === alias);
+    if (hit) return hit;
+  }
+  return null;
+}
+
 export function IntakeStep({ state, profile, onAnswer }: IntakeStepProps) {
   const [drafts, setDrafts] = useState<Record<string, unknown>>({});
   const onAnswerRef = useRef(onAnswer);
@@ -24,11 +61,17 @@ export function IntakeStep({ state, profile, onAnswer }: IntakeStepProps) {
       nationality: profile.nationality,
       passport_number: profile.passport_number,
       passport_expiry: profile.passport_expiry,
+      current_residence_country: profile.current_country,
+      current_location_country: profile.current_country,
+      residence_country: profile.current_country,
     };
     const toAutoFill: Record<string, unknown> = {};
     for (const q of state.questions) {
       if (state.answers[q.key] !== undefined || autoSubmittedRef.current.has(q.key)) continue;
-      const val = profileMap[q.key];
+      let val = profileMap[q.key] ?? null;
+      if (val && q.type === "enum" && q.options?.length) {
+        val = matchEnumOption(val, q.options);
+      }
       if (val) toAutoFill[q.key] = val;
     }
     if (Object.keys(toAutoFill).length > 0) {
@@ -68,7 +111,7 @@ export function IntakeStep({ state, profile, onAnswer }: IntakeStepProps) {
         <h3 className="text-sm font-medium text-muted-foreground">Intake questionnaire</h3>
         <p className="mt-1 text-xs text-muted-foreground">
           {state.progress.answered} of {state.progress.total} questions answered ({pct}%)
-          {state.progress.complete ? " · Complete — continue to eligibility" : ""}
+          {state.progress.complete ? " · Complete — use Continue when ready" : ""}
         </p>
         <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
           <div className="h-full bg-primary transition-all" style={{ width: `${pct}%` }} />

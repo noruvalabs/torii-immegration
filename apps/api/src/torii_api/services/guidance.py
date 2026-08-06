@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 from torii_api.services.intake import IntakeProgress, parse_questions, progress_for
 
 GuidancePhase = Literal[
+    "research",
     "intake",
     "eligibility",
     "checklist",
@@ -57,6 +58,7 @@ def compute_guidance(
     has_eligibility_def: bool,
     has_document_def: bool,
     has_form_def: bool,
+    research_status: str | None = None,
     scope_label: str | None = None,
 ) -> CaseGuidance:
     """Return the single next action an applicant should take."""
@@ -75,6 +77,49 @@ def compute_guidance(
         has_documents=has_document_def,
         has_forms=has_form_def,
     ):
+        # No live content pack for this scope: the case is research-driven. The LLM proposed,
+        # a completed snapshot is usable, but the live tables are empty (NF-1/NF-2 preserved).
+        if research_status == "completed":
+            return CaseGuidance(
+                phase="intake",
+                title="Answer the intake questions",
+                instruction=(
+                    "We researched the official requirements for this case. "
+                    "Answer the questions so we can build your document list and forms."
+                ),
+                cta_label="Continue intake",
+                progress=progress_for(parse_questions(intake_questions or []), answers),
+                scope_label=scope_label,
+            )
+        if research_status in ("queued", "running", "stale"):
+            title = (
+                "Refreshing requirements for your case"
+                if research_status == "stale"
+                else "Researching requirements for your case"
+            )
+            instruction = (
+                "We are checking the latest official sources for this case. "
+                "This usually takes under a minute."
+            )
+            return CaseGuidance(
+                phase="research",
+                title=title,
+                instruction=instruction,
+                cta_label="Check status",
+                scope_label=scope_label,
+            )
+        if research_status == "failed":
+            return CaseGuidance(
+                phase="research",
+                title="We could not research this case automatically",
+                instruction=(
+                    "We could not verify official requirements for this case. "
+                    "Request human help and we will prepare it manually."
+                ),
+                cta_label="Request human help",
+                blocked_reason="research_failed",
+                scope_label=scope_label,
+            )
         return CaseGuidance(
             phase="blocked",
             title="This visa path is not fully configured yet",
@@ -132,8 +177,8 @@ def compute_guidance(
             phase="checklist",
             title="Gather required documents",
             instruction=(
-                f"{detail} Follow how-to-obtain steps and official source links — "
-                "no file upload is required in this step."
+                f"{detail} Reuse docs already in your wallet when they match, "
+                "or upload/scan new ones. Follow official source links for how-to-obtain."
             ),
             cta_label="Open checklist" if checklist_items else "Generate checklist",
             progress=progress,

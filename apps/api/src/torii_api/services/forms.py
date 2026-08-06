@@ -26,9 +26,15 @@ def fill_form(field_mappings: list[dict[str, Any]], answers: dict[str, Any]) -> 
     """Fill only declared mappings; never infer undeclared form fields."""
     filled: dict[str, Any] = {}
     missing: list[str] = []
-    for mapping in field_mappings:
-        form_field = str(mapping["form_field"])
-        answer_key = str(mapping["answer_key"])
+    for mapping in field_mappings or []:
+        if not isinstance(mapping, dict):
+            continue
+        raw_field = mapping.get("form_field")
+        raw_key = mapping.get("answer_key")
+        if raw_field is None or raw_key is None:
+            continue
+        form_field = str(raw_field)
+        answer_key = str(raw_key)
         value = answers.get(answer_key)
         if value is not None and value != "":
             filled[form_field] = value

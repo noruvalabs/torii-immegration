@@ -7,6 +7,7 @@ source-diffing logic land on top of these seams without changing the wiring.
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -17,20 +18,167 @@ from sqlalchemy import select
 
 from torii_api.config import get_settings
 from torii_api.db.engine import create_engine, create_session_factory
-from torii_api.db.models import Case, OutboxEvent
+from torii_api.db.models import Case, OutboxEvent, ScopeResearch, ScopeResearchStatus
 from torii_api.logging import configure_logging
+from torii_api.services.research import RESEARCH_TTL_DAYS, research_payload
 
 log = structlog.get_logger()
+
+
+async def _write_research_progress(
+    session_factory: Any,
+    research_id: int,
+    *,
+    key: str,
+    label: str,
+    detail: str = "",
+    status: str = ScopeResearchStatus.RUNNING,
+) -> None:
+    """Append a progress step to the in-flight research payload for the applicant UI."""
+    async with session_factory() as session:
+        research = await session.get(ScopeResearch, research_id)
+        if research is None:
+            return
+        payload = dict(research.payload or {})
+        steps = list(payload.get("_progress") or [])
+        # Replace same key (e.g. search status updates) or append new stages.
+        filtered = [s for s in steps if not (isinstance(s, dict) and s.get("key") == key)]
+        filtered.append(
+            {
+                "key": key,
+                "label": label,
+                "detail": detail,
+                "at": datetime.now(UTC).isoformat(),
+            }
+        )
+        payload["_progress"] = filtered
+        research.payload = payload
+        research.status = status
+        await session.commit()
+
+
+async def run_case_research(ctx: dict[str, Any], event: OutboxEvent) -> None:
+    """Run one on-demand live-research job for a research-driven case scope.
+
+    Streams progress from the AI service (``POST /ai/ops/scrape/stream``), persists each
+    step for the applicant UI, validates the payload with the citation/schema gate, and
+    writes the result to the cached ``ScopeResearch`` row.
+    """
+    import httpx
+
+    from torii_api.services.ops_ingest import validated_for_promote
+
+    settings = get_settings()
+    session_factory = ctx["session_factory"]
+    payload = dict(event.payload or {})
+    research_id = payload.get("research_id")
+    if research_id is None:
+        return
+
+    now = datetime.now(UTC)
+    await _write_research_progress(
+        session_factory,
+        research_id,
+        key="queued",
+        label="Research job started",
+        detail="Connecting to official source research worker",
+    )
+
+    data: dict[str, Any] = {}
+    try:
+        async with httpx.AsyncClient(timeout=180.0) as client:
+            async with client.stream(
+                "POST",
+                f"{settings.ai_service_url.rstrip('/')}/ai/ops/scrape/stream",
+                json={
+                    "jurisdiction_code": payload.get("jurisdiction_code"),
+                    "visa_category": payload.get("visa_category"),
+                    "action": payload.get("action"),
+                    "origin_country": payload.get("origin_country"),
+                    "residence_country": payload.get("residence_country"),
+                    "return_payload": True,
+                },
+            ) as resp:
+                if resp.status_code >= 300:
+                    raise RuntimeError(f"scrape stream returned HTTP {resp.status_code}")
+                async for line in resp.aiter_lines():
+                    if not line.strip():
+                        continue
+                    try:
+                        event_obj = json.loads(line)
+                    except Exception:  # noqa: BLE001
+                        continue
+                    etype = event_obj.get("type")
+                    if etype == "progress":
+                        await _write_research_progress(
+                            session_factory,
+                            research_id,
+                            key=str(event_obj.get("key") or "step"),
+                            label=str(event_obj.get("label") or "Working…"),
+                            detail=str(event_obj.get("detail") or ""),
+                        )
+                    elif etype == "error":
+                        raise RuntimeError(str(event_obj.get("detail") or "scrape stream error"))
+                    elif etype == "complete":
+                        data = event_obj
+    except Exception as exc:  # noqa: BLE001 - a failed research job must never crash the drain
+        async with session_factory() as session:
+            research = await session.get(ScopeResearch, research_id)
+            if research is not None:
+                research.status = ScopeResearchStatus.FAILED
+                research.error = str(exc)[:1000]
+            await session.commit()
+        log.warning("research.failed", research_id=research_id, error=str(exc))
+        return
+
+    rules = list(data.get("eligibility_rules_payload") or [])
+    docs = list(data.get("document_requirements_payload") or [])
+    questions = list(data.get("intake_questions_payload") or [])
+    forms = list(data.get("form_templates_payload") or [])
+    valid = validated_for_promote(rules=rules, documents=docs, questions=questions)
+
+    async with session_factory() as session:
+        research = await session.get(ScopeResearch, research_id)
+        if research is None:
+            return
+        if valid:
+            research.status = ScopeResearchStatus.COMPLETED
+            research.payload = research_payload(
+                intake_questions=questions,
+                eligibility_rules=rules,
+                document_requirements=docs,
+                form_templates=forms,
+            )
+            research.source_pages = list(
+                data.get("source_pages_list") or data.get("source_pages") or []
+            )
+            research.researched_at = now
+            research.expires_at = now + timedelta(days=RESEARCH_TTL_DAYS)
+            research.error = None
+        else:
+            research.status = ScopeResearchStatus.FAILED
+            research.error = "research payload failed the citation/schema gate"
+        await session.commit()
+
+    log.info(
+        "research.done",
+        research_id=research_id,
+        valid=valid,
+        rules=len(rules),
+        documents=len(docs),
+        questions=len(questions),
+        forms=len(forms),
+    )
 
 
 async def poll_outbox(ctx: dict[str, Any]) -> int:
     """Drain unprocessed outbox events (at-least-once), stamping ``processed_at``.
 
-    The scaffold logs each event and marks it done; real handlers (embed source, notify,
-    escalate) dispatch off ``topic`` here. Returns the number handled — useful in tests.
+    Events are fetched first, then each topic is dispatched (research jobs run their own
+    transaction) and stamped in its own short transaction so a slow handler never holds the
+    drain session open. Returns the number handled — useful in tests.
     """
     session_factory = ctx["session_factory"]
-    handled = 0
     async with session_factory() as session:
         pending = (
             (
@@ -44,11 +192,19 @@ async def poll_outbox(ctx: dict[str, Any]) -> int:
             .scalars()
             .all()
         )
-        for event in pending:
+
+    handled = 0
+    for event in pending:
+        if event.topic == "case.research.queued":
+            await run_case_research(ctx, event)
+        else:
             log.info("outbox.handle", topic=event.topic, event_id=event.id)
-            event.processed_at = datetime.now(UTC)
-            handled += 1
-        await session.commit()
+        async with session_factory() as session:
+            stamped = await session.get(OutboxEvent, event.id)
+            if stamped is not None:
+                stamped.processed_at = datetime.now(UTC)
+                await session.commit()
+        handled += 1
     if handled:
         log.info("outbox.drained", handled=handled)
     return handled

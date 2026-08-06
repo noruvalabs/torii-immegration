@@ -4,6 +4,7 @@ export { ChecklistStep } from "./ChecklistStep";
 export { FormsStep } from "./FormsStep";
 export { ReviewStep } from "./ReviewStep";
 export { PacketStep } from "./PacketStep";
+export { ResearchStep } from "./ResearchStep";
 export type {
   Step,
   Case,
@@ -20,4 +21,13 @@ export type {
   DocumentType,
   WalletDocument,
 } from "./types";
-export { STEPS, phaseToStep, citationUrl, citationVersion } from "./types";
+export {
+  STEPS,
+  STEP_ORDER,
+  phaseToStep,
+  maxReachableStep,
+  canVisitStep,
+  nextWorkflowStep,
+  citationUrl,
+  citationVersion,
+} from "./types";

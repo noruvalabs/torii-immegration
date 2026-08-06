@@ -42,6 +42,31 @@ SUPPORTED_DESTINATIONS: dict[str, dict[str, str]] = {
     "CH": {"name": "Switzerland", "currency": "CHF", "flag": "🇨🇭"},
 }
 
+# Supported nationalities (country of origin / citizenship) for cross-border guidance.
+# Destination codes are reused where possible, plus the most common origin countries.
+SUPPORTED_NATIONALITIES: dict[str, dict[str, str]] = {
+    **SUPPORTED_DESTINATIONS,
+    "BD": {"name": "Bangladesh", "currency": "BDT", "flag": "🇧🇩"},
+    "IN": {"name": "India", "currency": "INR", "flag": "🇮🇳"},
+    "PK": {"name": "Pakistan", "currency": "PKR", "flag": "🇵🇰"},
+    "LK": {"name": "Sri Lanka", "currency": "LKR", "flag": "🇱🇰"},
+    "NP": {"name": "Nepal", "currency": "NPR", "flag": "🇳🇵"},
+    "VN": {"name": "Vietnam", "currency": "VND", "flag": "🇻🇳"},
+    "TH": {"name": "Thailand", "currency": "THB", "flag": "🇹🇭"},
+    "MY": {"name": "Malaysia", "currency": "MYR", "flag": "🇲🇾"},
+    "ID": {"name": "Indonesia", "currency": "IDR", "flag": "🇮🇩"},
+    "PH": {"name": "Philippines", "currency": "PHP", "flag": "🇵🇭"},
+    "CN": {"name": "China", "currency": "CNY", "flag": "🇨🇳"},
+    "TW": {"name": "Taiwan", "currency": "TWD", "flag": "🇹🇼"},
+    "HK": {"name": "Hong Kong", "currency": "HKD", "flag": "🇭🇰"},
+    "BR": {"name": "Brazil", "currency": "BRL", "flag": "🇧🇷"},
+    "MX": {"name": "Mexico", "currency": "MXN", "flag": "🇲🇽"},
+    "TR": {"name": "Turkey", "currency": "TRY", "flag": "🇹🇷"},
+    "EG": {"name": "Egypt", "currency": "EGP", "flag": "🇪🇬"},
+    "SA": {"name": "Saudi Arabia", "currency": "SAR", "flag": "🇸🇦"},
+    "AE": {"name": "United Arab Emirates", "currency": "AED", "flag": "🇦🇪"},
+}
+
 # Visa types
 VISA_TYPES: dict[str, dict[str, str]] = {
     "tourist": {
@@ -101,6 +126,19 @@ def get_application_types() -> list[dict[str, str]]:
     return [
         {"code": code, "name": info["name"], "description": info["description"]}
         for code, info in APPLICATION_TYPES.items()
+    ]
+
+
+def get_nationalities() -> list[dict[str, str]]:
+    """Get list of supported nationalities (country of origin)."""
+    return [
+        {
+            "code": code,
+            "name": info["name"],
+            "currency": info["currency"],
+            "flag": info["flag"],
+        }
+        for code, info in SUPPORTED_NATIONALITIES.items()
     ]
 
 
