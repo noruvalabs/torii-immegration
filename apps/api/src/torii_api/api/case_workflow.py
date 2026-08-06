@@ -10,7 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from torii_api.api.cases import _owned_case, _research_for_case
+from torii_api.api.cases import _owned_case, _research_for_case, _scope_label
 from torii_api.auth.deps import CurrentUserDep
 from torii_api.config import get_settings
 from torii_api.db.models import (
@@ -541,7 +541,15 @@ async def build_packet(case_id: int, session: SessionDep, user: CurrentUserDep) 
         ChecklistItemOut.model_validate(item).model_dump(mode="json")
         for item in await _checklist(session, case.id)
     ]
-    snapshot = assemble_packet(case.reference, forms, checklist, case.submission_reference)
+    j_code, _, _, scope_label = await _scope_label(session, case)
+    snapshot = assemble_packet(
+        case.reference,
+        forms,
+        checklist,
+        case.submission_reference,
+        jurisdiction_code=j_code,
+        scope_label=scope_label,
+    )
     case.packet_snapshot = snapshot
     case.status = "packet_ready"
     await session.flush()

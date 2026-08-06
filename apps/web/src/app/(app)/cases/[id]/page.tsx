@@ -224,6 +224,13 @@ export default function CaseDetailPage() {
     try {
       await acknowledgeReview(token, caseId);
       await refreshGuidance();
+      setActiveStep("packet");
+      try {
+        const built = await buildPacket(token, caseId);
+        setPacket(built);
+      } catch {
+        // Fallback: PacketStep UI renders manual build button
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Acknowledge failed");
     }

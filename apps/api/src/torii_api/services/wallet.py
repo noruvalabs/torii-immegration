@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 import structlog
-from sqlalchemy import select, update
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from torii_api.db.models import (
@@ -37,7 +37,25 @@ DOCUMENT_TYPES: dict[str, dict[str, str]] = {
     "guarantor_letter": {"name": "Guarantor Letter", "category": "support"},
     "residence_card": {"name": "Residence Card", "category": "immigration"},
     "visa_copy": {"name": "Previous Visa", "category": "immigration"},
+    "other": {"name": "Other Document", "category": "support"},
 }
+
+DOC_TYPE_ALIASES: dict[str, str] = {
+    "passport_photo": "photo",
+    "proof_of_funds": "bank_statement",
+    "travel_itinerary": "flight_itinerary",
+    "employment_contract": "employment_letter",
+}
+
+
+def normalize_doc_type(code: str) -> str:
+    """Normalize a document type code, handling aliases and fallbacks gracefully."""
+    code_clean = (code or "").lower().strip()
+    if code_clean in DOCUMENT_TYPES:
+        return code_clean
+    if code_clean in DOC_TYPE_ALIASES:
+        return DOC_TYPE_ALIASES[code_clean]
+    return "other"
 
 
 def get_document_types() -> list[dict[str, str]]:
@@ -159,16 +177,6 @@ async def update_document(
 
     if not document:
         raise ValueError("Document not found")
-
-    # Mark current version as not latest
-    await db.execute(
-        update(DocumentWalletItemVersion)
-        .where(
-            DocumentWalletItemVersion.document_id == document_id,
-            DocumentWalletItemVersion.version == document.version,
-        )
-        .values(is_latest=False)  # type: ignore
-    )
 
     # Increment version
     new_version = document.version + 1

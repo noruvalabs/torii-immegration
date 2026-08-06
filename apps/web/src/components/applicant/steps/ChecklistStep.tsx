@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Check, Upload, Loader2, Camera, ExternalLink, FolderOpen } from "lucide-react";
+import Link from "next/link";
+import { Check, Upload, Loader2, Camera, ExternalLink, FolderOpen, ShieldCheck } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -126,7 +127,7 @@ export function ChecklistStep({
 
   useEffect(() => {
     if (!token) return;
-    getWallet().then(setWalletDocs).catch(() => {});
+    getWallet(token).then(setWalletDocs).catch(() => {});
   }, [token]);
 
   // Auto-attach matching wallet docs once when checklist + wallet are ready.
@@ -240,8 +241,8 @@ export function ChecklistStep({
           content_type: file.type || "application/octet-stream",
         });
         try {
-          await uploadDocument(file, mapDocType(item.code), item.name);
-          const refreshed = await getWallet();
+          await uploadDocument(token, file, mapDocType(item.code), item.name);
+          const refreshed = await getWallet(token);
           setWalletDocs(refreshed);
         } catch {
           // Wallet is optional
@@ -283,8 +284,8 @@ export function ChecklistStep({
       try {
         const blob = new Blob([JSON.stringify(ocrResult.fields)], { type: "application/json" });
         const file = new File([blob], `checklist-${item.code}.json`, { type: "application/json" });
-        await uploadDocument(file, mapDocType(item.code), item.name);
-        const refreshed = await getWallet();
+        await uploadDocument(token, file, mapDocType(item.code), item.name);
+        const refreshed = await getWallet(token);
         setWalletDocs(refreshed);
       } catch {
         // Wallet upload is optional
@@ -310,18 +311,26 @@ export function ChecklistStep({
         onChange={handleFileChange}
       />
 
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h3 className="text-sm font-medium text-muted-foreground">Document checklist</h3>
+          <h3 className="text-sm font-semibold text-foreground">Document checklist</h3>
           <p className="mt-1 text-xs text-muted-foreground">
             {gatheredCount} of {items.length} gathered
             {requiredNeeded > 0 ? ` · ${requiredNeeded} required remaining` : ""}
-            {" — "}matching profile/wallet docs auto-select; otherwise upload or scan.
           </p>
         </div>
-        <Button variant="outline" onClick={onRefresh} disabled={loading}>
-          {items.length === 0 ? "Generate checklist" : "Refresh"}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/documents"
+            className="inline-flex items-center gap-1.5 rounded-[var(--radius)] border px-3 py-1.5 text-xs font-medium hover:bg-accent text-primary"
+          >
+            <ShieldCheck className="size-3.5" />
+            Manage Document Vault
+          </Link>
+          <Button variant="outline" onClick={onRefresh} disabled={loading} className="px-3 py-1.5 text-xs">
+            {items.length === 0 ? "Generate checklist" : "Refresh"}
+          </Button>
+        </div>
       </div>
 
       {items.length === 0 ? (

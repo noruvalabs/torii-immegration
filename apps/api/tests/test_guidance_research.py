@@ -13,7 +13,10 @@ RESEARCH_QUESTIONS = [
 ]
 
 
-def _guidance(*, research_status: str | None = None, questions=None) -> object:
+from typing import Any
+
+
+def _guidance(*, research_status: str | None = None, questions=None) -> Any:
     return compute_guidance(
         intake_questions=questions,
         answers={},
