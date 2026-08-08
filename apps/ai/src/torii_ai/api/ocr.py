@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 from torii_ai.services import ocr as ocr_service
 from torii_ai.services.ocr import DocumentType, OCRResult
 
-router = APIRouter(prefix="/ocr", tags=["ocr"])
+router = APIRouter(prefix="/ai/ocr", tags=["ocr"])
 
 PDF_MIMES = {"application/pdf"}
 IMAGE_MIMES = {"image/jpeg", "image/png", "image/webp", "image/gif", "image/tiff", "image/bmp"}

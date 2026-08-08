@@ -137,6 +137,16 @@ async def test_eligibility_checklist_and_locale(client: AsyncClient, engine: Asy
         json={"key": "employment_status", "value": "employed"},
         headers=headers,
     )
+    await client.put(
+        f"/v1/cases/{case_id}/intake/answer",
+        json={"key": "resident_tax_status", "value": True},
+        headers=headers,
+    )
+    await client.put(
+        f"/v1/cases/{case_id}/intake/answer",
+        json={"key": "criminal_disclosures", "value": False},
+        headers=headers,
+    )
     ok = await client.post(f"/v1/cases/{case_id}/eligibility/evaluate", headers=headers)
     assert ok.status_code == 200
     assert ok.json()["result"] == "pass"
