@@ -1,3 +1,5 @@
+import { formatApiDetail } from "./errors";
+
 const API = "/backend/v1/wallet";
 
 export type DocumentType = {
@@ -55,37 +57,49 @@ export type WalletUploadResponse = {
   message: string;
 };
 
-async function request<T>(path: string, options: RequestInit): Promise<T> {
-  const token = localStorage.getItem("token");
+function resolveToken(token?: string | null): string | null {
+  if (token) return token;
+  if (typeof window !== "undefined") {
+    return (
+      localStorage.getItem("torii_token") ||
+      localStorage.getItem("token")
+    );
+  }
+  return null;
+}
+
+async function request<T>(path: string, options: RequestInit, token?: string | null): Promise<T> {
+  const authToken = resolveToken(token);
   const res = await fetch(`${API}${path}`, {
     ...options,
     headers: {
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
       ...options.headers,
     },
   });
 
   if (!res.ok) {
-    const body = (await res.json().catch(() => null)) as { detail?: string } | null;
-    throw new Error(body?.detail ?? `Request failed (${res.status})`);
+    const body = (await res.json().catch(() => null)) as { detail?: unknown } | null;
+    throw new Error(formatApiDetail(body?.detail) || `Request failed (${res.status})`);
   }
 
   return res.json() as Promise<T>;
 }
 
-export function getDocumentTypes() {
-  return request<DocumentTypesResponse>("/document-types", { method: "GET" });
+export function getDocumentTypes(token?: string | null) {
+  return request<DocumentTypesResponse>("/document-types", { method: "GET" }, token);
 }
 
-export function getWallet() {
-  return request<WalletDocument[]>("/", { method: "GET" });
+export function getWallet(token?: string | null) {
+  return request<WalletDocument[]>("/", { method: "GET" }, token);
 }
 
-export function getWalletSummary() {
-  return request<WalletSummary>("/summary", { method: "GET" });
+export function getWalletSummary(token?: string | null) {
+  return request<WalletSummary>("/summary", { method: "GET" }, token);
 }
 
 export function uploadDocument(
+  token: string | null | undefined,
   file: File,
   docType: string,
   name?: string,
@@ -93,52 +107,55 @@ export function uploadDocument(
   expiryDate?: string,
   notes?: string,
 ) {
-  const formData = new URLSearchParams();
-  formData.append("doc_type", docType);
-  if (name) formData.append("name", name);
-  if (issuedDate) formData.append("issued_date", issuedDate);
-  if (expiryDate) formData.append("expiry_date", expiryDate);
-  if (notes) formData.append("notes", notes);
+  const formData = new FormData();
+  formData.append("file", file);
 
-  const token = localStorage.getItem("token");
-  return fetch(`${API}/upload?${formData.toString()}`, {
+  const queryParams = new URLSearchParams();
+  queryParams.append("doc_type", docType);
+  if (name) queryParams.append("name", name);
+  if (issuedDate) queryParams.append("issued_date", issuedDate);
+  if (expiryDate) queryParams.append("expiry_date", expiryDate);
+  if (notes) queryParams.append("notes", notes);
+
+  const authToken = resolveToken(token);
+  return fetch(`${API}/upload?${queryParams.toString()}`, {
     method: "POST",
     headers: {
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
     },
-    body: file,
+    body: formData,
   }).then(async (res) => {
     if (!res.ok) {
-      const body = (await res.json().catch(() => null)) as { detail?: string } | null;
-      throw new Error(body?.detail ?? `Upload failed (${res.status})`);
+      const body = (await res.json().catch(() => null)) as { detail?: unknown } | null;
+      throw new Error(formatApiDetail(body?.detail) || `Upload failed (${res.status})`);
     }
     return res.json() as Promise<WalletUploadResponse>;
   });
 }
 
-export function getDocument(documentId: number) {
-  return request<WalletDocument>(`/${documentId}`, { method: "GET" });
+export function getDocument(documentId: number, token?: string | null) {
+  return request<WalletDocument>(`/${documentId}`, { method: "GET" }, token);
 }
 
-export function getDocumentVersions(documentId: number) {
-  return request<DocumentVersion[]>(`/${documentId}/versions`, { method: "GET" });
+export function getDocumentVersions(documentId: number, token?: string | null) {
+  return request<DocumentVersion[]>(`/${documentId}/versions`, { method: "GET" }, token);
 }
 
-export function expireDocument(documentId: number) {
-  return request<WalletDocument>(`/${documentId}/expire`, { method: "POST" });
+export function expireDocument(documentId: number, token?: string | null) {
+  return request<WalletDocument>(`/${documentId}/expire`, { method: "POST" }, token);
 }
 
-export function deleteDocument(documentId: number) {
-  const token = localStorage.getItem("token");
+export function deleteDocument(documentId: number, token?: string | null) {
+  const authToken = resolveToken(token);
   return fetch(`${API}/${documentId}`, {
     method: "DELETE",
     headers: {
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
     },
   }).then(async (res) => {
     if (!res.ok) {
-      const body = (await res.json().catch(() => null)) as { detail?: string } | null;
-      throw new Error(body?.detail ?? `Delete failed (${res.status})`);
+      const body = (await res.json().catch(() => null)) as { detail?: unknown } | null;
+      throw new Error(formatApiDetail(body?.detail) || `Delete failed (${res.status})`);
     }
   });
 }

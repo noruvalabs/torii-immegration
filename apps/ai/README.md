@@ -11,7 +11,7 @@ Live search: **Tavily** (not a sole legal citation source).
 ## Run
 
 ```bash
-cp .env.example .env   # fill TORII_AI_GROQ_API_KEY and TORII_AI_TAVILY_API_KEY
+cp ../../.env.example ../../.env   # repo-root file, shared with apps/api and apps/web — fill in TORII_AI_GROQ_API_KEY and TORII_AI_TAVILY_API_KEY
 uv sync
 uv run uvicorn torii_ai.main:app --reload --port 8001
 #   GET /health
@@ -21,6 +21,9 @@ uv run uvicorn torii_ai.main:app --reload --port 8001
 ```
 
 ## Configuration (`TORII_AI_` env prefix)
+
+Loaded from the single `.env` at the repo root (see `config.py`), not a local `apps/ai/.env` —
+one file covers apps/api, apps/ai, and apps/web.
 
 | Variable | Default | Purpose |
 |---|---|---|

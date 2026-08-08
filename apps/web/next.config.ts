@@ -1,4 +1,11 @@
+import path from "node:path";
+import { loadEnvConfig } from "@next/env";
 import type { NextConfig } from "next";
+
+// Single env file for the whole monorepo (see /.env.example at the repo root) — Next.js only
+// auto-loads .env files from this app's own directory, so load the root one explicitly before
+// reading process.env below.
+loadEnvConfig(path.resolve(import.meta.dirname, "../.."));
 
 const nextConfig: NextConfig = {
   // Standalone output keeps the production Docker image small (only the traced

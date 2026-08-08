@@ -5,13 +5,14 @@ Framework-free so routers, seeds, and tests share the same deterministic rules (
 
 from __future__ import annotations
 
+from datetime import date
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
 from torii_api.services.pack_exports import pack_questions
 
-QuestionType = Literal["boolean", "string", "integer", "enum"]
+QuestionType = Literal["boolean", "string", "integer", "enum", "date"]
 
 
 class ShowWhen(BaseModel):
@@ -93,6 +94,15 @@ def validate_answer(question: IntakeQuestion, value: Any) -> str | None:
         options = question.options or []
         if value not in options:
             return f"must be one of: {', '.join(options)}"
+        return None
+
+    if question.type == "date":
+        if not isinstance(value, str):
+            return "expected an ISO-8601 date string (YYYY-MM-DD)"
+        try:
+            date.fromisoformat(value)
+        except ValueError:
+            return "must be a valid ISO-8601 date (YYYY-MM-DD)"
         return None
 
     return "unsupported question type"

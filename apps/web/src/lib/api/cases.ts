@@ -1,3 +1,5 @@
+import { formatApiDetail } from "./errors";
+
 const API = "/backend/v1";
 
 function authHeaders(token: string | null): Record<string, string> {
@@ -12,8 +14,8 @@ async function req<T>(path: string, token: string | null, init?: RequestInit): P
     headers: { ...authHeaders(token), ...init?.headers },
   });
   if (!res.ok) {
-    const body = await res.json().catch(() => null) as { detail?: string } | null;
-    throw new Error(body?.detail ?? `Request failed (${res.status})`);
+    const body = (await res.json().catch(() => null)) as { detail?: unknown } | null;
+    throw new Error(formatApiDetail(body?.detail) || `Request failed (${res.status})`);
   }
   if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
@@ -123,6 +125,7 @@ export type GeneratedForm = {
 
 export type ReviewResult = {
   flags: { code: string; message: string; fields?: string[] }[];
+  checks: { code: string; message: string; passed: boolean }[];
   ready: boolean;
 };
 
@@ -143,6 +146,20 @@ export type CaseGuidance = {
   scope_label: string | null;
   research_status?: string | null;
   research_steps?: ResearchStepLog[];
+  deadlines?: CaseDeadlines | null;
+};
+
+// Computed filing deadlines for a case, derived from the residence-card expiry
+// intake answer (window open, online cut-off, grace period). Nulls mean the value
+// is not applicable/known yet for this case's procedure.
+export type CaseDeadlines = {
+  residence_expiry: string | null;
+  procedure: string;
+  filing_window_opens: string | null;
+  online_cutoff: string | null;
+  grace_period_end: string | null;
+  my_number_expiry: string | null;
+  has_grace_period: boolean;
 };
 
 export type Escalation = {

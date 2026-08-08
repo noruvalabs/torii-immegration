@@ -1,0 +1,445 @@
+scope:
+  jurisdiction: US
+  visa_category: f1
+  action: new_application
+  is_live: true
+  name: United States F-1 student — new application (I-20 → SEVIS → DS-160 → interview)
+
+stages:
+  - sequence: 1
+    code: sponsor_petition
+    actor: sponsor
+    handoff_artifact: i20
+  - sequence: 2
+    code: applicant_filing
+    actor: applicant
+
+intake:
+  questions:
+    # --- Category 1: Personal & Passport Details ---
+    - key: full_name
+      section: Personal & Identity
+      prompt: What is your full name as it appears on your passport?
+      type: string
+      min_length: 2
+      max_length: 200
+      required: true
+      citation:
+        authority: U.S. Department of State
+        title: DS-160 Online Nonimmigrant Visa Application
+        url: https://travel.state.gov/content/travel/en/us-visas/visa-information-resources/forms/ds-160-online-nonimmigrant-visa-application.html
+
+    - key: nationality
+      section: Personal & Identity
+      prompt: What is your nationality (passport country)?
+      type: enum
+      options:
+        - JP
+        - IN
+        - CN
+        - KR
+        - GB
+        - CA
+        - AU
+        - BD
+        - PH
+        - VN
+        - ID
+        - TH
+        - MY
+        - other
+      required: true
+
+    - key: passport_number
+      section: Personal & Identity
+      prompt: What is your passport number?
+      type: string
+      min_length: 5
+      max_length: 32
+      required: true
+
+    - key: passport_expiry
+      section: Personal & Identity
+      prompt: What is your passport expiration date (YYYY-MM-DD)?
+      type: date
+      required: true
+
+    - key: current_location_country
+      section: Personal & Identity
+      prompt: Which country are you currently residing in?
+      type: enum
+      options:
+        - Japan
+        - United States
+        - United Kingdom
+        - Canada
+        - Australia
+        - Germany
+        - France
+        - Singapore
+        - South Korea
+        - United Arab Emirates
+        - New Zealand
+        - Netherlands
+        - India
+        - China
+        - Bangladesh
+        - Philippines
+        - Vietnam
+        - Indonesia
+      required: true
+
+    # --- Category 2: School & I-20 ---
+    - key: has_i20
+      section: School & SEVIS
+      prompt: Have you received your Form I-20 (Certificate of Eligibility for Nonimmigrant Student Status) from your U.S. school?
+      type: boolean
+      required: true
+
+    - key: school_name
+      section: School & SEVIS
+      prompt: What is the legal name of your U.S. school (as it appears on the I-20)?
+      type: string
+      min_length: 2
+      max_length: 200
+      show_when:
+        key: has_i20
+        equals: true
+
+    - key: sevis_id
+      section: School & SEVIS
+      prompt: What is your SEVIS ID (the N-number on the I-20)?
+      type: string
+      min_length: 9
+      max_length: 10
+      show_when:
+        key: has_i20
+        equals: true
+
+    - key: program_start_date
+      section: School & SEVIS
+      prompt: What is your program start date on the I-20 (YYYY-MM-DD)?
+      type: date
+      show_when:
+        key: has_i20
+        equals: true
+
+    - key: study_level
+      section: School & SEVIS
+      prompt: What is your level of study?
+      type: enum
+      options:
+        - high_school
+        - associate
+        - undergraduate
+        - graduate
+        - language_program
+        - other
+      required: true
+
+    - key: has_sevis_fee_receipt
+      section: School & SEVIS
+      prompt: Have you paid the I-901 SEVIS fee and received the receipt?
+      type: boolean
+      required: true
+
+    # --- Category 3: Financial Support ---
+    - key: has_financial_support
+      section: Financial Support
+      prompt: Do you have sufficient funds documented to cover tuition and living expenses for the first year?
+      type: boolean
+      required: true
+
+    - key: funding_source
+      section: Financial Support
+      prompt: What is your primary funding source?
+      type: enum
+      options:
+        - self
+        - family
+        - scholarship
+        - employer
+        - other
+      required: true
+
+    # --- Category 4: Consular Interview & Travel ---
+    - key: interview_aware
+      section: Consular Interview
+      prompt: >-
+        An in-person interview is mandatory for F-1 applicants (no dropbox / interview
+        waiver for F/M/J) since 2 September 2025. Are you prepared to attend an
+        interview at a U.S. embassy or consulate?
+      type: boolean
+      required: true
+      citation:
+        authority: U.S. Department of State
+        title: In-person interview requirement for nonimmigrant visas
+        url: https://travel.state.gov/content/travel/en/us-visas/visa-information-resources/policy-updates.html
+
+    - key: prior_us_visa_refusal
+      section: Consular Interview
+      prompt: Have you previously been refused a U.S. visa?
+      type: boolean
+      required: true
+
+    - key: criminal_disclosures
+      section: Consular Interview
+      prompt: Have you ever been convicted of a crime or been arrested?
+      type: boolean
+      required: true
+
+eligibility:
+  rules:
+    - key: has_i20
+      operator: equals
+      value: true
+      failure_status: fail
+      message: >-
+        An F-1 application requires a valid Form I-20 issued by a U.S. SEVP-certified
+        school. The I-20 is stage 1 (sponsor petition) of this flow.
+      citation:
+        authority: U.S. Department of Homeland Security
+        title: SEVP — Students (F/M)
+        url: https://www.ice.gov/sevis
+        source_version: "2026-04"
+
+    - key: has_sevis_fee_receipt
+      operator: equals
+      value: true
+      failure_status: fail
+      message: The I-901 SEVIS fee ($350) must be paid before the visa interview; the receipt is required.
+      citation:
+        authority: U.S. Immigration and Customs Enforcement
+        title: SEVIS I-901 fee
+        url: https://www.fmjfee.com/i901fee/index.html
+        source_version: "2026-04"
+
+    - key: has_financial_support
+      operator: equals
+      value: true
+      failure_status: fail
+      message: You must document sufficient funds for the first year of study (tuition and living costs).
+      citation:
+        authority: U.S. Department of State
+        title: F-1 Student Visa
+        url: https://travel.state.gov/content/travel/en/us-visas/study/student-visa.html
+        source_version: "2026-04"
+
+    - key: interview_aware
+      operator: equals
+      value: true
+      failure_status: review
+      message: >-
+        An in-person interview is mandatory for F/M/J applicants since 2 September 2025.
+        Schedule the interview at the U.S. embassy in Japan after paying the SEVIS fee.
+      citation:
+        authority: U.S. Department of State
+        title: In-person interview requirement for nonimmigrant visas
+        url: https://travel.state.gov/content/travel/en/us-visas/visa-information-resources/policy-updates.html
+        source_version: "2026-04"
+
+    - key: criminal_disclosures
+      operator: equals
+      value: false
+      failure_status: review
+      message: >-
+        Certain convictions or arrests may render you ineligible (INA section 212(a));
+        human review required.
+      citation:
+        authority: U.S. Citizenship and Immigration Services
+        title: Inadmissibility INA 212(a)
+        url: https://www.uscis.gov/laws-and-regulations/immigration-and-nationality-act
+        source_version: "2026-04"
+
+documents:
+  items:
+    - code: passport
+      name:
+        en: Passport (valid at least 6 months beyond intended stay)
+      how_to_obtain:
+        en: Use your current valid passport biographic page.
+      why_required:
+        en: Confirms identity and travel document details for the DS-160 and interview.
+      is_required: true
+      citation:
+        authority: U.S. Department of State
+        title: F-1 Student Visa
+        url: https://travel.state.gov/content/travel/en/us-visas/study/student-visa.html
+        source_version: "2026-04"
+
+    - code: i20
+      name:
+        en: Form I-20 (Certificate of Eligibility)
+      how_to_obtain:
+        en: Provided by your U.S. school (stage 1). Bring the signed original to the interview.
+      why_required:
+        en: Primary document proving F-1 eligibility and your SEVIS record.
+      is_required: true
+      show_when:
+        key: has_i20
+        equals: true
+      citation:
+        authority: U.S. Department of Homeland Security
+        title: SEVP — Students (F/M)
+        url: https://www.ice.gov/sevis
+        source_version: "2026-04"
+
+    - code: sevis_fee_receipt
+      name:
+        en: I-901 SEVIS fee receipt
+      how_to_obtain:
+        en: Pay at fmjfee.com and print the receipt confirmation page.
+      why_required:
+        en: Proof of the $350 SEVIS fee, required for visa issuance.
+      is_required: true
+      show_when:
+        key: has_sevis_fee_receipt
+        equals: true
+      citation:
+        authority: U.S. Immigration and Customs Enforcement
+        title: SEVIS I-901 fee
+        url: https://www.fmjfee.com/i901fee/index.html
+        source_version: "2026-04"
+
+    - code: financial_evidence
+      name:
+        en: Financial evidence (bank statements / scholarship letter)
+      how_to_obtain:
+        en: Request fresh bank statements or a scholarship award letter covering the first year.
+      why_required:
+        en: Demonstrates ability to pay tuition and living costs (DS-160 and interview).
+      is_required: true
+      citation:
+        authority: U.S. Department of State
+        title: F-1 Student Visa
+        url: https://travel.state.gov/content/travel/en/us-visas/study/student-visa.html
+        source_version: "2026-04"
+
+    - code: ds160_confirmation
+      name:
+        en: DS-160 confirmation page
+      how_to_obtain:
+        en: Complete the DS-160 online at ceac.state.gov and print the confirmation barcode page.
+      why_required:
+        en: Required to schedule and attend the interview.
+      is_required: true
+      citation:
+        authority: U.S. Department of State
+        title: DS-160 Online Nonimmigrant Visa Application
+        url: https://ceac.state.gov/genniv/
+        source_version: "2026-04"
+
+    - code: photo
+      name:
+        en: Recent passport-style photo meeting DS-160 specifications
+      how_to_obtain:
+        en: Obtain a compliant 2x2 inch photo (50mm x 50mm) from a professional photographer.
+      why_required:
+        en: Uploaded in the DS-160 and required at the interview.
+      is_required: true
+      citation:
+        authority: U.S. Department of State
+        title: DS-160 photo requirements
+        url: https://travel.state.gov/content/travel/en/us-visas/visa-information-resources/photos.html
+        source_version: "2026-04"
+
+    - code: interview_letter
+      name:
+        en: Visa interview appointment confirmation
+      how_to_obtain:
+        en: Schedule the interview at the U.S. Embassy Tokyo / Consulate Naha and print the appointment letter.
+      why_required:
+        en: Entry document for the mandatory in-person interview.
+      is_required: true
+      citation:
+        authority: U.S. Department of State
+        title: In-person interview requirement for nonimmigrant visas
+        url: https://travel.state.gov/content/travel/en/us-visas/visa-information-resources/policy-updates.html
+        source_version: "2026-04"
+
+forms:
+  - code: ds160
+    version: "2026-04"
+    official_title: Online Nonimmigrant Visa Application (Form DS-160)
+    citation:
+      authority: U.S. Department of State
+      title: DS-160 Online Nonimmigrant Visa Application
+      url: https://travel.state.gov/content/travel/en/us-visas/visa-information-resources/forms/ds-160-online-nonimmigrant-visa-application.html
+      source_version: "2026-04"
+    field_mappings:
+      - form_field: applicant.full_name
+        answer_key: full_name
+        required: true
+      - form_field: applicant.nationality
+        answer_key: nationality
+        required: true
+      - form_field: applicant.passport_number
+        answer_key: passport_number
+        required: true
+      - form_field: applicant.passport_expiry
+        answer_key: passport_expiry
+        required: true
+      - form_field: education.sevis_id
+        answer_key: sevis_id
+        required: false
+      - form_field: education.school_name
+        answer_key: school_name
+        required: false
+
+  - code: i901
+    version: "2026-04"
+    official_title: I-901 SEVIS Fee Payment
+    citation:
+      authority: U.S. Immigration and Customs Enforcement
+      title: SEVIS I-901 fee
+      url: https://www.fmjfee.com/i901fee/index.html
+      source_version: "2026-04"
+    field_mappings:
+      - form_field: applicant.full_name
+        answer_key: full_name
+        required: true
+      - form_field: applicant.sevis_id
+        answer_key: sevis_id
+        required: false
+
+fees:
+  # Verified 2026-07-30 (plan §5): F-1 = $350 SEVIS + $185 MRV = $535 minimum.
+  - code: sevis_i901
+    amount: 350
+    currency: USD
+    channel: online
+    published: true
+    note: I-901 SEVIS fee for F-1 students. Non-refundable.
+    citation:
+      authority: U.S. Immigration and Customs Enforcement
+      title: SEVIS I-901 fee
+      url: https://www.fmjfee.com/i901fee/index.html
+      retrieved: "2026-08-01"
+
+  - code: mrv_fee
+    amount: 185
+    currency: USD
+    channel: embassy
+    published: true
+    note: >-
+      Machine Readable Visa (MRV) application fee. Non-refundable on refusal. Paid
+      before scheduling the interview.
+    citation:
+      authority: U.S. Department of State
+      title: Visa fees and reciprocity tables
+      url: https://travel.state.gov/content/travel/en/us-visas/visa-information-resources/fees/fees-visa-services.html
+      retrieved: "2026-08-01"
+
+sources:
+  - title: F-1 Student Visa (U.S. Department of State)
+    url: https://travel.state.gov/content/travel/en/us-visas/study/student-visa.html
+    retrieved: "2026-08-01"
+  - title: SEVIS I-901 fee (ICE)
+    url: https://www.fmjfee.com/i901fee/index.html
+    retrieved: "2026-08-01"
+  - title: DS-160 Online Nonimmigrant Visa Application
+    url: https://travel.state.gov/content/travel/en/us-visas/visa-information-resources/forms/ds-160-online-nonimmigrant-visa-application.html
+    retrieved: "2026-08-01"
+  - title: In-person interview requirement for nonimmigrant visas
+    url: https://travel.state.gov/content/travel/en/us-visas/visa-information-resources/policy-updates.html
+    retrieved: "2026-08-01"

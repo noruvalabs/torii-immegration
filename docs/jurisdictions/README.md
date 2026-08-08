@@ -13,11 +13,18 @@ docs/jurisdictions/
     _jurisdiction.yml
     work.renewal.yml
     student.new_application.yml
+    student.renewal.yml
+    student.change_of_status.yml
     tourist.new_application.yml
   us/
     _jurisdiction.yml
     h1b.renewal.yml
     h1b.new_application.yml
+    f1.new_application.yml
+    b1b2.new_application.yml
+  uk/
+    _jurisdiction.yml
+    tourist.new_application.yml
 ```
 
 ## Pack shape

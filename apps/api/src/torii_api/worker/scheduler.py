@@ -7,6 +7,7 @@ source-diffing logic land on top of these seams without changing the wiring.
 
 from __future__ import annotations
 
+import asyncio
 import json
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -14,7 +15,7 @@ from typing import Any
 import structlog
 from arq import cron
 from arq.connections import RedisSettings
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from torii_api.config import get_settings
 from torii_api.db.engine import create_engine, create_session_factory
@@ -86,7 +87,12 @@ async def run_case_research(ctx: dict[str, Any], event: OutboxEvent) -> None:
 
     data: dict[str, Any] = {}
     try:
-        async with httpx.AsyncClient(timeout=180.0) as client:
+        # The AI service emits no progress bytes while it awaits the LLM extraction call, and
+        # the OpenAI SDK retries a timed-out NVIDIA/Groq call internally — so a single quiet
+        # gap can run well past the per-provider timeout (nvidia_timeout_seconds default:
+        # 120s) before this stream's read timeout would otherwise fire. 420s covers that
+        # worst case with margin, distinct from the provider's own timeout.
+        async with httpx.AsyncClient(timeout=420.0) as client:
             async with client.stream(
                 "POST",
                 f"{settings.ai_service_url.rstrip('/')}/ai/ops/scrape/stream",
@@ -121,14 +127,30 @@ async def run_case_research(ctx: dict[str, Any], event: OutboxEvent) -> None:
                         raise RuntimeError(str(event_obj.get("detail") or "scrape stream error"))
                     elif etype == "complete":
                         data = event_obj
-    except Exception as exc:  # noqa: BLE001 - a failed research job must never crash the drain
+    except asyncio.CancelledError:
+        # arq's per-job timeout cancels this coroutine, and CancelledError is a BaseException
+        # (not Exception) — it would otherwise skip straight past the handler below and leave
+        # the row stuck in RUNNING forever (the outbox event is already claimed, so nothing
+        # ever re-queues it). Mark it failed before honoring the cancellation.
         async with session_factory() as session:
             research = await session.get(ScopeResearch, research_id)
             if research is not None:
                 research.status = ScopeResearchStatus.FAILED
-                research.error = str(exc)[:1000]
+                research.error = "research job timed out"
             await session.commit()
-        log.warning("research.failed", research_id=research_id, error=str(exc))
+        log.warning("research.failed", research_id=research_id, error="cancelled/timed out")
+        raise
+    except Exception as exc:  # noqa: BLE001 - a failed research job must never crash the drain
+        # Network-layer exceptions (e.g. httpx.ReadTimeout) often stringify to "" — fall back
+        # to the exception's class name so a failed run always leaves a diagnosable reason.
+        error_message = str(exc) or type(exc).__name__
+        async with session_factory() as session:
+            research = await session.get(ScopeResearch, research_id)
+            if research is not None:
+                research.status = ScopeResearchStatus.FAILED
+                research.error = error_message[:1000]
+            await session.commit()
+        log.warning("research.failed", research_id=research_id, error=error_message)
         return
 
     rules = list(data.get("eligibility_rules_payload") or [])
@@ -174,9 +196,12 @@ async def run_case_research(ctx: dict[str, Any], event: OutboxEvent) -> None:
 async def poll_outbox(ctx: dict[str, Any]) -> int:
     """Drain unprocessed outbox events (at-least-once), stamping ``processed_at``.
 
-    Events are fetched first, then each topic is dispatched (research jobs run their own
-    transaction) and stamped in its own short transaction so a slow handler never holds the
-    drain session open. Returns the number handled — useful in tests.
+    Events are fetched, then each is **claimed** (``processed_at`` stamped) *before* its
+    handler runs — this cron fires every 10s (see ``cron_jobs`` below), but a research job
+    routinely takes well over 10s, so claiming late (after the handler returns) let the next
+    tick see the same still-open event and re-dispatch it, running duplicate concurrent scrapes
+    against the same ``ScopeResearch`` row. The claim uses an ``UPDATE ... WHERE processed_at
+    IS NULL`` so two overlapping ticks can't both win the same event.
     """
     session_factory = ctx["session_factory"]
     async with session_factory() as session:
@@ -195,15 +220,21 @@ async def poll_outbox(ctx: dict[str, Any]) -> int:
 
     handled = 0
     for event in pending:
+        async with session_factory() as session:
+            result = await session.execute(
+                update(OutboxEvent)
+                .where(OutboxEvent.id == event.id, OutboxEvent.processed_at.is_(None))
+                .values(processed_at=datetime.now(UTC))
+            )
+            await session.commit()
+            if result.rowcount == 0:
+                log.info("outbox.already_claimed", topic=event.topic, event_id=event.id)
+                continue
+
         if event.topic == "case.research.queued":
             await run_case_research(ctx, event)
         else:
             log.info("outbox.handle", topic=event.topic, event_id=event.id)
-        async with session_factory() as session:
-            stamped = await session.get(OutboxEvent, event.id)
-            if stamped is not None:
-                stamped.processed_at = datetime.now(UTC)
-                await session.commit()
         handled += 1
     if handled:
         log.info("outbox.drained", handled=handled)
@@ -407,8 +438,17 @@ class WorkerSettings:
     # arq reads the connection off this class attribute (resolved from TORII_REDIS_URL at import).
     redis_settings = RedisSettings.from_dsn(get_settings().redis_url)
     cron_jobs = [
-        # Drain the outbox every 10 seconds (the sub-minute cadence the outbox needs).
-        cron(poll_outbox, second={0, 10, 20, 30, 40, 50}, run_at_startup=True),
+        # Drain the outbox every 10 seconds (the sub-minute cadence the outbox needs). A
+        # research job runs inline here and can take several minutes (scrape + LLM
+        # extraction), so this needs a timeout well past arq's 300s default — otherwise arq
+        # cancels the job mid-run, which orphans the ScopeResearch row in RUNNING forever
+        # (asyncio.CancelledError isn't caught by run_case_research's `except Exception`).
+        cron(
+            poll_outbox,
+            second={0, 10, 20, 30, 40, 50},
+            run_at_startup=True,
+            timeout=600,
+        ),
         # Renewal reminders once a day at 08:00 (server time).
         cron(send_renewal_reminders, hour=8, minute=0),
         # AI-powered immigration source scraping — daily at 02:00 (server time).

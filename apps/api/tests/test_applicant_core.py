@@ -137,6 +137,28 @@ async def test_eligibility_checklist_and_locale(client: AsyncClient, engine: Asy
         json={"key": "employment_status", "value": "employed"},
         headers=headers,
     )
+    await client.put(
+        f"/v1/cases/{case_id}/intake/answer",
+        json={"key": "resident_tax_status", "value": True},
+        headers=headers,
+    )
+    # New JP work-renewal rules (pension/social-insurance and linked employer sanctions)
+    # must be answered before eligibility can pass.
+    await client.put(
+        f"/v1/cases/{case_id}/intake/answer",
+        json={"key": "pension_health_insurance", "value": True},
+        headers=headers,
+    )
+    await client.put(
+        f"/v1/cases/{case_id}/intake/answer",
+        json={"key": "employer_sanctioned", "value": False},
+        headers=headers,
+    )
+    await client.put(
+        f"/v1/cases/{case_id}/intake/answer",
+        json={"key": "criminal_disclosures", "value": False},
+        headers=headers,
+    )
     ok = await client.post(f"/v1/cases/{case_id}/eligibility/evaluate", headers=headers)
     assert ok.status_code == 200
     assert ok.json()["result"] == "pass"

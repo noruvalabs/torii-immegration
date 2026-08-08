@@ -22,6 +22,7 @@ import {
 } from "@/lib/api/cases";
 
 const POLL_MS = 2000;
+const STALL_THRESHOLD_SEC = 120;
 
 type ResearchStepProps = {
   caseId: number;
@@ -137,6 +138,7 @@ export function ResearchStep({ caseId, token, onPhaseChange }: ResearchStepProps
   const [escalationError, setEscalationError] = useState<string | null>(null);
   const [elapsed, setElapsed] = useState(0);
   const startedAt = useRef<number>(Date.now());
+  const lastServerStepAt = useRef<number>(Date.now());
 
   useEffect(() => {
     const id = setInterval(() => {
@@ -157,6 +159,9 @@ export function ResearchStep({ caseId, token, onPhaseChange }: ResearchStepProps
         if (g.phase !== "research") {
           onPhaseChange(g.phase);
           return;
+        }
+        if ((g.research_steps?.length ?? 0) > 0) {
+          lastServerStepAt.current = Date.now();
         }
       } catch {
         // transient network error; keep polling
@@ -195,9 +200,16 @@ export function ResearchStep({ caseId, token, onPhaseChange }: ResearchStepProps
   const pct = Math.min(95, Math.round((doneCount / totalCount) * 100) + (researchStatus === "running" ? 4 : 0));
   const active = displaySteps.find((s) => s.state === "active") ?? displaySteps[displaySteps.length - 1];
 
+  const stalled =
+    !failed &&
+    researchStatus !== "completed" &&
+    elapsed >= STALL_THRESHOLD_SEC &&
+    Date.now() - lastServerStepAt.current >= STALL_THRESHOLD_SEC * 1000;
+
   async function retryResearch() {
     setEscalationError(null);
     startedAt.current = Date.now();
+    lastServerStepAt.current = Date.now();
     setElapsed(0);
     try {
       await requestResearch(token, caseId);
@@ -243,6 +255,53 @@ export function ResearchStep({ caseId, token, onPhaseChange }: ResearchStepProps
               <p className="mt-1 text-xs text-muted-foreground">
                 The official sources could not be reached. You can retry, or ask our team to build
                 this guide manually.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="outline" onClick={() => void retryResearch()}>
+              <RotateCcw className="size-4" />
+              Retry research
+            </Button>
+          </div>
+
+          {!escalated ? (
+            <div className="space-y-3 rounded-[var(--radius)] border p-4">
+              <p className="text-sm font-medium">Request manual help</p>
+              <textarea
+                value={escalationMessage}
+                onChange={(e) => setEscalationMessage(e.target.value)}
+                placeholder="Anything specific you are applying for? (optional)"
+                rows={3}
+                className="w-full rounded-[var(--radius)] border bg-transparent px-3 py-2 text-sm outline-none focus:border-primary"
+              />
+              {escalationError && (
+                <p className="text-xs text-[var(--color-danger)]">{escalationError}</p>
+              )}
+              <Button onClick={() => void handleEscalate()} disabled={escalating}>
+                {escalating ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
+                Send to our team
+              </Button>
+            </div>
+          ) : (
+            <div className="rounded-[var(--radius)] border border-[var(--color-success)]/30 bg-[var(--color-success)]/5 p-4">
+              <p className="text-sm font-medium">Request sent</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Our team has been notified and will build the guide for you.
+              </p>
+            </div>
+          )}
+        </div>
+      ) : stalled ? (
+        <div className="space-y-4">
+          <div className="flex items-start gap-3 rounded-[var(--radius)] border border-[var(--color-warning)]/30 bg-[var(--color-warning)]/5 p-4">
+            <AlertTriangle className="mt-0.5 size-4 shrink-0 text-[var(--color-warning)]" />
+            <div className="flex-1">
+              <p className="text-sm font-medium">Research seems to be taking longer than expected</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                The research has been running for over {Math.floor(elapsed / 60)}m {elapsed % 60}s.
+                You can retry or request manual help from our team.
               </p>
             </div>
           </div>

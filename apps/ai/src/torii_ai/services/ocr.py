@@ -1,16 +1,15 @@
-"""OCR extraction using Groq vision model for document field extraction."""
+"""OCR extraction using LLM for document field extraction."""
 
 from __future__ import annotations
 
-import base64
 from pathlib import Path
 from typing import Literal
 
 from pydantic import BaseModel
 
-from torii_ai.config import Settings, get_settings
+from torii_ai.config import get_settings
 
-DocumentType = Literal["passport", "residence_card", "employment_contract"]
+DocumentType = Literal["passport", "residence_card", "employment_contract", "proof_of_funds", "travel_itinerary"]
 
 
 class ExtractedValue(BaseModel):
@@ -25,7 +24,7 @@ class OCRResult(BaseModel):
 
 DOC_TYPE_PROMPTS: dict[DocumentType, str] = {
     "passport": (
-        "Extract the following fields from this passport image:\n"
+        "Extract the following fields from this passport document:\n"
         "- full_name: The holder's full name\n"
         "- passport_number: The passport number\n"
         "- nationality: Country of citizenship\n"
@@ -34,7 +33,7 @@ DOC_TYPE_PROMPTS: dict[DocumentType, str] = {
         "Return as JSON with field names as keys and {\"value\": \"...\", \"confidence\": 0.0-1.0} objects."
     ),
     "residence_card": (
-        "Extract the following fields from this residence card image:\n"
+        "Extract the following fields from this residence card document:\n"
         "- full_name: The holder's full name\n"
         "- residence_card_number: The card number\n"
         "- status: Residence status type\n"
@@ -49,7 +48,39 @@ DOC_TYPE_PROMPTS: dict[DocumentType, str] = {
         "- start_date: Employment start date (YYYY-MM-DD)\n"
         "Return as JSON with field names as keys and {\"value\": \"...\", \"confidence\": 0.0-1.0} objects."
     ),
+    "proof_of_funds": (
+        "Extract the following fields from this financial document (bank statement, "
+        "sponsorship letter, or proof of funds):\n"
+        "- account_holder: Name of the account holder\n"
+        "- bank_name: Bank or financial institution name\n"
+        "- balance: Account balance or available amount (include currency)\n"
+        "- statement_date: Date of the statement (YYYY-MM-DD)\n"
+        "- account_number: Last 4 digits of account number if visible\n"
+        "Return as JSON with field names as keys and {\"value\": \"...\", \"confidence\": 0.0-1.0} objects."
+    ),
+    "travel_itinerary": (
+        "Extract the following fields from this travel itinerary or booking document:\n"
+        "- traveler_name: Full name of the traveler\n"
+        "- departure_date: Departure date (YYYY-MM-DD)\n"
+        "- return_date: Return date (YYYY-MM-DD) if round trip\n"
+        "- destination: Destination city/country\n"
+        "- airline_or_hotel: Airline name or hotel name\n"
+        "- booking_reference: Booking/reference number\n"
+        "Return as JSON with field names as keys and {\"value\": \"...\", \"confidence\": 0.0-1.0} objects."
+    ),
 }
+
+
+def extract_text_from_pdf(pdf_bytes: bytes) -> str:
+    """Extract text from a PDF using PyMuPDF. Supports multilingual content."""
+    import pymupdf
+
+    doc = pymupdf.open(stream=pdf_bytes, filetype="pdf")
+    pages: list[str] = []
+    for page in doc:
+        pages.append(page.get_text())
+    doc.close()
+    return "\n".join(pages).strip()
 
 
 def extract_document_fields(
@@ -63,13 +94,17 @@ def extract_document_fields(
 
     settings = get_settings()
 
-    if not settings.groq_api_key:
+    api_key = settings.nvidia_api_key or settings.groq_api_key
+    base_url = settings.nvidia_base_url if settings.nvidia_api_key else settings.groq_base_url
+    model = settings.nvidia_model if settings.nvidia_api_key else settings.groq_model
+
+    if not api_key:
         return _fallback_extract(doc_type, filename, hint_text)
 
     try:
         client = OpenAI(
-            api_key=settings.groq_api_key,
-            base_url=settings.groq_base_url,
+            api_key=api_key,
+            base_url=base_url,
         )
 
         prompt = DOC_TYPE_PROMPTS.get(doc_type, DOC_TYPE_PROMPTS["passport"])
@@ -78,7 +113,7 @@ def extract_document_fields(
             prompt = f"Document text/content: {hint_text}\n\n{prompt}"
 
         response = client.chat.completions.create(
-            model=settings.groq_model,
+            model=model,
             messages=[
                 {"role": "system", "content": "You are a document OCR assistant. Extract fields from document images and return valid JSON only."},
                 {"role": "user", "content": prompt},

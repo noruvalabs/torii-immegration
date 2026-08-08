@@ -18,6 +18,11 @@ coverage/
 .pytest_cache/
 .ruff_cache/
 
+# Logs (dev server / worker / service stdout redirected to files)
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
 # Python
 .venv/
 __pycache__/

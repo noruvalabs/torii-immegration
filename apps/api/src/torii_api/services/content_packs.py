@@ -8,6 +8,7 @@ YAML at request time — it reads the DB.
 
 from __future__ import annotations
 
+from datetime import date
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Literal
@@ -17,9 +18,48 @@ from pydantic import BaseModel, Field, field_validator
 
 from torii_api.config import get_settings
 
-StageCode = Literal["sponsor_petition", "applicant_filing"]
-StageActor = Literal["applicant", "sponsor"]
+StageCode = Literal["sponsor_petition", "applicant_filing", "school_completion"]
+StageActor = Literal["applicant", "sponsor", "institution"]
 HandoffArtifact = Literal["coe", "i20", "i129_approval"]
+
+EFFECTIVE_KEYS = ("effective_from", "effective_until")
+
+
+def parse_iso_date(value: str) -> date:
+    """Parse an ISO-8601 date, rejecting anything that isn't a real calendar day."""
+    return date.fromisoformat(value)
+
+
+def effective_window(item: dict[str, Any]) -> tuple[date | None, date | None]:
+    """Read the optional ``effective_from`` / ``effective_until`` window from a payload item.
+
+    Returns ``(from, until)`` where either bound may be ``None`` (open-ended).
+    Raises ``ValueError`` on a malformed date so bad pack data fails the ingest gate.
+    """
+    effective_from = item.get("effective_from")
+    effective_until = item.get("effective_until")
+    if effective_from is not None and not isinstance(effective_from, str):
+        raise ValueError("effective_from must be an ISO-8601 string")
+    if effective_until is not None and not isinstance(effective_until, str):
+        raise ValueError("effective_until must be an ISO-8601 string")
+    return (
+        parse_iso_date(effective_from) if effective_from is not None else None,
+        parse_iso_date(effective_until) if effective_until is not None else None,
+    )
+
+
+def is_effective_on(item: dict[str, Any], as_of: date) -> bool:
+    """True when an item's validity window contains ``as_of`` (inclusive from, exclusive until).
+
+    Items without any window are always effective. The engine answers "what were the
+    requirements on the date this application was received", never "what are they today".
+    """
+    effective_from, effective_until = effective_window(item)
+    if effective_from is not None and as_of < effective_from:
+        return False
+    if effective_until is not None and as_of >= effective_until:
+        return False
+    return True
 
 
 class Citation(BaseModel):
@@ -52,6 +92,19 @@ class PackFee(BaseModel):
     published: bool = False
     citation: Citation | None = None
     note: str | None = None
+    effective_from: str | None = None
+    effective_until: str | None = None
+    # Tiered schedules (e.g. the Oct 2026 ISA period-granted bands). Each tier is a
+    # dict like {"period": "1y", "amount": 33000, "period_from": "2026-10-01"}.
+    tiers: list[dict[str, Any]] | None = None
+
+    @field_validator("effective_from", "effective_until")
+    @classmethod
+    def _iso_date(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        parse_iso_date(value)
+        return value
 
 
 class PackSource(BaseModel):
@@ -289,3 +342,34 @@ def workflow_rows_from_packs(
 def clear_pack_cache() -> None:
     """Reset the pack cache (tests / after pack edits)."""
     load_all_packs.cache_clear()
+
+
+def resolve_fee(
+    fees: list[PackFee],
+    *,
+    as_of: date,
+    channel: str | None = None,
+    period: str | None = None,
+) -> PackFee | None:
+    """Return the fee applicable on ``as_of`` for an optional channel and granted period.
+
+    ``period`` selects a tier (e.g. ``"1y"``) from ``fee.tiers``; the tier's amount then wins
+    over the flat ``amount``. Only ``published`` fees are returned — draft figures (like the
+    October 2026 ISA schedule) stay hidden until confirmed (NF-2).
+    """
+    candidates = [fee for fee in fees if fee.published and is_effective_on(fee.model_dump(), as_of)]
+    if channel:
+        by_channel = [fee for fee in candidates if fee.channel == channel]
+        if by_channel:
+            candidates = by_channel
+    if not candidates:
+        return None
+    best = sorted(candidates, key=lambda f: (f.effective_from or "0000-00-00"), reverse=True)[0]
+    if period and best.tiers:
+        for tier in best.tiers:
+            if tier.get("period") == period:
+                selected = best.model_copy(
+                    update={"amount": tier.get("amount"), "note": tier.get("note", best.note)}
+                )
+                return selected
+    return best

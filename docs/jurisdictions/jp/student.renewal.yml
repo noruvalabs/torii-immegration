@@ -1,0 +1,547 @@
+scope:
+  jurisdiction: JP
+  visa_category: student
+  action: renewal
+  is_live: true
+  name: Japan 留学 student visa — extension of period of stay (在留期間更新許可申請)
+
+stages:
+  - sequence: 1
+    code: applicant_filing
+    actor: applicant
+  - sequence: 2
+    code: school_completion
+    actor: institution
+
+intake:
+  questions:
+    # --- Category 1: Personal & Passport Details ---
+    - key: full_name
+      section: Personal & Identity
+      prompt: What is your full name as it appears on your passport?
+      type: string
+      min_length: 2
+      max_length: 200
+      required: true
+      citation:
+        authority: Immigration Services Agency of Japan (MOJ)
+        title: Application for Extension of Period of Stay (Student)
+        url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
+
+    - key: nationality
+      section: Personal & Identity
+      prompt: What is your nationality (passport country)?
+      type: enum
+      options:
+        - US
+        - GB
+        - CA
+        - AU
+        - DE
+        - FR
+        - SG
+        - KR
+        - IN
+        - CN
+        - BD
+        - PH
+        - VN
+        - ID
+        - TH
+        - MY
+        - other
+      required: true
+
+    - key: passport_number
+      section: Personal & Identity
+      prompt: What is your passport number?
+      type: string
+      min_length: 5
+      max_length: 32
+      required: true
+
+    - key: passport_expiry
+      section: Personal & Identity
+      prompt: What is your passport expiration date (YYYY-MM-DD)?
+      type: date
+      required: true
+
+    # --- Category 2: Residence Card & Legal Status ---
+    - key: residence_card_number
+      section: Residence Card & Status
+      prompt: What is your 12-character Residence Card number (在留カード番号)?
+      type: string
+      min_length: 12
+      max_length: 12
+      required: true
+
+    - key: residence_card_expiry
+      section: Residence Card & Status
+      prompt: What is the current expiration date on your Residence Card (YYYY-MM-DD)?
+      type: date
+      required: true
+
+    - key: registered_address_japan
+      section: Residence Card & Status
+      prompt: What is your registered residential address in Japan?
+      type: string
+      min_length: 5
+      max_length: 300
+      required: true
+
+    # --- Category 3: School & Study Record ---
+    - key: school_name
+      section: School & Study Record
+      prompt: What is the official legal name of your educational institution in Japan?
+      type: string
+      min_length: 2
+      max_length: 200
+      required: true
+
+    - key: study_program_type
+      section: School & Study Record
+      prompt: What is your program of study?
+      type: enum
+      options:
+        - university_undergraduate
+        - university_graduate_master_phd
+        - japanese_language_school
+        - vocational_college
+      required: true
+
+    - key: school_completed
+      section: School & Study Record
+      prompt: Have you completed your program at your current institution (graduation / course completion)?
+      type: boolean
+      required: true
+
+    - key: planned_future_steps
+      section: School & Study Record
+      prompt: What is your plan after the current school program?
+      type: enum
+      options:
+        - continue_same_institution
+        - graduate_and_work_in_japan
+        - graduate_and_change_status
+        - transfer_to_new_institution
+        - return_home
+      required: true
+
+    - key: attendance_rate
+      section: School & Study Record
+      prompt: What is your current attendance rate at the institution (percent)?
+      type: integer
+      min_value: 0
+      max_value: 100
+      required: true
+      citation:
+        authority: Immigration Services Agency of Japan
+        title: Attendance compliance for student extension
+        url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
+
+    # Continuity: same institution since last application — waives the 1 Jul 2026
+    # language confirmation documentation.
+    - key: same_institution_as_last_application
+      section: School & Study Record
+      prompt: >-
+        Are you enrolled at the same institution as in your last application for this
+        status? (Waives the Japanese-language confirmation document introduced 1 Jul 2026.)
+      type: boolean
+      required: true
+
+    # --- Category 4: Work Rules (28-hour limit) ---
+    - key: work_under_28_hours
+      section: Work Rules & Compliance
+      prompt: >-
+        Do you (and any permitted part-time job) stay within the 28-hour-per-week work
+        limit during the academic term?
+      type: boolean
+      required: true
+      citation:
+        authority: Immigration Services Agency of Japan
+        title: Permitted part-time work limit for international students
+        url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
+
+    - key: work_exceeds_hours
+      section: Work Rules & Compliance
+      prompt: >-
+        Have you exceeded the permitted work hours (28 h/week, or 40 h/week for
+        designated-activities students seeking long-term residence after graduation)?
+      type: boolean
+      required: true
+      show_when:
+        key: work_under_28_hours
+        equals: false
+
+    # --- Category 5: Financial Support & Compliance ---
+    - key: has_financial_support
+      section: Financial Support & Expenses
+      prompt: Can you continue to prove sufficient liquid funds for tuition and living costs?
+      type: boolean
+      required: true
+
+    - key: resident_tax_status
+      section: Tax & Pension Compliance
+      prompt: Is your Resident Tax (住民税) fully paid to date with no outstanding arrears?
+      type: boolean
+      required: true
+      citation:
+        authority: Immigration Services Agency of Japan
+        title: Review Standards for Extension of Period of Stay
+        url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
+
+    - key: pension_health_insurance
+      section: Tax & Pension Compliance
+      prompt: Are your National Pension / Health Insurance contributions fully paid?
+      type: boolean
+      required: true
+
+    # --- Category 6: Travel & Disclosures ---
+    - key: departures_past_year
+      section: Travel & Disclosures
+      prompt: How many days in total have you spent outside Japan in the past 12 months?
+      type: integer
+      min_value: 0
+      max_value: 365
+      required: true
+
+    - key: criminal_disclosures
+      section: Travel & Disclosures
+      prompt: Have you ever been convicted of any crime or fined for traffic violations in Japan or abroad?
+      type: boolean
+      required: true
+
+eligibility:
+  rules:
+    - key: school_completed
+      operator: equals
+      value: false
+      failure_status: review
+      message: >-
+        If you have completed your program, a 留学 extension is generally not available;
+        this becomes a change-of-status (就労) or designated-activities case. Human review required.
+      citation:
+        authority: Immigration Services Agency of Japan
+        title: Student extension review standards
+        url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
+        source_version: "2026-04"
+
+    - key: attendance_rate
+      operator: min
+      value: 80
+      failure_status: review
+      message: >-
+        Attendance below 80% is a common quiet-refusal reason for student extension.
+        Human attorney review recommended.
+      citation:
+        authority: Immigration Services Agency of Japan
+        title: Attendance compliance for student extension
+        url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
+        source_version: "2026-04"
+
+    - key: work_under_28_hours
+      operator: equals
+      value: true
+      failure_status: review
+      message: >-
+        Exceeding the 28-hour work limit (40 h/week only for designated-activities
+        students seeking post-graduation residence) is grounds for refusal. Human review required.
+      citation:
+        authority: Immigration Services Agency of Japan
+        title: Permitted part-time work limit for international students
+        url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
+        source_version: "2026-04"
+
+    - key: has_financial_support
+      operator: equals
+      value: true
+      failure_status: fail
+      message: Proof of continued financial capacity is required by immigration.
+      citation:
+        authority: Immigration Services Agency of Japan
+        title: Financial Criteria for Student Status
+        url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
+        source_version: "2026-04"
+
+    - key: resident_tax_status
+      operator: equals
+      value: true
+      failure_status: warning
+      message: Unpaid Resident Tax (住民税) can lead to refusal or a shortened period of stay.
+      citation:
+        authority: Immigration Services Agency of Japan
+        title: Guidelines for Permission for Extension of Period of Stay
+        url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
+        source_version: "2026-04"
+
+    - key: pension_health_insurance
+      operator: equals
+      value: true
+      failure_status: warning
+      message: Lapsed pension or social insurance contributions are a common quiet-refusal cause.
+      citation:
+        authority: Immigration Services Agency of Japan
+        title: Review Standards for Extension of Period of Stay
+        url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
+        source_version: "2026-04"
+
+    - key: criminal_disclosures
+      operator: equals
+      value: false
+      failure_status: review
+      message: Prior convictions or major violations require human attorney legal review.
+      citation:
+        authority: Immigration Services Agency of Japan
+        title: Immigration Control and Refugee Recognition Act Art. 24
+        url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
+        source_version: "2026-04"
+
+documents:
+  items:
+    - code: passport
+      name:
+        en: Passport (Valid Original)
+        ja: パスポート（原本）
+      how_to_obtain:
+        en: Use your current valid original passport.
+      why_required:
+        en: Confirms identity, nationality, and valid travel document status.
+      is_required: true
+      citation:
+        authority: Immigration Services Agency of Japan
+        title: Application for Extension of Period of Stay (Student)
+        url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
+        source_version: "2026-04"
+
+    - code: residence_card
+      name:
+        en: Residence card (原本)
+        ja: 在留カード（原本）
+      how_to_obtain:
+        en: Present the original residence card currently issued to you.
+      why_required:
+        en: Confirms current registered residence status and legal period of stay.
+      is_required: true
+      citation:
+        authority: Immigration Services Agency of Japan
+        title: Application for Extension of Period of Stay (Student)
+        url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
+        source_version: "2026-04"
+
+    - code: enrollment_certificate
+      name:
+        en: Certificate of Enrollment (在学証明書)
+        ja: 在学証明書
+      how_to_obtain:
+        en: Request from your institution's student affairs office.
+      why_required:
+        en: Proves continued enrollment at a qualified educational institution.
+      is_required: true
+      citation:
+        authority: Immigration Services Agency of Japan
+        title: Required Documents for Student Period Extension
+        url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
+        source_version: "2026-04"
+
+    - code: attendance_certificate
+      name:
+        en: Certificate of Attendance (出席証明書)
+        ja: 出席状況証明書
+      how_to_obtain:
+        en: Request from your institution's student affairs office.
+      why_required:
+        en: Verifies attendance compliance, a key factor in student extension review.
+      is_required: true
+      citation:
+        authority: Immigration Services Agency of Japan
+        title: Required Documents for Student Period Extension
+        url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
+        source_version: "2026-04"
+
+    - code: financial_proof
+      name:
+        en: Proof of financial capacity (bank statement / scholarship)
+        ja: 預金残高証明書または奨学金証明書
+      how_to_obtain:
+        en: Request a fresh balance certificate from your bank, or a scholarship certificate.
+      why_required:
+        en: Demonstrates sufficient funds to continue tuition and living expenses.
+      is_required: true
+      citation:
+        authority: Immigration Services Agency of Japan
+        title: Financial Criteria for Student Status
+        url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
+        source_version: "2026-04"
+
+    # Japanese-language confirmation documentation for student filings on/after 1 Jul 2026,
+    # waived when the institution is unchanged since the last application.
+    - code: japanese_language_confirmation
+      name:
+        en: Japanese-language confirmation document
+        ja: 日本語能力を確認できる書類
+      how_to_obtain:
+        en: Provide documentation confirming your Japanese language level (JLPT certificate, school transcript, etc.).
+      why_required:
+        en: Required since 1 Jul 2026 for student extension unless enrolled at the same institution as the last application.
+      is_required: true
+      show_when:
+        key: same_institution_as_last_application
+        equals: false
+      effective_from: "2026-07-01"
+      citation:
+        authority: Immigration Services Agency of Japan
+        title: Confirmation of Japanese language ability for student applications
+        url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
+        source_version: "2026-04"
+
+    - code: tax_certificate
+      name:
+        en: Resident Tax Certificate (課税証明書・納税証明書)
+        ja: 住民税の課税証明書及び納税証明書
+      how_to_obtain:
+        en: Issued by your local Ward Office / City Hall (役所) for the most recent year.
+      why_required:
+        en: Verifies compliance with Japanese tax obligations.
+      is_required: true
+      citation:
+        authority: Immigration Services Agency of Japan
+        title: Required Documents for Period of Stay Extension
+        url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
+        source_version: "2026-04"
+
+    - code: work_proof
+      name:
+        en: Proof of part-time work hours (if employed)
+        ja: アルバイトの勤務状況を証明する書類
+      how_to_obtain:
+        en: Obtain a statement from your part-time employer showing hours worked per week.
+      why_required:
+        en: Confirms compliance with the 28-hour weekly work limit for international students.
+      is_required: false
+      show_when:
+        key: work_under_28_hours
+        equals: true
+      citation:
+        authority: Immigration Services Agency of Japan
+        title: Permitted part-time work limit for international students
+        url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
+        source_version: "2026-04"
+
+forms:
+  - code: extension_of_stay
+    version: "2026-04"
+    official_title: Application for Extension of Period of Stay — Applicant Part (在留期間更新許可申請書 申請人等作成用 P1-P2)
+    citation:
+      authority: Immigration Services Agency of Japan
+      title: Application for Extension of Period of Stay
+      url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
+      source_version: "2026-04"
+    field_mappings:
+      - form_field: applicant.full_name
+        answer_key: full_name
+        required: true
+      - form_field: applicant.nationality
+        answer_key: nationality
+        required: true
+      - form_field: applicant.passport_number
+        answer_key: passport_number
+        required: true
+      - form_field: applicant.passport_expiry
+        answer_key: passport_expiry
+        required: true
+      - form_field: residence.card_number
+        answer_key: residence_card_number
+        required: true
+      - form_field: residence.card_expiry
+        answer_key: residence_card_expiry
+        required: true
+      - form_field: residence.address
+        answer_key: registered_address_japan
+        required: true
+      - form_field: school.name
+        answer_key: school_name
+        required: true
+      - form_field: school.attendance_rate
+        answer_key: attendance_rate
+        required: true
+
+  - code: institution_part
+    version: "2026-04"
+    official_title: Application for Extension of Period of Stay — Institution Part (在留期間更新許可申請書 所属機関等作成用 P3-P4)
+    citation:
+      authority: Immigration Services Agency of Japan
+      title: Application for Extension of Period of Stay
+      url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
+      source_version: "2026-04"
+    field_mappings:
+      - form_field: school.name
+        answer_key: school_name
+        required: true
+      - form_field: school.enrollment_status
+        answer_key: school_completed
+        required: true
+
+fees:
+  # Same extension fee as work (in force since 1 April 2025).
+  - code: extension_counter
+    amount: 6000
+    currency: JPY
+    channel: counter
+    published: true
+    effective_from: "2025-04-01"
+    note: Fee for extension of period of stay at a Regional Immigration Bureau counter.
+    citation:
+      authority: Immigration Services Agency of Japan
+      title: Application for Extension of Period of Stay
+      url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
+      retrieved: "2026-08-01"
+
+  - code: extension_online
+    amount: 5500
+    currency: JPY
+    channel: online
+    published: true
+    effective_from: "2025-04-01"
+    note: Fee for extension of period of stay via the ISA online application system.
+    citation:
+      authority: Immigration Services Agency of Japan
+      title: Application for Extension of Period of Stay
+      url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
+      retrieved: "2026-08-01"
+
+  # Draft tiered schedule (cabinet-order figures at public-comment stage, July 2026).
+  # NOT published until confirmed (NF-2). Target effective date 1 Oct 2026.
+  - code: extension_counter_tiered
+    currency: JPY
+    channel: counter
+    published: false
+    effective_from: "2026-10-01"
+    note: >-
+      Draft tiered schedule based on the period granted (cabinet order not final).
+      Fee is charged on permission, not on application — a refusal incurs no fee.
+    tiers:
+      - period: 3m
+        amount: 10000
+        note: 3 months or less — draft, not confirmed
+      - period: 1y
+        amount: 33000
+        note: 1 year — draft, not confirmed
+      - period: 3y
+        amount: 64000
+        note: 3 to under 5 years — draft, not confirmed
+      - period: 5y
+        amount: 75000
+        note: 5 years or more — draft, not confirmed
+    citation:
+      authority: Immigration Services Agency of Japan
+      title: Draft ISA fee revision figures (published 24 June 2026, public comment)
+      url: https://www.moj.go.jp/isa/applications/online/online-QA.html
+      retrieved: "2026-08-01"
+
+sources:
+  - title: MOJ Student Visa Guidance
+    url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
+    retrieved: "2026-08-01"
+  - title: Application for Extension of Period of Stay (MOJ)
+    url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
+    retrieved: "2026-08-01"

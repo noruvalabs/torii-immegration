@@ -17,6 +17,7 @@ from pydantic import BaseModel, Field
 
 from torii_ai.config import Settings, get_settings
 from torii_ai.llm.groq import FakeChatClient, GroqChatClient
+from torii_ai.llm.nvidia import NvidiaChatClient
 from torii_ai.services.ops_scraper import OpsScraper
 from torii_ai.tools.tavily import FakeSearchClient, TavilyClient
 
@@ -71,16 +72,26 @@ class StatusResponse(BaseModel):
     running: bool
     last_scrape: dict[str, Any]
     tavily_configured: bool
-    groq_configured: bool
+    nvidia_configured: bool
 
 
 def _build_scraper(settings: Settings) -> OpsScraper:
     """Build an OpsScraper with real or fake clients based on config."""
     search = TavilyClient(settings) if settings.tavily_api_key else FakeSearchClient()
-    chat = GroqChatClient(settings) if settings.groq_api_key else FakeChatClient()
-    extract_chat = None
-    if settings.groq_api_key and settings.groq_extract_model:
-        extract_chat = GroqChatClient(settings, model=settings.groq_extract_model)
+    # Prefer NVIDIA NIM when configured, fall back to Groq, then fake.
+    if settings.nvidia_api_key:
+        chat = NvidiaChatClient(settings)
+        extract_chat = NvidiaChatClient(settings)
+    elif settings.groq_api_key:
+        chat = GroqChatClient(settings)
+        extract_chat = (
+            GroqChatClient(settings, model=settings.groq_extract_model)
+            if settings.groq_extract_model
+            else None
+        )
+    else:
+        chat = FakeChatClient()
+        extract_chat = None
     return OpsScraper(search=search, chat=chat, settings=settings, extract_chat=extract_chat)
 
 @router.post("/scrape", response_model=ScrapeResponse)
@@ -346,5 +357,5 @@ async def get_status() -> StatusResponse:
         running=True,
         last_scrape=_last_scrape,
         tavily_configured=bool(settings.tavily_api_key),
-        groq_configured=bool(settings.groq_api_key),
+        nvidia_configured=bool(settings.nvidia_api_key),
     )

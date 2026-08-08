@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, status
@@ -46,7 +47,7 @@ class WalletDocumentOut(BaseModel):
     issued_date: str | None = None
     expiry_date: str | None = None
     status: str
-    created_at: str | None = None
+    created_at: datetime | None = None
 
 
 class DocumentVersionOut(BaseModel):
@@ -58,7 +59,7 @@ class DocumentVersionOut(BaseModel):
     content_type: str
     file_size: int | None = None
     notes: str | None = None
-    created_at: str | None = None
+    created_at: datetime | None = None
 
 
 class WalletSummaryOut(BaseModel):
@@ -125,14 +126,8 @@ async def upload_wallet_document(
     notes: str | None = None,
 ) -> WalletUploadOut:
     """Upload a document to the wallet."""
-    from torii_api.services.wallet import DOCUMENT_TYPES
-
-    # Validate document type
-    if doc_type not in DOCUMENT_TYPES:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid document type: {doc_type}. Valid types: {list(DOCUMENT_TYPES.keys())}",
-        )
+    from torii_api.services.wallet import normalize_doc_type
+    doc_type = normalize_doc_type(doc_type)
 
     # Read file content
     content = await file.read()

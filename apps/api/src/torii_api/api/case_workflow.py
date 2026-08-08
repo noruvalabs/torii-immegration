@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date
 from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -10,7 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from torii_api.api.cases import _owned_case, _research_for_case
+from torii_api.api.cases import _owned_case, _research_for_case, _scope_label
 from torii_api.auth.deps import CurrentUserDep
 from torii_api.config import get_settings
 from torii_api.db.models import (
@@ -294,7 +295,19 @@ async def evaluate_case_eligibility(
         raise HTTPException(
             status_code=404, detail="no eligibility rules available for this case scope"
         )
-    result = evaluate_eligibility(dict(case.intake_answers or {}), rules)
+    # Evaluate against the rules in force on the day the application was received,
+    # not today — a fee or requirement change mid-processing must not retroactively
+    # affect a filing (e.g. the ISA's tiered fees effective 2026-10-01).
+    as_of = case.created_at.date() if case.created_at is not None else date.today()
+    # Context carries dimensions that live outside the intake answers: the employer
+    # category (documents/language requirements are a function of the employer) and
+    # continuity facts captured from the previous application (context_equals rules).
+    context: dict[str, Any] = {
+        "employer_category": (case.intake_answers or {}).get("employer_category"),
+    }
+    if case.prior_application:
+        context.update(case.prior_application)
+    result = evaluate_eligibility(dict(case.intake_answers or {}), rules, as_of=as_of, context=context)
     case.eligibility_snapshot = result.model_dump(mode="json")
     new_status = next_status_for_phase("checklist", case.status)
     if new_status is not None:
@@ -311,6 +324,22 @@ async def get_case_eligibility(
     if case.eligibility_snapshot is None:
         raise HTTPException(status_code=404, detail="eligibility has not been evaluated")
     return EligibilityResult.model_validate(case.eligibility_snapshot)
+
+
+@router.get("/{case_id}/deadlines", response_model=dict[str, Any])
+async def get_case_deadlines(
+    case_id: int, session: SessionDep, user: CurrentUserDep
+) -> dict[str, Any]:
+    """Computed filing deadlines for a case (window open, online cut-off, grace period)."""
+    from torii_api.api.cases import _scope_label
+    from torii_api.services.deadlines import compute_deadlines
+
+    case = await _owned_case(session, case_id, user)
+    _, _, a_code, _ = await _scope_label(session, case)
+    expiry = (case.intake_answers or {}).get("residence_card_expiry")
+    if not expiry:
+        return {"residence_expiry": None, "procedure": a_code or ""}
+    return compute_deadlines(str(expiry), (a_code or "").replace("_", "").lower()).to_dict()
 
 
 @router.post("/{case_id}/checklist/refresh", response_model=list[ChecklistItemOut])
@@ -541,7 +570,15 @@ async def build_packet(case_id: int, session: SessionDep, user: CurrentUserDep) 
         ChecklistItemOut.model_validate(item).model_dump(mode="json")
         for item in await _checklist(session, case.id)
     ]
-    snapshot = assemble_packet(case.reference, forms, checklist, case.submission_reference)
+    j_code, _, _, scope_label = await _scope_label(session, case)
+    snapshot = assemble_packet(
+        case.reference,
+        forms,
+        checklist,
+        case.submission_reference,
+        jurisdiction_code=j_code,
+        scope_label=scope_label,
+    )
     case.packet_snapshot = snapshot
     case.status = "packet_ready"
     await session.flush()

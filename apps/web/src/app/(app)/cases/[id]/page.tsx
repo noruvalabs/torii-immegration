@@ -21,9 +21,12 @@ import {
 } from "@/lib/api/cases";
 import {
   IntakeStep, EligibilityStep, ChecklistStep, FormsStep, ReviewStep, PacketStep, ResearchStep,
+  DeadlinesCard,
   STEPS, phaseToStep, canVisitStep, nextWorkflowStep,
   type Step,
 } from "@/components/applicant/steps";
+import { CaseDocuments } from "@/components/applicant/CaseDocuments";
+
 
 export default function CaseDetailPage() {
   const params = useParams();
@@ -73,7 +76,7 @@ export default function CaseDetailPage() {
   useEffect(() => { void loadCase(); }, [loadCase]);
 
   useEffect(() => {
-    if (!token || !caseId) return;
+    if (!token || !caseId || loading) return;
     setStepError(null);
     if (activeStep === "research") {
       // ResearchStep polls the guidance endpoint itself.
@@ -90,7 +93,7 @@ export default function CaseDetailPage() {
     } else if (activeStep === "packet") {
       getPacket(token, caseId).then(setPacket).catch(() => { setPacket(null); });
     }
-  }, [token, caseId, activeStep]);
+  }, [token, caseId, activeStep, loading]);
 
   async function refreshGuidance() {
     if (!token) return;
@@ -224,6 +227,13 @@ export default function CaseDetailPage() {
     try {
       await acknowledgeReview(token, caseId);
       await refreshGuidance();
+      setActiveStep("packet");
+      try {
+        const built = await buildPacket(token, caseId);
+        setPacket(built);
+      } catch {
+        // Fallback: PacketStep UI renders manual build button
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Acknowledge failed");
     }
@@ -362,6 +372,11 @@ export default function CaseDetailPage() {
         </div>
       </div>
 
+      {/* Filing deadlines surface whenever guidance carries them (residence expiry known). */}
+      {guidance && guidance.deadlines && (
+        <DeadlinesCard deadlines={guidance.deadlines} />
+      )}
+
       {guidance && guidance.phase !== "done" && (
         <Card className="border-primary/30 bg-primary/5">
           <CardContent className="flex flex-col gap-3 pt-5 sm:flex-row sm:items-center sm:justify-between">
@@ -453,6 +468,7 @@ export default function CaseDetailPage() {
               forms={forms}
               loading={submitting}
               onGenerate={handleGenerateForms}
+              intakeAnswers={caseData.intake_answers}
             />
           )}
           {!stepError && activeStep === "review" && (
@@ -490,6 +506,9 @@ export default function CaseDetailPage() {
         </CardContent>
       </Card>
 
+      {token && <CaseDocuments caseId={caseId} token={token} />}
+
     </div>
   );
 }
+

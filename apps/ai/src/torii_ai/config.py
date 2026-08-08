@@ -1,8 +1,13 @@
 """Application settings, loaded from the environment (prefix ``TORII_AI_``)."""
 
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# One env file for the whole monorepo (see /.env.example at the repo root) — this file lives
+# at apps/ai/src/torii_ai/config.py, five levels below the root regardless of CWD.
+_REPO_ROOT_ENV_FILE = Path(__file__).resolve().parents[4] / ".env"
 
 
 class Settings(BaseSettings):
@@ -10,7 +15,7 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(
         env_prefix="TORII_AI_",
-        env_file=".env",
+        env_file=_REPO_ROOT_ENV_FILE,
         extra="ignore",
     )
 
@@ -30,6 +35,13 @@ class Settings(BaseSettings):
     # Explicit completion budget — reasoning models emit <think> blocks and otherwise
     # truncate before producing JSON; keep (input + max_tokens) under the Groq TPM limit.
     groq_max_tokens: int = 8000
+
+    # --- NVIDIA NIM (OpenAI-compatible) ----------------------------------------
+    nvidia_api_key: str = ""
+    nvidia_model: str = "openai/gpt-oss-120b"
+    nvidia_base_url: str = "https://integrate.api.nvidia.com/v1"
+    nvidia_max_tokens: int = 4096
+    nvidia_timeout_seconds: float = 120.0
 
     # --- Tavily search --------------------------------------------------------
     tavily_api_key: str = ""

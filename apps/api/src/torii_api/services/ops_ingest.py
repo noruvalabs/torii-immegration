@@ -24,6 +24,7 @@ from torii_api.db.models import (
     OutboxEvent,
     VisaCategory,
 )
+from torii_api.services.content_packs import effective_window, is_effective_on
 from torii_api.services.intake import parse_questions
 
 log = structlog.get_logger()
@@ -43,6 +44,21 @@ def _has_citation(item: dict[str, Any]) -> bool:
     return isinstance(url, str) and url.startswith("http")
 
 
+def _has_valid_effective_window(item: dict[str, Any]) -> bool:
+    """Reject malformed ``effective_from`` / ``effective_until`` dates (NF-2 gate).
+
+    A window whose from-date is after its until-date is also invalid; ``from == until``
+    is an empty window and therefore never applicable, so treat it as invalid too.
+    """
+    try:
+        effective_from, effective_until = effective_window(item)
+    except ValueError:
+        return False
+    if effective_from is not None and effective_until is not None:
+        return effective_from < effective_until
+    return True
+
+
 def validated_for_promote(
     *,
     rules: list[dict[str, Any]],
@@ -55,6 +71,8 @@ def validated_for_promote(
     if not all(_has_citation(rule) for rule in rules):
         return False
     if not all(_has_citation(doc) for doc in documents):
+        return False
+    if not all(_has_valid_effective_window(item) for item in rules + documents):
         return False
     try:
         parse_questions(questions)

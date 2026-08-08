@@ -11,7 +11,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from torii_ai.config import Settings, get_settings
-from torii_ai.llm.groq import GroqChatClient
+from torii_ai.llm.nvidia import NvidiaChatClient
 from torii_ai.services.assistant import AssistantService
 from torii_ai.services.sessions import ChatMessage, session_store, utcnow
 from torii_ai.tools.tavily import TavilyClient
@@ -40,7 +40,7 @@ class MessageIn(BaseModel):
 
 def get_assistant(settings: Annotated[Settings, Depends(get_settings)]) -> AssistantService:
     """Default wired assistant; tests override via ``app.dependency_overrides``."""
-    return AssistantService(chat=GroqChatClient(settings), search=TavilyClient(settings))
+    return AssistantService(chat=NvidiaChatClient(settings), search=TavilyClient(settings))
 
 
 AssistantDep = Annotated[AssistantService, Depends(get_assistant)]

@@ -40,6 +40,7 @@ docs/         product specs (docs/specs) + architecture decisions (docs/decision
 ### Run everything with one command (zero infra — SQLite)
 
 ```bash
+cp .env.example .env   # one file for apps/api, apps/ai, and apps/web — fill in secrets
 pnpm install    # once — installs the web deps and registers apps/api with turbo
 pnpm dev        # runs the API (uv) and the web app (next dev) together, prefixed logs
 # → http://localhost:3000            applicant landing
@@ -53,6 +54,11 @@ runs `next dev`; `apps/api`'s wraps `uv run alembic upgrade head && uv run uvico
 manages its own `.venv` on first run, so no separate Python install step is needed.
 
 Run just one side with `pnpm --filter web dev` or `pnpm --filter api dev`.
+
+`apps/ai` isn't part of the pnpm workspace (no `package.json`, standalone `uv` project like
+`apps/api`) and neither it nor the arq worker/Redis are started by `pnpm dev` — start them
+separately for anything that needs live research or the assistant (see `apps/ai/README.md`
+and "Background worker" in `apps/api/README.md`), or they'll silently never run.
 
 ### Everything, together (Postgres + Redis + nginx)
 
