@@ -318,6 +318,11 @@ class Case(TimestampMixin, Base):
     research_id: Mapped[int | None] = mapped_column(
         ForeignKey("scope_research.id"), nullable=True, index=True
     )
+    # Continuity facts from the applicant's previous application, used to evaluate
+    # predicates like "same employer since the last application" (JP 技人国 language
+    # waiver) and "same institution since the last application" (JP student 確認書
+    # waiver). Captured at intake, never inferred (NF-1).
+    prior_application: Mapped[dict[str, Any] | None] = mapped_column(SAJSON, nullable=True)
 
     jurisdiction: Mapped[Jurisdiction] = relationship(back_populates="cases")
     visa_category: Mapped[VisaCategory | None] = relationship(back_populates="cases")

@@ -33,6 +33,7 @@ from torii_api.db.models import (
     VisaCategory,
 )
 from torii_api.db.session import get_session
+from torii_api.services.deadlines import compute_deadlines
 from torii_api.services.guidance import compute_guidance, next_status_for_phase
 from torii_api.services.intake import (
     IntakeProgress,
@@ -190,6 +191,7 @@ class GuidanceOut(BaseModel):
     scope_label: str | None = None
     research_status: str | None = None
     research_steps: list[ResearchStepOut] = []
+    deadlines: dict[str, Any] | None = None
 
 
 # ── Visa categories & actions ─────────────────────────────────────────────────
@@ -524,6 +526,25 @@ def _intake_state(case: Case, questions: list[dict[str, Any]]) -> IntakeStateOut
     )
 
 
+# Intake answer keys that capture continuity facts for the current application.
+# Values are copied verbatim into Case.prior_application so rules can evaluate
+# "unchanged since the last application" predicates deterministically (NF-1).
+PRIOR_APPLICATION_ANSWER_KEYS: tuple[str, ...] = (
+    "same_employer_as_last_application",
+    "same_duties_as_last_application",
+    "same_institution_as_last_application",
+)
+
+
+def _sync_prior_application(case: Case) -> None:
+    """Mirror continuity intake answers into ``case.prior_application`` (NF-1)."""
+    answers = dict(case.intake_answers or {})
+    facts = {key: answers[key] for key in PRIOR_APPLICATION_ANSWER_KEYS if key in answers}
+    if not facts:
+        return
+    case.prior_application = {**dict(case.prior_application or {}), **facts}
+
+
 async def _scope_label(
     session: AsyncSession, case: Case
 ) -> tuple[str | None, str | None, str | None, str | None]:
@@ -609,6 +630,20 @@ async def _def_flags(session: AsyncSession, case: Case) -> tuple[bool, bool, boo
     return has_intake, has_eligibility, has_docs, has_forms
 
 
+def _case_deadlines(case: Case, action_code: str | None) -> dict[str, object] | None:
+    """Derive the deadline profile from the residence-card expiry intake answer.
+
+    Returns ``None`` when no expiry is known yet (the applicant has not reached that intake
+    branch). ``action_code`` (e.g. ``extend`` / ``change`` / ``new_application``) decides
+    whether the 特例期間 grace period applies.
+    """
+    expiry = (case.intake_answers or {}).get("residence_card_expiry")
+    procedure = (action_code or "").replace("_", "").lower()
+    if expiry is None:
+        return None
+    return compute_deadlines(str(expiry), procedure).to_dict()
+
+
 async def _case_guidance(session: AsyncSession, case: Case) -> GuidanceOut:
     j_code, v_code, a_code, label = await _scope_label(session, case)
     has_intake, has_eligibility, has_docs, has_forms = await _def_flags(session, case)
@@ -689,6 +724,7 @@ async def _case_guidance(session: AsyncSession, case: Case) -> GuidanceOut:
         has_form_def=has_forms,
         research_status=research_status,
         scope_label=label,
+        deadlines=_case_deadlines(case, a_code),
     )
     steps = research_progress_steps(research.payload if research is not None else None)
     _ = (j_code, v_code, a_code)
@@ -778,6 +814,7 @@ async def answer_intake(
     case.intake_answers = prune_answers(questions, merged)
     case.intake_step = payload.key
     case.review_flags_acknowledged = False
+    _sync_prior_application(case)
     state = _intake_state(case, [q.model_dump() for q in questions])
     if state.progress.complete:
         new_status = next_status_for_phase("eligibility", case.status)

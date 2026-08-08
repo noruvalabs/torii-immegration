@@ -81,6 +81,10 @@ VISA_TYPES: dict[str, dict[str, str]] = {
 APPLICATION_TYPES: dict[str, dict[str, str]] = {
     "new": {"name": "New Visa", "description": "First-time application"},
     "renewal": {"name": "Renewal / Extension", "description": "Extend or renew existing visa"},
+    "change_of_status": {
+        "name": "Change of status",
+        "description": "Switch to a different status (e.g. student to work)",
+    },
 }
 
 

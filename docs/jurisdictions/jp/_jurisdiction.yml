@@ -6,10 +6,14 @@ efile_enabled: false
 self_filing_allowed: true
 notes: >
   Domestic filings (extension / change of status) may be self-filed by the
-  resident. COE for new work/student applications is filed by the sponsor.
+  resident via the ISA online system or a Regional Immigration Bureau. COE for
+  new work/student applications is filed by the sponsor abroad. The visa (査証)
+  is a one-time MOFA travel document; residents renew status of residence (在留
+  資格), not the visa. Intake asks for the residence-card status, never "what
+  visa do you have".
 categories:
   - code: work
-    name: Work Visa - Employment with a Japanese company
+    name: Work Visa - 技術・人文知識・国際業務 (Engineer / Specialist in Humanities / International Services)
     is_live: true
   - code: student
     name: Student Visa - Study at a university or language school
@@ -26,7 +30,7 @@ actions:
     is_live: true
   - code: change_of_status
     name: Change of status
-    is_live: false
+    is_live: true
   - code: new
     name: New Visa
     is_live: true

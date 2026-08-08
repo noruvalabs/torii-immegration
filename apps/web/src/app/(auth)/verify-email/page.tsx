@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { CheckCircle2, XCircle, Loader2, Mail } from "lucide-react";
@@ -9,6 +9,16 @@ import { Button } from "@/components/ui/button";
 import { verifyEmail, resendVerification } from "@/lib/api/auth";
 
 export default function VerifyEmailPage() {
+  // useSearchParams must be wrapped in Suspense so the page can be statically
+  // prerendered and the token is only read client-side after hydration.
+  return (
+    <Suspense fallback={null}>
+      <VerifyEmailForm />
+    </Suspense>
+  );
+}
+
+function VerifyEmailForm() {
   const searchParams = useSearchParams();
   const token = searchParams.get("token") ?? "";
 

@@ -146,6 +146,20 @@ export type CaseGuidance = {
   scope_label: string | null;
   research_status?: string | null;
   research_steps?: ResearchStepLog[];
+  deadlines?: CaseDeadlines | null;
+};
+
+// Computed filing deadlines for a case, derived from the residence-card expiry
+// intake answer (window open, online cut-off, grace period). Nulls mean the value
+// is not applicable/known yet for this case's procedure.
+export type CaseDeadlines = {
+  residence_expiry: string | null;
+  procedure: string;
+  filing_window_opens: string | null;
+  online_cutoff: string | null;
+  grace_period_end: string | null;
+  my_number_expiry: string | null;
+  has_grace_period: boolean;
 };
 
 export type Escalation = {

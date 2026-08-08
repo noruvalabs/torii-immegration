@@ -289,12 +289,31 @@ forms:
         required: true
 
 fees:
+  # Visa issuance fee in force since 1 July 2026 (raised from ¥3,000 to ¥15,000).
   - code: visa_issuance
-    amount: 3000
+    amount: 15000
     currency: JPY
     channel: embassy
     published: true
-    note: Standard single-entry visa fee collected by Japanese Embassy/Consulate abroad.
+    effective_from: "2026-07-01"
+    note: >-
+      Standard single-entry visa fee collected by Japanese Embassy/Consulate abroad.
+      Raised to ¥15,000 effective 1 July 2026 (previously ¥3,000).
+    citation:
+      authority: Ministry of Foreign Affairs of Japan
+      title: Visa Fees
+      url: https://www.mofa.go.jp/j_info/visit/visa/index.html
+      retrieved: "2026-08-01"
+
+  # Historical record of the previous fee, for filings before 1 July 2026.
+  - code: visa_issuance_legacy
+    amount: 3000
+    currency: JPY
+    channel: embassy
+    published: false
+    effective_from: "2024-04-01"
+    effective_until: "2026-06-30"
+    note: Previous visa fee superseded by the ¥15,000 fee on 1 July 2026. Kept for historical reference.
     citation:
       authority: Ministry of Foreign Affairs of Japan
       title: Visa Fees

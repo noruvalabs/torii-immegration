@@ -1,6 +1,7 @@
 import type {
   Case,
   CaseGuidance,
+  CaseDeadlines,
   IntakeState,
   IntakeQuestion,
   EligibilityResult,
@@ -16,6 +17,7 @@ import type { WalletDocument } from "@/lib/api/wallet";
 export type {
   Case,
   CaseGuidance,
+  CaseDeadlines,
   IntakeState,
   IntakeQuestion,
   EligibilityResult,

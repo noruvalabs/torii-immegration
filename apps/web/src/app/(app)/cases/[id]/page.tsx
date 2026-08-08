@@ -21,6 +21,7 @@ import {
 } from "@/lib/api/cases";
 import {
   IntakeStep, EligibilityStep, ChecklistStep, FormsStep, ReviewStep, PacketStep, ResearchStep,
+  DeadlinesCard,
   STEPS, phaseToStep, canVisitStep, nextWorkflowStep,
   type Step,
 } from "@/components/applicant/steps";
@@ -370,6 +371,11 @@ export default function CaseDetailPage() {
           </p>
         </div>
       </div>
+
+      {/* Filing deadlines surface whenever guidance carries them (residence expiry known). */}
+      {guidance && guidance.deadlines && (
+        <DeadlinesCard deadlines={guidance.deadlines} />
+      )}
 
       {guidance && guidance.phase !== "done" && (
         <Card className="border-primary/30 bg-primary/5">

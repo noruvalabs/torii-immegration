@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Lock, CheckCircle2 } from "lucide-react";
@@ -9,6 +9,16 @@ import { Button } from "@/components/ui/button";
 import { resetPassword } from "@/lib/api/auth";
 
 export default function ResetPasswordPage() {
+  // useSearchParams must be wrapped in Suspense so the page can be statically
+  // prerendered and the token is only read client-side after hydration.
+  return (
+    <Suspense fallback={null}>
+      <ResetPasswordForm />
+    </Suspense>
+  );
+}
+
+function ResetPasswordForm() {
   const searchParams = useSearchParams();
   const token = searchParams.get("token") ?? "";
 

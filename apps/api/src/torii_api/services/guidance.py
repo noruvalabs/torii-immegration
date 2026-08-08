@@ -32,6 +32,7 @@ class CaseGuidance(BaseModel):
     blocked_reason: str | None = None
     progress: IntakeProgress | None = None
     scope_label: str | None = None
+    deadlines: dict[str, Any] | None = None
 
 
 def _has_live_defs(
@@ -60,6 +61,7 @@ def compute_guidance(
     has_form_def: bool,
     research_status: str | None = None,
     scope_label: str | None = None,
+    deadlines: dict[str, Any] | None = None,
 ) -> CaseGuidance:
     """Return the single next action an applicant should take."""
     if status == "submitted":
@@ -69,6 +71,7 @@ def compute_guidance(
             instruction="Your packet has been submitted. Track status from your cases list.",
             cta_label="View packet",
             scope_label=scope_label,
+            deadlines=deadlines,
         )
 
     if not _has_live_defs(
@@ -90,6 +93,7 @@ def compute_guidance(
                 cta_label="Continue intake",
                 progress=progress_for(parse_questions(intake_questions or []), answers),
                 scope_label=scope_label,
+                deadlines=deadlines,
             )
         if research_status in ("queued", "running", "stale"):
             title = (
@@ -107,6 +111,7 @@ def compute_guidance(
                 instruction=instruction,
                 cta_label="Check status",
                 scope_label=scope_label,
+                deadlines=deadlines,
             )
         if research_status == "failed":
             return CaseGuidance(
@@ -119,6 +124,7 @@ def compute_guidance(
                 cta_label="Request human help",
                 blocked_reason="research_failed",
                 scope_label=scope_label,
+                deadlines=deadlines,
             )
         return CaseGuidance(
             phase="blocked",
@@ -130,6 +136,7 @@ def compute_guidance(
             cta_label="Back to cases",
             blocked_reason="missing_live_workflow_definitions",
             scope_label=scope_label,
+            deadlines=deadlines,
         )
 
     questions = parse_questions(intake_questions or [])
@@ -146,6 +153,7 @@ def compute_guidance(
             cta_label="Continue intake",
             progress=progress,
             scope_label=scope_label,
+            deadlines=deadlines,
         )
 
     if eligibility_snapshot is None:
@@ -159,6 +167,7 @@ def compute_guidance(
             cta_label="Evaluate eligibility",
             progress=progress,
             scope_label=scope_label,
+            deadlines=deadlines,
         )
 
     required_needed = [
@@ -183,6 +192,7 @@ def compute_guidance(
             cta_label="Open checklist" if checklist_items else "Generate checklist",
             progress=progress,
             scope_label=scope_label,
+            deadlines=deadlines,
         )
 
     if not generated_forms:
@@ -193,6 +203,7 @@ def compute_guidance(
             cta_label="Generate forms",
             progress=progress,
             scope_label=scope_label,
+            deadlines=deadlines,
         )
 
     if packet_snapshot is None and not review_flags_acknowledged:
@@ -206,6 +217,7 @@ def compute_guidance(
             cta_label="Run review",
             progress=progress,
             scope_label=scope_label,
+            deadlines=deadlines,
         )
 
     if packet_snapshot is None:
@@ -216,6 +228,7 @@ def compute_guidance(
             cta_label="Build packet",
             progress=progress,
             scope_label=scope_label,
+            deadlines=deadlines,
         )
 
     return CaseGuidance(

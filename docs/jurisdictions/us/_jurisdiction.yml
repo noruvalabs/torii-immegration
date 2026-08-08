@@ -20,6 +20,12 @@ categories:
   - code: work
     name: Work Visa (H-1B)
     is_live: true
+  - code: f1
+    name: Student Visa (F-1)
+    is_live: true
+  - code: b1b2
+    name: Tourist / Business Visa (B1/B2)
+    is_live: true
 actions:
   - code: renewal
     name: Renewal / Extension

@@ -5,10 +5,12 @@ export { FormsStep } from "./FormsStep";
 export { ReviewStep } from "./ReviewStep";
 export { PacketStep } from "./PacketStep";
 export { ResearchStep } from "./ResearchStep";
+export { DeadlinesCard } from "./DeadlinesCard";
 export type {
   Step,
   Case,
   CaseGuidance,
+  CaseDeadlines,
   IntakeState,
   IntakeQuestion,
   EligibilityResult,

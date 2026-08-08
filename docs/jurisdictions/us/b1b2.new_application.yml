@@ -1,0 +1,375 @@
+scope:
+  jurisdiction: US
+  visa_category: b1b2
+  action: new_application
+  is_live: true
+  name: United States B1/B2 tourist & business — new application (ESTA vs visa branch)
+
+stages:
+  - sequence: 1
+    code: applicant_filing
+    actor: applicant
+
+intake:
+  questions:
+    # --- Category 1: Personal & Passport Details ---
+    - key: full_name
+      section: Personal & Identity
+      prompt: What is your full name as it appears on your passport?
+      type: string
+      min_length: 2
+      max_length: 200
+      required: true
+      citation:
+        authority: U.S. Department of State
+        title: DS-160 Online Nonimmigrant Visa Application
+        url: https://travel.state.gov/content/travel/en/us-visas/visa-information-resources/forms/ds-160-online-nonimmigrant-visa-application.html
+
+    - key: nationality
+      section: Personal & Identity
+      prompt: What is your nationality (passport country)?
+      type: enum
+      options:
+        - JP
+        - IN
+        - CN
+        - KR
+        - GB
+        - CA
+        - AU
+        - BD
+        - PH
+        - VN
+        - ID
+        - TH
+        - MY
+        - AE
+        - SA
+        - other
+      required: true
+      citation:
+        authority: U.S. Customs and Border Protection
+        title: Visa Waiver Program (VWP) — eligible countries
+        url: https://www.cbp.gov/travel/international-visitors/visa-waiver-program
+
+    - key: passport_number
+      section: Personal & Identity
+      prompt: What is your passport number?
+      type: string
+      min_length: 5
+      max_length: 32
+      required: true
+
+    - key: passport_expiry
+      section: Personal & Identity
+      prompt: What is your passport expiration date (YYYY-MM-DD)?
+      type: date
+      required: true
+
+    - key: passport_is_epassport
+      section: Personal & Identity
+      prompt: Does your passport contain a digital chip (e-passport)?
+      type: boolean
+      required: true
+
+    - key: current_residence_country
+      section: Personal & Identity
+      prompt: Which country do you currently reside in?
+      type: enum
+      options:
+        - Japan
+        - United States
+        - United Kingdom
+        - Canada
+        - Australia
+        - Germany
+        - France
+        - Singapore
+        - South Korea
+        - United Arab Emirates
+        - New Zealand
+        - Netherlands
+        - India
+        - China
+        - Bangladesh
+        - Philippines
+        - Vietnam
+        - Indonesia
+      required: true
+
+    # --- Category 2: Visit Purpose ---
+    - key: purpose_of_visit
+      section: Purpose of Visit
+      prompt: What is the primary purpose of your trip to the United States?
+      type: enum
+      options:
+        - tourism
+        - visiting_family
+        - business
+        - medical
+        - other
+      required: true
+
+    - key: intended_length_of_stay_days
+      section: Purpose of Visit
+      prompt: How many days do you plan to stay in the United States?
+      type: integer
+      min_value: 1
+      max_value: 90
+      required: true
+
+    - key: has_sufficient_funds
+      section: Purpose of Visit
+      prompt: Do you have sufficient funds to cover the trip without working in the U.S.?
+      type: boolean
+      required: true
+
+    # --- Category 3: ESTA / VWP screening ---
+    - key: has_vwp_denial_history
+      section: ESTA / VWP Screening
+      prompt: >-
+        Have you ever been denied an ESTA, or previously stayed in the U.S. beyond an
+        authorized period, or been in the U.S. more than 90 days in a rolling year?
+      type: boolean
+      required: true
+      citation:
+        authority: U.S. Customs and Border Protection
+        title: ESTA eligibility and ineligibility
+        url: https://esta.cbp.dhs.gov/
+
+    - key: has_criminal_record
+      section: ESTA / VWP Screening
+      prompt: Do you have a criminal record, or have you ever been arrested or convicted?
+      type: boolean
+      required: true
+      citation:
+        authority: U.S. Customs and Border Protection
+        title: ESTA eligibility and ineligibility
+        url: https://esta.cbp.dhs.gov/
+
+    # --- Category 4: Consular (B1/B2) specifics ---
+    - key: prior_us_visa_refusal
+      section: Consular Application
+      prompt: Have you previously been refused a U.S. visa?
+      type: boolean
+      required: true
+
+eligibility:
+  rules:
+    # ESTA branch: nationality is VWP-eligible AND no disqualifying history.
+    - key: nationality
+      operator: nationality_in
+      value:
+        - JP
+        - GB
+        - CA
+        - AU
+        - KR
+        - AE
+        - NL
+        - CH
+        - IE
+        - NZ
+      failure_status: review
+      message: >-
+        You are eligible for the Visa Waiver Program (ESTA). Most travelers from your
+        country do not need a B1/B2 visa. This case applies only if you intend B1/B2
+        (longer stay, work, or VWP-ineligible circumstances).
+      citation:
+        authority: U.S. Customs and Border Protection
+        title: Visa Waiver Program (VWP) — eligible countries
+        url: https://www.cbp.gov/travel/international-visitors/visa-waiver-program
+        source_version: "2026-04"
+
+    - key: passport_is_epassport
+      operator: equals
+      value: true
+      failure_status: warning
+      message: >-
+        ESTA requires an e-passport (digital chip). If your passport lacks a chip, you
+        cannot use the VWP and must apply for a B1/B2 visa instead.
+      citation:
+        authority: U.S. Customs and Border Protection
+        title: Visa Waiver Program requirements
+        url: https://www.cbp.gov/travel/international-visitors/visa-waiver-program
+        source_version: "2026-04"
+
+    - key: has_vwp_denial_history
+      operator: equals
+      value: false
+      failure_status: fail
+      message: >-
+        Prior ESTA denial, visa overstay, or prolonged U.S. presence makes you
+        ineligible for the VWP — you must apply for a B1/B2 visa.
+      citation:
+        authority: U.S. Customs and Border Protection
+        title: ESTA eligibility and ineligibility
+        url: https://esta.cbp.dhs.gov/
+        source_version: "2026-04"
+
+    - key: has_criminal_record
+      operator: equals
+      value: false
+      failure_status: fail
+      message: >-
+        A criminal record renders you ineligible for ESTA (and may render you
+        inadmissible under INA 212(a)); human review required.
+      citation:
+        authority: U.S. Customs and Border Protection
+        title: ESTA eligibility and ineligibility
+        url: https://esta.cbp.dhs.gov/
+        source_version: "2026-04"
+
+    - key: intended_length_of_stay_days
+      operator: max
+      value: 90
+      failure_status: warning
+      message: >-
+        The VWP allows up to 90 days. Longer stays require a B1/B2 visa.
+      citation:
+        authority: U.S. Customs and Border Protection
+        title: Visa Waiver Program stay limits
+        url: https://www.cbp.gov/travel/international-visitors/visa-waiver-program
+        source_version: "2026-04"
+
+    - key: has_sufficient_funds
+      operator: equals
+      value: true
+      failure_status: at_risk
+      message: You must be able to fund the trip without working in the United States.
+      citation:
+        authority: U.S. Department of State
+        title: B1/B2 Visitor Visa
+        url: https://travel.state.gov/content/travel/en/us-visas/tourism-visit/visitor.html
+        source_version: "2026-04"
+
+documents:
+  items:
+    - code: passport
+      name:
+        en: Passport (e-passport, valid at least 6 months)
+      how_to_obtain:
+        en: Use your current valid e-passport biographic page.
+      why_required:
+        en: Confirms identity and VWP/DS-160 eligibility.
+      is_required: true
+      citation:
+        authority: U.S. Customs and Border Protection
+        title: Visa Waiver Program requirements
+        url: https://www.cbp.gov/travel/international-visitors/visa-waiver-program
+        source_version: "2026-04"
+
+    - code: ds160_confirmation
+      name:
+        en: DS-160 confirmation page (B1/B2 route)
+      how_to_obtain:
+        en: Complete the DS-160 online at ceac.state.gov and print the confirmation barcode page.
+      why_required:
+        en: Required to schedule and attend the B1/B2 interview.
+      is_required: true
+      show_when:
+        key: has_vwp_denial_history
+        equals: true
+      citation:
+        authority: U.S. Department of State
+        title: DS-160 Online Nonimmigrant Visa Application
+        url: https://ceac.state.gov/genniv/
+        source_version: "2026-04"
+
+    - code: financial_evidence
+      name:
+        en: Financial evidence (bank statements)
+      how_to_obtain:
+        en: Request fresh bank statements showing funds for the trip.
+      why_required:
+        en: Demonstrates ability to fund the visit without U.S. employment.
+      is_required: true
+      citation:
+        authority: U.S. Department of State
+        title: B1/B2 Visitor Visa
+        url: https://travel.state.gov/content/travel/en/us-visas/tourism-visit/visitor.html
+        source_version: "2026-04"
+
+    - code: ties_evidence
+      name:
+        en: Evidence of ties to your home country
+      how_to_obtain:
+        en: Obtain employment, property, or family documents showing you intend to return.
+      why_required:
+        en: Shows you are likely to depart the U.S. after the visit.
+      is_required: true
+      citation:
+        authority: U.S. Department of State
+        title: B1/B2 Visitor Visa
+        url: https://travel.state.gov/content/travel/en/us-visas/tourism-visit/visitor.html
+        source_version: "2026-04"
+
+forms:
+  - code: ds160
+    version: "2026-04"
+    official_title: Online Nonimmigrant Visa Application (Form DS-160)
+    citation:
+      authority: U.S. Department of State
+      title: DS-160 Online Nonimmigrant Visa Application
+      url: https://travel.state.gov/content/travel/en/us-visas/visa-information-resources/forms/ds-160-online-nonimmigrant-visa-application.html
+      source_version: "2026-04"
+    field_mappings:
+      - form_field: applicant.full_name
+        answer_key: full_name
+        required: true
+      - form_field: applicant.nationality
+        answer_key: nationality
+        required: true
+      - form_field: applicant.passport_number
+        answer_key: passport_number
+        required: true
+      - form_field: applicant.passport_expiry
+        answer_key: passport_expiry
+        required: true
+      - form_field: visit.purpose
+        answer_key: purpose_of_visit
+        required: true
+      - form_field: visit.length_of_stay_days
+        answer_key: intended_length_of_stay_days
+        required: true
+
+fees:
+  # Verified 2026-07-30 (plan §5): ESTA $21; B1/B2 MRV $185.
+  - code: esta
+    amount: 21
+    currency: USD
+    channel: online
+    published: true
+    note: ESTA application fee for the Visa Waiver Program.
+    citation:
+      authority: U.S. Customs and Border Protection
+      title: ESTA fees
+      url: https://esta.cbp.dhs.gov/
+      retrieved: "2026-08-01"
+
+  - code: mrv_fee
+    amount: 185
+    currency: USD
+    channel: embassy
+    published: true
+    note: >-
+      Machine Readable Visa (MRV) application fee for B1/B2. Non-refundable on refusal.
+    citation:
+      authority: U.S. Department of State
+      title: Visa fees and reciprocity tables
+      url: https://travel.state.gov/content/travel/en/us-visas/visa-information-resources/fees/fees-visa-services.html
+      retrieved: "2026-08-01"
+
+sources:
+  - title: Visa Waiver Program (U.S. Customs and Border Protection)
+    url: https://www.cbp.gov/travel/international-visitors/visa-waiver-program
+    retrieved: "2026-08-01"
+  - title: ESTA — Electronic System for Travel Authorization
+    url: https://esta.cbp.dhs.gov/
+    retrieved: "2026-08-01"
+  - title: B1/B2 Visitor Visa (U.S. Department of State)
+    url: https://travel.state.gov/content/travel/en/us-visas/tourism-visit/visitor.html
+    retrieved: "2026-08-01"
+  - title: DS-160 Online Nonimmigrant Visa Application
+    url: https://travel.state.gov/content/travel/en/us-visas/visa-information-resources/forms/ds-160-online-nonimmigrant-visa-application.html
+    retrieved: "2026-08-01"
