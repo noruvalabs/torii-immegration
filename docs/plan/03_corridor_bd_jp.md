@@ -99,15 +99,32 @@ upfront.
 
 ## Milestones — log progress here as each completes
 
-### M0 — Unblock and put authored depth on the wire
-- [ ] Fix `gov_scraper.py` syntax error (restore the `ead` branch body)
-- [ ] `IntakeQuestion` += `section`, `citation`; confirm they reach `GET /cases/{id}/intake`
-- [ ] Remove fake OCR literals from `IntakeStep.tsx`
-- [ ] Fix OCR path `/assistant/ocr/…` → `/assistant/ai/ocr/…`
-- [ ] Fix token key (`"token"` → `"torii_token"`) in `ocr.ts`/`geo.ts`/`payments.ts`
-- [ ] `official_domains_for` never returns `None`
-- [ ] Frontend `QuestionType` gains `"date"`
-- [ ] Verify: US B1/B2 pack renders section tabs + official-source links in the wizard
+### M0 — Unblock and put authored depth on the wire ✅ DONE (2026-08-15)
+- [x] Fix `gov_scraper.py` syntax error (restored the `ead` branch body; also restored the `l1`
+      eligibility branch that the same in-progress edit had silently dropped)
+- [x] `IntakeQuestion` += `section`, `citation`; confirmed they reach `GET /cases/{id}/intake`
+- [x] Remove fake OCR literals from `IntakeStep.tsx` (deleted the whole "AI Smart Document
+      Capture" simulation banner + `triggerAiDocumentOcr`, not just the literals — it had no
+      real backing endpoint)
+- [x] Fix OCR path `/assistant/ocr/…` → `/assistant/ai/ocr/…`
+- [x] Fix token key (`"token"` → `"torii_token"`) in `ocr.ts`/`geo.ts`/`payments.ts`
+- [x] `official_domains_for` crash fixed (log-line f-string no longer throws `TypeError` when
+      `None`; the function itself still returns `None` for unmapped countries and `search()`
+      already falls back to the settings allowlist in that case — the full "never returns None"
+      redesign lands with mission domains in M1, this was the narrower live-crash fix)
+- [x] Frontend `QuestionType` gains `"date"`
+- [x] Verify: confirmed via API (`GET /cases/{id}/intake` for a properly-scoped `US·b1b2·new_application`
+      case now returns 84 questions across 12 authored sections, 6 with citations) **and** in the
+      browser (dev servers + login as `applicant1@example.com`) — section tabs, per-section
+      progress, and "Official Source" citation links all render; the fake OCR banner is gone.
+      Note: an existing case scoped via legacy codes (`tourist`/`new`) still resolves the
+      8-question generic fallback, not the b1b2 pack — that's the pre-existing scope/pack
+      resolution gap M2's pack selector addresses, not a regression from this fix.
+
+Commit: `49e21b9 fix(api,web,ai): M0 correctness fixes for corridor-aware flow`.
+API (`uv run pytest`, 72 passed) and `apps/web` (`pnpm typecheck`, clean) both gate-clean;
+`pnpm lint` fails on a pre-existing ESLint/eslintrc circular-JSON error unrelated to this branch
+(reproduced identically with these changes stashed out).
 
 ### M1 — Corridor
 - [ ] `CorridorProfile` model + migration `0013_corridor_profiles`
