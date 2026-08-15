@@ -19,8 +19,15 @@ from sqlalchemy import select, update
 
 from torii_api.config import get_settings
 from torii_api.db.engine import create_engine, create_session_factory
-from torii_api.db.models import Case, OutboxEvent, ScopeResearch, ScopeResearchStatus
+from torii_api.db.models import (
+    Case,
+    CaseStageResearch,
+    OutboxEvent,
+    ScopeResearch,
+    ScopeResearchStatus,
+)
 from torii_api.logging import configure_logging
+from torii_api.services.agentic import stage_expiry, stage_is_valid
 from torii_api.services.research import RESEARCH_TTL_DAYS, research_payload
 
 log = structlog.get_logger()
@@ -193,6 +200,99 @@ async def run_case_research(ctx: dict[str, Any], event: OutboxEvent) -> None:
     )
 
 
+async def run_stage_research(ctx: dict[str, Any], event: OutboxEvent) -> None:
+    """Run one agentic per-stage research job (docs/plan/03_corridor_bd_jp.md, Decisions §2).
+
+    Calls the AI service's ``POST /ai/agentic/research-stage``, validates the result against
+    the stage's NF-2 citation/schema gate (:func:`services.agentic.stage_is_valid`), and writes
+    it to the cached :class:`CaseStageResearch` row. Unlike :func:`run_case_research`, this is a
+    single request/response (no NDJSON progress stream) — a stage's search+extract (+ optional
+    followup round) typically completes in well under a minute; add streaming progress here
+    later if a stage proves slow enough to need it.
+    """
+    import httpx
+
+    settings = get_settings()
+    session_factory = ctx["session_factory"]
+    payload = dict(event.payload or {})
+    research_id = payload.get("stage_research_id")
+    stage = payload.get("stage")
+    if research_id is None or stage is None:
+        return
+
+    async with session_factory() as session:
+        research = await session.get(CaseStageResearch, research_id)
+        if research is None:
+            return
+        research.status = ScopeResearchStatus.RUNNING
+        await session.commit()
+
+    now = datetime.now(UTC)
+    data: dict[str, Any] = {}
+    try:
+        async with httpx.AsyncClient(timeout=180.0) as client:
+            resp = await client.post(
+                f"{settings.ai_service_url.rstrip('/')}/ai/agentic/research-stage",
+                json={
+                    "stage": stage,
+                    "destination_code": payload.get("destination_code"),
+                    "purpose_code": payload.get("purpose_code"),
+                    "action_code": payload.get("action_code"),
+                    "nationality": payload.get("nationality"),
+                    "residence_country": payload.get("residence_country"),
+                    "context": payload.get("context") or {},
+                },
+            )
+            if resp.status_code >= 300:
+                raise RuntimeError(f"agentic research returned HTTP {resp.status_code}")
+            data = resp.json()
+    except asyncio.CancelledError:
+        # See run_case_research's identical handling: arq's job timeout cancels this
+        # coroutine, and CancelledError is a BaseException that would otherwise skip past
+        # the handler below and leave the row stuck in RUNNING forever.
+        async with session_factory() as session:
+            research = await session.get(CaseStageResearch, research_id)
+            if research is not None:
+                research.status = ScopeResearchStatus.FAILED
+                research.error = "stage research job timed out"
+            await session.commit()
+        log.warning("stage_research.failed", research_id=research_id, error="cancelled/timed out")
+        raise
+    except Exception as exc:  # noqa: BLE001 - a failed stage research must never crash the drain
+        error_message = str(exc) or type(exc).__name__
+        async with session_factory() as session:
+            research = await session.get(CaseStageResearch, research_id)
+            if research is not None:
+                research.status = ScopeResearchStatus.FAILED
+                research.error = error_message[:1000]
+            await session.commit()
+        log.warning(
+            "stage_research.failed", research_id=research_id, stage=stage, error=error_message
+        )
+        return
+
+    items = dict(data.get("items") or {})
+    valid = stage_is_valid(stage, items)
+
+    async with session_factory() as session:
+        research = await session.get(CaseStageResearch, research_id)
+        if research is None:
+            return
+        if valid:
+            research.status = ScopeResearchStatus.COMPLETED
+            research.payload = items
+            research.source_pages = list(data.get("source_pages") or [])
+            research.researched_at = now
+            research.expires_at = stage_expiry(stage)
+            research.error = None
+        else:
+            research.status = ScopeResearchStatus.FAILED
+            research.error = "stage research payload failed the citation/schema gate"
+        await session.commit()
+
+    log.info("stage_research.done", research_id=research_id, stage=stage, valid=valid)
+
+
 async def poll_outbox(ctx: dict[str, Any]) -> int:
     """Drain unprocessed outbox events (at-least-once), stamping ``processed_at``.
 
@@ -233,6 +333,8 @@ async def poll_outbox(ctx: dict[str, Any]) -> int:
 
         if event.topic == "case.research.queued":
             await run_case_research(ctx, event)
+        elif event.topic == "case.stage_research.queued":
+            await run_stage_research(ctx, event)
         else:
             log.info("outbox.handle", topic=event.topic, event_id=event.id)
         handled += 1
