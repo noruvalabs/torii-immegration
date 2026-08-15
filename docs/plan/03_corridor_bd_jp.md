@@ -193,20 +193,39 @@ API (`uv run pytest`, 72 passed) and `apps/web` (`pnpm typecheck`, clean) both g
 `pnpm lint` fails on a pre-existing ESLint/eslintrc circular-JSON error unrelated to this branch
 (reproduced identically with these changes stashed out).
 
-### M1 — Shared agentic engine + admissibility stage (was "Corridor")
-- [ ] `apps/ai/.../services/agentic_research.py`: `StageResearchRequest`/`Result`, per-stage query
+### M1 — Shared agentic engine + admissibility stage (was "Corridor") ✅ DONE (2026-08-15)
+- [x] `apps/ai/.../services/agentic_research.py`: `StageResearchRequest`/`Result`, per-stage query
       builders, per-stage extraction schemas, two-round search-if-insufficient
-- [ ] Mission domains in `ops_scraper.py` (`official_domains_for(destination, nationality)`,
-      never `None`)
-- [ ] New AI endpoint `POST /ai/agentic/research-stage`
-- [ ] `CaseStageResearch` model + migration `0013_case_stage_research`
-- [ ] `services/agentic.py` (api-side): find/cache/gate per stage
-- [ ] Outbox topic `case.stage_research.queued` `{case_id|null, stage}` + worker handler
-      `run_stage_research` (generalized from `run_case_research`)
-- [ ] `admissibility` stage runnable pre-case (no `case_id`), cached by scope+nationality+residence
-- [ ] `POST /v1/corridors/check` (unchanged endpoint shape) backed by the admissibility stage
-- [ ] `/scope` admissibility card + `AdmissibilityStep.tsx`
-- [ ] Verify: BD→JP admissibility check returns route/filer/fee/processing-time, each cited
+- [x] Mission domains in `ops_scraper.py` (`official_domains_for(destination, nationality)`,
+      unions destination + mission-in-origin domains; still returns `None` only when truly
+      nothing matches, which `search()` already handles — see M0's narrower crash-fix note)
+- [x] New AI endpoint `POST /ai/agentic/research-stage`
+- [x] `CaseStageResearch` model + migration `0013_case_stage_research` (upgrade/downgrade
+      round-trip verified, then applied to the dev DB)
+- [x] `services/agentic.py` (api-side): `scope_key`, `stage_is_usable`, `stage_items`,
+      `stage_is_valid` (per-stage NF-2 citation+schema gate, reusing `has_citation` — renamed
+      from `ops_ingest._has_citation` — and `parse_questions` the same way
+      `validated_for_promote` already does for packs)
+- [x] Outbox topic `case.stage_research.queued` + worker handler `run_stage_research`
+      (generalized from `run_case_research`; single request/response, no NDJSON progress stream
+      yet — a stage completes in well under a minute, streaming is a later addition if needed)
+- [x] `admissibility` stage runnable pre-case (no `case_id`), cached by `scope_key`
+      (destination+purpose+action+nationality+residence)
+- [x] `POST /v1/corridors/check` + `GET /v1/corridors/{id}`, backed by the admissibility stage
+- [ ] `/scope` admissibility card + `AdmissibilityStep.tsx` — **not started**, frontend wiring
+      deferred to keep this milestone backend-complete and independently verifiable first
+- [x] Verify: **full real stack** — `POST /v1/corridors/check` (BD nationality/residence, JP
+      destination, tourist/new_application) → outbox → `run_stage_research` → real AI service →
+      real Tavily reaching `bd.emb-japan.go.jp` (unreachable before the mission-domain fix) →
+      real NVIDIA/Groq extraction → NF-2 gate passed → `GET /v1/corridors/1` returns: visa
+      required, route `consular_visa`, filing channel `embassy`/filer `applicant` (no
+      third-party agency needed for this corridor), the exact Dhaka embassy address, a 4-step
+      process, and — genuinely case-specific, not generic — **the visa fee is 0 JPY for
+      Bangladeshi nationals**, every fact cited to a `bd.emb-japan.go.jp` or `mofa.go.jp` page.
+
+Commits: `0dec017` (shared engine + AI endpoint + model/migration),
+`7102688` (api-side service + worker handler). Corridors endpoint + its 5 tests staged for the
+next commit alongside this log update. API suite: 95 passed. AI suite: 33 passed.
 
 ### M2 — Intake stage wired end to end (was "Pack selector + golden pack" — deferred)
 - [ ] `compute_guidance` gains `research_stage`; `research` phase reused for stage `intake`
