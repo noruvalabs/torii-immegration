@@ -256,7 +256,8 @@ async def _seed_workflow(
     questions: list[dict[str, Any]],
     rules: list[dict[str, Any]],
     documents: list[dict[str, Any]],
-    form: dict[str, Any],
+    form: dict[str, Any] | None = None,
+    forms: list[dict[str, Any]] | None = None,
 ) -> int:
     created = 0
     existing_intake = await session.scalar(
@@ -308,29 +309,31 @@ async def _seed_workflow(
                 setattr(existing, key, value)
             existing.is_live = True
 
-    existing_form = await session.scalar(
-        select(FormTemplate).where(
-            FormTemplate.jurisdiction_id == jurisdiction_id,
-            FormTemplate.visa_category_id == visa_category_id,
-            FormTemplate.case_action_id == case_action_id,
-            FormTemplate.code == form["code"],
-        )
-    )
-    if existing_form is None:
-        session.add(
-            FormTemplate(
-                jurisdiction_id=jurisdiction_id,
-                visa_category_id=visa_category_id,
-                case_action_id=case_action_id,
-                is_live=True,
-                **form,
+    all_forms: list[dict[str, Any]] = forms if forms is not None else ([form] if form else [])
+    for f in all_forms:
+        existing_form = await session.scalar(
+            select(FormTemplate).where(
+                FormTemplate.jurisdiction_id == jurisdiction_id,
+                FormTemplate.visa_category_id == visa_category_id,
+                FormTemplate.case_action_id == case_action_id,
+                FormTemplate.code == f["code"],
             )
         )
-        created += 1
-    else:
-        for key, value in form.items():
-            setattr(existing_form, key, value)
-        existing_form.is_live = True
+        if existing_form is None:
+            session.add(
+                FormTemplate(
+                    jurisdiction_id=jurisdiction_id,
+                    visa_category_id=visa_category_id,
+                    case_action_id=case_action_id,
+                    is_live=True,
+                    **f,
+                )
+            )
+            created += 1
+        else:
+            for key, value in f.items():
+                setattr(existing_form, key, value)
+            existing_form.is_live = True
 
     return created
 
@@ -543,6 +546,7 @@ async def seed() -> None:
                 rules=workflow["rules"],
                 documents=workflow["documents"],
                 form=workflow["form"],
+                forms=workflow.get("forms"),
             )
 
         # Generic fallback for live category/action combos without a content pack.

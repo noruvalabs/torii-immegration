@@ -1,0 +1,1439 @@
+scope:
+  jurisdiction: US
+  visa_category: tourist
+  action: new_application
+  is_live: true
+  name: United States B1/B2 tourist & business — new application (ESTA vs visa branch)
+
+stages:
+  - sequence: 1
+    code: applicant_filing
+    actor: applicant
+
+intake:
+  questions:
+    # =========================================================================
+    # Section 1: Personal & Identity Information
+    # =========================================================================
+    - key: full_name
+      section: 1. Personal Information
+      prompt: What is your full legal name as it appears on your passport (Surname, Given Names)?
+      type: string
+      min_length: 2
+      max_length: 200
+      required: true
+      citation:
+        authority: U.S. Department of State
+        title: DS-160 Online Nonimmigrant Visa Application
+        url: https://travel.state.gov/content/travel/en/us-visas/visa-information-resources/forms/ds-160-online-nonimmigrant-visa-application.html
+
+    - key: other_names_used
+      section: 1. Personal Information
+      prompt: Have you ever used other names (maiden name, alias, religious name, professional name)?
+      type: string
+      min_length: 2
+      max_length: 200
+      required: false
+
+    - key: gender
+      section: 1. Personal Information
+      prompt: What is your sex / gender?
+      type: enum
+      options:
+        - Male
+        - Female
+        - Other
+      required: true
+
+    - key: marital_status
+      section: 1. Personal Information
+      prompt: What is your current marital status?
+      type: enum
+      options:
+        - Single
+        - Married
+        - Common_Law_Marriage
+        - Civil_Union_Domestic_Partnership
+        - Divorced
+        - Widowed
+        - Legally_Separated
+        - Other
+      required: true
+
+    - key: date_of_birth
+      section: 1. Personal Information
+      prompt: What is your date of birth (YYYY-MM-DD)?
+      type: date
+      required: true
+
+    - key: city_of_birth
+      section: 1. Personal Information
+      prompt: What is your city of birth?
+      type: string
+      min_length: 2
+      max_length: 100
+      required: true
+
+    - key: country_of_birth
+      section: 1. Personal Information
+      prompt: What is your country of birth?
+      type: string
+      min_length: 2
+      max_length: 100
+      required: true
+
+    # =========================================================================
+    # Section 2: Nationality & Legal Status
+    # =========================================================================
+    - key: nationality
+      section: 2. Nationality & Legal Status
+      prompt: What is your primary nationality (passport country)?
+      type: enum
+      options:
+        - JP
+        - US
+        - GB
+        - CA
+        - AU
+        - KR
+        - DE
+        - FR
+        - SG
+        - AE
+        - NZ
+        - NL
+        - IN
+        - CN
+        - BD
+        - PH
+        - VN
+        - ID
+        - TH
+        - MY
+        - SA
+        - other
+      required: true
+      citation:
+        authority: U.S. Customs and Border Protection
+        title: Visa Waiver Program (VWP) — eligible countries
+        url: https://www.cbp.gov/travel/international-visitors/visa-waiver-program
+
+    - key: has_other_nationality
+      section: 2. Nationality & Legal Status
+      prompt: Do you hold or have you ever held any other nationality or citizenship?
+      type: boolean
+      required: true
+
+    - key: other_nationality_country
+      section: 2. Nationality & Legal Status
+      prompt: What is the other country of nationality and passport number (if applicable)?
+      type: string
+      min_length: 2
+      max_length: 150
+      required: false
+      show_when:
+        key: has_other_nationality
+        equals: true
+
+    - key: is_permanent_resident_other_country
+      section: 2. Nationality & Legal Status
+      prompt: Are you a permanent resident of a country other than your primary nationality?
+      type: boolean
+      required: true
+
+    - key: national_id_number
+      section: 2. Nationality & Legal Status
+      prompt: What is your National Identification Number (e.g. Japan My Number or Home Country ID)?
+      type: string
+      min_length: 2
+      max_length: 64
+      required: false
+
+    - key: us_ssn_or_taxid
+      section: 2. Nationality & Legal Status
+      prompt: What is your U.S. Social Security Number (SSN) or Taxpayer ID (ITIN), if ever issued?
+      type: string
+      min_length: 4
+      max_length: 32
+      required: false
+
+    - key: current_residence_country
+      section: 2. Nationality & Legal Status
+      prompt: Which country do you currently reside in?
+      type: enum
+      options:
+        - Japan
+        - United States
+        - United Kingdom
+        - Canada
+        - Australia
+        - Germany
+        - France
+        - Singapore
+        - South Korea
+        - United Arab Emirates
+        - New Zealand
+        - Netherlands
+        - India
+        - China
+        - Bangladesh
+        - Philippines
+        - Vietnam
+        - Indonesia
+        - other
+      required: true
+
+    - key: residence_card_number
+      section: 2. Nationality & Legal Status
+      prompt: What is your Japanese Residence Card (Zairyu Card) Number (if residing in Japan as foreign national)?
+      type: string
+      min_length: 12
+      max_length: 12
+      required: false
+
+    - key: japan_residence_status
+      section: 2. Nationality & Legal Status
+      prompt: What is your current Japanese residence status (e.g. Engineer/Specialist, Student, Dependent, Permanent Resident)?
+      type: string
+      min_length: 2
+      max_length: 100
+      required: false
+
+    - key: japan_residence_expiry
+      section: 2. Nationality & Legal Status
+      prompt: What is the expiration date of your Japanese Residence Card / Status (YYYY-MM-DD)?
+      type: date
+      required: false
+
+    # =========================================================================
+    # Section 3: Passport & Travel Document Details
+    # =========================================================================
+    - key: passport_type
+      section: 3. Passport & Travel Documents
+      prompt: What is your passport type?
+      type: enum
+      options:
+        - Regular
+        - Official
+        - Diplomatic
+        - Other
+      required: true
+
+    - key: passport_number
+      section: 3. Passport & Travel Documents
+      prompt: What is your passport number?
+      type: string
+      min_length: 5
+      max_length: 32
+      required: true
+
+    - key: passport_book_number
+      section: 3. Passport & Travel Documents
+      prompt: What is your passport book number (inventory barcode/number, if printed)?
+      type: string
+      min_length: 2
+      max_length: 32
+      required: false
+
+    - key: passport_issuing_country
+      section: 3. Passport & Travel Documents
+      prompt: Which country issued your passport?
+      type: string
+      min_length: 2
+      max_length: 100
+      required: true
+
+    - key: passport_issuing_city
+      section: 3. Passport & Travel Documents
+      prompt: In which city was your passport issued?
+      type: string
+      min_length: 2
+      max_length: 100
+      required: true
+
+    - key: passport_issue_date
+      section: 3. Passport & Travel Documents
+      prompt: What is your passport issue date (YYYY-MM-DD)?
+      type: date
+      required: true
+
+    - key: passport_expiry
+      section: 3. Passport & Travel Documents
+      prompt: What is your passport expiration date (YYYY-MM-DD)?
+      type: date
+      required: true
+
+    - key: passport_is_epassport
+      section: 3. Passport & Travel Documents
+      prompt: Does your passport contain an embedded digital chip (e-passport)?
+      type: boolean
+      required: true
+
+    - key: has_lost_stolen_passport
+      section: 3. Passport & Travel Documents
+      prompt: Have you ever lost a passport or had one stolen?
+      type: boolean
+      required: true
+
+    - key: lost_passport_explanation
+      section: 3. Passport & Travel Documents
+      prompt: Please explain the circumstances and lost passport number (if known).
+      type: string
+      min_length: 5
+      max_length: 500
+      required: false
+      show_when:
+        key: has_lost_stolen_passport
+        equals: true
+
+    # =========================================================================
+    # Section 4: U.S. Travel Plans (B1/B2)
+    # =========================================================================
+    - key: purpose_of_visit
+      section: 4. U.S. Travel Plans
+      prompt: What is the primary purpose of your trip to the United States?
+      type: enum
+      options:
+        - tourism
+        - business
+        - visiting_family
+        - medical
+        - other
+      required: true
+
+    - key: has_specific_travel_plans
+      section: 4. U.S. Travel Plans
+      prompt: Have you made specific travel plans (flights / confirmed dates)?
+      type: boolean
+      required: true
+
+    - key: arrival_date
+      section: 4. U.S. Travel Plans
+      prompt: What is your intended or confirmed arrival date in the U.S. (YYYY-MM-DD)?
+      type: date
+      required: true
+
+    - key: departure_date
+      section: 4. U.S. Travel Plans
+      prompt: What is your intended or confirmed departure date from the U.S. (YYYY-MM-DD)?
+      type: date
+      required: false
+      show_when:
+        key: has_specific_travel_plans
+        equals: true
+
+    - key: intended_length_of_stay_days
+      section: 4. U.S. Travel Plans
+      prompt: How many days in total do you plan to stay in the United States?
+      type: integer
+      min_value: 1
+      max_value: 180
+      required: true
+
+    - key: us_cities_to_visit
+      section: 4. U.S. Travel Plans
+      prompt: Which U.S. cities or locations do you plan to visit?
+      type: string
+      min_length: 2
+      max_length: 300
+      required: true
+
+    - key: us_stay_address
+      section: 4. U.S. Travel Plans
+      prompt: What is the street address and name of the hotel or host where you will stay in the U.S.?
+      type: string
+      min_length: 5
+      max_length: 300
+      required: true
+
+    - key: trip_payer_type
+      section: 4. U.S. Travel Plans
+      prompt: Who is paying for your trip expenses?
+      type: enum
+      options:
+        - Self
+        - Other_Individual
+        - Employer_Organization
+        - Other
+      required: true
+
+    - key: payer_details
+      section: 4. U.S. Travel Plans
+      prompt: If an individual or organization is paying, provide their full name, relationship, address, and phone.
+      type: string
+      min_length: 5
+      max_length: 400
+      required: false
+
+    # =========================================================================
+    # Section 5: Travel Companions
+    # =========================================================================
+    - key: has_travel_companions
+      section: 5. Travel Companions
+      prompt: Are other people traveling with you?
+      type: boolean
+      required: true
+
+    - key: traveling_as_group_or_org
+      section: 5. Travel Companions
+      prompt: Are you traveling as part of an organized group, tour, or company delegation?
+      type: boolean
+      required: true
+
+    - key: travel_companions_details
+      section: 5. Travel Companions
+      prompt: Please list names and relationships of all accompanying travelers.
+      type: string
+      min_length: 3
+      max_length: 400
+      required: false
+      show_when:
+        key: has_travel_companions
+        equals: true
+
+    # =========================================================================
+    # Section 6: Previous U.S. Travel & Visa History
+    # =========================================================================
+    - key: has_previous_us_visits
+      section: 6. Previous U.S. Travel
+      prompt: Have you ever previously visited the United States?
+      type: boolean
+      required: true
+
+    - key: previous_us_visits_details
+      section: 6. Previous U.S. Travel
+      prompt: List your past visits to the U.S. (arrival dates and duration of stay for up to 5 visits).
+      type: string
+      min_length: 3
+      max_length: 500
+      required: false
+      show_when:
+        key: has_previous_us_visits
+        equals: true
+
+    - key: has_us_drivers_license
+      section: 6. Previous U.S. Travel
+      prompt: Do you or have you ever held a U.S. Driver's License or state ID card?
+      type: boolean
+      required: true
+
+    - key: has_previous_us_visa
+      section: 6. Previous U.S. Travel
+      prompt: Have you ever been issued a U.S. Visa?
+      type: boolean
+      required: true
+
+    - key: previous_us_visa_details
+      section: 6. Previous U.S. Travel
+      prompt: Provide the issue date, visa category (e.g. B1/B2, F1), and Visa Foil Number (if available).
+      type: string
+      min_length: 3
+      max_length: 200
+      required: false
+      show_when:
+        key: has_previous_us_visa
+        equals: true
+
+    - key: has_fingerprints_collected_us
+      section: 6. Previous U.S. Travel
+      prompt: Have your fingerprints previously been collected by U.S. immigration or a consulate?
+      type: boolean
+      required: true
+
+    - key: has_us_visa_cancelled_revoked
+      section: 6. Previous U.S. Travel
+      prompt: Has your U.S. Visa ever been cancelled, revoked, or physically marked cancelled without prejudice?
+      type: boolean
+      required: true
+
+    - key: prior_us_visa_refusal
+      section: 6. Previous U.S. Travel
+      prompt: Have you ever been refused a U.S. Visa, denied entry at a U.S. port of entry, or withdrawn an application?
+      type: boolean
+      required: true
+
+    - key: visa_refusal_details
+      section: 6. Previous U.S. Travel
+      prompt: Please provide a detailed explanation of any previous visa refusals or denials.
+      type: string
+      min_length: 5
+      max_length: 500
+      required: false
+      show_when:
+        key: prior_us_visa_refusal
+        equals: true
+
+    - key: has_immigrant_petition_filed
+      section: 6. Previous U.S. Travel
+      prompt: Has anyone ever filed an immigrant petition (green card) on your behalf with USCIS?
+      type: boolean
+      required: true
+
+    # =========================================================================
+    # Section 7: U.S. Point of Contact
+    # =========================================================================
+    - key: us_contact_type
+      section: 7. U.S. Point of Contact
+      prompt: What is your primary contact in the U.S. (Individual, Organization/Company, or Hotel/Accommodation)?
+      type: enum
+      options:
+        - Individual_Person
+        - Organization_Company
+        - Hotel_Accommodation
+      required: true
+
+    - key: us_contact_name
+      section: 7. U.S. Point of Contact
+      prompt: What is the name of your U.S. contact person or hotel/organization?
+      type: string
+      min_length: 2
+      max_length: 150
+      required: true
+
+    - key: us_contact_relationship
+      section: 7. U.S. Point of Contact
+      prompt: What is your relationship to the contact (e.g. Friend, Relative, Business Associate, Hotel)?
+      type: string
+      min_length: 2
+      max_length: 100
+      required: true
+
+    - key: us_contact_address
+      section: 7. U.S. Point of Contact
+      prompt: What is the street address and ZIP code of your U.S. contact?
+      type: string
+      min_length: 5
+      max_length: 250
+      required: true
+
+    - key: us_contact_phone
+      section: 7. U.S. Point of Contact
+      prompt: What is the telephone number of your U.S. contact?
+      type: string
+      min_length: 5
+      max_length: 32
+      required: true
+
+    - key: us_contact_email
+      section: 7. U.S. Point of Contact
+      prompt: What is the email address of your U.S. contact (or hotel email)?
+      type: string
+      min_length: 5
+      max_length: 100
+      required: false
+
+    # =========================================================================
+    # Section 8: Family Information
+    # =========================================================================
+    - key: father_full_name
+      section: 8. Family Information
+      prompt: What is your father's full name (Surname, Given Names)?
+      type: string
+      min_length: 2
+      max_length: 150
+      required: true
+
+    - key: father_dob
+      section: 8. Family Information
+      prompt: What is your father's date of birth (YYYY-MM-DD or Unknown)?
+      type: string
+      min_length: 4
+      max_length: 32
+      required: true
+
+    - key: father_in_us
+      section: 8. Family Information
+      prompt: Is your father currently residing in the United States?
+      type: boolean
+      required: true
+
+    - key: mother_full_name
+      section: 8. Family Information
+      prompt: What is your mother's full name (Surname, Given Names)?
+      type: string
+      min_length: 2
+      max_length: 150
+      required: true
+
+    - key: mother_dob
+      section: 8. Family Information
+      prompt: What is your mother's date of birth (YYYY-MM-DD or Unknown)?
+      type: string
+      min_length: 4
+      max_length: 32
+      required: true
+
+    - key: mother_in_us
+      section: 8. Family Information
+      prompt: Is your mother currently residing in the United States?
+      type: boolean
+      required: true
+
+    - key: has_immediate_relatives_in_us
+      section: 8. Family Information
+      prompt: Do you have any immediate relatives in the U.S. (Spouse, Fiancé, Child, Sibling)?
+      type: boolean
+      required: true
+
+    - key: immediate_relatives_status
+      section: 8. Family Information
+      prompt: If yes, what is the status of your relative(s) in the U.S. (U.S. Citizen, Permanent Resident, Nonimmigrant visa holder)?
+      type: string
+      min_length: 3
+      max_length: 250
+      required: false
+      show_when:
+        key: has_immediate_relatives_in_us
+        equals: true
+
+    - key: spouse_full_name
+      section: 8. Family Information
+      prompt: If married or divorced, what is your spouse's full legal name?
+      type: string
+      min_length: 2
+      max_length: 150
+      required: false
+
+    - key: spouse_dob
+      section: 8. Family Information
+      prompt: What is your spouse's date of birth (YYYY-MM-DD)?
+      type: string
+      min_length: 4
+      max_length: 32
+      required: false
+
+    - key: spouse_nationality
+      section: 8. Family Information
+      prompt: What is your spouse's nationality?
+      type: string
+      min_length: 2
+      max_length: 64
+      required: false
+
+    # =========================================================================
+    # Section 9: Present Work, Education & Financial Ties
+    # =========================================================================
+    - key: primary_occupation_industry
+      section: 9. Present Work & Financial Ties
+      prompt: What is your primary occupation or industry?
+      type: string
+      min_length: 2
+      max_length: 100
+      required: true
+
+    - key: employer_or_school_name
+      section: 9. Present Work & Financial Ties
+      prompt: What is the legal name of your current employer or university in Japan/home country?
+      type: string
+      min_length: 2
+      max_length: 150
+      required: true
+
+    - key: employer_school_address
+      section: 9. Present Work & Financial Ties
+      prompt: What is your employer or school's street address and postal code?
+      type: string
+      min_length: 5
+      max_length: 250
+      required: true
+
+    - key: employer_school_phone
+      section: 9. Present Work & Financial Ties
+      prompt: What is your employer or school's phone number?
+      type: string
+      min_length: 5
+      max_length: 32
+      required: true
+
+    - key: employment_start_date
+      section: 9. Present Work & Financial Ties
+      prompt: When did your current employment or study begin (YYYY-MM-DD)?
+      type: date
+      required: true
+
+    - key: monthly_income_jpy
+      section: 9. Present Work & Financial Ties
+      prompt: What is your gross monthly income in local currency (e.g. JPY)?
+      type: integer
+      min_value: 0
+      max_value: 100000000
+      required: true
+
+    - key: liquid_funds_available_jpy
+      section: 9. Present Work & Financial Ties
+      prompt: What is the total estimated liquid funds available in your bank accounts (in JPY)?
+      type: integer
+      min_value: 0
+      max_value: 1000000000
+      required: true
+
+    - key: job_duties_description
+      section: 9. Present Work & Financial Ties
+      prompt: Briefly describe your current daily job duties and responsibilities.
+      type: string
+      min_length: 5
+      max_length: 500
+      required: true
+
+    - key: has_sufficient_funds
+      section: 9. Present Work & Financial Ties
+      prompt: Do you have sufficient personal/sponsored funds to cover all travel costs without unauthorized work?
+      type: boolean
+      required: true
+
+    # =========================================================================
+    # Section 10: Previous Work & Education History (Past 5 Years)
+    # =========================================================================
+    - key: has_previous_employment_5yrs
+      section: 10. Previous Work & Education
+      prompt: Have you been previously employed by other employers in the past 5 years?
+      type: boolean
+      required: true
+
+    - key: previous_employers_summary
+      section: 10. Previous Work & Education
+      prompt: List previous employer names, addresses, job titles, supervisor names, and dates of employment.
+      type: string
+      min_length: 5
+      max_length: 800
+      required: false
+      show_when:
+        key: has_previous_employment_5yrs
+        equals: true
+
+    - key: educational_institutions_attended
+      section: 10. Previous Work & Education
+      prompt: List educational institutions attended (high school, college, university) with school name, address, degree, and dates.
+      type: string
+      min_length: 5
+      max_length: 800
+      required: true
+
+    # =========================================================================
+    # Section 11: Additional Travel & Background Information
+    # =========================================================================
+    - key: languages_spoken
+      section: 11. Additional Background
+      prompt: Which languages do you speak?
+      type: string
+      min_length: 2
+      max_length: 150
+      required: true
+
+    - key: countries_visited_past_5yrs
+      section: 11. Additional Background
+      prompt: List all countries and regions you have visited in the past 5 years (separated by commas).
+      type: string
+      min_length: 2
+      max_length: 500
+      required: true
+
+    - key: organization_memberships
+      section: 11. Additional Background
+      prompt: Have you belonged to, contributed to, or worked for any professional, social, or charitable organization?
+      type: string
+      min_length: 2
+      max_length: 300
+      required: false
+
+    - key: has_military_service
+      section: 11. Additional Background
+      prompt: Have you ever served in the military or armed forces?
+      type: boolean
+      required: true
+
+    - key: military_service_details
+      section: 11. Additional Background
+      prompt: Provide branch of service, rank, military specialty, and dates of service.
+      type: string
+      min_length: 3
+      max_length: 300
+      required: false
+      show_when:
+        key: has_military_service
+        equals: true
+
+    - key: social_media_handles_past_5yrs
+      section: 11. Additional Background
+      prompt: List social media platform identifiers/usernames used in the past 5 years (e.g. LinkedIn, Instagram, X/Twitter).
+      type: string
+      min_length: 2
+      max_length: 300
+      required: true
+
+    - key: phone_numbers_past_5yrs
+      section: 11. Additional Background
+      prompt: List all phone numbers used in the past 5 years (mobile, home, work).
+      type: string
+      min_length: 5
+      max_length: 200
+      required: true
+
+    - key: email_addresses_past_5yrs
+      section: 11. Additional Background
+      prompt: List all email addresses used in the past 5 years.
+      type: string
+      min_length: 5
+      max_length: 250
+      required: true
+
+    # =========================================================================
+    # Section 12: Security & Inadmissibility Screening
+    # =========================================================================
+    - key: communicable_disease_disorder
+      section: 12. Security & Screening
+      prompt: Do you have a communicable disease of public health significance or a physical/mental disorder posing safety risk?
+      type: boolean
+      required: true
+      citation:
+        authority: U.S. Citizenship and Immigration Services
+        title: Health-Related Inadmissibility (INA 212(a)(1))
+        url: https://www.uscis.gov/policy-manual/volume-8-part-b
+
+    - key: drug_abuse_addiction_history
+      section: 12. Security & Screening
+      prompt: Have you ever been a drug abuser or addict, or violated any controlled substance laws?
+      type: boolean
+      required: true
+
+    - key: criminal_arrest_conviction_record
+      section: 12. Security & Screening
+      prompt: Have you ever been arrested, cited, or convicted for any offense or crime (even if pardoned/expunged)?
+      type: boolean
+      required: true
+      citation:
+        authority: U.S. Department of State
+        title: Ineligibilities and Waivers (INA 212(a)(2))
+        url: https://travel.state.gov/content/travel/en/us-visas/visa-information-resources/waivers.html
+
+    - key: has_criminal_record
+      section: 12. Security & Screening
+      prompt: Do you have an active criminal record?
+      type: boolean
+      required: true
+
+    - key: has_vwp_denial_history
+      section: 12. Security & Screening
+      prompt: Have you ever been denied an ESTA, or overstayed in the U.S. beyond an authorized admission period?
+      type: boolean
+      required: true
+      citation:
+        authority: U.S. Customs and Border Protection
+        title: ESTA eligibility and ineligibility
+        url: https://esta.cbp.dhs.gov/
+
+    - key: controlled_substances_money_laundering
+      section: 12. Security & Screening
+      prompt: Have you ever engaged in money laundering, illicit trafficking, or controlled substance violations?
+      type: boolean
+      required: true
+
+    - key: prior_immigration_violations_deportations
+      section: 12. Security & Screening
+      prompt: Have you ever been ordered removed, deported, or subject to exclusion proceedings in any country?
+      type: boolean
+      required: true
+
+    - key: sanctioned_countries_travel
+      section: 12. Security & Screening
+      prompt: Have you traveled to Cuba (on/after Jan 12 2021), Iran, Iraq, Syria, Sudan, Libya, Somalia, Yemen, or North Korea?
+      type: boolean
+      required: true
+      citation:
+        authority: U.S. Customs and Border Protection
+        title: Visa Waiver Program Improvement and Terrorist Travel Prevention Act
+        url: https://www.cbp.gov/travel/international-visitors/visa-waiver-program
+
+eligibility:
+  rules:
+    - key: nationality
+      operator: nationality_in
+      value:
+        - JP
+        - GB
+        - CA
+        - AU
+        - KR
+        - AE
+        - NL
+        - CH
+        - IE
+        - NZ
+        - DE
+        - FR
+        - SG
+      failure_status: review
+      message: >-
+        Citizens of Visa Waiver Program (VWP) countries generally use ESTA for tourism
+        or business stays up to 90 days. A formal B1/B2 visa is required if staying longer
+        than 90 days, if ESTA was previously denied, or if applying as a third-country resident.
+      citation:
+        authority: U.S. Customs and Border Protection
+        title: Visa Waiver Program (VWP) — eligible countries
+        url: https://www.cbp.gov/travel/international-visitors/visa-waiver-program
+        source_version: "2026-04"
+
+    - key: passport_is_epassport
+      operator: equals
+      value: true
+      failure_status: warning
+      message: >-
+        An electronic passport (e-Passport with digital chip) is mandatory for ESTA travel
+        and strongly recommended for DS-160 consular appointments.
+      citation:
+        authority: U.S. Customs and Border Protection
+        title: Visa Waiver Program requirements
+        url: https://www.cbp.gov/travel/international-visitors/visa-waiver-program
+        source_version: "2026-04"
+
+    - key: intended_length_of_stay_days
+      operator: max
+      value: 90
+      failure_status: warning
+      message: >-
+        Stays over 90 days are ineligible for ESTA (VWP) and require a full B1/B2 consular visa.
+        For B1/B2, long open-ended stays (3-6 months) trigger high scrutiny under INA 214(b).
+      citation:
+        authority: U.S. Department of State
+        title: B1/B2 Visitor Visa - Permissible Length of Stay
+        url: https://travel.state.gov/content/travel/en/us-visas/tourism-visit/visitor.html
+        source_version: "2026-04"
+
+    - key: has_sufficient_funds
+      operator: equals
+      value: true
+      failure_status: fail
+      message: >-
+        Under INA 214(b), you must demonstrate sufficient liquid funds to cover all travel,
+        accommodation, and living expenses without unauthorized U.S. employment.
+      citation:
+        authority: U.S. Department of State
+        title: INA Section 214(b) Presumption of Immigrant Intent
+        url: https://travel.state.gov/content/travel/en/us-visas/visa-information-resources/visa-denials.html
+        source_version: "2026-04"
+
+    - key: liquid_funds_available_jpy
+      operator: min
+      value: 300000
+      failure_status: at_risk
+      message: >-
+        Liquid funds in your bank account appear low for international travel and lodging.
+        Consular officers assess whether available liquid funds comfortably support your itinerary.
+      citation:
+        authority: U.S. Department of State
+        title: B1/B2 Visitor Visa Financial Qualifications
+        url: https://travel.state.gov/content/travel/en/us-visas/tourism-visit/visitor.html
+        source_version: "2026-04"
+
+    - key: has_vwp_denial_history
+      operator: equals
+      value: false
+      failure_status: fail
+      message: >-
+        Prior ESTA denial or U.S. overstay disqualifies you from VWP/ESTA. You must apply
+        for a B1/B2 visa and disclose the prior immigration history.
+      citation:
+        authority: U.S. Customs and Border Protection
+        title: ESTA eligibility and ineligibility
+        url: https://esta.cbp.dhs.gov/
+        source_version: "2026-04"
+
+    - key: prior_us_visa_refusal
+      operator: equals
+      value: false
+      failure_status: review
+      message: >-
+        Prior U.S. visa refusal requires detailed disclosure on Form DS-160 and demonstration
+        of materially changed circumstances since the last refusal under INA 214(b).
+      citation:
+        authority: U.S. Department of State
+        title: Visa Denials and Material Changes in Circumstances
+        url: https://travel.state.gov/content/travel/en/us-visas/visa-information-resources/visa-denials.html
+        source_version: "2026-04"
+
+    - key: has_us_visa_cancelled_revoked
+      operator: equals
+      value: false
+      failure_status: fail
+      message: >-
+        Prior visa cancellation or revocation requires formal consular adjudication and explanation.
+      citation:
+        authority: U.S. Department of State
+        title: Visa Ineligibilities and Revocations
+        url: https://travel.state.gov/content/travel/en/us-visas/visa-information-resources/waivers.html
+        source_version: "2026-04"
+
+    - key: sanctioned_countries_travel
+      operator: equals
+      value: false
+      failure_status: warning
+      message: >-
+        Travel to sanctioned countries (e.g. Cuba after Jan 2021, Iran, Syria, North Korea)
+        renders you ineligible for ESTA, requiring a full B1/B2 consular visa application.
+      citation:
+        authority: U.S. Customs and Border Protection
+        title: Terrorist Travel Prevention Act Restrictions
+        url: https://www.cbp.gov/travel/international-visitors/visa-waiver-program
+        source_version: "2026-04"
+
+    - key: has_criminal_record
+      operator: equals
+      value: false
+      failure_status: fail
+      message: >-
+        A criminal record may trigger inadmissibility under INA Section 212(a)(2).
+        Consular review and court/police records are required.
+      citation:
+        authority: U.S. Department of State
+        title: Criminal Inadmissibility (INA 212(a)(2))
+        url: https://travel.state.gov/content/travel/en/us-visas/visa-information-resources/waivers.html
+        source_version: "2026-04"
+
+    - key: communicable_disease_disorder
+      operator: equals
+      value: false
+      failure_status: fail
+      message: >-
+        Certain communicable health conditions of public health significance require medical clearance (INA 212(a)(1)).
+      citation:
+        authority: U.S. Citizenship and Immigration Services
+        title: Health-Related Inadmissibility
+        url: https://www.uscis.gov/policy-manual/volume-8-part-b
+        source_version: "2026-04"
+
+    - key: drug_abuse_addiction_history
+      operator: equals
+      value: false
+      failure_status: fail
+      message: >-
+        History of drug abuse or controlled substance violations triggers mandatory review under INA 212(a)(2)(A).
+      citation:
+        authority: U.S. Department of State
+        title: Controlled Substances Ineligibility
+        url: https://travel.state.gov/content/travel/en/us-visas/visa-information-resources/waivers.html
+        source_version: "2026-04"
+
+    - key: prior_immigration_violations_deportations
+      operator: equals
+      value: false
+      failure_status: fail
+      message: >-
+        Prior deportation, unlawful presence, or immigration misrepresentation requires an INA 212(d)(3) nonimmigrant waiver.
+      citation:
+        authority: U.S. Citizenship and Immigration Services
+        title: Unlawful Presence and Inadmissibility
+        url: https://www.uscis.gov/laws-and-regulations/immigration-and-nationality-act
+        source_version: "2026-04"
+
+documents:
+  items:
+    - code: passport
+      name:
+        en: Valid Passport (plus previous passports with U.S. visas)
+        ja: 有効なパスポート（過去の米国ビザ付き旧パスポート含む）
+      how_to_obtain:
+        en: Original passport valid for at least 6 months beyond intended stay in the United States.
+      why_required:
+        en: Confirms identity, nationality, and visa eligibility for the consular interview.
+      is_required: true
+      citation:
+        authority: U.S. Department of State
+        title: B1/B2 Visitor Visa Documents
+        url: https://travel.state.gov/content/travel/en/us-visas/tourism-visit/visitor.html
+        source_version: "2026-04"
+
+    - code: ds160_confirmation
+      name:
+        en: DS-160 Confirmation Page with Barcode
+        ja: DS-160確認ページ（バーコード付き）
+      how_to_obtain:
+        en: Complete Form DS-160 online at ceac.state.gov and print the confirmation page with barcode.
+      why_required:
+        en: Mandatory entry pass for the U.S. Embassy / Consulate interview.
+      is_required: true
+      citation:
+        authority: U.S. Department of State
+        title: DS-160 Online Nonimmigrant Visa Application
+        url: https://ceac.state.gov/genniv/
+        source_version: "2026-04"
+
+    - code: appointment_letter
+      name:
+        en: Visa Interview Appointment Confirmation Letter
+        ja: 面接予約確認書
+      how_to_obtain:
+        en: Schedule an appointment on the official U.S. visa portal for Japan (ustraveldocs) and print confirmation.
+      why_required:
+        en: Mandatory for security clearance and check-in at the U.S. Embassy Tokyo / Consulates.
+      is_required: true
+      citation:
+        authority: U.S. Department of State
+        title: U.S. Visa Appointment Services
+        url: https://travel.state.gov/content/travel/en/us-visas/visa-information-resources/policy-updates.html
+        source_version: "2026-04"
+
+    - code: mrv_fee_receipt
+      name:
+        en: MRV Application Fee Receipt ($185)
+        ja: ビザ申請料金（MRV Fee $185）領収書
+      how_to_obtain:
+        en: Pay the non-refundable MRV application fee via credit card, Pay-easy, or bank transfer and print proof.
+      why_required:
+        en: Proof of mandatory consular application processing payment.
+      is_required: true
+      citation:
+        authority: U.S. Department of State
+        title: Fees for Visa Services
+        url: https://travel.state.gov/content/travel/en/us-visas/visa-information-resources/fees/fees-visa-services.html
+        source_version: "2026-04"
+
+    - code: photo
+      name:
+        en: U.S. Visa Photo (2x2 inch / 5x5 cm color, white background)
+        ja: 米国ビザ用写真（5cm×5cm、白背景）
+      how_to_obtain:
+        en: Obtain a compliant 2x2 inch (50x50 mm) color photograph taken within the last 6 months.
+      why_required:
+        en: Uploaded to DS-160 and brought to the interview if digital photo upload requires verification.
+      is_required: true
+      citation:
+        authority: U.S. Department of State
+        title: Photo Requirements for U.S. Visas
+        url: https://travel.state.gov/content/travel/en/us-visas/visa-information-resources/photos.html
+        source_version: "2026-04"
+
+    - code: residence_card
+      name:
+        en: Japanese Residence Card (Zairyu Card) - for non-Japanese nationals
+        ja: 在留カード（日本国籍以外の方）
+      how_to_obtain:
+        en: Original current Japanese Residence Card (在留カード) with valid period of stay.
+      why_required:
+        en: Proves legal residence status and ties to Japan for third-country applicants applying in Japan.
+      is_required: true
+      citation:
+        authority: Immigration Services Agency of Japan
+        title: Residence Card System
+        url: https://www.moj.go.jp/isa/applications/procedures/index.html
+        source_version: "2026-04"
+
+    - code: employment_certificate
+      name:
+        en: Certificate of Employment (Zaishoku Shomeisho) & Approved Leave Letter
+        ja: 在職証明書および休暇承諾書
+      how_to_obtain:
+        en: Request from your employer in Japan stating job title, salary, tenure, and approved vacation/travel dates.
+      why_required:
+        en: Proves ongoing employment ties and committed return date to Japan under INA 214(b).
+      is_required: true
+      citation:
+        authority: U.S. Department of State
+        title: B1/B2 Visitor Visa - Proving Strong Ties
+        url: https://travel.state.gov/content/travel/en/us-visas/tourism-visit/visitor.html
+        source_version: "2026-04"
+
+    - code: business_registration
+      name:
+        en: Company Registration Certificate (Tokibo Tohon) & Corporate Tax Returns (Business Owners)
+        ja: 登記簿謄本および法人税申告書（会社経営者・自営業の方）
+      how_to_obtain:
+        en: Obtain from the Japanese Legal Affairs Bureau (Houmukyoku) within 3 months.
+      why_required:
+        en: Demonstrates legitimate business ownership and strong financial/operational anchors in Japan.
+      is_required: false
+      citation:
+        authority: Ministry of Justice Japan
+        title: Certificate of Registered Matters
+        url: https://www.moj.go.jp/
+        source_version: "2026-04"
+
+    - code: enrollment_certificate
+      name:
+        en: Certificate of Enrollment (Zaigaku Shomeisho) & Academic Transcript (Students in Japan)
+        ja: 在学証明書および成績証明書（日本の学校在籍者）
+      how_to_obtain:
+        en: Obtain from your Japanese school or university registrar.
+      why_required:
+        en: Proves active educational enrollment and obligation to return to Japan to complete studies.
+      is_required: false
+      citation:
+        authority: U.S. Department of State
+        title: B1/B2 Visitor Visa Qualifications
+        url: https://travel.state.gov/content/travel/en/us-visas/tourism-visit/visitor.html
+        source_version: "2026-04"
+
+    - code: financial_evidence
+      name:
+        en: Bank Statements / Bank Passbook (Tsucho) covering last 3-6 months
+        ja: 預金通帳（過去3〜6ヶ月分の記帳済コピー）または残高証明書
+      how_to_obtain:
+        en: Request bank balance certificate or copy of updated bank passbook showing steady salary deposits and funds.
+      why_required:
+        en: Demonstrates liquid financial capacity to fund travel without needing unauthorized U.S. work.
+      is_required: true
+      citation:
+        authority: U.S. Department of State
+        title: B1/B2 Visitor Visa Financial Evidence
+        url: https://travel.state.gov/content/travel/en/us-visas/tourism-visit/visitor.html
+        source_version: "2026-04"
+
+    - code: tax_certificates
+      name:
+        en: Japanese Municipal Tax Certificates (Juminzei / Shotoku Shomeisho)
+        ja: 課税証明書・納税証明書（市区町村役所発行）
+      how_to_obtain:
+        en: Obtain the latest 1-2 years tax certificate from your local Japanese city/ward municipal office.
+      why_required:
+        en: Official government verification of annual earnings and stable economic presence in Japan.
+      is_required: false
+      citation:
+        authority: National Tax Agency Japan
+        title: Tax Certificate Issuance
+        url: https://www.nta.go.jp/
+        source_version: "2026-04"
+
+    - code: travel_itinerary
+      name:
+        en: Day-by-Day Travel Itinerary & Hotel Confirmations
+        ja: 滞在日程表（日別の訪問予定・宿泊先一覧）
+      how_to_obtain:
+        en: Prepare a chronological travel plan showing dates, cities, activities, and hotel contact details.
+      why_required:
+        en: Corroborates genuine nonimmigrant tourist/business intent and proportional duration of stay.
+      is_required: true
+      citation:
+        authority: U.S. Department of State
+        title: B1/B2 Visitor Visa - Travel Purpose
+        url: https://travel.state.gov/content/travel/en/us-visas/tourism-visit/visitor.html
+        source_version: "2026-04"
+
+    - code: invitation_letter
+      name:
+        en: Invitation Letter (B1 Business Event / B2 Host Letter with proof of host U.S. legal status)
+        ja: 招へい理由書・イベント招待状（商用・知人訪問時）
+      how_to_obtain:
+        en: Letter from U.S. company or host detailing trip purpose, duration, lodging, and host's U.S. legal status.
+      why_required:
+        en: Validates business meeting necessity (B1) or personal relationship and accommodation (B2).
+      is_required: false
+      citation:
+        authority: U.S. Department of State
+        title: B1/B2 Visitor Visa Guidance
+        url: https://travel.state.gov/content/travel/en/us-visas/tourism-visit/visitor.html
+        source_version: "2026-04"
+
+forms:
+  - code: ds160
+    version: "2026-04"
+    official_title: Online Nonimmigrant Visa Application (Form DS-160)
+    citation:
+      authority: U.S. Department of State
+      title: DS-160 Online Nonimmigrant Visa Application
+      url: https://travel.state.gov/content/travel/en/us-visas/visa-information-resources/forms/ds-160-online-nonimmigrant-visa-application.html
+      source_version: "2026-04"
+    field_mappings:
+      - form_field: personal.full_legal_name
+        answer_key: full_name
+        required: true
+      - form_field: personal.other_names
+        answer_key: other_names_used
+        required: false
+      - form_field: personal.gender
+        answer_key: gender
+        required: true
+      - form_field: personal.marital_status
+        answer_key: marital_status
+        required: true
+      - form_field: personal.date_of_birth
+        answer_key: date_of_birth
+        required: true
+      - form_field: personal.city_of_birth
+        answer_key: city_of_birth
+        required: true
+      - form_field: personal.country_of_birth
+        answer_key: country_of_birth
+        required: true
+      - form_field: nationality.primary_citizenship
+        answer_key: nationality
+        required: true
+      - form_field: nationality.other_nationality
+        answer_key: other_nationality_country
+        required: false
+      - form_field: nationality.national_id_number
+        answer_key: national_id_number
+        required: false
+      - form_field: nationality.us_ssn_or_taxid
+        answer_key: us_ssn_or_taxid
+        required: false
+      - form_field: nationality.japan_residence_card
+        answer_key: residence_card_number
+        required: false
+      - form_field: nationality.japan_residence_status
+        answer_key: japan_residence_status
+        required: false
+      - form_field: nationality.japan_residence_expiry
+        answer_key: japan_residence_expiry
+        required: false
+      - form_field: passport.type
+        answer_key: passport_type
+        required: true
+      - form_field: passport.number
+        answer_key: passport_number
+        required: true
+      - form_field: passport.book_number
+        answer_key: passport_book_number
+        required: false
+      - form_field: passport.issuing_country
+        answer_key: passport_issuing_country
+        required: true
+      - form_field: passport.issuing_city
+        answer_key: passport_issuing_city
+        required: true
+      - form_field: passport.issue_date
+        answer_key: passport_issue_date
+        required: true
+      - form_field: passport.expiration_date
+        answer_key: passport_expiry
+        required: true
+      - form_field: travel.purpose_of_trip
+        answer_key: purpose_of_visit
+        required: true
+      - form_field: travel.intended_arrival_date
+        answer_key: arrival_date
+        required: true
+      - form_field: travel.intended_stay_length_days
+        answer_key: intended_length_of_stay_days
+        required: true
+      - form_field: travel.us_cities_destinations
+        answer_key: us_cities_to_visit
+        required: true
+      - form_field: travel.us_stay_address
+        answer_key: us_stay_address
+        required: true
+      - form_field: travel.trip_payer
+        answer_key: trip_payer_type
+        required: true
+      - form_field: contact.us_contact_name
+        answer_key: us_contact_name
+        required: true
+      - form_field: contact.us_contact_relationship
+        answer_key: us_contact_relationship
+        required: true
+      - form_field: contact.us_contact_address
+        answer_key: us_contact_address
+        required: true
+      - form_field: contact.us_contact_phone
+        answer_key: us_contact_phone
+        required: true
+      - form_field: contact.us_contact_email
+        answer_key: us_contact_email
+        required: false
+      - form_field: family.father_full_name
+        answer_key: father_full_name
+        required: true
+      - form_field: family.mother_full_name
+        answer_key: mother_full_name
+        required: true
+      - form_field: family.spouse_full_name
+        answer_key: spouse_full_name
+        required: false
+      - form_field: work.primary_occupation
+        answer_key: primary_occupation_industry
+        required: true
+      - form_field: work.present_employer_name
+        answer_key: employer_or_school_name
+        required: true
+      - form_field: work.employer_address
+        answer_key: employer_school_address
+        required: true
+      - form_field: work.monthly_income_jpy
+        answer_key: monthly_income_jpy
+        required: true
+      - form_field: work.job_duties
+        answer_key: job_duties_description
+        required: true
+      - form_field: background.languages
+        answer_key: languages_spoken
+        required: true
+      - form_field: background.countries_visited_5yrs
+        answer_key: countries_visited_past_5yrs
+        required: true
+      - form_field: background.social_media_handles
+        answer_key: social_media_handles_past_5yrs
+        required: true
+      - form_field: background.phone_numbers_5yrs
+        answer_key: phone_numbers_past_5yrs
+        required: true
+      - form_field: background.email_addresses_5yrs
+        answer_key: email_addresses_past_5yrs
+        required: true
+
+  - code: appointment_mrv
+    version: "2026-04"
+    official_title: U.S. Visa Appointment Portal & MRV Fee Scheduling
+    citation:
+      authority: U.S. Department of State / CGI Federal
+      title: Official U.S. Visa Services Japan
+      url: https://travel.state.gov/content/travel/en/us-visas/visa-information-resources/policy-updates.html
+      source_version: "2026-04"
+    field_mappings:
+      - form_field: appointment.applicant_full_name
+        answer_key: full_name
+        required: true
+      - form_field: appointment.nationality
+        answer_key: nationality
+        required: true
+      - form_field: appointment.passport_number
+        answer_key: passport_number
+        required: true
+      - form_field: appointment.passport_expiry
+        answer_key: passport_expiry
+        required: true
+      - form_field: appointment.ds160_barcode
+        answer_key: passport_number
+        required: false
+      - form_field: appointment.residence_country
+        answer_key: current_residence_country
+        required: true
+
+fees:
+  - code: esta
+    amount: 21
+    currency: USD
+    channel: online
+    published: true
+    note: ESTA application fee for the Visa Waiver Program (if VWP-eligible).
+    citation:
+      authority: U.S. Customs and Border Protection
+      title: ESTA fees
+      url: https://esta.cbp.dhs.gov/
+      retrieved: "2026-08-01"
+
+  - code: mrv_fee
+    amount: 185
+    currency: USD
+    channel: embassy
+    published: true
+    note: Machine Readable Visa (MRV) fee for B1/B2 tourist/business visa. Paid prior to interview scheduling.
+    citation:
+      authority: U.S. Department of State
+      title: Visa fees and reciprocity tables
+      url: https://travel.state.gov/content/travel/en/us-visas/visa-information-resources/fees/fees-visa-services.html
+      retrieved: "2026-08-01"
+
+sources:
+  - title: Visa Waiver Program (U.S. Customs and Border Protection)
+    url: https://www.cbp.gov/travel/international-visitors/visa-waiver-program
+    retrieved: "2026-08-01"
+  - title: ESTA — Electronic System for Travel Authorization
+    url: https://esta.cbp.dhs.gov/
+    retrieved: "2026-08-01"
+  - title: B1/B2 Visitor Visa (U.S. Department of State)
+    url: https://travel.state.gov/content/travel/en/us-visas/tourism-visit/visitor.html
+    retrieved: "2026-08-01"
+  - title: DS-160 Online Nonimmigrant Visa Application
+    url: https://travel.state.gov/content/travel/en/us-visas/visa-information-resources/forms/ds-160-online-nonimmigrant-visa-application.html
+    retrieved: "2026-08-01"
+  - title: INA 214(b) Nonimmigrant Intent and Ties
+    url: https://travel.state.gov/content/travel/en/us-visas/visa-information-resources/visa-denials.html
+    retrieved: "2026-08-01"

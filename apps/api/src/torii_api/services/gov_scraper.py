@@ -437,12 +437,31 @@ def _extract_us_documents(html: str, visa_type: str) -> list[dict[str, Any]]:
              "how_to_obtain": "Detailed job duties and organizational placement", "why_required": "Establishes managerial/executive/specialized knowledge role"},
         ])
     elif visa_type == "ead":
+    elif visa_type in ("b1b2", "tourist"):
         docs.extend(common_docs)
         docs.extend([
-            {"code": "form_i765", "name_en": "Form I-765 (Application for Employment Authorization)", "is_required": True,
-             "how_to_obtain": "Download from uscis.gov or file online", "why_required": "Main EAD application form"},
-            {"code": "basis_for_eligibility", "name_en": "Evidence of Basis for Eligibility", "is_required": True,
-             "how_to_obtain": "Supporting documents based on immigration category (I-94, pending I-485 receipt, etc.)", "why_required": "Proves eligibility category for EAD"},
+            {"code": "ds160_confirmation", "name_en": "DS-160 Confirmation Page", "is_required": True,
+             "how_to_obtain": "Complete online at ceac.state.gov", "why_required": "Official consular application confirmation"},
+            {"code": "financial_evidence", "name_en": "Bank Statements / Financial Evidence", "is_required": True,
+             "how_to_obtain": "3-6 months bank statements or passbook copy", "why_required": "Demonstrates trip funding under INA 214(b)"},
+            {"code": "employment_certificate", "name_en": "Certificate of Employment & Leave Letter", "is_required": True,
+             "how_to_obtain": "From employer stating job, salary, and approved leave", "why_required": "Proves ties and return commitment to place of residence"},
+            {"code": "travel_itinerary", "name_en": "Day-by-Day Travel Itinerary", "is_required": True,
+             "how_to_obtain": "Prepared travel schedule with hotel reservations", "why_required": "Validates temporary tourist/business purpose"},
+        ])
+    elif visa_type in ("f1", "student"):
+        docs.extend(common_docs)
+        docs.extend([
+            {"code": "i20", "name_en": "Form I-20 (Certificate of Eligibility)", "is_required": True,
+             "how_to_obtain": "Signed by school DSO and student", "why_required": "Primary proof of SEVP admission and eligibility"},
+            {"code": "sevis_fee_receipt", "name_en": "SEVIS I-901 Fee Receipt ($350)", "is_required": True,
+             "how_to_obtain": "Paid online at FMJfee.com", "why_required": "Mandatory SEVIS fee payment proof"},
+            {"code": "ds160_confirmation", "name_en": "DS-160 Confirmation Page", "is_required": True,
+             "how_to_obtain": "Complete online at ceac.state.gov", "why_required": "Consular visa application confirmation"},
+            {"code": "academic_transcripts", "name_en": "Academic Transcripts & Diplomas", "is_required": True,
+             "how_to_obtain": "From prior educational institutions", "why_required": "Proves academic qualification for degree program"},
+            {"code": "financial_evidence", "name_en": "Bank Statements & Balance Certificate", "is_required": True,
+             "how_to_obtain": "Bank certificate covering Year 1 total cost on I-20", "why_required": "Proves financial capability under INA 214(b)"},
         ])
 
     # Extract form references from page
@@ -478,14 +497,29 @@ def _extract_us_eligibility(html: str, visa_type: str) -> list[dict[str, Any]]:
             {"key": "annual_cap_not_reached", "operator": "equals", "value": "true",
              "failure_status": "at_risk", "message": "H-1B petitions are subject to an annual cap (currently 65,000 + 20,000 for US master's)"},
         ])
-    elif visa_type == "l1":
+    elif visa_type in ("b1b2", "tourist"):
         rules.extend([
-            {"key": "worked_at_foreign_entity_1yr", "operator": "equals", "value": "true",
-             "failure_status": "fail", "message": "Must have worked for qualifying foreign entity for at least 1 year in the past 3 years"},
-            {"key": "qualifying_relationship_exists", "operator": "equals", "value": "true",
-             "failure_status": "fail", "message": "US and foreign entities must have a qualifying relationship (parent, subsidiary, affiliate)"},
-            {"key": "managerial_executive_specialized", "operator": "equals", "value": "true",
-             "failure_status": "fail", "message": "Position must be managerial, executive, or require specialized knowledge"},
+            {"key": "has_sufficient_funds", "operator": "equals", "value": True,
+             "failure_status": "fail", "message": "Must demonstrate sufficient liquid funds under INA 214(b)"},
+            {"key": "has_criminal_record", "operator": "equals", "value": False,
+             "failure_status": "fail", "message": "Must not have disqualifying criminal record under INA 212(a)"},
+            {"key": "has_vwp_denial_history", "operator": "equals", "value": False,
+             "failure_status": "fail", "message": "Prior ESTA denial or U.S. overstay requires consular adjudication"},
+            {"key": "intended_length_of_stay_days", "operator": "max", "value": 90,
+             "failure_status": "warning", "message": "Stays over 90 days require full B1/B2 visa and face high scrutiny"},
+        ])
+    elif visa_type in ("f1", "student"):
+        rules.extend([
+            {"key": "has_i20", "operator": "equals", "value": True,
+             "failure_status": "fail", "message": "Must have valid signed Form I-20 from SEVP-certified institution"},
+            {"key": "has_sevis_fee_receipt", "operator": "equals", "value": True,
+             "failure_status": "fail", "message": "Must pay SEVIS I-901 fee ($350) prior to interview"},
+            {"key": "has_financial_support", "operator": "equals", "value": True,
+             "failure_status": "fail", "message": "Must document liquid funds covering Year 1 cost on I-20"},
+            {"key": "interview_aware", "operator": "equals", "value": True,
+             "failure_status": "review", "message": "Mandatory in-person interview required for student visas"},
+            {"key": "criminal_disclosures", "operator": "equals", "value": False,
+             "failure_status": "review", "message": "Must be admissible under INA 212(a)"},
         ])
 
     return rules

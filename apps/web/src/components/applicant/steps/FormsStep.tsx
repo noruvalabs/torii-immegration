@@ -25,10 +25,38 @@ type FormsStepProps = {
 
 function getFormMetadata(code: string): { title: string; purpose: string; officialUrl?: string } {
   const c = code.toLowerCase();
-  if (c.includes("ds_160") || c.includes("ds160") || c.includes("b1") || c.includes("b2")) {
+  if (c === "i901" || c.includes("i901") || c.includes("sevis_fee")) {
     return {
-      title: "US Nonimmigrant Visa Application (DS-160)",
-      purpose: "Official US Department of State form required for all tourist (B2) and business (B1) travel. Collects biographical data, travel itinerary, and security declaration.",
+      title: "Form I-901 (SEVIS Fee Payment Confirmation)",
+      purpose: "Mandatory Student and Exchange Visitor Program (SEVP) fee payment filed online at FMJfee.com ($350 for F-1 / $220 for J-1). Required before consular interview.",
+      officialUrl: "https://www.fmjfee.com/i901fee/index.html",
+    };
+  }
+  if (c === "i20" || c.includes("i20") || c.includes("i-20")) {
+    return {
+      title: "Form I-20 (Certificate of Eligibility for F-1 Student Status)",
+      purpose: "Official Department of Homeland Security certificate issued by your SEVP-certified U.S. school confirming admission, SEVIS ID, degree level, and estimated cost.",
+      officialUrl: "https://www.ice.gov/sevis",
+    };
+  }
+  if (c === "i134" || c.includes("i134") || c.includes("i-134") || c.includes("affidavit")) {
+    return {
+      title: "Form I-134 (Declaration of Financial Support)",
+      purpose: "USCIS declaration executed by a sponsor (parent, relative, or employer) proving sufficient liquid funds and income to support the applicant without unauthorized work.",
+      officialUrl: "https://www.uscis.gov/i-134",
+    };
+  }
+  if (c.includes("appointment") || c.includes("mrv")) {
+    return {
+      title: "U.S. Visa Appointment Portal & MRV Fee Scheduling",
+      purpose: "Official U.S. Embassy scheduling profile generating the MRV fee payment slip ($185) and the in-person interview confirmation appointment letter.",
+      officialUrl: "https://travel.state.gov/content/travel/en/us-visas/visa-information-resources/policy-updates.html",
+    };
+  }
+  if (c.includes("ds_160") || c.includes("ds160") || c.includes("b1") || c.includes("b2") || c.includes("f1")) {
+    return {
+      title: "Online Nonimmigrant Visa Application (Form DS-160)",
+      purpose: "Official U.S. Department of State application submitted via CEAC. Collects biographical data, passport info, travel plans, SEVIS/educational records, and security screening.",
       officialUrl: "https://ceac.state.gov/genniv/",
     };
   }
@@ -46,9 +74,16 @@ function getFormMetadata(code: string): { title: string; purpose: string; offici
       officialUrl: "https://www.gov.uk/standard-visitor-visa/apply",
     };
   }
+  if (c.includes("extension") || c.includes("stay")) {
+    return {
+      title: "Application for Extension of Period of Stay (在留期間更新許可申請書)",
+      purpose: "Official Immigration Services Agency of Japan (MOJ) form for extending lawful residence status in Japan.",
+      officialUrl: "https://www.moj.go.jp/isa/applications/procedures/16-3.html",
+    };
+  }
   return {
-    title: "Standard Tourist / Visitor Visa Application Form",
-    purpose: "Mandated government filing form required by immigration authorities to verify passport details, travel itinerary, return ticket, and financial sufficiency prior to entry authorization.",
+    title: "Official Visa Application Form",
+    purpose: "Mandated government filing form required by immigration authorities to verify applicant credentials, itinerary, and financial backing.",
     officialUrl: undefined,
   };
 }

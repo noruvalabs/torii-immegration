@@ -60,17 +60,42 @@ function matchWalletToChecklist(walletDoc: WalletDocument, checklistCode: string
   if (code.includes("photo") || code.includes("photograph")) {
     return combined.includes("photo") || combined.includes("photograph");
   }
+  if (code.includes("i20") || code.includes("i-20")) {
+    return combined.includes("i20") || combined.includes("i-20") || combined.includes("eligibility");
+  }
+  if (code.includes("sevis")) {
+    return combined.includes("sevis") || combined.includes("i901") || combined.includes("i-901");
+  }
+  if (code.includes("transcript") || code.includes("degree") || code.includes("diploma") || code.includes("test") || code.includes("admission")) {
+    return (
+      combined.includes("transcript") ||
+      combined.includes("degree") ||
+      combined.includes("diploma") ||
+      combined.includes("toefl") ||
+      combined.includes("ielts") ||
+      combined.includes("score") ||
+      combined.includes("admission") ||
+      combined.includes("acceptance")
+    );
+  }
   if (
     code.includes("fund") ||
     code.includes("bank") ||
     code.includes("financial") ||
-    code.includes("finance")
+    code.includes("finance") ||
+    code.includes("tsucho") ||
+    code.includes("sponsor") ||
+    code.includes("scholarship")
   ) {
     return (
       combined.includes("fund") ||
       combined.includes("bank") ||
       combined.includes("financial") ||
-      combined.includes("statement")
+      combined.includes("statement") ||
+      combined.includes("tsucho") ||
+      combined.includes("balance") ||
+      combined.includes("sponsor") ||
+      combined.includes("scholarship")
     );
   }
   if (
@@ -78,7 +103,8 @@ function matchWalletToChecklist(walletDoc: WalletDocument, checklistCode: string
     code.includes("travel") ||
     code.includes("flight") ||
     code.includes("hotel") ||
-    code.includes("accommodation")
+    code.includes("accommodation") ||
+    code.includes("invitation")
   ) {
     return (
       combined.includes("itinerary") ||
@@ -86,19 +112,26 @@ function matchWalletToChecklist(walletDoc: WalletDocument, checklistCode: string
       combined.includes("flight") ||
       combined.includes("hotel") ||
       combined.includes("accommodation") ||
-      combined.includes("booking")
+      combined.includes("booking") ||
+      combined.includes("invitation")
     );
   }
-  if (code.includes("employment") || code.includes("ties") || code.includes("job")) {
+  if (code.includes("employment") || code.includes("ties") || code.includes("job") || code.includes("zaishoku") || code.includes("tokibo") || code.includes("zaigaku")) {
     return (
       combined.includes("employment") ||
       combined.includes("job") ||
       combined.includes("employer") ||
-      combined.includes("contract")
+      combined.includes("contract") ||
+      combined.includes("zaishoku") ||
+      combined.includes("tokibo") ||
+      combined.includes("zaigaku")
     );
   }
-  if (code.includes("residence") || code.includes("card")) {
-    return combined.includes("residence") || combined.includes("card");
+  if (code.includes("tax") || code.includes("juminzei") || code.includes("shotoku")) {
+    return combined.includes("tax") || combined.includes("juminzei") || combined.includes("shotoku");
+  }
+  if (code.includes("residence") || code.includes("card") || code.includes("zairyu")) {
+    return combined.includes("residence") || combined.includes("card") || combined.includes("zairyu");
   }
   return docType === code || name.includes(code) || combined.includes(code.replaceAll("_", " "));
 }
