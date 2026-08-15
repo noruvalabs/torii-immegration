@@ -9,6 +9,7 @@ import structlog
 from fastapi import FastAPI
 
 from torii_ai import __version__
+from torii_ai.api.agentic import router as agentic_router
 from torii_ai.api.chat import router as chat_router
 from torii_ai.api.docs import build_docs_router
 from torii_ai.api.health import router as health_router
@@ -54,6 +55,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(chat_router)
     app.include_router(ocr_router)
     app.include_router(ops_router)
+    app.include_router(agentic_router)
     return app
 
 

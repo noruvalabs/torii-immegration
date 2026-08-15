@@ -10,7 +10,6 @@ changes, and flags them for human review before anything goes live (NF-9).
 
 from __future__ import annotations
 
-import hashlib
 import json
 import re
 from dataclasses import dataclass, field
@@ -22,6 +21,7 @@ import structlog
 
 from torii_ai.config import Settings
 from torii_ai.llm.groq import ChatClient
+from torii_ai.services.web_fetch import fetch_govuk_text, scrape_pages
 from torii_ai.tools.tavily import SearchClient
 
 log = structlog.get_logger()
@@ -49,6 +49,34 @@ OFFICIAL_DOMAINS: dict[str, list[str]] = {
     "ID": ["imigrasi.go.id"],
 }
 
+# Diplomatic-mission domain patterns, keyed by destination country. ``{cc}`` is filled with
+# the applicant's nationality's lowercase ISO-2 code, so a Bangladeshi applicant to Japan
+# reaches ``bd.emb-japan.go.jp`` — the page that actually states the origin-country filing
+# channel, document list, and fee, which the destination-only domains above never surface.
+MISSION_DOMAIN_PATTERNS: dict[str, list[str]] = {
+    "JP": ["{cc}.emb-japan.go.jp"],
+    "US": ["{cc}.usembassy.gov"],
+    "UK": ["gov.uk"],
+    "GB": ["gov.uk"],
+    "CA": ["international.gc.ca"],
+    "AU": ["{cc}.embassy.gov.au"],
+}
+
+
+def mission_domains_for(destination: str, nationality: str | None) -> list[str]:
+    """Mission-in-origin-country domains for a destination + applicant nationality.
+
+    Empty when the destination has no known mission-domain pattern or no nationality was
+    given — callers union this with :func:`official_domains_for`'s destination domains.
+    """
+    if not nationality:
+        return []
+    patterns = MISSION_DOMAIN_PATTERNS.get(destination.upper())
+    if not patterns:
+        return []
+    cc = nationality.lower()
+    return [pattern.format(cc=cc) for pattern in patterns]
+
 _COUNTRY_NAMES: dict[str, str] = {
     "JP": "Japan",
     "US": "United States",
@@ -71,7 +99,7 @@ _COUNTRY_NAMES: dict[str, str] = {
 }
 
 
-def _country_label(code: str | None) -> str:
+def country_label(code: str | None) -> str:
     if not code:
         return ""
     return _COUNTRY_NAMES.get(code.upper(), code.upper())
@@ -90,11 +118,11 @@ def build_queries(
     Every query names the destination country and the visa purpose so the retrieved pages
     belong to this case even before the domain allowlist is applied.
     """
-    dest = _country_label(destination)
+    dest = country_label(destination)
     vc = visa_category.lower().replace("_", " ")
     act = action.lower().replace("_", " ")
-    origin = _country_label(origin_country)
-    residence = _country_label(residence_country) if residence_country else ""
+    origin = country_label(origin_country)
+    residence = country_label(residence_country) if residence_country else ""
 
     queries = [
         f"{dest} {vc} visa {act} requirements official government",
@@ -114,9 +142,22 @@ def build_queries(
     return queries
 
 
-def official_domains_for(destination: str) -> list[str] | None:
-    """Official-domain allowlist for a destination, or None to use settings base."""
-    return OFFICIAL_DOMAINS.get(destination.upper())
+def official_domains_for(
+    destination: str, nationality: str | None = None
+) -> list[str] | None:
+    """Official-domain allowlist for a destination, unioned with mission-in-origin domains
+    for ``nationality`` when known. ``None`` (only when nothing at all matches) tells the
+    caller to fall back to the settings-level base allowlist.
+    """
+    dest_domains = OFFICIAL_DOMAINS.get(destination.upper())
+    mission = mission_domains_for(destination, nationality)
+    if not dest_domains and not mission:
+        return None
+    combined = list(dest_domains or [])
+    for domain in mission:
+        if domain not in combined:
+            combined.append(domain)
+    return combined
 
 EXTRACT_SYSTEM = """You are an immigration data extractor. Given scraped government page content,
 extract structured immigration data for a specific jurisdiction and visa category.
@@ -259,7 +300,7 @@ class OpsScraper:
         Used for streaming research UIs: each event is a dict with ``type`` of
         ``progress`` or ``complete``. Progress events include key/label/detail.
         """
-        dest_label = _country_label(jurisdiction_code) or jurisdiction_code
+        dest_label = country_label(jurisdiction_code) or jurisdiction_code
         yield {
             "type": "progress",
             "key": "prepare",
@@ -274,7 +315,7 @@ class OpsScraper:
             origin_country=origin_country,
             residence_country=residence_country,
         )
-        domains = official_domains_for(jurisdiction_code)
+        domains = official_domains_for(jurisdiction_code, origin_country)
         domains_label = (
             ", ".join(domains[:3]) if domains else "the configured official-source allowlist"
         )
@@ -386,84 +427,19 @@ class OpsScraper:
     async def _scrape_pages(self, urls: list[str]) -> list[dict[str, str]]:
         """Fetch page content from URLs with timeout and error handling.
 
-        JS-rendered government sites (gov.uk serves a static shell to plain fetches) are read
-        through their official content API instead, so the article body is actually scraped.
-        Identical bodies (e.g. the same gov.uk guide returned for many sub-paths) are
-        deduplicated by content hash to keep the extraction prompt small.
+        Delegates to :mod:`torii_ai.services.web_fetch`, shared with the per-stage agentic
+        research engine so both scrape identically (gov.uk content-API handling, dedup by
+        content hash).
         """
-        content: list[dict[str, str]] = []
-        seen: set[str] = set()
-        async with httpx.AsyncClient(
-            timeout=self._settings.tavily_timeout_seconds,
-            follow_redirects=True,
-            headers={"User-Agent": "Torii-OPS-Worker/1.0"},
-        ) as client:
-            for url in urls:
-                text = await self._fetch_page_text(client, url)
-                if not text:
-                    continue
-                digest = hashlib.sha256(text.encode("utf-8", "ignore")).hexdigest()
-                if digest in seen:
-                    log.info("scraper.page_duplicate", url=url)
-                    continue
-                seen.add(digest)
-                content.append({"url": url, "text": text[: self._settings.scrape_page_chars]})
-                log.info("scraper.page_scraped", url=url, chars=len(text))
-        return content
-
-    async def _fetch_page_text(self, client: httpx.AsyncClient, url: str) -> str:
-        """Return readable page text for one URL ('' on failure)."""
-        try:
-            if _is_govuk(url):
-                text = await self._scrape_govuk(client, url)
-                if text:
-                    return text
-            resp = await client.get(url)
-            if resp.status_code != 200:
-                return ""
-            ctype = resp.headers.get("content-type", "")
-            if ctype and not ctype.startswith("text/") and "html" not in ctype:
-                log.info("scraper.page_skipped", url=url, content_type=ctype)
-                return ""
-            return _strip_html(resp.text[:8000])
-        except (httpx.HTTPError, ValueError) as exc:
-            log.warning("scraper.page_failed", url=url, error=str(exc))
-            return ""
+        return await scrape_pages(
+            urls,
+            timeout_seconds=self._settings.tavily_timeout_seconds,
+            page_chars=self._settings.scrape_page_chars,
+        )
 
     async def _scrape_govuk(self, client: httpx.AsyncClient, page_url: str) -> str:
-        """Read a gov.uk article via its public content API (``/api/content/<path>``).
-
-        The published HTML is a JS-rendered shell; the content API returns the full body as
-        JSON (``details.parts[].body`` for guides, ``details.body`` otherwise). Handles the
-        ``redirect`` content type by following the declared destination.
-        """
-        try:
-            parsed = httpx.URL(page_url)
-            host = str(parsed.host)
-            api_url = f"{parsed.scheme}://{host}/api/content{parsed.path}"
-            resp = await client.get(api_url)
-            if resp.status_code != 200:
-                return ""
-            data = resp.json()
-            if not isinstance(data, dict):
-                return ""
-            if data.get("document_type") == "redirect":
-                redirects = data.get("redirects") or []
-                if redirects:
-                    dest = redirects[0].get("destination")
-                    if dest:
-                        next_url = f"{parsed.scheme}://{host}{dest}"
-                        return await self._scrape_govuk(client, next_url)
-                return ""
-            details = data.get("details") or {}
-            parts = details.get("parts") or []
-            if parts:
-                bodies = [p.get("body") or "" for p in parts]
-                return _strip_html("\n".join(bodies))
-            return _strip_html(details.get("body") or "")
-        except (httpx.HTTPError, ValueError, TypeError) as exc:
-            log.warning("scraper.govuk_api_failed", url=page_url, error=str(exc))
-            return ""
+        """Read a gov.uk article via its public content API. Delegates to ``web_fetch``."""
+        return await fetch_govuk_text(client, page_url)
 
     async def _extract_data(
         self,
@@ -483,8 +459,8 @@ class OpsScraper:
             for i, c in enumerate(content)
         )
 
-        origin_label = _country_label(origin_country)
-        residence_label = _country_label(residence_country)
+        origin_label = country_label(origin_country)
+        residence_label = country_label(residence_country)
         case_context = "Applicant profile: standard case for this destination."
         if origin_label and residence_label and origin_label != residence_label:
             case_context = (
@@ -517,7 +493,7 @@ Return JSON only."""
 
         try:
             raw = await self._extract_chat.complete(system=EXTRACT_SYSTEM, user=user_prompt)
-            data = _extract_json(raw)
+            data = extract_json(raw)
         except Exception as exc:
             log.warning("scraper.llm_failed", error=str(exc))
             data = None
@@ -573,24 +549,7 @@ Return JSON only."""
         return result
 
 
-def _is_govuk(url: str) -> bool:
-    """True when a URL is served by the JS-rendered gov.uk frontend."""
-    try:
-        host = httpx.URL(url).host or ""
-    except Exception:
-        return False
-    return host == "www.gov.uk" or host.endswith(".gov.uk")
-
-
-def _strip_html(raw: str) -> str:
-    """Strip script/style blocks and tags, collapse whitespace."""
-    text = re.sub(r"<script[^>]*>.*?</script>", "", raw, flags=re.DOTALL)
-    text = re.sub(r"<style[^>]*>.*?</style>", "", text, flags=re.DOTALL)
-    text = re.sub(r"<[^>]+>", " ", text)
-    return re.sub(r"\s+", " ", text).strip()
-
-
-def _extract_json(raw: str) -> dict[str, Any] | None:
+def extract_json(raw: str) -> dict[str, Any] | None:
     """Extract JSON from LLM response, handling markdown fences and <think> blocks."""
     text = raw.strip()
     # Reasoning models prepend a <think>...</think> deliberation block — drop it so the
