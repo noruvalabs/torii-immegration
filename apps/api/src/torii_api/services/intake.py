@@ -35,6 +35,8 @@ class IntakeQuestion(BaseModel):
     max_length: int | None = None
     min_value: int | None = None
     max_value: int | None = None
+    section: str | None = None
+    citation: dict[str, Any] | None = None
 
 
 class IntakeProgress(BaseModel):

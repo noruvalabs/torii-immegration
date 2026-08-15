@@ -275,12 +275,15 @@ class OpsScraper:
             residence_country=residence_country,
         )
         domains = official_domains_for(jurisdiction_code)
+        domains_label = (
+            ", ".join(domains[:3]) if domains else "the configured official-source allowlist"
+        )
 
         yield {
             "type": "progress",
             "key": "search",
             "label": "Searching official government sources",
-            "detail": f"{len(queries)} targeted queries on {', '.join(domains[:3])}",
+            "detail": f"{len(queries)} targeted queries on {domains_label}",
         }
 
         # Phase 1: Discover sources via Tavily (restricted to official destination domains)

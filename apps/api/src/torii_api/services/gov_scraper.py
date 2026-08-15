@@ -437,6 +437,13 @@ def _extract_us_documents(html: str, visa_type: str) -> list[dict[str, Any]]:
              "how_to_obtain": "Detailed job duties and organizational placement", "why_required": "Establishes managerial/executive/specialized knowledge role"},
         ])
     elif visa_type == "ead":
+        docs.extend(common_docs)
+        docs.extend([
+            {"code": "form_i765", "name_en": "Form I-765 (Application for Employment Authorization)", "is_required": True,
+             "how_to_obtain": "Download from uscis.gov or file online", "why_required": "Main EAD application form"},
+            {"code": "basis_for_eligibility", "name_en": "Evidence of Basis for Eligibility", "is_required": True,
+             "how_to_obtain": "Supporting documents based on immigration category (I-94, pending I-485 receipt, etc.)", "why_required": "Proves eligibility category for EAD"},
+        ])
     elif visa_type in ("b1b2", "tourist"):
         docs.extend(common_docs)
         docs.extend([
@@ -496,6 +503,15 @@ def _extract_us_eligibility(html: str, visa_type: str) -> list[dict[str, Any]]:
              "failure_status": "at_risk", "message": "Employer must pay at least the prevailing wage for the occupation"},
             {"key": "annual_cap_not_reached", "operator": "equals", "value": "true",
              "failure_status": "at_risk", "message": "H-1B petitions are subject to an annual cap (currently 65,000 + 20,000 for US master's)"},
+        ])
+    elif visa_type == "l1":
+        rules.extend([
+            {"key": "worked_at_foreign_entity_1yr", "operator": "equals", "value": "true",
+             "failure_status": "fail", "message": "Must have worked for qualifying foreign entity for at least 1 year in the past 3 years"},
+            {"key": "qualifying_relationship_exists", "operator": "equals", "value": "true",
+             "failure_status": "fail", "message": "US and foreign entities must have a qualifying relationship (parent, subsidiary, affiliate)"},
+            {"key": "managerial_executive_specialized", "operator": "equals", "value": "true",
+             "failure_status": "fail", "message": "Position must be managerial, executive, or require specialized knowledge"},
         ])
     elif visa_type in ("b1b2", "tourist"):
         rules.extend([

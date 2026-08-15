@@ -45,7 +45,7 @@ export type GeoData = {
 };
 
 async function request<T>(path: string, options: RequestInit): Promise<T> {
-  const token = localStorage.getItem("token");
+  const token = localStorage.getItem("torii_token");
   const res = await fetch(`${API}${path}`, {
     ...options,
     headers: {

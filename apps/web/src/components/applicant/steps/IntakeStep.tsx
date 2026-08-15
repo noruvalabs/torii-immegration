@@ -1,20 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState, useMemo } from "react";
-import {
-  Check,
-  Sparkles,
-  Camera,
-  ExternalLink,
-  ShieldCheck,
-  FileText,
-  GraduationCap,
-  ChevronLeft,
-  ChevronRight,
-  Search,
-} from "lucide-react";
+import { Check, ExternalLink, ChevronLeft, ChevronRight, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import type { IntakeState, User } from "./types";
 
@@ -63,8 +52,6 @@ function matchEnumOption(value: string, options: string[]): string | null {
 
 export function IntakeStep({ state, profile, onAnswer }: IntakeStepProps) {
   const [drafts, setDrafts] = useState<Record<string, unknown>>({});
-  const [ocrLoading, setOcrLoading] = useState(false);
-  const [ocrSuccessMsg, setOcrSuccessMsg] = useState<string | null>(null);
   const [activeSection, setActiveSection] = useState<string | null>(null);
   const [enumSearch, setEnumSearch] = useState<Record<string, string>>({});
 
@@ -107,7 +94,7 @@ export function IntakeStep({ state, profile, onAnswer }: IntakeStepProps) {
   const sectionsMap = useMemo(() => {
     const map = new Map<string, typeof state.questions>();
     for (const q of state.questions) {
-      const sec = (q as unknown as { section?: string }).section || "General Details";
+      const sec = q.section || "General Details";
       if (!map.has(sec)) map.set(sec, []);
       map.get(sec)!.push(q);
     }
@@ -140,142 +127,14 @@ export function IntakeStep({ state, profile, onAnswer }: IntakeStepProps) {
     }
   }
 
-  /** AI Document Capture Simulation / Instant OCR Auto-Fill */
-  async function triggerAiDocumentOcr(docKind: "passport" | "residence_card" | "i20") {
-    setOcrLoading(true);
-    setOcrSuccessMsg(null);
-    await new Promise((res) => setTimeout(res, 850));
-
-    let simulated: Record<string, unknown> = {};
-    if (docKind === "passport") {
-      simulated = {
-        full_name: profile?.full_name || "TANAKA Kenji",
-        nationality: "JP",
-        gender: "Male",
-        passport_number: "TK8849201",
-        passport_type: "Regular",
-        passport_issuing_country: "Japan",
-        passport_issuing_city: "Tokyo",
-        passport_issue_date: "2024-04-10",
-        passport_expiry: "2034-04-10",
-        passport_is_epassport: true,
-        city_of_birth: "Tokyo",
-        country_of_birth: "Japan",
-        date_of_birth: "1996-08-15",
-      };
-    } else if (docKind === "residence_card") {
-      simulated = {
-        residence_card_number: "AB12345678JP",
-        japan_residence_status: "Engineer/Specialist in Humanities/International Services",
-        japan_residence_expiry: "2027-09-30",
-        registered_address_japan: "Tokyo-to, Minato-ku, Roppongi 6-10-1",
-        current_residence_country: "Japan",
-        current_location_country: "Japan",
-      };
-    } else {
-      simulated = {
-        has_i20: true,
-        sevis_id: "N0012345678",
-        school_sevis_code: "NYC214F00123000",
-        school_name: "Columbia University in the City of New York",
-        course_of_study_major: "Computer Science (11.0701)",
-        study_level: "Master_Degree",
-        program_start_date: "2026-09-01",
-        program_end_date: "2028-05-30",
-        school_address: "116th and Broadway, New York, NY",
-        school_zip_code: "10027",
-        dso_name: "Sarah Jenkins",
-        i20_year1_total_cost_usd: 68500,
-        has_sevis_fee_receipt: true,
-        has_financial_support: true,
-        applicant_liquid_funds_jpy: 12000000,
-        interview_aware: true,
-      };
-    }
-
-    setDrafts((prev) => ({ ...prev, ...simulated }));
-    for (const [k, v] of Object.entries(simulated)) {
-      onAnswer(k, v);
-    }
-    setOcrLoading(false);
-    setOcrSuccessMsg(
-      docKind === "passport"
-        ? "AI OCR extracted Passport fields (Full Name, Nationality, Passport #, Expiry Date, Place of Birth)."
-        : docKind === "residence_card"
-          ? "AI OCR extracted Residence Card fields (Card #, Status, Expiry, Registered Address)."
-          : "AI OCR extracted Form I-20 / SEVIS fields (SEVIS ID, School Code, Major, Program Dates, Year 1 Cost)."
-    );
-  }
-
   const pct = state.progress.total > 0
     ? Math.round((state.progress.answered / state.progress.total) * 100)
     : 0;
 
   const currentQuestions = sectionsMap.get(currentSectionKey) || state.questions;
-  const isStudentCase = state.questions.some((q) => q.key.includes("sevis") || q.key.includes("i20"));
 
   return (
     <div className="space-y-6">
-      {/* Top Banner: AI Document Auto-fill feature badge */}
-      <Card className="border-primary/30 bg-gradient-to-r from-primary/5 via-blue-50/20 to-indigo-50/30 dark:from-primary/10 dark:to-accent/10">
-        <CardContent className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <Badge tone="default" className="border-primary/50 text-primary bg-background gap-1 text-xs font-semibold">
-                <Sparkles className="size-3 text-primary animate-pulse" />
-                AI Smart Document Capture
-              </Badge>
-              <span className="text-xs font-medium text-muted-foreground">Instant Field Extraction</span>
-            </div>
-            <h4 className="text-sm font-semibold">Auto-fill questionnaire with official document scans</h4>
-            <p className="text-xs text-muted-foreground">
-              Extract passport numbers, SEVIS records, and residency status directly into the official schema.
-            </p>
-          </div>
-
-          <div className="flex flex-wrap gap-2 shrink-0">
-            <Button
-              variant="outline"
-              disabled={ocrLoading}
-              onClick={() => void triggerAiDocumentOcr("passport")}
-              className="gap-1.5 text-xs bg-background hover:bg-primary/10 hover:text-primary h-8 px-3 shadow-sm"
-            >
-              <Camera className="size-3.5 text-primary" />
-              Scan Passport
-            </Button>
-
-            <Button
-              variant="outline"
-              disabled={ocrLoading}
-              onClick={() => void triggerAiDocumentOcr("residence_card")}
-              className="gap-1.5 text-xs bg-background hover:bg-primary/10 hover:text-primary h-8 px-3 shadow-sm"
-            >
-              <FileText className="size-3.5 text-blue-600" />
-              Scan Residence Card
-            </Button>
-
-            {isStudentCase && (
-              <Button
-                variant="outline"
-                disabled={ocrLoading}
-                onClick={() => void triggerAiDocumentOcr("i20")}
-                className="gap-1.5 text-xs bg-background hover:bg-primary/10 hover:text-primary h-8 px-3 shadow-sm"
-              >
-                <GraduationCap className="size-3.5 text-emerald-600" />
-                Scan Form I-20
-              </Button>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-
-      {ocrSuccessMsg && (
-        <div className="flex items-center gap-2 rounded-md bg-[var(--color-success)]/10 border border-[var(--color-success)]/30 p-3 text-xs text-[var(--color-success)] font-medium animate-in fade-in">
-          <ShieldCheck className="size-4 shrink-0" />
-          <span>{ocrSuccessMsg}</span>
-        </div>
-      )}
-
       {/* Progress & Section Tabs */}
       <div className="space-y-2">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
@@ -372,7 +231,7 @@ export function IntakeStep({ state, profile, onAnswer }: IntakeStepProps) {
 
           {currentQuestions.map((q) => {
             const current = (state.answers[q.key] ?? drafts[q.key]) as string | number | boolean | undefined;
-            const citation = (q as unknown as { citation?: { title?: string; url?: string } }).citation;
+            const citation = q.citation as { title?: string; url?: string } | null | undefined;
             const hasOptions = q.type === "enum" && q.options && q.options.length > 0;
             const isLongEnum = hasOptions && (q.options?.length ?? 0) > 8;
             const searchVal = enumSearch[q.key] || "";

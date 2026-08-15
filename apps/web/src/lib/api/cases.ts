@@ -58,7 +58,7 @@ export type Case = {
 export type IntakeQuestion = {
   key: string;
   prompt: string;
-  type: "boolean" | "string" | "integer" | "enum";
+  type: "boolean" | "string" | "integer" | "enum" | "date";
   required?: boolean;
   options?: string[] | null;
   show_when?: { key: string; equals: boolean | string | number } | null;
@@ -66,6 +66,8 @@ export type IntakeQuestion = {
   max_length?: number | null;
   min_value?: number | null;
   max_value?: number | null;
+  section?: string | null;
+  citation?: Record<string, unknown> | null;
 };
 
 export type IntakeState = {
