@@ -6,6 +6,8 @@ Product **what** lives in `docs/specs/`. This folder is **when / in what order /
 |---|---|---|
 | [`00_applicant_v1.md`](./00_applicant_v1.md) | Product + eng | Milestones M0–M4, beachhead, deferred work |
 | [`01_frontend_implementation.md`](./01_frontend_implementation.md) | Frontend agent (including small models) | Step-by-step Next.js applicant UI build |
+| [`02_live_research_flow.md`](./02_live_research_flow.md) | Backend + AI agent | Per-case live research (`ScopeResearch`), any country pair |
+| [`03_corridor_bd_jp.md`](./03_corridor_bd_jp.md) | Backend + AI + frontend agent | Corridor admissibility, deep research, correspondence — proven on BD→JP |
 
 ## Read order
 
