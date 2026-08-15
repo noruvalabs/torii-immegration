@@ -22,7 +22,8 @@ question the filing needs* → *eligibility* → *documents* → *forms filled* 
 1. Cover the **full chain** in this effort, not a slice.
 2. Build **both** a hand-authored golden BD→JP pack **and** the research pipeline that must
    reproduce it — the pack is the quality bar and the test fixture for "dynamic == as good as
-   hand-authored."
+   hand-authored." **Superseded 2026-08-15, see Decisions §2 below** — the golden pack becomes an
+   optional later regression fixture, not a blocking milestone.
 3. When a corridor's official route requires a third party (accredited agency, VAC, sponsor),
    **prepare everything and hand off** — never block the case.
 4. Letters/emails are **full LLM drafts, applicant-edited** — not fixed templates, not
@@ -31,6 +32,47 @@ question the filing needs* → *eligibility* → *documents* → *forms filled* 
 Binding constraints, unchanged: **NF-1** rule-governed output is deterministic, never
 model-inferred. **NF-2** nothing user-facing ships without an official-source citation.
 No portal automation — guided-fill only.
+
+## Decisions §2 — pivot to fully agentic, per-stage research (confirmed 2026-08-15)
+
+After M0, manual verification showed the actual felt problem: different visa types/countries
+were still surfacing the **same** questions and documents. Root cause confirmed in code — content
+resolution is pack-first (`content_packs.py` → seeded DB rows), and most scope combinations fall
+through to a generic 8-question static definition (`GENERIC_QUESTIONS` in `seed.py`) rather than
+anything scope-specific. Founder decision: **stop resolving from YAML/DB packs in the request
+path, for every scope, effective now** — not just for scopes lacking a pack. Every case, every
+stage, gets live LLM + web-search research. Two follow-up decisions, each with a stated default:
+
+1. **Universal, not fallback-only.** Live agentic research is the path for *every* case,
+   including scopes that already have a working seeded pack (e.g. JP work-visa renewal). Packs
+   stay on disk as a reference/fallback if a research call fails outright — they are not deleted,
+   just no longer read at request time.
+2. **Per-stage, sequential, not one upfront pass.** Each pipeline stage — intake, eligibility,
+   documents (checklist), forms — runs its **own** fresh search + LLM extraction, informed by
+   everything learned in prior stages (the applicant's actual answers, the eligibility result,
+   etc.), rather than one research call producing everything before intake starts. Slower and
+   more LLM/search calls per case; this is what makes each stage feel like an agent actually
+   working *this* case instead of a lookup.
+
+**How this stays inside NF-1 (reconciled, not waived).** "Use an LLM to validate all info" is
+implemented as two distinct things, not one: the LLM+search step **discovers** candidate content
+for a stage — a citation-backed eligibility rule, a document requirement, a form field mapping —
+exactly as `ops_scraper.py` already does for `ScopeResearch`. The **existing deterministic
+functions** (`services/eligibility.py:evaluate_eligibility`, `services/forms.py:fill_form`, the
+checklist visibility logic) then evaluate the applicant's actual answers against that
+LLM-discovered content, unchanged. The engine never adopts an LLM's verdict on whether a specific
+applicant passes a rule — only what the rule *is*, cited to an official source. This is the same
+boundary the architecture doc already draws between `apps/ai` (proposes) and `apps/api` (decides);
+it now applies per-stage instead of once per scope.
+
+**What this supersedes:** the M1 (`CorridorProfile`) design below is kept but reframed as **stage
+zero** (`admissibility`) of the same per-stage engine, run before a case exists (keyed by scope +
+nationality + residence, no `case_id` yet). M2 (pack selector + golden BD→JP pack) is deferred —
+selectors solve "pick the right static pack," which stops being the mechanism. M3 (aspect-sharded
+research) is superseded by the per-stage engine directly: each stage *is* an aspect now, run in its
+own request rather than concurrently in one pass, because later stages need earlier stages'
+answers. M4 (correspondence), M5 (submission mechanics), and M6 (cleanup) are unaffected in intent,
+only in what feeds them (per-stage research output instead of `CorridorProfile`/pack data).
 
 ## The gaps this closes (verified in code, 2026-08-15)
 
@@ -57,32 +99,57 @@ this doc — the design below is self-contained without it.
 
 ## Design (one paragraph per piece)
 
-1. **`CorridorProfile`** — new cached, citation-gated table keyed by
-   `(destination, purpose, nationality, residence)`, resolved **before** a case exists via
-   `POST /v1/corridors/check`. Payload: `admission` (visa required/route/max stay),
-   `filing_channel` (who files, where, directory), `process` (steps, processing time,
-   biometrics/interview), `fees`, `faq` — every leaf cited or dropped. `compute_guidance` gains a
-   leading `admissibility` phase; a third-party filer is guidance, not a block.
-2. **Mission domains** — `official_domains_for(destination, origin_country)` in
-   `apps/ai/.../services/ops_scraper.py` unions destination domains with mission-in-origin domains
-   (`bd.emb-japan.go.jp` for BD→JP) and **never returns `None`** (fixes a live crash for every
-   country outside the current 17-entry map).
-3. **Aspect-sharded research** — replace the single extraction pass with concurrent aspects
-   (admissibility / channel / eligibility / documents / forms / questions / faq), each its own
-   search → scrape → extract, merged deterministically by natural key.
-4. **Question synthesis** — deterministic, in `apps/api`: every `forms[].field_mappings[].answer_key`
-   with no matching question gets a stub (type inferred, citation copied from the form). This is
-   what makes "all the common questions" a guarantee, not a hope.
-5. **Pack selector** — `ScopeMeta.selector` (`residence_in`/`residence_not_in`/`nationality_in`/
-   `nationality_not_in`) resolves which live definition wins; falls through to research when
-   nothing matches. Fixes G0b.
-6. **The golden BD→JP pack** — `docs/jurisdictions/jp/tourist.new_application.overseas.yml`,
-   `selector: {residence_not_in: [JP]}`, authored to `us/b1b2` depth. The research-quality fixture.
+### Superseded design (kept for history — see Decisions §2)
+
+Items 1–6 below described a `CorridorProfile` table + aspect-sharded-but-concurrent research +
+a YAML pack selector + a hand-authored golden pack. That design assumed packs stay the primary
+content source with research as a fallback. **Replaced** by the agentic per-stage engine in
+"Current design" below. Mission domains (old §2) and question synthesis (old §4) are **not**
+superseded — they're absorbed into the new engine as-is.
+
+### Current design — the agentic per-stage engine
+
+1. **One shared engine, four+one callers.** New `apps/ai/src/torii_ai/services/agentic_research.py`
+   exposes `research_stage(request) -> StageResearchResult` for stage ∈
+   `admissibility | intake | eligibility | documents | forms`. Each stage has its own
+   context-aware query builder and its own narrow LLM extraction schema (reusing
+   `ops_scraper.py`'s page-fetch/`_strip_html`/`_extract_json`/gov.uk-content-API helpers rather
+   than duplicating them). `admissibility` is stage zero, run **before** a case exists (keyed by
+   destination + purpose + action + nationality + residence, no `case_id`); the other four run
+   **per case**, each seeded with everything learned so far (prior answers, the eligibility
+   result, etc.) — sequential, not parallel, because stage N's queries depend on stage N-1's output.
+2. **Two-round search per stage, not one.** Round 1: build queries from context → search
+   (mission-domain-aware, see below) → scrape → LLM extract to the stage's schema, which also
+   returns `insufficient: bool` and `followup_queries: string[]`. If `insufficient` and
+   follow-ups exist, round 2 searches those specific queries and re-extracts, merging. This is the
+   concrete shape of "search with LLM for additional info" for this iteration — a full multi-turn
+   tool-calling agent is a natural later upgrade, not required to stop the static-content problem.
+3. **Mission domains.** `official_domains_for(destination, nationality)` in `ops_scraper.py` unions
+   destination-government domains with mission-in-origin domains (`bd.emb-japan.go.jp` for a BD
+   national applying to JP) and never returns `None` (fixes a live crash for every destination
+   outside the 17-entry map — already landed in M0).
+4. **Question synthesis** (unchanged from the superseded design) — deterministic, in `apps/api`:
+   every `forms[].field_mappings[].answer_key` with no matching question gets a stub. Runs after
+   the `forms` stage's research, so the intake question set is always complete even where the
+   LLM's own `intake` stage under-asked.
+5. **Per-case, per-stage storage.** New `CaseStageResearch` table: `case_id`, `stage`, `status`,
+   `payload`, `source_pages`, `error`, `researched_at`, unique per `(case_id, stage)`. Citation
+   gate reuses `ops_ingest.validated_for_promote`'s discipline per stage (rules/documents need an
+   `http` citation; forms need field mappings; questions need a `parse_questions`-compatible
+   shape). `admissibility` results are cached by scope+nationality+residence (shared across
+   applicants on the same corridor, like the old `CorridorProfile`); `intake`/`eligibility`/
+   `documents`/`forms` results are per-case only, since they depend on this applicant's answers.
+6. **Guidance reuses the existing `research` phase.** No new phase names: `compute_guidance` gains
+   a `research_stage: str | None` field. Before entering `intake`, if `CaseStageResearch(case,
+   "intake")` isn't ready, phase stays `research` with `research_stage="intake"`; same pattern
+   before `eligibility` (stage `eligibility`), before `checklist` (stage `documents`), before
+   `forms` (stage `forms`). `ResearchStep.tsx` already polls and renders a research timeline — it
+   only needs the stage label to describe what's being researched, not a new UI.
 7. **Correspondence** — extend `FormTemplate`/`CaseGeneratedForm` with `kind`/`audience`/
    `body_template`/`body_text`/`edited_body`; deterministic slot-fill + optional LLM prose draft,
    applicant-edited, never auto-sent.
-8. **Submission mechanics from data** — `services/packet.py` reads the `CorridorProfile` payload
-   instead of a hardcoded if/elif chain; no uncited number ever renders.
+8. **Submission mechanics from data** — `services/packet.py` reads the case's `admissibility`
+   stage research instead of a hardcoded if/elif chain; no uncited number ever renders.
 9. **Frontend** — `/scope` gains nationality + residence + an admissibility card before case
    creation; new `AdmissibilityStep`/`CorrespondenceStep`; `PacketStep` renders server data instead
    of client-generated text.
@@ -126,29 +193,43 @@ API (`uv run pytest`, 72 passed) and `apps/web` (`pnpm typecheck`, clean) both g
 `pnpm lint` fails on a pre-existing ESLint/eslintrc circular-JSON error unrelated to this branch
 (reproduced identically with these changes stashed out).
 
-### M1 — Corridor
-- [ ] `CorridorProfile` model + migration `0013_corridor_profiles`
-- [ ] `services/corridor.py` + `api/corridors.py` (`POST /v1/corridors/check`, `GET /{id}`)
-- [ ] `corridor.research.queued` outbox handler
-- [ ] Mission domains in `ops_scraper.py`
-- [ ] `admissibility` guidance phase + `corridor_third_party_filer` / `corridor_not_admissible`
+### M1 — Shared agentic engine + admissibility stage (was "Corridor")
+- [ ] `apps/ai/.../services/agentic_research.py`: `StageResearchRequest`/`Result`, per-stage query
+      builders, per-stage extraction schemas, two-round search-if-insufficient
+- [ ] Mission domains in `ops_scraper.py` (`official_domains_for(destination, nationality)`,
+      never `None`)
+- [ ] New AI endpoint `POST /ai/agentic/research-stage`
+- [ ] `CaseStageResearch` model + migration `0013_case_stage_research`
+- [ ] `services/agentic.py` (api-side): find/cache/gate per stage
+- [ ] Outbox topic `case.stage_research.queued` `{case_id|null, stage}` + worker handler
+      `run_stage_research` (generalized from `run_case_research`)
+- [ ] `admissibility` stage runnable pre-case (no `case_id`), cached by scope+nationality+residence
+- [ ] `POST /v1/corridors/check` (unchanged endpoint shape) backed by the admissibility stage
 - [ ] `/scope` admissibility card + `AdmissibilityStep.tsx`
-- [ ] Verify: BD→JP corridor check returns route/filer/fee/processing-time, each cited
+- [ ] Verify: BD→JP admissibility check returns route/filer/fee/processing-time, each cited
 
-### M2 — Pack selector + the golden pack
-- [ ] `PackSelector` model + `pack_matches` + `selector_specificity`
-- [ ] Migration `0014_definition_selector`; fix `seed.py` upsert key
-- [ ] Selector-aware resolution in `cases.py`/`case_workflow.py`, falling through to research
-- [ ] `selector: {residence_in: [JP]}` on the existing guarantor pack
-- [ ] `jp/tourist.new_application.overseas.yml` authored to B1/B2 depth
-- [ ] Verify: BD/BD resolves overseas pack; JP-resident still resolves guarantor pack
+### M2 — Intake stage wired end to end (was "Pack selector + golden pack" — deferred)
+- [ ] `compute_guidance` gains `research_stage`; `research` phase reused for stage `intake`
+- [ ] `cases.py:_intake_questions_for_case` stops reading `IntakeDefinition`/packs; always resolves
+      via `CaseStageResearch(case, "intake")`, enqueuing when absent/stale
+- [ ] `ResearchStep.tsx` renders `research_stage` in its timeline label
+- [ ] Verify: a BD/BD→JP tourist case and a US/US→US b1b2 case produce **visibly different**
+      intake question sets, live, with citations — the concrete fix for "same questions for every
+      country"
+- [ ] Existing pack-driven intake tests (`test_us02_intake.py`, `test_content_packs.py` intake
+      assertions) updated to reflect research-driven intake; deterministic-logic tests
+      (`validate_answer`, `progress_for`, `is_visible`) are unaffected and stay as-is
 
-### M3 — Deep research
-- [ ] Aspect-sharded `research_aspects.py`, concurrent search/scrape/extract per aspect
-- [ ] `question_synthesis.py` + wired into `run_case_research` and `seed.py`
+### M3 — Eligibility, documents, forms stages wired end to end
+- [ ] Same pattern as M2 for `eligibility` (feeds `evaluate_eligibility` unchanged), `documents`
+      (feeds checklist visibility unchanged), `forms` (feeds `fill_form` unchanged) — each stage's
+      research call includes prior answers/results as context
+- [ ] `question_synthesis.py`: every `forms` field mapping with no matching question gets a stub;
+      wired in after the `forms` stage's research
 - [ ] `test_question_coverage.py`
-- [ ] `faq` slice end to end
-- [ ] Research-quality gate: diff BD→JP research output against the golden pack, report recall
+- [ ] Verify: full BD→JP walk — eligibility findings cited to BD-specific sources (not generic JP
+      pages), checklist items match what the mission actually requires, forms match the real form
+      the mission names
 
 ### M4 — Correspondence
 - [ ] `FormTemplate`/`CaseGeneratedForm` schema extension + migration `0015_correspondence`
