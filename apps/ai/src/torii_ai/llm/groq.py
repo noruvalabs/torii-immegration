@@ -14,31 +14,45 @@ class ChatClient(Protocol):
 
 
 class GroqChatClient:
-    """Thin wrapper around the OpenAI SDK pointed at Groq."""
+    """Thin wrapper around the OpenAI SDK pointed at Groq with fallback support."""
 
-    def __init__(self, settings: Settings, model: str | None = None) -> None:
+    def __init__(
+        self,
+        settings: Settings,
+        model: str | None = None,
+        fallback: ChatClient | None = None,
+    ) -> None:
         self._settings = settings
         self._model = model or settings.groq_model
+        self._fallback = fallback
         self._client = AsyncOpenAI(
             api_key=settings.groq_api_key or "missing",
             base_url=settings.groq_base_url,
             timeout=settings.groq_timeout_seconds,
+            max_retries=0,
         )
 
     async def complete(self, *, system: str, user: str) -> str:
         if not self._settings.groq_api_key:
+            if self._fallback:
+                return await self._fallback.complete(system=system, user=user)
             raise RuntimeError("TORII_AI_GROQ_API_KEY is not configured")
-        response = await self._client.chat.completions.create(
-            model=self._model,
-            messages=[
-                {"role": "system", "content": system},
-                {"role": "user", "content": user},
-            ],
-            temperature=0.2,
-            max_tokens=self._settings.groq_max_tokens,
-        )
-        content = response.choices[0].message.content
-        return content or ""
+        try:
+            response = await self._client.chat.completions.create(
+                model=self._model,
+                messages=[
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": user},
+                ],
+                temperature=0.2,
+                max_tokens=self._settings.groq_max_tokens,
+            )
+            content = response.choices[0].message.content
+            return content or ""
+        except Exception:
+            if self._fallback:
+                return await self._fallback.complete(system=system, user=user)
+            raise
 
 
 class FakeChatClient:

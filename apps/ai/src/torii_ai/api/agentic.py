@@ -46,12 +46,10 @@ class StageResearchOut(BaseModel):
 def _build_researcher(settings: Settings) -> AgenticStageResearcher:
     """Real Tavily/LLM clients when configured, fake stand-ins otherwise (local dev/tests)."""
     search = TavilyClient(settings) if settings.tavily_api_key else FakeSearchClient()
-    if settings.nvidia_api_key:
-        chat = NvidiaChatClient(settings)
-    elif settings.groq_api_key:
-        # Prefer the dedicated non-reasoning extraction model — a reasoning model's <think>
-        # block can truncate the JSON under the TPM ceiling (same rationale as ops_scraper.py).
+    if settings.groq_api_key:
         chat = GroqChatClient(settings, model=settings.groq_extract_model or settings.groq_model)
+    elif settings.nvidia_api_key:
+        chat = NvidiaChatClient(settings)
     else:
         chat = FakeChatClient()
     return AgenticStageResearcher(search=search, chat=chat, settings=settings)

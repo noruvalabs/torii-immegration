@@ -10,13 +10,14 @@ from torii_ai.config import Settings
 class NvidiaChatClient:
     """Thin wrapper around the OpenAI SDK pointed at NVIDIA NIM."""
 
-    def __init__(self, settings: Settings) -> None:
+    def __init__(self, settings: Settings, model: str | None = None) -> None:
         self._settings = settings
-        self._model = settings.nvidia_model
+        self._model = model or settings.nvidia_model
         self._client = AsyncOpenAI(
-            api_key=settings.nvidia_api_key,
+            api_key=settings.nvidia_api_key or "missing",
             base_url=settings.nvidia_base_url,
             timeout=settings.nvidia_timeout_seconds,
+            max_retries=1,
         )
 
     async def complete(self, *, system: str, user: str) -> str:

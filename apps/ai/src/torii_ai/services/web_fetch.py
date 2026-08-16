@@ -89,26 +89,37 @@ async def fetch_page_text(client: httpx.AsyncClient, url: str) -> str:
         return ""
 
 
+import asyncio
+
 async def scrape_pages(
     urls: list[str], *, timeout_seconds: float, page_chars: int
 ) -> list[dict[str, str]]:
-    """Fetch page content for each URL, deduplicating identical bodies by content hash."""
+    """Fetch page content for each URL concurrently, deduplicating identical bodies by content hash."""
     content: list[dict[str, str]] = []
     seen: set[str] = set()
+    semaphore = asyncio.Semaphore(6)
+
     async with httpx.AsyncClient(
         timeout=timeout_seconds,
         follow_redirects=True,
         headers={"User-Agent": "Torii-OPS-Worker/1.0"},
     ) as client:
-        for url in urls:
-            text = await fetch_page_text(client, url)
-            if not text:
-                continue
-            digest = hashlib.sha256(text.encode("utf-8", "ignore")).hexdigest()
-            if digest in seen:
-                log.info("web_fetch.page_duplicate", url=url)
-                continue
-            seen.add(digest)
-            content.append({"url": url, "text": text[:page_chars]})
-            log.info("web_fetch.page_scraped", url=url, chars=len(text))
+        async def _fetch(u: str) -> tuple[str, str]:
+            async with semaphore:
+                t = await fetch_page_text(client, u)
+                return u, t
+
+        results = await asyncio.gather(*[_fetch(u) for u in urls], return_exceptions=True)
+        for res in results:
+            if isinstance(res, tuple):
+                u, text = res
+                if not text:
+                    continue
+                digest = hashlib.sha256(text.encode("utf-8", "ignore")).hexdigest()
+                if digest in seen:
+                    log.info("web_fetch.page_duplicate", url=u)
+                    continue
+                seen.add(digest)
+                content.append({"url": u, "text": text[:page_chars]})
+                log.info("web_fetch.page_scraped", url=u, chars=len(text))
     return content

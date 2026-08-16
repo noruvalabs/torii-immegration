@@ -186,10 +186,13 @@ Return JSON only, no markdown fences:
   ],
   "intake_questions": [
     {
-      "key": "unique_key",
+      "key": "unique_snake_case_key",
       "prompt": "Plain language question for the applicant",
-      "type": "string|boolean|integer|enum",
-      "options": ["opt1", "opt2"] // only for enum type
+      "type": "string|boolean|integer|enum|date",
+      "options": ["opt1", "opt2"], // only for enum type
+      "required": true,
+      "section": "1. Personal Information | 2. Trip & Purpose | 3. Accommodation | 4. Financial & Sponsor | 5. Employment & Study | 6. Travel History | 7. Local Connections | 8. Document Readiness",
+      "show_when": {"key": "parent_key", "equals": "matching_value"} // optional branching
     }
   ],
   "form_templates": [
@@ -209,16 +212,45 @@ Return JSON only, no markdown fences:
 }
 
 Rules:
-- Only extract data that is explicitly stated in the provided content.
-- Do NOT invent rules, requirements, or forms not present in the source material.
+- Only extract data that is explicitly stated or required for the destination jurisdiction and visa category.
+- DYNAMIC COUNTRY & TOUR-TYPE TAILORING:
+  The questionnaire and modules must dynamically reflect the destination country (e.g. Japan, UK, US) and the specific type of tour/visit:
+  1. Personal Information: full_name, date_of_birth, nationality, current_residence_country, passport_number, passport_issue_date, passport_expiry_date, marital_status.
+  2. Trip & Tour Type:
+     - planned_arrival_date, stay_duration_days, main_purpose
+     - tour_type (enum: independent_tourism, package_tour_via_agency, visiting_relatives_or_acquaintances, short_term_business)
+     - when tour_type == "package_tour_via_agency": tour_agency_name, package_booking_reference, receiving_agency_in_destination
+     - when tour_type == "visiting_relatives_or_acquaintances": host_full_name, host_relationship, host_residency_status, host_address, is_host_guaranteeing_expenses
+     - when tour_type == "independent_tourism": cities_to_visit, schedule_of_stay_ready
+     - when tour_type == "short_term_business": inviting_company_name, business_meeting_purpose, inviting_contact_person
+  3. Accommodation (country-specific):
+     - accommodation_type (hotel, airbnb, relative_or_friend_home, company_dormitory, other)
+     - accommodation_booked (boolean)
+     - accommodation_address (string)
+  4. Financial & Sponsor (country-specific):
+     - trip_payer (enum: myself, parent, spouse, employer, host_sponsor, other_sponsor)
+     - when trip_payer != "myself": sponsor_name, sponsor_relationship, sponsor_occupation, sponsor_financial_proof_available
+     - estimated_savings_available, bank_statement_available (6 months)
+  5. Employment & Occupation (use show_when branching):
+     - occupation (enum: employed, student, business_owner, freelancer, unemployed, retired)
+     - when occupation == "employed": employer_name, job_title, monthly_salary, employment_start_date, approved_leave_secured
+     - when occupation == "student": educational_institution, student_course, current_semester, student_leave_approved
+     - when occupation == "business_owner": business_name, trade_license_number, annual_revenue
+     - when occupation == "unemployed": financial_support_source
+  6. Travel History & Compliance:
+     - traveled_internationally_before (boolean)
+     - when traveled_internationally_before == "true": countries_visited (string)
+     - visited_destination_before (boolean)
+     - prior_visa_refusal_any_country (boolean)
+     - prior_overstay_history (boolean)
+  7. Country-Specific Requirements (e.g. for Japan: Japanese guarantor / Invitation details; for UK: TB screening if applicable; for US: 214(b) home ties):
+     - relatives_or_friends_in_destination (boolean)
+     - when relatives_or_friends_in_destination == "true": connection_details (string)
+- Branching: Do NOT ask every question upfront. Use "show_when" with {"key": "parent_key", "equals": "expected_value"} so that package tour fields only appear for package tours, sponsor fields only appear when sponsored, student fields only for students, and host/guarantor fields only when visiting hosts.
 - Every item MUST have a citation pointing to the official source URL.
-- Use plain language for messages — bureaucratic jargon is not acceptable.
-- source_version should be the page's date or "YYYY-MM" format.
-- If the content is insufficient for a category, return an empty list for that category.
-- When the request states an origin country and/or residence country, tailor the extracted
-  documents, questions, and rules to that applicant profile (e.g. a citizen of the origin
-  country residing in the residence country must submit proof of lawful residence there).
-  Only do this when supported by the source content — never invent requirements.
+- Group related questions under clear, intuitive "section" titles matching the destination flow.
+- Use plain language for prompts — avoid unnecessary bureaucratic jargon.
+- When the request states an origin country and/or residence country (e.g. Bangladesh -> Japan), tailor the questions, required documents (e.g. Schedule of Stay, VFS/Embassy Dhaka format, 45x35mm photo), and eligibility rules directly to that corridor.
 """
 
 

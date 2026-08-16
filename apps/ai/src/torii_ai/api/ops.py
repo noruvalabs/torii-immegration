@@ -78,17 +78,17 @@ class StatusResponse(BaseModel):
 def _build_scraper(settings: Settings) -> OpsScraper:
     """Build an OpsScraper with real or fake clients based on config."""
     search = TavilyClient(settings) if settings.tavily_api_key else FakeSearchClient()
-    # Prefer NVIDIA NIM when configured, fall back to Groq, then fake.
-    if settings.nvidia_api_key:
-        chat = NvidiaChatClient(settings)
-        extract_chat = NvidiaChatClient(settings)
-    elif settings.groq_api_key:
+    # Prefer Groq (high speed, sub-second latency) when configured, then NVIDIA NIM, then fake.
+    if settings.groq_api_key:
         chat = GroqChatClient(settings)
         extract_chat = (
             GroqChatClient(settings, model=settings.groq_extract_model)
             if settings.groq_extract_model
-            else None
+            else GroqChatClient(settings)
         )
+    elif settings.nvidia_api_key:
+        chat = NvidiaChatClient(settings)
+        extract_chat = NvidiaChatClient(settings)
     else:
         chat = FakeChatClient()
         extract_chat = None
