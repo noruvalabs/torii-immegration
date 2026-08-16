@@ -371,7 +371,7 @@ export function ChecklistStep({
           No checklist items yet. Generate your personalized list after eligibility.
         </p>
       ) : (
-        <div className="space-y-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {items.map((item) => {
             const url = citationUrl(item.citation);
             const version = citationVersion(item.citation);
@@ -382,7 +382,7 @@ export function ChecklistStep({
             return (
               <div
                 key={item.id}
-                className="rounded-[var(--radius)] border p-4"
+                className="rounded-[var(--radius)] border p-4 bg-card flex flex-col justify-between transition-all hover:border-primary/40 shadow-sm"
               >
                 <div className="flex items-start gap-3">
                   <div className="mt-0.5">

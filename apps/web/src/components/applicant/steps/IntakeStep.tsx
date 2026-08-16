@@ -194,7 +194,7 @@ export function IntakeStep({ state, profile, onAnswer }: IntakeStepProps) {
         </div>
       )}
 
-      {/* Questions list for active section */}
+      {/* Questions grid for active section */}
       {state.questions.length === 0 ? (
         <p className="text-sm text-muted-foreground">No questions available for this scope.</p>
       ) : (
@@ -229,130 +229,162 @@ export function IntakeStep({ state, profile, onAnswer }: IntakeStepProps) {
             </div>
           </div>
 
-          {currentQuestions.map((q) => {
-            const current = (state.answers[q.key] ?? drafts[q.key]) as string | number | boolean | undefined;
-            const citation = q.citation as { title?: string; url?: string } | null | undefined;
-            const hasOptions = q.type === "enum" && q.options && q.options.length > 0;
-            const isLongEnum = hasOptions && (q.options?.length ?? 0) > 8;
-            const searchVal = enumSearch[q.key] || "";
-            const filteredOptions = isLongEnum && searchVal
-              ? q.options!.filter((opt) => opt.toLowerCase().includes(searchVal.toLowerCase()))
-              : q.options || [];
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-4">
+            {currentQuestions.map((q) => {
+              const current = (state.answers[q.key] ?? drafts[q.key]) as string | number | boolean | undefined;
+              const citation = q.citation as { title?: string; url?: string } | null | undefined;
+              const hasOptions = q.type === "enum" && q.options && q.options.length > 0;
+              const optionsCount = q.options?.length ?? 0;
+              const isLongEnum = hasOptions && optionsCount > 5;
+              const searchVal = enumSearch[q.key] || "";
+              const filteredOptions = isLongEnum && searchVal
+                ? q.options!.filter((opt) => opt.toLowerCase().includes(searchVal.toLowerCase()))
+                : q.options || [];
 
-            const isDateInput =
-              q.key.includes("date") ||
-              q.key.includes("expiry") ||
-              q.key.includes("dob") ||
-              q.prompt.includes("YYYY-MM-DD");
+              const isDateInput =
+                q.key.includes("date") ||
+                q.key.includes("expiry") ||
+                q.key.includes("dob") ||
+                q.prompt.includes("YYYY-MM-DD");
 
-            return (
-              <Card key={q.key} className="p-4 transition-all hover:border-primary/40 bg-card">
-                <div className="space-y-2.5">
-                  <div className="flex items-start justify-between gap-2">
-                    <label className="text-sm font-medium leading-snug text-foreground">
-                      {q.prompt}
-                      {q.required !== false && <span className="ml-1 text-[var(--color-danger)]">*</span>}
-                    </label>
+              const isFullWidth = hasOptions && optionsCount > 8;
 
-                    {citation?.url && (
-                      <a
-                        href={citation.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-primary transition-colors shrink-0"
-                        title={citation.title || "Official Regulation Source"}
-                      >
-                        <span>Official Source</span>
-                        <ExternalLink className="size-3" />
-                      </a>
-                    )}
-                  </div>
+              return (
+                <Card
+                  key={q.key}
+                  className={`p-4 flex flex-col justify-between transition-all hover:border-primary/40 bg-card shadow-sm ${
+                    isFullWidth ? "col-span-1 md:col-span-2" : "col-span-1"
+                  }`}
+                >
+                  <div className="space-y-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <label className="text-xs font-semibold leading-snug text-foreground">
+                        {q.prompt}
+                        {q.required !== false && <span className="ml-1 text-[var(--color-danger)] font-bold">*</span>}
+                      </label>
 
-                  {q.type === "enum" && q.options ? (
-                    <div className="space-y-2 pt-1">
-                      {isLongEnum && (
-                        <div className="relative max-w-xs">
-                          <Search className="absolute left-2.5 top-2.5 size-3.5 text-muted-foreground" />
-                          <input
-                            type="text"
-                            value={searchVal}
-                            onChange={(e) => setEnumSearch((prev) => ({ ...prev, [q.key]: e.target.value }))}
-                            placeholder="Filter options..."
-                            className="h-8 w-full rounded-md border bg-background pl-8 pr-3 text-xs outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                          />
-                        </div>
+                      {citation?.url && (
+                        <a
+                          href={citation.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1 text-[10px] text-muted-foreground hover:text-primary transition-colors shrink-0"
+                          title={citation.title || "Official Regulation Source"}
+                        >
+                          <span>Official Source</span>
+                          <ExternalLink className="size-2.5" />
+                        </a>
                       )}
-                      <div className="flex flex-wrap gap-2 max-h-48 overflow-y-auto pr-1">
-                        {filteredOptions.map((opt) => (
+                    </div>
+
+                    {q.type === "enum" && q.options ? (
+                      optionsCount <= 4 ? (
+                        <div className="flex flex-wrap gap-1.5 pt-1">
+                          {q.options.map((opt) => (
+                            <button
+                              key={opt}
+                              type="button"
+                              onClick={() => onAnswer(q.key, opt)}
+                              className={`rounded-md border px-3 py-1.5 text-xs transition-all ${
+                                current === opt
+                                  ? "border-primary bg-primary/10 text-primary font-semibold shadow-sm ring-1 ring-primary/40"
+                                  : "hover:bg-accent text-muted-foreground bg-background"
+                              }`}
+                            >
+                              {opt.replaceAll("_", " ")}
+                            </button>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="space-y-2 pt-1">
+                          {isLongEnum && (
+                            <div className="relative">
+                              <Search className="absolute left-2.5 top-2.5 size-3.5 text-muted-foreground" />
+                              <input
+                                type="text"
+                                value={searchVal}
+                                onChange={(e) => setEnumSearch((prev) => ({ ...prev, [q.key]: e.target.value }))}
+                                placeholder="Filter options..."
+                                className="h-8 w-full rounded-md border bg-background pl-8 pr-3 text-xs outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                              />
+                            </div>
+                          )}
+                          <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto pr-1">
+                            {filteredOptions.map((opt) => (
+                              <button
+                                key={opt}
+                                type="button"
+                                onClick={() => onAnswer(q.key, opt)}
+                                className={`rounded-md border px-2.5 py-1 text-xs transition-all ${
+                                  current === opt
+                                    ? "border-primary bg-primary/10 text-primary font-semibold shadow-sm ring-1 ring-primary/40"
+                                    : "hover:bg-accent text-muted-foreground bg-background"
+                                }`}
+                              >
+                                {opt.replaceAll("_", " ")}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )
+                    ) : q.type === "boolean" ? (
+                      <div className="grid grid-cols-2 gap-2 pt-1">
+                        {[true, false].map((v) => (
                           <button
-                            key={opt}
-                            onClick={() => onAnswer(q.key, opt)}
-                            className={`rounded-[var(--radius)] border px-3 py-1.5 text-xs transition-colors ${
-                              current === opt
-                                ? "border-primary bg-primary/10 text-primary font-semibold shadow-sm ring-1 ring-primary/30"
-                                : "hover:bg-accent hover:border-accent-foreground/20 text-muted-foreground bg-background"
+                            key={String(v)}
+                            type="button"
+                            onClick={() => onAnswer(q.key, v)}
+                            className={`rounded-md border py-2 text-xs font-medium transition-all ${
+                              current === v
+                                ? "border-primary bg-primary/10 text-primary font-semibold shadow-sm ring-1 ring-primary/40"
+                                : "hover:bg-accent text-muted-foreground bg-background"
                             }`}
                           >
-                            {opt.replaceAll("_", " ")}
+                            {v ? "Yes" : "No"}
                           </button>
                         ))}
                       </div>
-                    </div>
-                  ) : q.type === "boolean" ? (
-                    <div className="flex gap-2 pt-1">
-                      {[true, false].map((v) => (
-                        <button
-                          key={String(v)}
-                          onClick={() => onAnswer(q.key, v)}
-                          className={`rounded-[var(--radius)] border px-4 py-1.5 text-xs font-medium transition-colors ${
-                            current === v
-                              ? "border-primary bg-primary/10 text-primary font-semibold shadow-sm ring-1 ring-primary/30"
-                              : "hover:bg-accent text-muted-foreground bg-background"
-                          }`}
-                        >
-                          {v ? "Yes" : "No"}
-                        </button>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="flex gap-2 pt-1">
-                      <input
-                        type={q.type === "integer" ? "number" : isDateInput ? "date" : "text"}
-                        value={String(current ?? "")}
-                        onChange={(e) => handleChange(q.key, e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            e.preventDefault();
-                            handleSubmit(q.key);
-                          }
-                        }}
-                        placeholder={`Enter ${q.key.replaceAll("_", " ")}...`}
-                        className="h-9 flex-1 rounded-[var(--radius)] border bg-background px-3 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring font-normal"
-                      />
-                      <Button onClick={() => handleSubmit(q.key)} className="text-xs h-9 px-4 font-medium">
-                        Save
-                      </Button>
-                    </div>
-                  )}
+                    ) : (
+                      <div className="flex gap-2 pt-1">
+                        <input
+                          type={q.type === "integer" ? "number" : isDateInput ? "date" : "text"}
+                          value={String(current ?? "")}
+                          onChange={(e) => handleChange(q.key, e.target.value)}
+                          onBlur={() => handleSubmit(q.key)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              handleSubmit(q.key);
+                            }
+                          }}
+                          placeholder={`Enter ${q.key.replaceAll("_", " ")}...`}
+                          className="h-9 flex-1 rounded-md border bg-background px-3 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring font-normal"
+                        />
+                        <Button onClick={() => handleSubmit(q.key)} className="text-xs h-9 px-3.5 font-medium shrink-0">
+                          Save
+                        </Button>
+                      </div>
+                    )}
+                  </div>
 
                   {state.answers[q.key] !== undefined && (
-                    <p className="text-[11px] text-[var(--color-success)] font-medium flex items-center gap-1 pt-0.5">
-                      <Check className="size-3.5" />
-                      Answer Saved & Verified
-                    </p>
+                    <div className="flex items-center gap-1 text-[11px] text-emerald-500 dark:text-emerald-400 font-medium pt-2">
+                      <Check className="size-3.5 shrink-0" />
+                      <span>Answer Saved</span>
+                    </div>
                   )}
-                </div>
-              </Card>
-            );
-          })}
+                </Card>
+              );
+            })}
+          </div>
 
           {/* Section navigation footer */}
-          <div className="flex items-center justify-between border-t pt-4 mt-6">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 border-t pt-4 mt-6">
             {currentSectionIndex > 0 ? (
               <Button
                 variant="outline"
                 onClick={() => setActiveSection(sectionKeys[currentSectionIndex - 1])}
-                className="h-8 text-xs gap-1.5 px-3"
+                className="h-8 text-xs gap-1.5 px-3 justify-center sm:justify-start"
               >
                 <ChevronLeft className="size-3.5" /> Previous: {sectionKeys[currentSectionIndex - 1]}
               </Button>
@@ -361,12 +393,12 @@ export function IntakeStep({ state, profile, onAnswer }: IntakeStepProps) {
             {currentSectionIndex < sectionKeys.length - 1 ? (
               <Button
                 onClick={() => setActiveSection(sectionKeys[currentSectionIndex + 1])}
-                className="h-8 text-xs gap-1.5 px-3"
+                className="h-8 text-xs gap-1.5 px-3 justify-center sm:justify-start"
               >
                 Next: {sectionKeys[currentSectionIndex + 1]} <ChevronRight className="size-3.5" />
               </Button>
             ) : (
-              <Badge tone={state.progress.complete ? "success" : "default"} className="text-xs py-1 px-3">
+              <Badge tone={state.progress.complete ? "success" : "default"} className="text-xs py-1 px-3 justify-center">
                 {state.progress.complete ? "All Sections Complete — Ready for Eligibility Step" : "Fill remaining required fields"}
               </Badge>
             )}

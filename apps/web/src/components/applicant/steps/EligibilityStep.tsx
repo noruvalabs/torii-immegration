@@ -11,18 +11,53 @@ type EligibilityStepProps = {
   result: EligibilityResult | null;
   loading: boolean;
   onEvaluate: () => void;
+  jurisdictionCode?: string;
+  jurisdictionName?: string;
+  visaCategoryName?: string;
 };
 
-export function EligibilityStep({ result, loading, onEvaluate }: EligibilityStepProps) {
+export function EligibilityStep({
+  result,
+  loading,
+  onEvaluate,
+  jurisdictionCode = "JP",
+  jurisdictionName,
+  visaCategoryName,
+}: EligibilityStepProps) {
+  const code = jurisdictionCode?.toUpperCase() || "JP";
+  const countryName = jurisdictionName || (code === "JP" ? "Japan" : code === "GB" || code === "UK" ? "United Kingdom" : code === "US" ? "United States" : "Destination");
+
+  // Dynamic header copy based on jurisdiction
+  const headerTitle =
+    code === "JP"
+      ? "Japan Visa Eligibility & Criteria Assessment"
+      : code === "GB" || code === "UK"
+        ? "UK Visa & Immigration (UKVI) Eligibility Assessment"
+        : code === "US"
+          ? "US Visa Eligibility & INA Section 214(b) Screening"
+          : `${countryName} Visa Eligibility Screening`;
+
+  const headerSubtitle =
+    code === "JP"
+      ? "Deterministic evaluation under the Immigration Control and Refugee Recognition Act (出入国管理及び難民認定法) & Ministry of Foreign Affairs (MOFA) criteria."
+      : code === "GB" || code === "UK"
+        ? "Evaluation under UK Immigration Rules (Appendix V: Visitor & Student Route statutory criteria)."
+        : code === "US"
+          ? "Deterministic rules evaluation under the Immigration and Nationality Act (INA) Section 214(b) & Section 212(a)."
+          : `Deterministic rules evaluation against official ${countryName} immigration requirements.`;
+
   const overallTone =
     result?.result === "pass"
       ? "success"
       : result?.result === "at_risk"
         ? "warning"
-        : "danger";
+        : result?.result === "out_of_scope"
+          ? "muted"
+          : "danger";
 
-  // Group findings or evaluate pillar status
+  // Group findings
   const findings = result?.findings || [];
+  const passCount = findings.filter((f) => f.status === "pass").length;
   const failCount = findings.filter((f) => f.status === "fail").length;
   const atRiskCount = findings.filter((f) => f.status === "at_risk").length;
   const reviewCount = findings.filter((f) => f.status === "out_of_scope").length;
@@ -31,10 +66,8 @@ export function EligibilityStep({ result, loading, onEvaluate }: EligibilityStep
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h3 className="text-base font-semibold text-foreground">Section 214(b) INA Eligibility Screening</h3>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            Deterministic rules evaluation under the Immigration and Nationality Act (INA) Section 214(b) &amp; Section 212(a).
-          </p>
+          <h3 className="text-base font-semibold text-foreground">{headerTitle}</h3>
+          <p className="mt-0.5 text-xs text-muted-foreground">{headerSubtitle}</p>
         </div>
 
         <Button onClick={onEvaluate} disabled={loading} className="gap-1.5 shrink-0 h-8 px-3 text-xs">
@@ -48,11 +81,11 @@ export function EligibilityStep({ result, loading, onEvaluate }: EligibilityStep
           <Scale className="mx-auto size-10 text-muted-foreground/40" />
           <h4 className="text-sm font-semibold">Eligibility check has not been run</h4>
           <p className="text-xs text-muted-foreground max-w-md mx-auto">
-            Click &quot;Evaluate eligibility now&quot; above. Torii will assess your profile across the 4 statutory pillars: Institutional/Trip Feasibility, Financial Capacity, Nonimmigrant Ties, and Inadmissibility Screening.
+            Click &quot;Evaluate eligibility now&quot; above. Torii will evaluate your completed intake answers against official {countryName} immigration regulations, landing requirements, and financial criteria.
           </p>
           <Button onClick={onEvaluate} disabled={loading} className="mt-2">
             {loading ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Scale className="mr-2 size-4" />}
-            Run 4-Pillar evaluation
+            Evaluate eligibility now
           </Button>
         </div>
       ) : (
@@ -64,35 +97,47 @@ export function EligibilityStep({ result, loading, onEvaluate }: EligibilityStep
                 ? "border-emerald-500/30 bg-emerald-500/5 text-emerald-950 dark:text-emerald-100"
                 : result.result === "at_risk"
                   ? "border-amber-500/30 bg-amber-500/5 text-amber-950 dark:text-amber-100"
-                  : "border-[var(--color-danger)]/30 bg-[var(--color-danger)]/5 text-rose-950 dark:text-rose-100"
+                  : result.result === "out_of_scope"
+                    ? "border-blue-500/30 bg-blue-500/5 text-blue-950 dark:text-blue-100"
+                    : "border-[var(--color-danger)]/30 bg-[var(--color-danger)]/5 text-rose-950 dark:text-rose-100"
             }`}
           >
             <div className="space-y-1">
               <div className="flex items-center gap-2">
                 <Badge tone={overallTone} className="uppercase font-bold tracking-wider text-xs px-2.5 py-0.5">
-                  {result.result.replaceAll("_", " ")}
+                  {result.result === "pass"
+                    ? "PASS · FULLY ELIGIBLE"
+                    : result.result === "at_risk"
+                      ? "AT RISK · ATTENTION RECOMMENDED"
+                      : result.result === "out_of_scope"
+                        ? "INCOMPLETE · PENDING INTAKE ANSWERS"
+                        : "INELIGIBLE · STATUTORY CRITICAL FLAG"}
                 </Badge>
                 <span className="text-xs font-semibold">
                   {result.result === "pass"
-                    ? "Strong Nonimmigrant Profile"
+                    ? `Fulfills Core ${countryName} Visa Criteria`
                     : result.result === "at_risk"
-                      ? "Attention / Preparation Recommended"
-                      : "Critical Inadmissibility / Ineligibility Flag"}
+                      ? "Preparation / Additional Documentation Recommended"
+                      : result.result === "out_of_scope"
+                        ? "Additional Intake Information Needed"
+                        : "Statutory Disqualification or Inadmissibility Detected"}
                 </span>
               </div>
               <p className="text-xs opacity-90 max-w-xl">
                 {result.result === "pass"
-                  ? "Your intake profile fulfills core INA 214(b) statutory criteria. Proceed to prepare required supporting documents."
+                  ? `Your intake profile fulfills official ${countryName} statutory criteria. Proceed to prepare your supporting documents in the checklist.`
                   : result.result === "at_risk"
-                    ? "One or more factors require additional supporting documentation (e.g. proof of liquid funds, employer leave letter)."
-                    : "Statutory ineligibility or disqualification detected. Consular review and formal explanations will be required."}
+                    ? "One or more factors recommend stronger supporting evidence (e.g. liquid bank balance, leave approval letter, or sponsor guarantee)."
+                    : result.result === "out_of_scope"
+                      ? "Some required intake questions have not been answered yet. Return to Intake to complete all fields so full evaluation can run."
+                      : "One or more answers conflict with statutory landing requirements (e.g. prior deportation or overstay ban). Consular review required."}
               </p>
             </div>
 
             <div className="flex gap-2 shrink-0">
               {failCount > 0 && (
                 <Badge tone="danger" className="text-xs gap-1">
-                  <AlertOctagon className="size-3" /> {failCount} Red Flags
+                  <AlertOctagon className="size-3" /> {failCount} Disqualified
                 </Badge>
               )}
               {atRiskCount > 0 && (
@@ -102,19 +147,19 @@ export function EligibilityStep({ result, loading, onEvaluate }: EligibilityStep
               )}
               {reviewCount > 0 && (
                 <Badge tone="muted" className="text-xs gap-1">
-                  <HelpCircle className="size-3" /> {reviewCount} Reviews
+                  <HelpCircle className="size-3" /> {reviewCount} Missing Answers
                 </Badge>
               )}
-              {failCount === 0 && atRiskCount === 0 && (
+              {failCount === 0 && atRiskCount === 0 && reviewCount === 0 && (
                 <Badge tone="success" className="text-xs gap-1">
-                  <CheckCircle2 className="size-3" /> 100% Eligible
+                  <CheckCircle2 className="size-3" /> {passCount} Checks Passed
                 </Badge>
               )}
             </div>
           </div>
 
           {/* 4 Pillars Summary Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             <Card className="p-3.5 bg-card">
               <div className="flex items-start gap-2.5">
                 <div className="size-7 rounded-md bg-primary/10 flex items-center justify-center text-primary font-bold text-xs shrink-0">
@@ -122,10 +167,10 @@ export function EligibilityStep({ result, loading, onEvaluate }: EligibilityStep
                 </div>
                 <div>
                   <h5 className="text-xs font-bold uppercase tracking-wider text-foreground">
-                    Institutional &amp; Trip Qualification
+                    Identity &amp; Passport
                   </h5>
                   <p className="text-[11px] text-muted-foreground mt-0.5">
-                    Valid I-20/SEVIS registration or concrete tourist itinerary matching declared duration.
+                    Valid passport with required remaining validity and verified applicant nationality.
                   </p>
                 </div>
               </div>
@@ -138,10 +183,10 @@ export function EligibilityStep({ result, loading, onEvaluate }: EligibilityStep
                 </div>
                 <div>
                   <h5 className="text-xs font-bold uppercase tracking-wider text-foreground">
-                    Financial Capacity (INA 214(b))
+                    Travel Purpose &amp; Plan
                   </h5>
                   <p className="text-[11px] text-muted-foreground mt-0.5">
-                    Liquid bank balance covering Year 1 total cost / full travel budget without unauthorized U.S. work.
+                    Genuine sightseeing or visitor purpose with concrete schedule matching stay duration.
                   </p>
                 </div>
               </div>
@@ -154,10 +199,10 @@ export function EligibilityStep({ result, loading, onEvaluate }: EligibilityStep
                 </div>
                 <div>
                   <h5 className="text-xs font-bold uppercase tracking-wider text-foreground">
-                    Nonimmigrant Intent &amp; Japan Ties
+                    Financial Capacity
                   </h5>
                   <p className="text-[11px] text-muted-foreground mt-0.5">
-                    Stable employment, valid residence status in Japan, and clear return roadmap.
+                    Verified bank statements, stable employment, or official sponsor guarantee covering expenses.
                   </p>
                 </div>
               </div>
@@ -170,10 +215,10 @@ export function EligibilityStep({ result, loading, onEvaluate }: EligibilityStep
                 </div>
                 <div>
                   <h5 className="text-xs font-bold uppercase tracking-wider text-foreground">
-                    General Admissibility (INA 212(a))
+                    Immigration Compliance
                   </h5>
                   <p className="text-[11px] text-muted-foreground mt-0.5">
-                    Clean immigration history, no unresolved visa overstays, and interview preparedness.
+                    Clean compliance history with no active entry bans, overstays, or disqualifying grounds.
                   </p>
                 </div>
               </div>
@@ -189,73 +234,75 @@ export function EligibilityStep({ result, loading, onEvaluate }: EligibilityStep
                 All statutory rules and checks passed successfully. No compliance red flags found.
               </div>
             ) : (
-              findings.map((finding) => {
-                const isFail = finding.status === "fail";
-                const isWarning = finding.status === "at_risk";
-                const isReview = finding.status === "out_of_scope";
-                const url = citationUrl(finding.citation);
-                const version = citationVersion(finding.citation);
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {findings.map((finding) => {
+                  const isFail = finding.status === "fail";
+                  const isWarning = finding.status === "at_risk";
+                  const isReview = finding.status === "out_of_scope";
+                  const url = citationUrl(finding.citation);
+                  const version = citationVersion(finding.citation);
 
-                return (
-                  <div
-                    key={`${finding.key}-${finding.status}`}
-                    className={`rounded-[var(--radius)] border p-4 transition-all ${
-                      isFail
-                        ? "border-[var(--color-danger)]/30 bg-[var(--color-danger)]/5"
-                        : isWarning
-                          ? "border-[var(--color-warning)]/30 bg-[var(--color-warning)]/5"
-                          : isReview
-                            ? "border-blue-500/30 bg-blue-500/5"
-                            : "border-emerald-500/30 bg-emerald-500/5"
-                    }`}
-                  >
-                    <div className="flex items-start gap-3">
-                      {isFail ? (
-                        <AlertOctagon className="mt-0.5 size-5 shrink-0 text-[var(--color-danger)]" />
-                      ) : isWarning ? (
-                        <AlertTriangle className="mt-0.5 size-5 shrink-0 text-[var(--color-warning)]" />
-                      ) : isReview ? (
-                        <HelpCircle className="mt-0.5 size-5 shrink-0 text-blue-500" />
-                      ) : (
-                        <CheckCircle2 className="mt-0.5 size-5 shrink-0 text-emerald-500" />
-                      )}
-
-                      <div className="flex-1 space-y-1">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <p className="text-sm font-bold capitalize text-foreground">
-                            {finding.key.replaceAll("_", " ")}
-                          </p>
-                          <Badge
-                            tone={isFail ? "danger" : isWarning ? "warning" : "muted"}
-                            className="text-[10px] uppercase font-semibold"
-                          >
-                            {finding.status}
-                          </Badge>
-                        </div>
-
-                        <p className="text-xs text-foreground/80 leading-relaxed">{finding.message}</p>
-
-                        {url && (
-                          <div className="pt-1">
-                            <a
-                              href={url}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline font-medium"
-                            >
-                              <span>
-                                {String(finding.citation?.authority || "Official Authority")}: {String(finding.citation?.title || "Regulatory Source")}
-                                {version ? ` (${version})` : ""}
-                              </span>
-                              <ExternalLink className="size-3" />
-                            </a>
-                          </div>
+                  return (
+                    <div
+                      key={`${finding.key}-${finding.status}`}
+                      className={`rounded-[var(--radius)] border p-4 flex flex-col justify-between transition-all ${
+                        isFail
+                          ? "border-[var(--color-danger)]/30 bg-[var(--color-danger)]/5"
+                          : isWarning
+                            ? "border-[var(--color-warning)]/30 bg-[var(--color-warning)]/5"
+                            : isReview
+                              ? "border-blue-500/30 bg-blue-500/5"
+                              : "border-emerald-500/30 bg-emerald-500/5"
+                      }`}
+                    >
+                      <div className="flex items-start gap-3">
+                        {isFail ? (
+                          <AlertOctagon className="mt-0.5 size-5 shrink-0 text-[var(--color-danger)]" />
+                        ) : isWarning ? (
+                          <AlertTriangle className="mt-0.5 size-5 shrink-0 text-[var(--color-warning)]" />
+                        ) : isReview ? (
+                          <HelpCircle className="mt-0.5 size-5 shrink-0 text-blue-500" />
+                        ) : (
+                          <CheckCircle2 className="mt-0.5 size-5 shrink-0 text-emerald-500" />
                         )}
+
+                        <div className="flex-1 space-y-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="text-sm font-bold capitalize text-foreground">
+                              {finding.key.replaceAll("_", " ")}
+                            </p>
+                            <Badge
+                              tone={isFail ? "danger" : isWarning ? "warning" : isReview ? "muted" : "success"}
+                              className="text-[10px] uppercase font-semibold"
+                            >
+                              {isFail ? "Disqualified" : isWarning ? "At Risk" : isReview ? "Incomplete" : "Passed"}
+                            </Badge>
+                          </div>
+                          <p className="text-xs text-muted-foreground leading-relaxed">
+                            {finding.message}
+                          </p>
+                          {url && (
+                            <div className="pt-1.5">
+                              <a
+                                href={url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline"
+                              >
+                                <span>
+                                  {String(finding.citation?.authority || "Official regulation source")}
+                                  {version ? ` (${version})` : ""}
+                                </span>
+                                <ExternalLink className="size-3" />
+                              </a>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                );
-              })
+                  );
+                })}
+              </div>
             )}
           </div>
 
