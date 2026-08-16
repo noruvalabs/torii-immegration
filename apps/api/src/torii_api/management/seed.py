@@ -74,21 +74,8 @@ SEED_USERS = [
     },
 ]
 
-# Extra markets without full content packs (scope browsing only).
-SEED_EXTRA_JURISDICTIONS = [
-    {"code": "CA", "name": "Canada", "is_live": True},
-    {"code": "AU", "name": "Australia", "is_live": True},
-    {"code": "DE", "name": "Germany", "is_live": True},
-    {"code": "FR", "name": "France", "is_live": True},
-    {"code": "SG", "name": "Singapore", "is_live": True},
-    {"code": "KR", "name": "South Korea", "is_live": True},
-    {"code": "NZ", "name": "New Zealand", "is_live": True},
-    {"code": "IE", "name": "Ireland", "is_live": True},
-    {"code": "NL", "name": "Netherlands", "is_live": True},
-    {"code": "SE", "name": "Sweden", "is_live": True},
-    {"code": "NO", "name": "Norway", "is_live": True},
-    {"code": "CH", "name": "Switzerland", "is_live": True},
-]
+# Extra markets without full content packs (empty for now — only JP, US, UK live).
+SEED_EXTRA_JURISDICTIONS: list[dict[str, Any]] = []
 
 SEED_EXTRA_CATEGORIES = [
     {"code": "tourist", "name": "Tourist / Visitor", "is_live": True},
@@ -485,7 +472,7 @@ async def seed() -> None:
                     code=str(cat["code"]).lower(),
                     name=str(cat["name"]),
                     is_live=bool(cat.get("is_live", True)),
-                    research_enabled=bool(cat.get("research_enabled", False)),
+                    research_enabled=True,
                     category_ids=category_ids,
                 )
             for action in meta.actions:
@@ -496,7 +483,7 @@ async def seed() -> None:
                     code=str(action["code"]).lower(),
                     name=str(action["name"]),
                     is_live=bool(action.get("is_live", True)),
-                    research_enabled=bool(action.get("research_enabled", False)),
+                    research_enabled=True,
                     action_ids=action_ids,
                 )
 
@@ -517,6 +504,7 @@ async def seed() -> None:
                     code=cat["code"],
                     name=cat["name"],
                     is_live=bool(cat["is_live"]),
+                    research_enabled=True,
                     category_ids=category_ids,
                 )
             for action in SEED_EXTRA_ACTIONS:
@@ -527,70 +515,12 @@ async def seed() -> None:
                     code=action["code"],
                     name=action["name"],
                     is_live=bool(action["is_live"]),
+                    research_enabled=True,
                     action_ids=action_ids,
                 )
 
         created_workflow_definitions = 0
-        for workflow in workflow_rows_from_packs(packs):
-            jid = jurisdiction_ids.get(workflow["jurisdiction"])
-            vid = category_ids.get((workflow["jurisdiction"], workflow["visa_category"]))
-            aid = action_ids.get((workflow["jurisdiction"], workflow["action"]))
-            if jid is None or vid is None or aid is None:
-                continue
-            created_workflow_definitions += await _seed_workflow(
-                session,
-                jurisdiction_id=jid,
-                visa_category_id=vid,
-                case_action_id=aid,
-                questions=workflow["questions"],
-                rules=workflow["rules"],
-                documents=workflow["documents"],
-                form=workflow["form"],
-                forms=workflow.get("forms"),
-            )
-
-        # Generic fallback for live category/action combos without a content pack.
-        # Research-enabled scopes are skipped: they are served by the live-research pipeline.
-        research_category_ids = {
-            row[0]
-            for row in await session.execute(
-                select(VisaCategory.id).where(VisaCategory.research_enabled.is_(True))
-            )
-        }
-        research_action_ids = {
-            row[0]
-            for row in await session.execute(
-                select(CaseAction.id).where(CaseAction.research_enabled.is_(True))
-            )
-        }
-        for (j_code, _v_code), vid in category_ids.items():
-            for (a_j_code, _a_code), aid in action_ids.items():
-                if j_code != a_j_code:
-                    continue
-                jid = jurisdiction_ids.get(j_code)
-                if jid is None:
-                    continue
-                if vid in research_category_ids or aid in research_action_ids:
-                    continue
-                existing = await session.scalar(
-                    select(IntakeDefinition).where(
-                        IntakeDefinition.jurisdiction_id == jid,
-                        IntakeDefinition.visa_category_id == vid,
-                        IntakeDefinition.case_action_id == aid,
-                    )
-                )
-                if existing is not None:
-                    continue
-                created_workflow_definitions += await _seed_workflow(
-                    session,
-                    jurisdiction_id=jid,
-                    visa_category_id=vid,
-                    case_action_id=aid,
-                    questions=GENERIC_QUESTIONS,
-                    rules=GENERIC_RULES,
-                    documents=GENERIC_DOCUMENTS,
-                    form=GENERIC_FORM,
-                )
+        # Static YAML pack workflow definitions are disabled: all scopes are research-driven via live web search + LLM.
 
         await session.commit()
 

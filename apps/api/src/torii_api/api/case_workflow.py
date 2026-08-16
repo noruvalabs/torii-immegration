@@ -150,7 +150,12 @@ async def _research_is_usable_for(session: AsyncSession, case: Case) -> bool:
 
 
 async def _effective_rules(session: AsyncSession, case: Case) -> list[dict[str, Any]]:
-    """Eligibility rules for the case: live definition, else the research snapshot."""
+    """Eligibility rules for the case: research snapshot, else live definition fallback."""
+    research = await _research_for_case(session, case)
+    if research is not None and research_is_usable(research):
+        rules = research_rules(research.payload)
+        if rules:
+            return rules
     if case.visa_category_id is not None and case.case_action_id is not None:
         definition = await session.scalar(
             select(EligibilityRuleSet).where(
@@ -162,14 +167,16 @@ async def _effective_rules(session: AsyncSession, case: Case) -> list[dict[str, 
         )
         if definition is not None:
             return list(definition.rules or [])
-    research = await _research_for_case(session, case)
-    if research is not None and research_is_usable(research):
-        return research_rules(research.payload)
     return []
 
 
 async def _effective_documents(session: AsyncSession, case: Case) -> list[dict[str, Any]]:
-    """Document requirements for the case: live definition, else the research snapshot."""
+    """Document requirements for the case: research snapshot, else live definition fallback."""
+    research = await _research_for_case(session, case)
+    if research is not None and research_is_usable(research):
+        docs = research_documents(research.payload)
+        if docs:
+            return docs
     if case.visa_category_id is not None and case.case_action_id is not None:
         definition = await session.scalar(
             select(DocumentRequirementSet).where(
@@ -181,14 +188,27 @@ async def _effective_documents(session: AsyncSession, case: Case) -> list[dict[s
         )
         if definition is not None:
             return list(definition.items or [])
-    research = await _research_for_case(session, case)
-    if research is not None and research_is_usable(research):
-        return research_documents(research.payload)
     return []
 
 
 async def _effective_templates(session: AsyncSession, case: Case) -> list[_FormDescriptor]:
-    """Forms for the case: live FormTemplates, else the research snapshot's templates."""
+    """Forms for the case: research snapshot's templates, else live FormTemplates fallback."""
+    research = await _research_for_case(session, case)
+    if research is not None and research_is_usable(research):
+        forms = [
+            _FormDescriptor(
+                code=str(form.get("code") or "form"),
+                version=str(form.get("version") or ""),
+                official_title=str(form.get("official_title") or form.get("code") or "form"),
+                citation=dict(form.get("citation") or {}),
+                field_mappings=list(form.get("field_mappings") or []),
+                research_id=research.id,
+            )
+            for form in research_forms(research.payload)
+            if isinstance(form, dict)
+        ]
+        if forms:
+            return forms
     if case.visa_category_id is not None and case.case_action_id is not None:
         result = await session.execute(
             select(FormTemplate)
@@ -213,20 +233,6 @@ async def _effective_templates(session: AsyncSession, case: Case) -> list[_FormD
                 )
                 for t in live
             ]
-    research = await _research_for_case(session, case)
-    if research is not None and research_is_usable(research):
-        return [
-            _FormDescriptor(
-                code=str(form.get("code") or "form"),
-                version=str(form.get("version") or ""),
-                official_title=str(form.get("official_title") or form.get("code") or "form"),
-                citation=dict(form.get("citation") or {}),
-                field_mappings=list(form.get("field_mappings") or []),
-                research_id=research.id,
-            )
-            for form in research_forms(research.payload)
-            if isinstance(form, dict)
-        ]
     return []
 
 
