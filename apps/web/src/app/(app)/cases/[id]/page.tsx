@@ -354,7 +354,7 @@ export default function CaseDetailPage() {
     activeStep !== "packet";
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6">
+    <div className="w-full max-w-7xl mx-auto space-y-6">
       <div className="flex items-start gap-4">
         <Link href="/cases" className="mt-1 text-muted-foreground hover:text-foreground">
           <ArrowLeft className="size-5" />
@@ -452,6 +452,7 @@ export default function CaseDetailPage() {
               result={eligibility}
               loading={submitting}
               onEvaluate={handleEvaluateEligibility}
+              jurisdictionCode={caseData?.reference ? caseData.reference.split("-")[0] : "JP"}
             />
           )}
           {!stepError && activeStep === "checklist" && (

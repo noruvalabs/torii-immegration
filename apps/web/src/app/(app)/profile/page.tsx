@@ -7,12 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { useAuth } from "@/lib/auth-context";
 import { updateProfile, uploadAvatar, type ProfileUpdate } from "@/lib/api/auth";
 
-const COUNTRIES = [
-  "Japan", "United States", "United Kingdom", "Canada", "Australia",
-  "Germany", "France", "Singapore", "South Korea", "United Arab Emirates",
-  "New Zealand", "Netherlands", "Italy", "Spain", "Switzerland",
-  "Ireland", "Thailand", "Malaysia", "India", "China",
-];
+import { CountrySelector } from "@/components/ui/country-selector";
 
 export default function ProfilePage() {
   const { user, token, setAuth } = useAuth();
@@ -78,7 +73,7 @@ export default function ProfilePage() {
   const isValid = form.full_name && form.nationality && form.passport_number && form.current_country;
 
   return (
-    <div className="mx-auto max-w-lg space-y-6 py-8">
+    <div className="w-full max-w-4xl mx-auto space-y-6 py-6">
       <div className="flex items-center gap-3">
         <div className="flex size-10 items-center justify-center rounded-full bg-primary/10">
           <User className="size-5 text-primary" />
@@ -99,9 +94,9 @@ export default function ProfilePage() {
 
       <Card>
         <CardContent>
-          <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4 pt-5">
+          <form onSubmit={(e) => void handleSubmit(e)} className="space-y-6 pt-5">
             {/* Avatar upload */}
-            <div className="flex flex-col items-center gap-3">
+            <div className="flex flex-col items-center gap-3 pb-2 border-b">
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
@@ -138,40 +133,36 @@ export default function ProfilePage() {
               <p className="text-xs text-muted-foreground">Click to upload photo</p>
             </div>
 
-            <Field label="Full name (as on passport)" required>
-              <input
-                type="text"
-                value={form.full_name ?? ""}
-                onChange={(e) => update("full_name", e.target.value)}
-                className="w-full rounded-[var(--radius)] border bg-background px-3 py-2 text-sm"
-                placeholder="Yuki Tanaka"
-              />
-            </Field>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Field label="Full name (as on passport)" required>
+                <input
+                  type="text"
+                  value={form.full_name ?? ""}
+                  onChange={(e) => update("full_name", e.target.value)}
+                  className="w-full rounded-[var(--radius)] border bg-background px-3 py-2 text-sm"
+                  placeholder="Yuki Tanaka"
+                />
+              </Field>
 
-            <Field label="Nationality" required>
-              <select
-                value={form.nationality ?? ""}
-                onChange={(e) => update("nationality", e.target.value)}
-                className="w-full rounded-[var(--radius)] border bg-background px-3 py-2 text-sm"
-              >
-                <option value="">Select nationality</option>
-                {COUNTRIES.map((c) => (
-                  <option key={c} value={c}>{c}</option>
-                ))}
-              </select>
-            </Field>
+              <Field label="Nationality" required>
+                <CountrySelector
+                  value={form.nationality ?? ""}
+                  valueType="name"
+                  placeholder="Select nationality..."
+                  onChange={(val) => update("nationality", val)}
+                />
+              </Field>
 
-            <Field label="Passport number" required>
-              <input
-                type="text"
-                value={form.passport_number ?? ""}
-                onChange={(e) => update("passport_number", e.target.value)}
-                className="w-full rounded-[var(--radius)] border bg-background px-3 py-2 text-sm"
-                placeholder="TK4567890"
-              />
-            </Field>
+              <Field label="Passport number" required>
+                <input
+                  type="text"
+                  value={form.passport_number ?? ""}
+                  onChange={(e) => update("passport_number", e.target.value)}
+                  className="w-full rounded-[var(--radius)] border bg-background px-3 py-2 text-sm"
+                  placeholder="TK4567890"
+                />
+              </Field>
 
-            <div className="grid grid-cols-2 gap-4">
               <Field label="Passport expiry">
                 <input
                   type="date"
@@ -180,6 +171,7 @@ export default function ProfilePage() {
                   className="w-full rounded-[var(--radius)] border bg-background px-3 py-2 text-sm"
                 />
               </Field>
+
               <Field label="Date of birth">
                 <input
                   type="date"
@@ -188,20 +180,16 @@ export default function ProfilePage() {
                   className="w-full rounded-[var(--radius)] border bg-background px-3 py-2 text-sm"
                 />
               </Field>
-            </div>
 
-            <Field label="Current country of residence" required>
-              <select
-                value={form.current_country ?? ""}
-                onChange={(e) => update("current_country", e.target.value)}
-                className="w-full rounded-[var(--radius)] border bg-background px-3 py-2 text-sm"
-              >
-                <option value="">Select country</option>
-                {COUNTRIES.map((c) => (
-                  <option key={c} value={c}>{c}</option>
-                ))}
-              </select>
-            </Field>
+              <Field label="Current country of residence" required>
+                <CountrySelector
+                  value={form.current_country ?? ""}
+                  valueType="name"
+                  placeholder="Select residence country..."
+                  onChange={(val) => update("current_country", val)}
+                />
+              </Field>
+            </div>
 
             <button
               type="submit"

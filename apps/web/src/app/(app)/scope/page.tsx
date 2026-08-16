@@ -10,7 +10,6 @@ import {
   getAllGeoData,
   type GeoData,
   type Destination,
-  type Nationality,
   type VisaType,
   type ApplicationType,
 } from "@/lib/api/geo";
@@ -18,25 +17,13 @@ import { updateProfile } from "@/lib/api/auth";
 import {
   scopeCase,
 } from "@/lib/api/cases";
+import { CountrySelector } from "@/components/ui/country-selector";
+import { matchCountry } from "@/lib/countries";
 
 type CaseResult = { id: number; reference: string; status: string };
 
 /** Combined residence + nationality, then destination → visa → app → review */
 type Step = "identity" | "destination" | "visa_type" | "app_type" | "review";
-
-function matchCountryCode(
-  profileValue: string | null | undefined,
-  options: Nationality[],
-  fallback: string,
-): string {
-  if (!profileValue) return fallback;
-  const raw = profileValue.trim();
-  const upper = raw.toUpperCase();
-  if (options.some((n) => n.code === upper)) return upper;
-  const byName = options.find((n) => n.name.toLowerCase() === raw.toLowerCase());
-  if (byName) return byName.code;
-  return fallback;
-}
 
 export default function ScopePage() {
   const { token, user } = useAuth();
@@ -47,8 +34,8 @@ export default function ScopePage() {
 
   const [geoData, setGeoData] = useState<GeoData | null>(null);
 
-  const [residenceCountry, setResidenceCountry] = useState<string>("JP");
-  const [nationality, setNationality] = useState<string>("JP");
+  const [residenceCountry, setResidenceCountry] = useState<string>("BD");
+  const [nationality, setNationality] = useState<string>("BD");
   const [selectedDestination, setSelectedDestination] = useState<Destination | null>(null);
   const [selectedVisaType, setSelectedVisaType] = useState<VisaType | null>(null);
   const [selectedAppType, setSelectedAppType] = useState<ApplicationType | null>(null);
@@ -75,10 +62,10 @@ export default function ScopePage() {
           const profile = userRef.current;
           const fallback = data.detected_country.country_code;
           setResidenceCountry(
-            matchCountryCode(profile?.current_country, data.nationalities, fallback),
+            matchCountry(profile?.current_country, fallback).code,
           );
           setNationality(
-            matchCountryCode(profile?.nationality, data.nationalities, fallback),
+            matchCountry(profile?.nationality, fallback).code,
           );
           seededFromProfileRef.current = true;
         }
@@ -109,12 +96,8 @@ export default function ScopePage() {
     setStep("destination");
     if (token) {
       try {
-        const natName =
-          (geoData?.nationalities ?? []).find((n) => n.code === nationality)?.name ?? nationality;
-        const resName =
-          (geoData?.nationalities ?? []).find((n) => n.code === residenceCountry)?.name ??
-          geoData?.detected_country.country_name ??
-          residenceCountry;
+        const natName = matchCountry(nationality).name;
+        const resName = matchCountry(residenceCountry).name;
         // Do not call setAuth here — updating global user re-triggered this page previously.
         await updateProfile(token, {
           nationality: natName,
@@ -217,21 +200,17 @@ export default function ScopePage() {
   const visaTypes = geoData?.visa_types ?? [];
   const appTypes = geoData?.application_types ?? [];
   const nationalities = geoData?.nationalities ?? [];
-  const residenceLabel =
-    nationalities.find((n) => n.code === residenceCountry)?.name ??
-    geoData?.detected_country.country_name ??
-    residenceCountry;
-  const nationalityLabel =
-    nationalities.find((n) => n.code === nationality)?.name ?? nationality;
+  const residenceLabel = matchCountry(residenceCountry).name;
+  const nationalityLabel = matchCountry(nationality).name;
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6 py-8">
+    <div className="w-full max-w-7xl mx-auto space-y-6 py-6">
       <div>
         <h2 className="text-2xl font-semibold tracking-tight">
           Start a new application
         </h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Apply for a visa from {geoData?.detected_country.country_name ?? "your country"} to any destination worldwide.
+          Apply for a visa from {geoData?.detected_country.country_name ?? "Bangladesh"} to Japan, United States, or United Kingdom.
         </p>
       </div>
 
@@ -285,26 +264,13 @@ export default function ScopePage() {
                 </span>
               </div>
             )}
-            <div className="grid max-h-48 gap-2 overflow-y-auto sm:grid-cols-2">
-              {nationalities.map((n) => (
-                <button
-                  key={`res-${n.code}`}
-                  type="button"
-                  onClick={() => setResidenceCountry(n.code)}
-                  className={`flex items-center gap-3 rounded-[var(--radius)] border p-3 text-left text-sm transition-colors ${
-                    residenceCountry === n.code
-                      ? "border-primary bg-primary/10 text-primary"
-                      : "bg-card hover:bg-accent"
-                  }`}
-                >
-                  <span className="text-xl">{n.flag}</span>
-                  <span className="min-w-0 flex-1 truncate font-medium">{n.name}</span>
-                  {residenceCountry === n.code && (
-                    <Check className="size-4 shrink-0 text-[var(--color-success)]" />
-                  )}
-                </button>
-              ))}
-            </div>
+            <CountrySelector
+              mode="grid"
+              valueType="code"
+              value={residenceCountry}
+              onChange={(code) => setResidenceCountry(code)}
+              gridMaxHeightClass="max-h-56"
+            />
           </div>
 
           <div className="space-y-3">
@@ -314,30 +280,13 @@ export default function ScopePage() {
             <p className="text-xs text-muted-foreground">
               Some visas differ by nationality. We use this to tailor official requirements.
             </p>
-            {nationalities.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No nationality options available.</p>
-            ) : (
-              <div className="grid max-h-56 gap-2 overflow-y-auto sm:grid-cols-2">
-                {nationalities.map((n) => (
-                  <button
-                    key={`nat-${n.code}`}
-                    type="button"
-                    onClick={() => setNationality(n.code)}
-                    className={`flex items-center gap-3 rounded-[var(--radius)] border p-3 text-left text-sm transition-colors ${
-                      nationality === n.code
-                        ? "border-primary bg-primary/10 text-primary"
-                        : "bg-card hover:bg-accent"
-                    }`}
-                  >
-                    <span className="text-xl">{n.flag}</span>
-                    <span className="min-w-0 flex-1 truncate font-medium">{n.name}</span>
-                    {nationality === n.code && (
-                      <Check className="size-4 shrink-0 text-[var(--color-success)]" />
-                    )}
-                  </button>
-                ))}
-              </div>
-            )}
+            <CountrySelector
+              mode="grid"
+              valueType="code"
+              value={nationality}
+              onChange={(code) => setNationality(code)}
+              gridMaxHeightClass="max-h-56"
+            />
           </div>
 
           <button

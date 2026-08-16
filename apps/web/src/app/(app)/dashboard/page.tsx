@@ -41,7 +41,7 @@ export default function DashboardPage() {
   const completed = cases.filter((c) => ["submitted", "packet_ready"].includes(c.status));
 
   return (
-    <div className="mx-auto max-w-4xl space-y-8">
+    <div className="w-full max-w-7xl mx-auto space-y-8">
       <div className="flex items-start justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Welcome back</h1>
