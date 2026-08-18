@@ -34,6 +34,7 @@ class UTCDateTime(TypeDecorator):
             value = value.replace(tzinfo=UTC)
         return value
 
+
 # Explicit, dialect-portable constraint naming so Alembic autogenerate produces stable names
 # on both SQLite and Postgres (and so batch ALTER on SQLite can reference them).
 NAMING_CONVENTION = {

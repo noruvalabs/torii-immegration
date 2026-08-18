@@ -77,7 +77,7 @@ _CITATION_RULE = (
     '"title": "page title", "url": "https://...", "source_version": "YYYY-MM"}.'
 )
 _FOLLOWUP_RULE = (
-    "- \"followup_queries\" are search-engine query text (e.g. \"Japan tourist visa required "
+    '- "followup_queries" are search-engine query text (e.g. "Japan tourist visa required '
     'documents official"), never a URL and never one you were already given as source content.'
 )
 
@@ -328,9 +328,7 @@ def build_stage_queries(request: StageResearchRequest) -> list[str]:
         ]
         if residence and residence != dest:
             queries.append(f"{dest} embassy or consulate in {residence} visa application")
-            queries.append(
-                f"{dest} visa accredited travel agency application centre {residence}"
-            )
+            queries.append(f"{dest} visa accredited travel agency application centre {residence}")
         return [q for q in queries if q]
 
     if request.stage == "intake":

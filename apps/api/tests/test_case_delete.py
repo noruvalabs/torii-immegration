@@ -10,9 +10,13 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 async def _seed_minimal_us_scope(engine: AsyncEngine) -> tuple[int, int, int]:
     async with engine.begin() as conn:
         await conn.execute(
-            text("INSERT INTO jurisdictions (code, name, is_live) VALUES ('US', 'United States', 1)")
+            text(
+                "INSERT INTO jurisdictions (code, name, is_live) VALUES ('US', 'United States', 1)"
+            )
         )
-        jid = (await conn.execute(text("SELECT id FROM jurisdictions WHERE code = 'US'"))).scalar_one()
+        jid = (
+            await conn.execute(text("SELECT id FROM jurisdictions WHERE code = 'US'"))
+        ).scalar_one()
 
         await conn.execute(
             text(
@@ -80,9 +84,7 @@ async def test_delete_case_removes_it(client: AsyncClient, engine: AsyncEngine) 
     assert get_resp.status_code == 404
 
 
-async def test_delete_case_rejects_submitted(
-    client: AsyncClient, engine: AsyncEngine
-) -> None:
+async def test_delete_case_rejects_submitted(client: AsyncClient, engine: AsyncEngine) -> None:
     await _seed_minimal_us_scope(engine)
 
     register = await client.post(
@@ -107,8 +109,9 @@ async def test_delete_case_rejects_submitted(
     case_id = scoped.json()["id"]
 
     async with engine.begin() as conn:
-        await conn.execute(text("UPDATE cases SET status = 'submitted' WHERE id = :id"), {"id": case_id})
+        await conn.execute(
+            text("UPDATE cases SET status = 'submitted' WHERE id = :id"), {"id": case_id}
+        )
 
     resp = await client.delete(f"/v1/cases/{case_id}", headers=headers)
     assert resp.status_code == 409
-

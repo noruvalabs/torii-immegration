@@ -7,20 +7,13 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 
-async def test_visa_categories_list_empty(
-    client: AsyncClient, engine: AsyncEngine
-) -> None:
+async def test_visa_categories_list_empty(client: AsyncClient, engine: AsyncEngine) -> None:
     """No categories before seeding."""
     async with engine.begin() as conn:
         await conn.execute(
-            text(
-                "INSERT INTO jurisdictions (code, name, is_live)"
-                " VALUES ('JP', 'Japan', 1)"
-            )
+            text("INSERT INTO jurisdictions (code, name, is_live) VALUES ('JP', 'Japan', 1)")
         )
-    resp = await client.get(
-        "/v1/cases/visa-categories", params={"jurisdiction_code": "JP"}
-    )
+    resp = await client.get("/v1/cases/visa-categories", params={"jurisdiction_code": "JP"})
     assert resp.status_code == 200
     assert resp.json() == []
 
@@ -28,26 +21,17 @@ async def test_visa_categories_list_empty(
 async def test_visa_categories_404_for_unknown_jurisdiction(
     client: AsyncClient,
 ) -> None:
-    resp = await client.get(
-        "/v1/cases/visa-categories", params={"jurisdiction_code": "ZZ"}
-    )
+    resp = await client.get("/v1/cases/visa-categories", params={"jurisdiction_code": "ZZ"})
     assert resp.status_code == 404
 
 
-async def test_case_actions_list_empty(
-    client: AsyncClient, engine: AsyncEngine
-) -> None:
+async def test_case_actions_list_empty(client: AsyncClient, engine: AsyncEngine) -> None:
     """No actions before seeding."""
     async with engine.begin() as conn:
         await conn.execute(
-            text(
-                "INSERT INTO jurisdictions (code, name, is_live)"
-                " VALUES ('JP2', 'Japan2', 1)"
-            )
+            text("INSERT INTO jurisdictions (code, name, is_live) VALUES ('JP2', 'Japan2', 1)")
         )
-    resp = await client.get(
-        "/v1/cases/case-actions", params={"jurisdiction_code": "JP2"}
-    )
+    resp = await client.get("/v1/cases/case-actions", params={"jurisdiction_code": "JP2"})
     assert resp.status_code == 200
     assert resp.json() == []
 
@@ -80,10 +64,7 @@ async def test_scope_case_rejects_inactive_jurisdiction(
     """Scoping with a non-live jurisdiction returns 400."""
     async with engine.begin() as conn:
         await conn.execute(
-            text(
-                "INSERT INTO jurisdictions (code, name, is_live)"
-                " VALUES ('DE', 'Germany', 0)"
-            )
+            text("INSERT INTO jurisdictions (code, name, is_live) VALUES ('DE', 'Germany', 0)")
         )
     register = await client.post(
         "/v1/auth/register",

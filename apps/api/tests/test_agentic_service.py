@@ -127,9 +127,7 @@ def test_admissibility_is_valid_accepts_cited_fee() -> None:
 
 def test_stage_is_valid_intake_requires_citations_and_parseable_questions() -> None:
     good = {
-        "questions": [
-            {"key": "full_name", "prompt": "Name?", "type": "string", "citation": CITED}
-        ]
+        "questions": [{"key": "full_name", "prompt": "Name?", "type": "string", "citation": CITED}]
     }
     assert stage_is_valid("intake", good) is True
 

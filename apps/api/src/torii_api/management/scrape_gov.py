@@ -46,13 +46,13 @@ async def run() -> None:
         stored_counts = {"eligibility": 0, "documents": 0, "intake": 0}
 
         for code, result in results.items():
-            print(f"\n{'='*60}")
+            print(f"\n{'=' * 60}")
             print(f"  {code}: {len(result.source_pages)} pages scraped")
             print(f"  Visa categories found: {len(result.visa_categories)}")
             print(f"  Document sets: {len(result.document_requirements)}")
             print(f"  Eligibility rule sets: {len(result.eligibility_rules)}")
             print(f"  Errors: {len(result.errors)}")
-            print(f"{'='*60}")
+            print(f"{'=' * 60}")
 
             # Resolve jurisdiction
             jurisdiction = await session.scalar(
@@ -133,7 +133,9 @@ async def run() -> None:
                 if existing:
                     existing.rules = rules
                     existing.is_live = False
-                    print(f"  ~ Updated eligibility rules for {vc.code}/{ca.code}: {len(rules)} rules")
+                    print(
+                        f"  ~ Updated eligibility rules for {vc.code}/{ca.code}: {len(rules)} rules"
+                    )
                 else:
                     session.add(
                         EligibilityRuleSet(
@@ -188,7 +190,9 @@ async def run() -> None:
                 if existing:
                     existing.items = documents
                     existing.is_live = False
-                    print(f"  ~ Updated document requirements for {vc.code}/{ca.code}: {len(documents)} items")
+                    print(
+                        f"  ~ Updated document requirements for {vc.code}/{ca.code}: {len(documents)} items"
+                    )
                 else:
                     session.add(
                         DocumentRequirementSet(
@@ -199,7 +203,9 @@ async def run() -> None:
                             is_live=False,
                         )
                     )
-                    print(f"  + Document requirements for {vc.code}/{ca.code}: {len(documents)} items")
+                    print(
+                        f"  + Document requirements for {vc.code}/{ca.code}: {len(documents)} items"
+                    )
                 stored_counts["documents"] += 1
 
             # ── Store intake questions (basic from scraped data) ────────────────
@@ -236,7 +242,9 @@ async def run() -> None:
                 if existing:
                     existing.questions = intake_questions
                     existing.is_live = False
-                    print(f"  ~ Updated intake questions for {vc.code}/{ca.code}: {len(intake_questions)} questions")
+                    print(
+                        f"  ~ Updated intake questions for {vc.code}/{ca.code}: {len(intake_questions)} questions"
+                    )
                 else:
                     session.add(
                         IntakeDefinition(
@@ -247,18 +255,20 @@ async def run() -> None:
                             is_live=False,
                         )
                     )
-                    print(f"  + Intake questions for {vc.code}/{ca.code}: {len(intake_questions)} questions")
+                    print(
+                        f"  + Intake questions for {vc.code}/{ca.code}: {len(intake_questions)} questions"
+                    )
                 stored_counts["intake"] += 1
 
         await session.commit()
 
     await engine.dispose()
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"  DONE — stored {stored_counts['eligibility']} eligibility rule sets,")
     print(f"          {stored_counts['documents']} document requirement sets,")
     print(f"          {stored_counts['intake']} intake definitions")
     print("  All records are DRAFT (is_live=False). Review and approve via admin.")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
 
 
 def _build_intake_questions(result) -> list[dict]:
@@ -266,96 +276,116 @@ def _build_intake_questions(result) -> list[dict]:
     questions = []
 
     # Basic questions every applicant needs to answer
-    questions.append({
-        "key": "nationality",
-        "kind": "text",
-        "label": "What is your nationality?",
-        "hint": "Country of citizenship",
-        "required": True,
-    })
+    questions.append(
+        {
+            "key": "nationality",
+            "kind": "text",
+            "label": "What is your nationality?",
+            "hint": "Country of citizenship",
+            "required": True,
+        }
+    )
 
-    questions.append({
-        "key": "current_status",
-        "kind": "select",
-        "label": "What is your current immigration status?",
-        "options": [
-            {"value": vc["code"], "label": vc.get("name_en", vc["code"])}
-            for vc in result.visa_categories
-            if vc.get("code") and not vc["code"].startswith("gc_")
-        ][:10],  # Limit options
-        "required": True,
-    })
+    questions.append(
+        {
+            "key": "current_status",
+            "kind": "select",
+            "label": "What is your current immigration status?",
+            "options": [
+                {"value": vc["code"], "label": vc.get("name_en", vc["code"])}
+                for vc in result.visa_categories
+                if vc.get("code") and not vc["code"].startswith("gc_")
+            ][:10],  # Limit options
+            "required": True,
+        }
+    )
 
-    questions.append({
-        "key": "purpose",
-        "kind": "select",
-        "label": "What do you need to do?",
-        "options": [
-            {"value": "renewal", "label": "Renew/extend current status"},
-            {"value": "change_status", "label": "Change to a different status"},
-            {"value": "new_application", "label": "New visa application"},
-        ],
-        "required": True,
-    })
+    questions.append(
+        {
+            "key": "purpose",
+            "kind": "select",
+            "label": "What do you need to do?",
+            "options": [
+                {"value": "renewal", "label": "Renew/extend current status"},
+                {"value": "change_status", "label": "Change to a different status"},
+                {"value": "new_application", "label": "New visa application"},
+            ],
+            "required": True,
+        }
+    )
 
-    questions.append({
-        "key": "has_passport",
-        "kind": "bool",
-        "label": "Do you have a valid passport?",
-        "required": True,
-    })
+    questions.append(
+        {
+            "key": "has_passport",
+            "kind": "bool",
+            "label": "Do you have a valid passport?",
+            "required": True,
+        }
+    )
 
-    questions.append({
-        "key": "has_residence_card",
-        "kind": "bool",
-        "label": "Do you currently hold a residence card or visa?",
-        "required": True,
-    })
+    questions.append(
+        {
+            "key": "has_residence_card",
+            "kind": "bool",
+            "label": "Do you currently hold a residence card or visa?",
+            "required": True,
+        }
+    )
 
-    questions.append({
-        "key": "employment_status",
-        "kind": "select",
-        "label": "What is your current employment situation?",
-        "options": [
-            {"value": "employed", "label": "Employed"},
-            {"value": "self_employed", "label": "Self-employed"},
-            {"value": "student", "label": "Student"},
-            {"value": "unemployed", "label": "Not currently employed"},
-            {"value": "retired", "label": "Retired"},
-        ],
-        "required": True,
-    })
+    questions.append(
+        {
+            "key": "employment_status",
+            "kind": "select",
+            "label": "What is your current employment situation?",
+            "options": [
+                {"value": "employed", "label": "Employed"},
+                {"value": "self_employed", "label": "Self-employed"},
+                {"value": "student", "label": "Student"},
+                {"value": "unemployed", "label": "Not currently employed"},
+                {"value": "retired", "label": "Retired"},
+            ],
+            "required": True,
+        }
+    )
 
     if result.jurisdiction_code == "JP":
-        questions.append({
-            "key": "years_in_japan",
-            "kind": "number",
-            "label": "How many years have you lived in Japan?",
-            "hint": "Whole years",
-            "required": True,
-        })
+        questions.append(
+            {
+                "key": "years_in_japan",
+                "kind": "number",
+                "label": "How many years have you lived in Japan?",
+                "hint": "Whole years",
+                "required": True,
+            }
+        )
     elif result.jurisdiction_code == "US":
-        questions.append({
-            "key": "entry_date",
-            "kind": "date",
-            "label": "When did you last enter the United States?",
+        questions.append(
+            {
+                "key": "entry_date",
+                "kind": "date",
+                "label": "When did you last enter the United States?",
+                "required": True,
+            }
+        )
+
+    questions.append(
+        {
+            "key": "has_criminal_record",
+            "kind": "bool",
+            "label": "Do you have any criminal convictions?",
             "required": True,
-        })
+        }
+    )
 
-    questions.append({
-        "key": "has_criminal_record",
-        "kind": "bool",
-        "label": "Do you have any criminal convictions?",
-        "required": True,
-    })
-
-    questions.append({
-        "key": "additional_info",
-        "kind": "text",
-        "label": "Is there anything else we should know about your situation?",
-        "hint": "Optional — any special circumstances or concerns",
-        "required": False,
-    })
+    questions.append(
+        {
+            "key": "additional_info",
+            "kind": "text",
+            "label": "Is there anything else we should know about your situation?",
+            "hint": "Optional — any special circumstances or concerns",
+            "required": False,
+        }
+    )
 
     return questions
 

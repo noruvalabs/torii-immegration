@@ -65,7 +65,9 @@ class DeadlineProfile:
 
     def to_dict(self) -> dict[str, object]:
         return {
-            "residence_expiry": self.residence_expiry.isoformat() if self.residence_expiry else None,
+            "residence_expiry": self.residence_expiry.isoformat()
+            if self.residence_expiry
+            else None,
             "procedure": self.procedure,
             "filing_window_opens": (
                 self.filing_window_opens.isoformat() if self.filing_window_opens else None
@@ -74,7 +76,9 @@ class DeadlineProfile:
             "grace_period_end": (
                 self.grace_period_end.isoformat() if self.grace_period_end else None
             ),
-            "my_number_expiry": self.my_number_expiry.isoformat() if self.my_number_expiry else None,
+            "my_number_expiry": self.my_number_expiry.isoformat()
+            if self.my_number_expiry
+            else None,
             "has_grace_period": self.has_grace_period,
         }
 

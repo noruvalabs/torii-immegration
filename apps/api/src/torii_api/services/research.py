@@ -98,6 +98,7 @@ async def find_research(
         ScopeResearch.visa_category_id == visa_category_id,
         ScopeResearch.case_action_id == case_action_id,
     )
+
     # SQL NULL-safe comparison: build equality that treats None and '' as absent.
     def _match(column: Any, value: str | None) -> Any:
         if value:

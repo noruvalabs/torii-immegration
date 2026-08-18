@@ -26,10 +26,10 @@ def fill_form(field_mappings: list[dict[str, Any]], answers: dict[str, Any]) -> 
     """Fill declared mappings and all available applicant intake answers into standard form fields."""
     filled: dict[str, Any] = {}
     missing: list[str] = []
-    
+
     # 1. Standardize and normalize key answers
     normalized_answers = dict(answers or {})
-    
+
     # Fill declared mappings first
     for mapping in field_mappings or []:
         if not isinstance(mapping, dict):

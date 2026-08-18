@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+
 import pytest
 from httpx import ASGITransport, AsyncClient
 
@@ -14,35 +15,37 @@ from torii_ai.services.eligibility_evaluator import (
     AIEvaluationRequest,
 )
 
-SAMPLE_LLM_REPLY = json.dumps({
-    "result": "pass",
-    "summary": "Applicant satisfies all visitor visa requirements.",
-    "findings": [
-        {
-            "key": "travel_purpose",
-            "status": "pass",
-            "message": "Trip purpose 'visiting family and tourism' is legitimate.",
-            "citation": {
-                "authority": "Ministry of Foreign Affairs of Japan",
-                "title": "Visa for Temporary Visitors",
-                "url": "https://www.mofa.go.jp/j_info/visit/visa/index.html",
-                "source_version": "2026-08",
+SAMPLE_LLM_REPLY = json.dumps(
+    {
+        "result": "pass",
+        "summary": "Applicant satisfies all visitor visa requirements.",
+        "findings": [
+            {
+                "key": "travel_purpose",
+                "status": "pass",
+                "message": "Trip purpose 'visiting family and tourism' is legitimate.",
+                "citation": {
+                    "authority": "Ministry of Foreign Affairs of Japan",
+                    "title": "Visa for Temporary Visitors",
+                    "url": "https://www.mofa.go.jp/j_info/visit/visa/index.html",
+                    "source_version": "2026-08",
+                },
             },
-        },
-        {
-            "key": "financial_capacity",
-            "status": "pass",
-            "message": "Funds and employment proof are sufficient.",
-            "citation": {
-                "authority": "Ministry of Foreign Affairs of Japan",
-                "title": "Visa for Temporary Visitors",
-                "url": "https://www.mofa.go.jp/j_info/visit/visa/index.html",
-                "source_version": "2026-08",
+            {
+                "key": "financial_capacity",
+                "status": "pass",
+                "message": "Funds and employment proof are sufficient.",
+                "citation": {
+                    "authority": "Ministry of Foreign Affairs of Japan",
+                    "title": "Visa for Temporary Visitors",
+                    "url": "https://www.mofa.go.jp/j_info/visit/visa/index.html",
+                    "source_version": "2026-08",
+                },
             },
-        },
-    ],
-    "disclaimer": "This is an AI-assisted preparation check based on official published criteria, not legal advice or a government decision.",
-})
+        ],
+        "disclaimer": "This is an AI-assisted preparation check based on official published criteria, not legal advice or a government decision.",
+    }
+)
 
 
 @pytest.mark.asyncio

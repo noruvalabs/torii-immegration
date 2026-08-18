@@ -22,6 +22,9 @@ from torii_api.db.engine import create_engine, create_session_factory
 from torii_api.db.models import (
     Case,
     CaseStageResearch,
+    DocumentRequirementSet,
+    EligibilityRuleSet,
+    IntakeDefinition,
     OutboxEvent,
     ScopeResearch,
     ScopeResearchStatus,
@@ -167,22 +170,38 @@ async def run_case_research(ctx: dict[str, Any], event: OutboxEvent) -> None:
     valid = validated_for_promote(rules=rules, documents=docs, questions=questions)
 
     if not valid and (not rules or not docs or not questions):
-        from torii_api.management.seed import (
-            GENERIC_DOCUMENTS,
-            GENERIC_FORM,
-            GENERIC_QUESTIONS,
-            GENERIC_RULES,
-        )
+        async with session_factory() as session:
+            res_row = await session.get(ScopeResearch, research_id)
+            if res_row is not None:
+                idef = await session.scalar(
+                    select(IntakeDefinition).where(
+                        IntakeDefinition.jurisdiction_id == res_row.jurisdiction_id,
+                        IntakeDefinition.visa_category_id == res_row.visa_category_id,
+                        IntakeDefinition.is_live.is_(True),
+                    )
+                )
+                if idef and idef.questions and not questions:
+                    questions = list(idef.questions)
+                edef = await session.scalar(
+                    select(EligibilityRuleSet).where(
+                        EligibilityRuleSet.jurisdiction_id == res_row.jurisdiction_id,
+                        EligibilityRuleSet.visa_category_id == res_row.visa_category_id,
+                        EligibilityRuleSet.is_live.is_(True),
+                    )
+                )
+                if edef and edef.rules and not rules:
+                    rules = list(edef.rules)
+                ddef = await session.scalar(
+                    select(DocumentRequirementSet).where(
+                        DocumentRequirementSet.jurisdiction_id == res_row.jurisdiction_id,
+                        DocumentRequirementSet.visa_category_id == res_row.visa_category_id,
+                        DocumentRequirementSet.is_live.is_(True),
+                    )
+                )
+                if ddef and ddef.items and not docs:
+                    docs = list(ddef.items)
 
-        if not rules:
-            rules = list(GENERIC_RULES)
-        if not docs:
-            docs = list(GENERIC_DOCUMENTS)
-        if not questions:
-            questions = list(GENERIC_QUESTIONS)
-        if not forms:
-            forms = [dict(GENERIC_FORM)]
-        valid = validated_for_promote(rules=rules, documents=docs, questions=questions)
+        valid = bool(rules and docs and questions)
 
     async with session_factory() as session:
         research = await session.get(ScopeResearch, research_id)

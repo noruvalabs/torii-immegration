@@ -87,9 +87,7 @@ async def count_users(
     _admin: AdminDep,
 ) -> dict[str, int]:
     """Return user counts by role (admin only)."""
-    result = await session.execute(
-        select(User.role, func.count()).group_by(User.role)
-    )
+    result = await session.execute(select(User.role, func.count()).group_by(User.role))
     return {row[0]: row[1] for row in result.all()}
 
 
@@ -184,9 +182,7 @@ async def admin_count_cases(
     _admin: AdminDep,
 ) -> dict[str, int]:
     """Return case counts by status (admin only)."""
-    result = await session.execute(
-        select(Case.status, func.count()).group_by(Case.status)
-    )
+    result = await session.execute(select(Case.status, func.count()).group_by(Case.status))
     return {row[0]: row[1] for row in result.all()}
 
 

@@ -51,7 +51,6 @@ def get_assistant(settings: Annotated[Settings, Depends(get_settings)]) -> Assis
     return AssistantService(chat=chat, search=search)
 
 
-
 AssistantDep = Annotated[AssistantService, Depends(get_assistant)]
 SettingsDep = Annotated[Settings, Depends(get_settings)]
 

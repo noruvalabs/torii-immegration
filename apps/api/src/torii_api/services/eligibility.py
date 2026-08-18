@@ -90,20 +90,45 @@ class EligibilityResult(BaseModel):
 
 
 KEY_ALIASES: dict[str, list[str]] = {
-    "purpose_of_stay": ["main_purpose", "purpose_of_visit", "trip_purpose", "purpose", "travel_purpose"],
-    "main_purpose": ["purpose_of_stay", "purpose_of_visit", "trip_purpose", "purpose", "travel_purpose"],
+    "purpose_of_stay": [
+        "main_purpose",
+        "purpose_of_visit",
+        "trip_purpose",
+        "purpose",
+        "travel_purpose",
+    ],
+    "main_purpose": [
+        "purpose_of_stay",
+        "purpose_of_visit",
+        "trip_purpose",
+        "purpose",
+        "travel_purpose",
+    ],
     "stay_duration_days": ["duration_of_stay", "stay_duration", "duration", "days_of_stay"],
     "passport_expiry_date": ["passport_expiry", "expiry_date"],
     "passport_issue_date": ["passport_issue", "issue_date"],
     "current_residence_country": ["residence_country", "current_country", "country_of_residence"],
     "estimated_savings_available": ["savings", "savings_available", "funds_available"],
-    "bank_statement_available": ["has_sufficient_funds", "bank_statement_6_months", "bank_statements_available"],
+    "bank_statement_available": [
+        "has_sufficient_funds",
+        "bank_statement_6_months",
+        "bank_statements_available",
+    ],
     "traveled_internationally_before": ["travel_history", "international_travel"],
     "prior_overstay_history": ["prior_overstay", "overstay_history"],
     "prior_visa_refusal_any_country": ["prior_refusal", "visa_refusal"],
 }
 
-PURPOSE_SYNONYMS: set[str] = {"tour", "tourism", "sightseeing", "holiday", "travel", "vacation", "leisure", "visit"}
+PURPOSE_SYNONYMS: set[str] = {
+    "tour",
+    "tourism",
+    "sightseeing",
+    "holiday",
+    "travel",
+    "vacation",
+    "leisure",
+    "visit",
+}
 
 
 def _get_answer_for_key(key: str, answers: dict[str, Any]) -> Any:
@@ -220,7 +245,9 @@ def evaluate_eligibility(
                 EligibilityFinding(
                     key=key,
                     status=_normalize_eligibility_status(rule.get("failure_status", "fail")),
-                    message=str(rule.get("message", f"Rule for '{key.replace('_', ' ')}' was not met.")),
+                    message=str(
+                        rule.get("message", f"Rule for '{key.replace('_', ' ')}' was not met.")
+                    ),
                     citation=dict(rule.get("citation") or {}),
                 )
             )
@@ -229,7 +256,12 @@ def evaluate_eligibility(
                 EligibilityFinding(
                     key=key,
                     status="pass",
-                    message=str(rule.get("pass_message", f"Criterion '{key.replace('_', ' ')}' is satisfied based on intake answers.")),
+                    message=str(
+                        rule.get(
+                            "pass_message",
+                            f"Criterion '{key.replace('_', ' ')}' is satisfied based on intake answers.",
+                        )
+                    ),
                     citation=dict(rule.get("citation") or {}),
                 )
             )
@@ -307,4 +339,3 @@ async def evaluate_eligibility_with_ai(
             log.info("eligibility.ai_eval_failed_fallback_to_rules", error=str(exc))
 
     return deterministic
-

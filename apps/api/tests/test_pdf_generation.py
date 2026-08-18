@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-import pytest
 from torii_api.services.pdf_generator import (
-    generate_japan_work_renewal_pdf,
     generate_cover_letter_pdf,
     generate_dossier_packet_pdf,
+    generate_japan_work_renewal_pdf,
 )
 
 
@@ -35,7 +34,9 @@ def test_cover_letter_pdf_generation():
         {"name": "Valid Passport", "status": "verified", "citation": {"authority": "MOJ"}},
         {"name": "Tax Certificate", "status": "provided", "citation": {"authority": "Tax Office"}},
     ]
-    pdf_bytes = generate_cover_letter_pdf("JP-2026-TEST01", answers, checklist, "Japan · Work Renewal")
+    pdf_bytes = generate_cover_letter_pdf(
+        "JP-2026-TEST01", answers, checklist, "Japan · Work Renewal"
+    )
     assert pdf_bytes.startswith(b"%PDF-")
     assert len(pdf_bytes) > 2000
 

@@ -89,9 +89,7 @@ class DocumentTypesOut(BaseModel):
 async def list_document_types() -> DocumentTypesOut:
     """List all supported document types."""
     doc_types = get_document_types()
-    return DocumentTypesOut(
-        document_types=[DocumentTypeOut(**dt) for dt in doc_types]
-    )
+    return DocumentTypesOut(document_types=[DocumentTypeOut(**dt) for dt in doc_types])
 
 
 @router.get("", response_model=list[WalletDocumentOut])
@@ -128,6 +126,7 @@ async def upload_wallet_document(
 ) -> WalletUploadOut:
     """Upload a document to the wallet."""
     from torii_api.services.wallet import normalize_doc_type
+
     doc_type = normalize_doc_type(doc_type)
 
     # Read file content

@@ -96,9 +96,7 @@ def _normalize_email(email: str) -> str:
     return email.strip().lower()
 
 
-async def _find_user_by_email_or_username(
-    session: SessionDep, identifier: str
-) -> User | None:
+async def _find_user_by_email_or_username(session: SessionDep, identifier: str) -> User | None:
     """Look up a user by email (normalized) or username (case-insensitive)."""
     identifier = identifier.strip()
     email = _normalize_email(identifier)
@@ -249,9 +247,7 @@ async def upload_avatar(
 async def verify_email(session: SessionDep, token: str = Query(...)) -> MessageOut:
     """Verify an email address via the token sent to the user's inbox."""
     token_hash = hash_token(token)
-    user = await session.scalar(
-        select(User).where(User.email_verification_token == token_hash)
-    )
+    user = await session.scalar(select(User).where(User.email_verification_token == token_hash))
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -325,9 +321,7 @@ async def forgot_password(
             settings=settings,
         )
 
-    return MessageOut(
-        detail="If that email is registered, a password-reset link has been sent"
-    )
+    return MessageOut(detail="If that email is registered, a password-reset link has been sent")
 
 
 @router.post("/reset-password", response_model=MessageOut)
@@ -336,9 +330,7 @@ async def reset_password(
 ) -> MessageOut:
     """Reset a password using the token from the email."""
     token_hash = hash_token(payload.token)
-    user = await session.scalar(
-        select(User).where(User.password_reset_token == token_hash)
-    )
+    user = await session.scalar(select(User).where(User.password_reset_token == token_hash))
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

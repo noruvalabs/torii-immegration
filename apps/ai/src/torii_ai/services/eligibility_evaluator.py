@@ -84,9 +84,7 @@ class AIFinding:
 class AIEvaluationResult:
     result: EligibilityStatus
     findings: list[dict[str, Any]]
-    disclaimer: str = (
-        "This is an AI-assisted preparation check based on official published criteria, not legal advice or a government decision."
-    )
+    disclaimer: str = "This is an AI-assisted preparation check based on official published criteria, not legal advice or a government decision."
     summary: str | None = None
 
 
@@ -116,18 +114,22 @@ class AIElegibilityEvaluator:
         ]
 
         if req.rules:
-            user_prompt_lines.extend([
-                "",
-                "Published Statutory Rules Reference:",
-                json.dumps(req.rules, indent=2, default=str),
-            ])
+            user_prompt_lines.extend(
+                [
+                    "",
+                    "Published Statutory Rules Reference:",
+                    json.dumps(req.rules, indent=2, default=str),
+                ]
+            )
 
         if req.context:
-            user_prompt_lines.extend([
-                "",
-                "Additional Application Context:",
-                json.dumps(req.context, indent=2, default=str),
-            ])
+            user_prompt_lines.extend(
+                [
+                    "",
+                    "Additional Application Context:",
+                    json.dumps(req.context, indent=2, default=str),
+                ]
+            )
 
         user_prompt_lines.append("\nEvaluate the applicant and return strict JSON.")
         user_prompt = "\n".join(user_prompt_lines)
@@ -155,12 +157,14 @@ class AIElegibilityEvaluator:
                     cit = item.get("citation")
                     if not isinstance(cit, dict) or not cit.get("url"):
                         cit = self._default_citation(req.destination_code)
-                    findings.append({
-                        "key": str(item["key"]),
-                        "status": status,
-                        "message": str(item.get("message") or f"Evaluation for {item['key']}"),
-                        "citation": cit,
-                    })
+                    findings.append(
+                        {
+                            "key": str(item["key"]),
+                            "status": status,
+                            "message": str(item.get("message") or f"Evaluation for {item['key']}"),
+                            "citation": cit,
+                        }
+                    )
 
         # Reconcile explicit statutory rules from req.rules to ensure statutory compliance
         for rule in req.rules:
@@ -186,12 +190,20 @@ class AIElegibilityEvaluator:
                 if existing:
                     existing["status"] = failure_status
                 else:
-                    findings.append({
-                        "key": key,
-                        "status": failure_status,
-                        "message": str(rule.get("message", f"Requirement for {key.replace('_', ' ')} not met.")),
-                        "citation": dict(rule.get("citation") or self._default_citation(req.destination_code)),
-                    })
+                    findings.append(
+                        {
+                            "key": key,
+                            "status": failure_status,
+                            "message": str(
+                                rule.get(
+                                    "message", f"Requirement for {key.replace('_', ' ')} not met."
+                                )
+                            ),
+                            "citation": dict(
+                                rule.get("citation") or self._default_citation(req.destination_code)
+                            ),
+                        }
+                    )
 
         statuses = {f["status"] for f in findings}
         if "fail" in statuses:
@@ -251,68 +263,108 @@ class AIElegibilityEvaluator:
         findings = []
 
         # 1. Travel Purpose
-        purpose = str(req.answers.get("purpose_of_visit") or req.answers.get("main_purpose") or req.purpose_code).lower()
-        valid_purposes = {"tour", "tourism", "sightseeing", "holiday", "travel", "vacation", "visiting_family", "visiting_relatives_or_acquaintances", "visit"}
-        if any(p in purpose for p in valid_purposes) or purpose in valid_purposes or "tourist" in req.purpose_code.lower():
-            findings.append({
-                "key": "purpose_of_stay",
-                "status": "pass",
-                "message": f"Purpose '{purpose.replace('_', ' ')}' is valid for short-term visitor travel.",
-                "citation": cit,
-            })
+        purpose = str(
+            req.answers.get("purpose_of_visit")
+            or req.answers.get("main_purpose")
+            or req.purpose_code
+        ).lower()
+        valid_purposes = {
+            "tour",
+            "tourism",
+            "sightseeing",
+            "holiday",
+            "travel",
+            "vacation",
+            "visiting_family",
+            "visiting_relatives_or_acquaintances",
+            "visit",
+        }
+        if (
+            any(p in purpose for p in valid_purposes)
+            or purpose in valid_purposes
+            or "tourist" in req.purpose_code.lower()
+        ):
+            findings.append(
+                {
+                    "key": "purpose_of_stay",
+                    "status": "pass",
+                    "message": f"Purpose '{purpose.replace('_', ' ')}' is valid for short-term visitor travel.",
+                    "citation": cit,
+                }
+            )
         else:
-            findings.append({
-                "key": "purpose_of_stay",
-                "status": "at_risk",
-                "message": f"Purpose '{purpose}' may require a specific business or designated activities visa.",
-                "citation": cit,
-            })
+            findings.append(
+                {
+                    "key": "purpose_of_stay",
+                    "status": "at_risk",
+                    "message": f"Purpose '{purpose}' may require a specific business or designated activities visa.",
+                    "citation": cit,
+                }
+            )
 
         # 2. Stay Duration
-        days = req.answers.get("intended_length_of_stay_days") or req.answers.get("stay_duration_days") or 15
+        days = (
+            req.answers.get("intended_length_of_stay_days")
+            or req.answers.get("stay_duration_days")
+            or 15
+        )
         if isinstance(days, (int, float)) and days <= 90:
-            findings.append({
-                "key": "stay_duration",
-                "status": "pass",
-                "message": f"Requested stay of {int(days)} days satisfies the temporary visitor limit (<= 90 days).",
-                "citation": cit,
-            })
+            findings.append(
+                {
+                    "key": "stay_duration",
+                    "status": "pass",
+                    "message": f"Requested stay of {int(days)} days satisfies the temporary visitor limit (<= 90 days).",
+                    "citation": cit,
+                }
+            )
         else:
-            findings.append({
-                "key": "stay_duration",
-                "status": "at_risk",
-                "message": f"Stay of {days} days exceeds standard 90-day visitor limits.",
-                "citation": cit,
-            })
+            findings.append(
+                {
+                    "key": "stay_duration",
+                    "status": "at_risk",
+                    "message": f"Stay of {days} days exceeds standard 90-day visitor limits.",
+                    "citation": cit,
+                }
+            )
 
         # 3. Financial Capacity
         savings = req.answers.get("estimated_savings_available") or req.answers.get("savings")
-        has_funds = req.answers.get("visitor_has_sufficient_funds") or req.answers.get("bank_statement_available")
-        if has_funds is not False and (savings is None or (isinstance(savings, (int, float)) and savings >= 1000)):
-            findings.append({
-                "key": "financial_capacity",
-                "status": "pass",
-                "message": "Financial capacity and supporting funds are confirmed.",
-                "citation": cit,
-            })
+        has_funds = req.answers.get("visitor_has_sufficient_funds") or req.answers.get(
+            "bank_statement_available"
+        )
+        if has_funds is not False and (
+            savings is None or (isinstance(savings, (int, float)) and savings >= 1000)
+        ):
+            findings.append(
+                {
+                    "key": "financial_capacity",
+                    "status": "pass",
+                    "message": "Financial capacity and supporting funds are confirmed.",
+                    "citation": cit,
+                }
+            )
         else:
-            findings.append({
-                "key": "financial_capacity",
-                "status": "at_risk",
-                "message": "Additional proof of financial sponsorship or bank balance recommended.",
-                "citation": cit,
-            })
+            findings.append(
+                {
+                    "key": "financial_capacity",
+                    "status": "at_risk",
+                    "message": "Additional proof of financial sponsorship or bank balance recommended.",
+                    "citation": cit,
+                }
+            )
 
         # 4. Immigration Compliance
         prior_refusal = req.answers.get("prior_visa_refusal_any_country")
         prior_overstay = req.answers.get("prior_overstay_history")
         if prior_refusal or prior_overstay:
-            findings.append({
-                "key": "immigration_compliance",
-                "status": "at_risk",
-                "message": "Prior visa history or refusal noted. Consular review may request supplementary explanation.",
-                "citation": cit,
-            })
+            findings.append(
+                {
+                    "key": "immigration_compliance",
+                    "status": "at_risk",
+                    "message": "Prior visa history or refusal noted. Consular review may request supplementary explanation.",
+                    "citation": cit,
+                }
+            )
         # 5. Statutory / Category specific rules passed in req.rules
         for rule in req.rules:
             key = rule.get("key")
@@ -329,20 +381,24 @@ class AIElegibilityEvaluator:
             if op in ("min", "gte") and isinstance(answer, (int, float)):
                 threshold = val if isinstance(val, (int, float)) else 0
                 if answer < threshold:
-                    findings.append({
-                        "key": key,
-                        "status": failure_status,
-                        "message": msg,
-                        "citation": rule_cit,
-                    })
+                    findings.append(
+                        {
+                            "key": key,
+                            "status": failure_status,
+                            "message": msg,
+                            "citation": rule_cit,
+                        }
+                    )
             elif op in ("equals", "eq"):
                 if answer != val:
-                    findings.append({
-                        "key": key,
-                        "status": failure_status,
-                        "message": msg,
-                        "citation": rule_cit,
-                    })
+                    findings.append(
+                        {
+                            "key": key,
+                            "status": failure_status,
+                            "message": msg,
+                            "citation": rule_cit,
+                        }
+                    )
 
         statuses = {f["status"] for f in findings}
         overall = "fail" if "fail" in statuses else "at_risk" if "at_risk" in statuses else "pass"

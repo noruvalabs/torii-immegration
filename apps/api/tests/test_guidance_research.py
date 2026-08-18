@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from torii_api.services.guidance import compute_guidance
 
 RESEARCH_QUESTIONS = [
@@ -11,9 +13,6 @@ RESEARCH_QUESTIONS = [
         "type": "string",
     }
 ]
-
-
-from typing import Any
 
 
 def _guidance(*, research_status: str | None = None, questions=None) -> Any:

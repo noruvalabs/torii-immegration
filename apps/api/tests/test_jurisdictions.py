@@ -56,6 +56,7 @@ async def test_visa_category_list_public(client: AsyncClient, engine) -> None:
     """GET /v1/jurisdictions/{id}/visa-categories works without auth."""
     async with engine.begin() as conn:
         from sqlalchemy import text
+
         await conn.execute(
             text("INSERT INTO jurisdictions (code, name, is_live) VALUES ('JP', 'Japan', 1)")
         )
@@ -68,6 +69,7 @@ async def test_visa_category_create_requires_admin(client: AsyncClient, engine) 
     """POST /v1/jurisdictions/{id}/visa-categories requires admin role."""
     async with engine.begin() as conn:
         from sqlalchemy import text
+
         await conn.execute(
             text("INSERT INTO jurisdictions (code, name, is_live) VALUES ('JP', 'Japan', 1)")
         )
@@ -84,6 +86,7 @@ async def test_case_action_list_public(client: AsyncClient, engine) -> None:
     """GET /v1/jurisdictions/{id}/case-actions works without auth."""
     async with engine.begin() as conn:
         from sqlalchemy import text
+
         await conn.execute(
             text("INSERT INTO jurisdictions (code, name, is_live) VALUES ('JP', 'Japan', 1)")
         )
@@ -96,6 +99,7 @@ async def test_case_action_create_requires_admin(client: AsyncClient, engine) ->
     """POST /v1/jurisdictions/{id}/case-actions requires admin role."""
     async with engine.begin() as conn:
         from sqlalchemy import text
+
         await conn.execute(
             text("INSERT INTO jurisdictions (code, name, is_live) VALUES ('JP', 'Japan', 1)")
         )

@@ -79,7 +79,9 @@ async def _fetch_page(url: str, client: httpx.AsyncClient) -> str | None:
         text = re.sub(r"<style[^>]*>.*?</style>", "", text, flags=re.DOTALL | re.IGNORECASE)
         text = re.sub(r"<svg[^>]*>.*?</svg>", "", text, flags=re.DOTALL | re.IGNORECASE)
         # Convert common tags to markers
-        text = re.sub(r"<h[1-6][^>]*>(.*?)</h[1-6]>", r"\n## \1\n", text, flags=re.DOTALL | re.IGNORECASE)
+        text = re.sub(
+            r"<h[1-6][^>]*>(.*?)</h[1-6]>", r"\n## \1\n", text, flags=re.DOTALL | re.IGNORECASE
+        )
         text = re.sub(r"<li[^>]*>(.*?)</li>", r"\n- \1", text, flags=re.DOTALL | re.IGNORECASE)
         text = re.sub(r"<tr[^>]*>(.*?)</tr>", r"\n| \1", text, flags=re.DOTALL | re.IGNORECASE)
         text = re.sub(r"<br\s*/?>", "\n", text, flags=re.IGNORECASE)
@@ -102,7 +104,9 @@ async def _fetch_page(url: str, client: httpx.AsyncClient) -> str | None:
 def _extract_links(html: str, base_url: str) -> list[dict[str, str]]:
     """Extract links from raw HTML."""
     links = []
-    for match in re.finditer(r'<a[^>]+href="([^"]*)"[^>]*>(.*?)</a>', html, re.DOTALL | re.IGNORECASE):
+    for match in re.finditer(
+        r'<a[^>]+href="([^"]*)"[^>]*>(.*?)</a>', html, re.DOTALL | re.IGNORECASE
+    ):
         href, label = match.group(1), match.group(2)
         label = re.sub(r"<[^>]+>", "", label).strip()
         if not label or len(label) < 3:
@@ -126,17 +130,58 @@ async def scrape_japan(client: httpx.AsyncClient) -> ScrapeResult:
     log.info("gov_scraper.jp.fetching", page="procedures")
     html = await _fetch_page(JP_SOURCES["procedures"], client)
     if html:
-        result.source_pages.append({"url": JP_SOURCES["procedures"], "title": "手続の種類から探す", "retrieved_at": result.scraped_at})
+        result.source_pages.append(
+            {
+                "url": JP_SOURCES["procedures"],
+                "title": "手続の種類から探す",
+                "retrieved_at": result.scraped_at,
+            }
+        )
 
         # Extract visa application types
         visa_types = [
-            {"code": "coe", "name_en": "Certificate of Eligibility (COE)", "name_ja": "在留資格認定証明書交付申請", "url": JP_SOURCES["coe"]},
-            {"code": "change_status", "name_en": "Change of Status of Residence", "name_ja": "在留資格変更許可申請", "url": JP_SOURCES["change_status"]},
-            {"code": "renewal", "name_en": "Extension of Period of Stay", "name_ja": "在留期間更新許可申請", "url": JP_SOURCES["renewal"]},
-            {"code": "acquire_status", "name_en": "Acquisition of Status of Residence", "name_ja": "在留資格取得許可申請", "url": ""},
-            {"code": "permanent_residence", "name_en": "Permanent Residence", "name_ja": "永住許可申請", "url": ""},
-            {"code": "work_permission", "name_en": "Permission to Engage in Activity other than Permitted", "name_ja": "資格外活動許可申請", "url": ""},
-            {"code": "employment_cert", "name_en": "Certificate of Authorized Employment", "name_ja": "就労資格証明書交付申請", "url": ""},
+            {
+                "code": "coe",
+                "name_en": "Certificate of Eligibility (COE)",
+                "name_ja": "在留資格認定証明書交付申請",
+                "url": JP_SOURCES["coe"],
+            },
+            {
+                "code": "change_status",
+                "name_en": "Change of Status of Residence",
+                "name_ja": "在留資格変更許可申請",
+                "url": JP_SOURCES["change_status"],
+            },
+            {
+                "code": "renewal",
+                "name_en": "Extension of Period of Stay",
+                "name_ja": "在留期間更新許可申請",
+                "url": JP_SOURCES["renewal"],
+            },
+            {
+                "code": "acquire_status",
+                "name_en": "Acquisition of Status of Residence",
+                "name_ja": "在留資格取得許可申請",
+                "url": "",
+            },
+            {
+                "code": "permanent_residence",
+                "name_en": "Permanent Residence",
+                "name_ja": "永住許可申請",
+                "url": "",
+            },
+            {
+                "code": "work_permission",
+                "name_en": "Permission to Engage in Activity other than Permitted",
+                "name_ja": "資格外活動許可申請",
+                "url": "",
+            },
+            {
+                "code": "employment_cert",
+                "name_en": "Certificate of Authorized Employment",
+                "name_ja": "就労資格証明書交付申請",
+                "url": "",
+            },
         ]
         result.visa_categories = visa_types
         log.info("gov_scraper.jp.visa_types_found", count=len(visa_types))
@@ -145,7 +190,13 @@ async def scrape_japan(client: httpx.AsyncClient) -> ScrapeResult:
     log.info("gov_scraper.jp.fetching", page="visa_categories")
     html2 = await _fetch_page(JP_SOURCES["visa_categories"], client)
     if html2:
-        result.source_pages.append({"url": JP_SOURCES["visa_categories"], "title": "在留資格から探す", "retrieved_at": result.scraped_at})
+        result.source_pages.append(
+            {
+                "url": JP_SOURCES["visa_categories"],
+                "title": "在留資格から探す",
+                "retrieved_at": result.scraped_at,
+            }
+        )
 
         # Extract residence statuses from the page
         status_patterns = [
@@ -158,7 +209,11 @@ async def scrape_japan(client: httpx.AsyncClient) -> ScrapeResult:
             (r"医療|Medical Services", "medical", "Medical Services"),
             (r"研究|Research", "research", "Research"),
             (r"教育|Education", "education", "Education"),
-            (r"技術\/人文知識\/国際業務|Specialist in Humanities/International Services", "specialist_humanities", "Specialist in Humanities/International Services"),
+            (
+                r"技術\/人文知識\/国際業務|Specialist in Humanities/International Services",
+                "specialist_humanities",
+                "Specialist in Humanities/International Services",
+            ),
             (r"介護|Nursing Care", "nursing_care", "Nursing Care"),
             (r"興行|Entertainment", "entertainment", "Entertainment"),
             (r"技能|Skilled Labor", "skilled_labor", "Skilled Labor"),
@@ -168,10 +223,18 @@ async def scrape_japan(client: httpx.AsyncClient) -> ScrapeResult:
             (r"研修|Trainee", "trainee", "Trainee"),
             (r"家族滞在|Dependent", "dependent", "Dependent"),
             (r"特定活動|Designated Activities", "designated_activities", "Designated Activities"),
-            (r"高度専門職|Highly Skilled Professional", "highly_skilled", "Highly Skilled Professional"),
+            (
+                r"高度専門職|Highly Skilled Professional",
+                "highly_skilled",
+                "Highly Skilled Professional",
+            ),
             (r"経営管理|Business Management", "business_management", "Business Management"),
             (r"特定技能|Specified Skilled Worker", "specified_skilled", "Specified Skilled Worker"),
-            (r"技能実習|Technical Intern Training", "technical_intern", "Technical Intern Training"),
+            (
+                r"技能実習|Technical Intern Training",
+                "technical_intern",
+                "Technical Intern Training",
+            ),
         ]
 
         found_statuses = []
@@ -187,7 +250,13 @@ async def scrape_japan(client: httpx.AsyncClient) -> ScrapeResult:
     log.info("gov_scraper.jp.fetching", page="renewal")
     html3 = await _fetch_page(JP_SOURCES["renewal"], client)
     if html3:
-        result.source_pages.append({"url": JP_SOURCES["renewal"], "title": "在留期間更新許可申請", "retrieved_at": result.scraped_at})
+        result.source_pages.append(
+            {
+                "url": JP_SOURCES["renewal"],
+                "title": "在留期間更新許可申請",
+                "retrieved_at": result.scraped_at,
+            }
+        )
 
         # Extract document requirements
         renewal_docs = _extract_jp_documents(html3, "renewal")
@@ -201,7 +270,13 @@ async def scrape_japan(client: httpx.AsyncClient) -> ScrapeResult:
     log.info("gov_scraper.jp.fetching", page="change_status")
     html4 = await _fetch_page(JP_SOURCES["change_status"], client)
     if html4:
-        result.source_pages.append({"url": JP_SOURCES["change_status"], "title": "在留資格変更許可申請", "retrieved_at": result.scraped_at})
+        result.source_pages.append(
+            {
+                "url": JP_SOURCES["change_status"],
+                "title": "在留資格変更許可申請",
+                "retrieved_at": result.scraped_at,
+            }
+        )
         change_docs = _extract_jp_documents(html4, "change_status")
         result.document_requirements["change_status"] = change_docs
 
@@ -209,11 +284,21 @@ async def scrape_japan(client: httpx.AsyncClient) -> ScrapeResult:
     log.info("gov_scraper.jp.fetching", page="coe")
     html5 = await _fetch_page(JP_SOURCES["coe"], client)
     if html5:
-        result.source_pages.append({"url": JP_SOURCES["coe"], "title": "在留資格認定証明書交付申請", "retrieved_at": result.scraped_at})
+        result.source_pages.append(
+            {
+                "url": JP_SOURCES["coe"],
+                "title": "在留資格認定証明書交付申請",
+                "retrieved_at": result.scraped_at,
+            }
+        )
         coe_docs = _extract_jp_documents(html5, "coe")
         result.document_requirements["coe"] = coe_docs
 
-    log.info("gov_scraper.jp.complete", pages=len(result.source_pages), categories=len(result.visa_categories))
+    log.info(
+        "gov_scraper.jp.complete",
+        pages=len(result.source_pages),
+        categories=len(result.visa_categories),
+    )
     return result
 
 
@@ -222,46 +307,112 @@ def _extract_jp_documents(html: str, action: str) -> list[dict[str, Any]]:
     docs = []
     # Common documents required across most applications
     common_docs = [
-        {"code": "passport", "name_en": "Passport", "name_ja": "パスポート", "is_required": True,
-         "how_to_obtain": "Valid passport from your home country", "why_required": "Primary identification document"},
-        {"code": "residence_card", "name_en": "Residence Card", "name_ja": "在留カード", "is_required": True,
-         "how_to_obtain": "Previously issued residence card", "why_required": "Proof of current immigration status"},
-        {"code": "photo", "name_en": "Photograph (4x3cm)", "name_ja": "証明写真（縦4cm×横3cm）", "is_required": True,
-         "how_to_obtain": "Recent photo meeting ISA specifications", "why_required": "Required for application form"},
-        {"code": "application_form", "name_en": "Application Form", "name_ja": "申請書", "is_required": True,
-         "how_to_obtain": "Download from ISA website or pick up at immigration office", "why_required": "Official application document"},
+        {
+            "code": "passport",
+            "name_en": "Passport",
+            "name_ja": "パスポート",
+            "is_required": True,
+            "how_to_obtain": "Valid passport from your home country",
+            "why_required": "Primary identification document",
+        },
+        {
+            "code": "residence_card",
+            "name_en": "Residence Card",
+            "name_ja": "在留カード",
+            "is_required": True,
+            "how_to_obtain": "Previously issued residence card",
+            "why_required": "Proof of current immigration status",
+        },
+        {
+            "code": "photo",
+            "name_en": "Photograph (4x3cm)",
+            "name_ja": "証明写真（縦4cm×横3cm）",
+            "is_required": True,
+            "how_to_obtain": "Recent photo meeting ISA specifications",
+            "why_required": "Required for application form",
+        },
+        {
+            "code": "application_form",
+            "name_en": "Application Form",
+            "name_ja": "申請書",
+            "is_required": True,
+            "how_to_obtain": "Download from ISA website or pick up at immigration office",
+            "why_required": "Official application document",
+        },
     ]
 
     if action == "renewal":
         docs.extend(common_docs)
-        docs.append({"code": "documents_showing_activities", "name_en": "Documents showing activities", "name_ja": "活動内容を証明する書類", "is_required": True,
-                      "how_to_obtain": "Employment certificate, tax payment certificate, etc.", "why_required": "Proves continued legitimate activities"})
-        docs.append({"code": "income_proof", "name_en": "Income proof / Tax certificate", "name_ja": "収入を証明する書類（納税証明書等）", "is_required": True,
-                      "how_to_obtain": "From tax office or employer", "why_required": "Demonstrates financial stability"})
+        docs.append(
+            {
+                "code": "documents_showing_activities",
+                "name_en": "Documents showing activities",
+                "name_ja": "活動内容を証明する書類",
+                "is_required": True,
+                "how_to_obtain": "Employment certificate, tax payment certificate, etc.",
+                "why_required": "Proves continued legitimate activities",
+            }
+        )
+        docs.append(
+            {
+                "code": "income_proof",
+                "name_en": "Income proof / Tax certificate",
+                "name_ja": "収入を証明する書類（納税証明書等）",
+                "is_required": True,
+                "how_to_obtain": "From tax office or employer",
+                "why_required": "Demonstrates financial stability",
+            }
+        )
     elif action == "change_status":
         docs.extend(common_docs)
-        docs.append({"code": "reason_documents", "name_en": "Documents explaining reason for change", "name_ja": "変更理由を説明する書類", "is_required": True,
-                      "how_to_obtain": "Letter of explanation, supporting documents", "why_required": "Justifies the status change request"})
-        docs.append({"code": "new_qualification_proof", "name_en": "Proof of new qualification", "name_ja": "新たな資格を証明する書類", "is_required": True,
-                      "how_to_obtain": "Certificate, license, or employment offer", "why_required": "Proves eligibility for new status"})
+        docs.append(
+            {
+                "code": "reason_documents",
+                "name_en": "Documents explaining reason for change",
+                "name_ja": "変更理由を説明する書類",
+                "is_required": True,
+                "how_to_obtain": "Letter of explanation, supporting documents",
+                "why_required": "Justifies the status change request",
+            }
+        )
+        docs.append(
+            {
+                "code": "new_qualification_proof",
+                "name_en": "Proof of new qualification",
+                "name_ja": "新たな資格を証明する書類",
+                "is_required": True,
+                "how_to_obtain": "Certificate, license, or employment offer",
+                "why_required": "Proves eligibility for new status",
+            }
+        )
     elif action == "coe":
         docs.extend(common_docs)
-        docs.append({"code": "coa_documents", "name_en": "Documents from receiving organization", "name_ja": "受入機関の書類", "is_required": True,
-                      "how_to_obtain": "From the Japanese company/school sponsoring you", "why_required": "Proves purpose and arrangement in Japan"})
+        docs.append(
+            {
+                "code": "coa_documents",
+                "name_en": "Documents from receiving organization",
+                "name_ja": "受入機関の書類",
+                "is_required": True,
+                "how_to_obtain": "From the Japanese company/school sponsoring you",
+                "why_required": "Proves purpose and arrangement in Japan",
+            }
+        )
 
     # Extract any specific document links from the page
     doc_links = _extract_links(html, "https://www.moj.go.jp")
     for link in doc_links:
         title = link["title"].lower()
         if any(kw in title for kw in ["書類", "document", "様式", "form", "申請書"]):
-            docs.append({
-                "code": re.sub(r"[^a-z0-9]", "_", title[:32]),
-                "name_en": link["title"],
-                "name_ja": "",
-                "is_required": False,
-                "how_to_obtain": f"Download from {link['url']}",
-                "why_required": "Referenced on official procedures page",
-            })
+            docs.append(
+                {
+                    "code": re.sub(r"[^a-z0-9]", "_", title[:32]),
+                    "name_en": link["title"],
+                    "name_ja": "",
+                    "is_required": False,
+                    "how_to_obtain": f"Download from {link['url']}",
+                    "why_required": "Referenced on official procedures page",
+                }
+            )
 
     return docs
 
@@ -272,28 +423,69 @@ def _extract_jp_eligibility(html: str, action: str) -> list[dict[str, Any]]:
 
     # Common eligibility rules for Japan
     if action == "renewal":
-        rules.extend([
-            {"key": "has_valid_passport", "operator": "equals", "value": "true",
-             "failure_status": "fail", "message": "You must hold a valid passport"},
-            {"key": "has_residence_card", "operator": "equals", "value": "true",
-             "failure_status": "fail", "message": "You must hold a valid residence card"},
-            {"key": "current_status_is_renewable", "operator": "equals", "value": "true",
-             "failure_status": "fail", "message": "Your current status of residence must be eligible for renewal"},
-            {"key": "applied_before_expiry", "operator": "equals", "value": "true",
-             "failure_status": "at_risk", "message": "Applications should be submitted before your current period of stay expires"},
-        ])
+        rules.extend(
+            [
+                {
+                    "key": "has_valid_passport",
+                    "operator": "equals",
+                    "value": "true",
+                    "failure_status": "fail",
+                    "message": "You must hold a valid passport",
+                },
+                {
+                    "key": "has_residence_card",
+                    "operator": "equals",
+                    "value": "true",
+                    "failure_status": "fail",
+                    "message": "You must hold a valid residence card",
+                },
+                {
+                    "key": "current_status_is_renewable",
+                    "operator": "equals",
+                    "value": "true",
+                    "failure_status": "fail",
+                    "message": "Your current status of residence must be eligible for renewal",
+                },
+                {
+                    "key": "applied_before_expiry",
+                    "operator": "equals",
+                    "value": "true",
+                    "failure_status": "at_risk",
+                    "message": "Applications should be submitted before your current period of stay expires",
+                },
+            ]
+        )
     elif action == "change_status":
-        rules.extend([
-            {"key": "has_valid_passport", "operator": "equals", "value": "true",
-             "failure_status": "fail", "message": "You must hold a valid passport"},
-            {"key": "has_qualification_for_new_status", "operator": "equals", "value": "true",
-             "failure_status": "fail", "message": "You must meet the requirements for the new status of residence"},
-        ])
+        rules.extend(
+            [
+                {
+                    "key": "has_valid_passport",
+                    "operator": "equals",
+                    "value": "true",
+                    "failure_status": "fail",
+                    "message": "You must hold a valid passport",
+                },
+                {
+                    "key": "has_qualification_for_new_status",
+                    "operator": "equals",
+                    "value": "true",
+                    "failure_status": "fail",
+                    "message": "You must meet the requirements for the new status of residence",
+                },
+            ]
+        )
     elif action == "coe":
-        rules.extend([
-            {"key": "has_sponsoring_organization", "operator": "equals", "value": "true",
-             "failure_status": "fail", "message": "A Japanese organization must sponsor your COE application"},
-        ])
+        rules.extend(
+            [
+                {
+                    "key": "has_sponsoring_organization",
+                    "operator": "equals",
+                    "value": "true",
+                    "failure_status": "fail",
+                    "message": "A Japanese organization must sponsor your COE application",
+                },
+            ]
+        )
 
     return rules
 
@@ -309,7 +501,13 @@ async def scrape_usa(client: httpx.AsyncClient) -> ScrapeResult:
     log.info("gov_scraper.us.fetching", page="temporary_workers")
     html = await _fetch_page(US_SOURCES["temporary_workers"], client)
     if html:
-        result.source_pages.append({"url": US_SOURCES["temporary_workers"], "title": "Working in the United States", "retrieved_at": result.scraped_at})
+        result.source_pages.append(
+            {
+                "url": US_SOURCES["temporary_workers"],
+                "title": "Working in the United States",
+                "retrieved_at": result.scraped_at,
+            }
+        )
 
         # Extract visa categories from links
         links = _extract_links(html, "https://www.uscis.gov")
@@ -349,7 +547,13 @@ async def scrape_usa(client: httpx.AsyncClient) -> ScrapeResult:
     log.info("gov_scraper.us.fetching", page="h1b")
     html2 = await _fetch_page(US_SOURCES["h1b"], client)
     if html2:
-        result.source_pages.append({"url": US_SOURCES["h1b"], "title": "H-1B Specialty Occupations", "retrieved_at": result.scraped_at})
+        result.source_pages.append(
+            {
+                "url": US_SOURCES["h1b"],
+                "title": "H-1B Specialty Occupations",
+                "retrieved_at": result.scraped_at,
+            }
+        )
         h1b_docs = _extract_us_documents(html2, "h1b")
         result.document_requirements["h1b"] = h1b_docs
         h1b_rules = _extract_us_eligibility(html2, "h1b")
@@ -359,7 +563,13 @@ async def scrape_usa(client: httpx.AsyncClient) -> ScrapeResult:
     log.info("gov_scraper.us.fetching", page="l1")
     html3 = await _fetch_page(US_SOURCES["l1"], client)
     if html3:
-        result.source_pages.append({"url": US_SOURCES["l1"], "title": "L-1 Intracompany Transferees", "retrieved_at": result.scraped_at})
+        result.source_pages.append(
+            {
+                "url": US_SOURCES["l1"],
+                "title": "L-1 Intracompany Transferees",
+                "retrieved_at": result.scraped_at,
+            }
+        )
         l1_docs = _extract_us_documents(html3, "l1")
         result.document_requirements["l1"] = l1_docs
 
@@ -367,7 +577,13 @@ async def scrape_usa(client: httpx.AsyncClient) -> ScrapeResult:
     log.info("gov_scraper.us.fetching", page="ead")
     html4 = await _fetch_page(US_SOURCES["ead"], client)
     if html4:
-        result.source_pages.append({"url": US_SOURCES["ead"], "title": "Employment Authorization Document", "retrieved_at": result.scraped_at})
+        result.source_pages.append(
+            {
+                "url": US_SOURCES["ead"],
+                "title": "Employment Authorization Document",
+                "retrieved_at": result.scraped_at,
+            }
+        )
         ead_docs = _extract_us_documents(html4, "ead")
         result.document_requirements["ead"] = ead_docs
 
@@ -375,13 +591,21 @@ async def scrape_usa(client: httpx.AsyncClient) -> ScrapeResult:
     log.info("gov_scraper.us.fetching", page="green_card")
     html5 = await _fetch_page(US_SOURCES["green_card"], client)
     if html5:
-        result.source_pages.append({"url": US_SOURCES["green_card"], "title": "Green Card", "retrieved_at": result.scraped_at})
+        result.source_pages.append(
+            {
+                "url": US_SOURCES["green_card"],
+                "title": "Green Card",
+                "retrieved_at": result.scraped_at,
+            }
+        )
         gc_links = _extract_links(html5, "https://www.uscis.gov")
         gc_categories = []
         for link in gc_links:
             if "/green-card/" in link["url"] and link["url"] != US_SOURCES["green_card"]:
                 code = link["url"].rstrip("/").split("/")[-1]
-                gc_categories.append({"code": f"gc_{code}", "name_en": link["title"], "url": link["url"]})
+                gc_categories.append(
+                    {"code": f"gc_{code}", "name_en": link["title"], "url": link["url"]}
+                )
         if gc_categories:
             result.visa_categories.extend(gc_categories)
             log.info("gov_scraper.us.green_card_categories_found", count=len(gc_categories))
@@ -390,11 +614,17 @@ async def scrape_usa(client: httpx.AsyncClient) -> ScrapeResult:
     log.info("gov_scraper.us.fetching", page="forms")
     html6 = await _fetch_page(US_SOURCES["forms"], client)
     if html6:
-        result.source_pages.append({"url": US_SOURCES["forms"], "title": "USCIS Forms", "retrieved_at": result.scraped_at})
+        result.source_pages.append(
+            {"url": US_SOURCES["forms"], "title": "USCIS Forms", "retrieved_at": result.scraped_at}
+        )
         forms = _extract_us_forms(html6)
         result.forms = forms
 
-    log.info("gov_scraper.us.complete", pages=len(result.source_pages), categories=len(result.visa_categories))
+    log.info(
+        "gov_scraper.us.complete",
+        pages=len(result.source_pages),
+        categories=len(result.visa_categories),
+    )
     return result
 
 
@@ -404,85 +634,207 @@ def _extract_us_documents(html: str, visa_type: str) -> list[dict[str, Any]]:
 
     # Common US immigration documents
     common_docs = [
-        {"code": "passport", "name_en": "Valid Passport", "is_required": True,
-         "how_to_obtain": "Valid passport from your home country", "why_required": "Primary identification"},
-        {"code": "form_i94", "name_en": "Form I-94 (Arrival/Departure Record)", "is_required": True,
-         "how_to_obtain": "Obtained at port of entry or online at i94.cbp.dhs.gov", "why_required": "Proof of lawful entry"},
-        {"code": "passport_photo", "name_en": "Passport-style Photographs", "is_required": True,
-         "how_to_obtain": "2x2 inch color photos meeting USCIS specifications", "why_required": "Required for application"},
+        {
+            "code": "passport",
+            "name_en": "Valid Passport",
+            "is_required": True,
+            "how_to_obtain": "Valid passport from your home country",
+            "why_required": "Primary identification",
+        },
+        {
+            "code": "form_i94",
+            "name_en": "Form I-94 (Arrival/Departure Record)",
+            "is_required": True,
+            "how_to_obtain": "Obtained at port of entry or online at i94.cbp.dhs.gov",
+            "why_required": "Proof of lawful entry",
+        },
+        {
+            "code": "passport_photo",
+            "name_en": "Passport-style Photographs",
+            "is_required": True,
+            "how_to_obtain": "2x2 inch color photos meeting USCIS specifications",
+            "why_required": "Required for application",
+        },
     ]
 
     if visa_type == "h1b":
         docs.extend(common_docs)
-        docs.extend([
-            {"code": "form_i129", "name_en": "Form I-129 (Petition for Nonimmigrant Worker)", "is_required": True,
-             "how_to_obtain": "Download from uscis.gov or file online", "why_required": "Main H-1B petition form"},
-            {"code": "labor_condition_application", "name_en": "Labor Condition Application (LCA)", "is_required": True,
-             "how_to_obtain": "Certified by Department of Labor", "why_required": "Required before H-1B petition"},
-            {"code": "degree_credential", "name_en": "Degree Credentials / Equivalency", "is_required": True,
-             "how_to_obtain": "Official transcripts, degree certificates, or credential evaluation", "why_required": "Proves specialty occupation qualification"},
-            {"code": "employer_letter", "name_en": "Employer Support Letter", "is_required": True,
-             "how_to_obtain": "From sponsoring employer detailing job duties, salary, requirements", "why_required": "Establishes specialty occupation and employer-employee relationship"},
-        ])
+        docs.extend(
+            [
+                {
+                    "code": "form_i129",
+                    "name_en": "Form I-129 (Petition for Nonimmigrant Worker)",
+                    "is_required": True,
+                    "how_to_obtain": "Download from uscis.gov or file online",
+                    "why_required": "Main H-1B petition form",
+                },
+                {
+                    "code": "labor_condition_application",
+                    "name_en": "Labor Condition Application (LCA)",
+                    "is_required": True,
+                    "how_to_obtain": "Certified by Department of Labor",
+                    "why_required": "Required before H-1B petition",
+                },
+                {
+                    "code": "degree_credential",
+                    "name_en": "Degree Credentials / Equivalency",
+                    "is_required": True,
+                    "how_to_obtain": "Official transcripts, degree certificates, or credential evaluation",
+                    "why_required": "Proves specialty occupation qualification",
+                },
+                {
+                    "code": "employer_letter",
+                    "name_en": "Employer Support Letter",
+                    "is_required": True,
+                    "how_to_obtain": "From sponsoring employer detailing job duties, salary, requirements",
+                    "why_required": "Establishes specialty occupation and employer-employee relationship",
+                },
+            ]
+        )
     elif visa_type == "l1":
         docs.extend(common_docs)
-        docs.extend([
-            {"code": "form_i129", "name_en": "Form I-129 with L Supplement", "is_required": True,
-             "how_to_obtain": "Download from uscis.gov", "why_required": "Main L-1 petition form"},
-            {"code": "proof_of_qualifying_relationship", "name_en": "Proof of Qualifying Relationship", "is_required": True,
-             "how_to_obtain": "Articles of incorporation, stock certificates, organizational charts", "why_required": "Proves related employer entities"},
-            {"code": "proof_of_employment_abroad", "name_en": "Proof of Employment Abroad (1 year in 3 years)", "is_required": True,
-             "how_to_obtain": "Employment records, pay stubs, tax filings from foreign entity", "why_required": "Proves qualifying foreign employment"},
-            {"code": "job_description", "name_en": "US Position Description", "is_required": True,
-             "how_to_obtain": "Detailed job duties and organizational placement", "why_required": "Establishes managerial/executive/specialized knowledge role"},
-        ])
+        docs.extend(
+            [
+                {
+                    "code": "form_i129",
+                    "name_en": "Form I-129 with L Supplement",
+                    "is_required": True,
+                    "how_to_obtain": "Download from uscis.gov",
+                    "why_required": "Main L-1 petition form",
+                },
+                {
+                    "code": "proof_of_qualifying_relationship",
+                    "name_en": "Proof of Qualifying Relationship",
+                    "is_required": True,
+                    "how_to_obtain": "Articles of incorporation, stock certificates, organizational charts",
+                    "why_required": "Proves related employer entities",
+                },
+                {
+                    "code": "proof_of_employment_abroad",
+                    "name_en": "Proof of Employment Abroad (1 year in 3 years)",
+                    "is_required": True,
+                    "how_to_obtain": "Employment records, pay stubs, tax filings from foreign entity",
+                    "why_required": "Proves qualifying foreign employment",
+                },
+                {
+                    "code": "job_description",
+                    "name_en": "US Position Description",
+                    "is_required": True,
+                    "how_to_obtain": "Detailed job duties and organizational placement",
+                    "why_required": "Establishes managerial/executive/specialized knowledge role",
+                },
+            ]
+        )
     elif visa_type == "ead":
         docs.extend(common_docs)
-        docs.extend([
-            {"code": "form_i765", "name_en": "Form I-765 (Application for Employment Authorization)", "is_required": True,
-             "how_to_obtain": "Download from uscis.gov or file online", "why_required": "Main EAD application form"},
-            {"code": "basis_for_eligibility", "name_en": "Evidence of Basis for Eligibility", "is_required": True,
-             "how_to_obtain": "Supporting documents based on immigration category (I-94, pending I-485 receipt, etc.)", "why_required": "Proves eligibility category for EAD"},
-        ])
+        docs.extend(
+            [
+                {
+                    "code": "form_i765",
+                    "name_en": "Form I-765 (Application for Employment Authorization)",
+                    "is_required": True,
+                    "how_to_obtain": "Download from uscis.gov or file online",
+                    "why_required": "Main EAD application form",
+                },
+                {
+                    "code": "basis_for_eligibility",
+                    "name_en": "Evidence of Basis for Eligibility",
+                    "is_required": True,
+                    "how_to_obtain": "Supporting documents based on immigration category (I-94, pending I-485 receipt, etc.)",
+                    "why_required": "Proves eligibility category for EAD",
+                },
+            ]
+        )
     elif visa_type in ("b1b2", "tourist"):
         docs.extend(common_docs)
-        docs.extend([
-            {"code": "ds160_confirmation", "name_en": "DS-160 Confirmation Page", "is_required": True,
-             "how_to_obtain": "Complete online at ceac.state.gov", "why_required": "Official consular application confirmation"},
-            {"code": "financial_evidence", "name_en": "Bank Statements / Financial Evidence", "is_required": True,
-             "how_to_obtain": "3-6 months bank statements or passbook copy", "why_required": "Demonstrates trip funding under INA 214(b)"},
-            {"code": "employment_certificate", "name_en": "Certificate of Employment & Leave Letter", "is_required": True,
-             "how_to_obtain": "From employer stating job, salary, and approved leave", "why_required": "Proves ties and return commitment to place of residence"},
-            {"code": "travel_itinerary", "name_en": "Day-by-Day Travel Itinerary", "is_required": True,
-             "how_to_obtain": "Prepared travel schedule with hotel reservations", "why_required": "Validates temporary tourist/business purpose"},
-        ])
+        docs.extend(
+            [
+                {
+                    "code": "ds160_confirmation",
+                    "name_en": "DS-160 Confirmation Page",
+                    "is_required": True,
+                    "how_to_obtain": "Complete online at ceac.state.gov",
+                    "why_required": "Official consular application confirmation",
+                },
+                {
+                    "code": "financial_evidence",
+                    "name_en": "Bank Statements / Financial Evidence",
+                    "is_required": True,
+                    "how_to_obtain": "3-6 months bank statements or passbook copy",
+                    "why_required": "Demonstrates trip funding under INA 214(b)",
+                },
+                {
+                    "code": "employment_certificate",
+                    "name_en": "Certificate of Employment & Leave Letter",
+                    "is_required": True,
+                    "how_to_obtain": "From employer stating job, salary, and approved leave",
+                    "why_required": "Proves ties and return commitment to place of residence",
+                },
+                {
+                    "code": "travel_itinerary",
+                    "name_en": "Day-by-Day Travel Itinerary",
+                    "is_required": True,
+                    "how_to_obtain": "Prepared travel schedule with hotel reservations",
+                    "why_required": "Validates temporary tourist/business purpose",
+                },
+            ]
+        )
     elif visa_type in ("f1", "student"):
         docs.extend(common_docs)
-        docs.extend([
-            {"code": "i20", "name_en": "Form I-20 (Certificate of Eligibility)", "is_required": True,
-             "how_to_obtain": "Signed by school DSO and student", "why_required": "Primary proof of SEVP admission and eligibility"},
-            {"code": "sevis_fee_receipt", "name_en": "SEVIS I-901 Fee Receipt ($350)", "is_required": True,
-             "how_to_obtain": "Paid online at FMJfee.com", "why_required": "Mandatory SEVIS fee payment proof"},
-            {"code": "ds160_confirmation", "name_en": "DS-160 Confirmation Page", "is_required": True,
-             "how_to_obtain": "Complete online at ceac.state.gov", "why_required": "Consular visa application confirmation"},
-            {"code": "academic_transcripts", "name_en": "Academic Transcripts & Diplomas", "is_required": True,
-             "how_to_obtain": "From prior educational institutions", "why_required": "Proves academic qualification for degree program"},
-            {"code": "financial_evidence", "name_en": "Bank Statements & Balance Certificate", "is_required": True,
-             "how_to_obtain": "Bank certificate covering Year 1 total cost on I-20", "why_required": "Proves financial capability under INA 214(b)"},
-        ])
+        docs.extend(
+            [
+                {
+                    "code": "i20",
+                    "name_en": "Form I-20 (Certificate of Eligibility)",
+                    "is_required": True,
+                    "how_to_obtain": "Signed by school DSO and student",
+                    "why_required": "Primary proof of SEVP admission and eligibility",
+                },
+                {
+                    "code": "sevis_fee_receipt",
+                    "name_en": "SEVIS I-901 Fee Receipt ($350)",
+                    "is_required": True,
+                    "how_to_obtain": "Paid online at FMJfee.com",
+                    "why_required": "Mandatory SEVIS fee payment proof",
+                },
+                {
+                    "code": "ds160_confirmation",
+                    "name_en": "DS-160 Confirmation Page",
+                    "is_required": True,
+                    "how_to_obtain": "Complete online at ceac.state.gov",
+                    "why_required": "Consular visa application confirmation",
+                },
+                {
+                    "code": "academic_transcripts",
+                    "name_en": "Academic Transcripts & Diplomas",
+                    "is_required": True,
+                    "how_to_obtain": "From prior educational institutions",
+                    "why_required": "Proves academic qualification for degree program",
+                },
+                {
+                    "code": "financial_evidence",
+                    "name_en": "Bank Statements & Balance Certificate",
+                    "is_required": True,
+                    "how_to_obtain": "Bank certificate covering Year 1 total cost on I-20",
+                    "why_required": "Proves financial capability under INA 214(b)",
+                },
+            ]
+        )
 
     # Extract form references from page
     form_refs = re.findall(r"(?:Form\s+)?(I-\d{2}[A-Z]?)", html, re.IGNORECASE)
     for form_id in set(form_refs):
         form_id_upper = form_id.upper()
         if not any(d["code"].startswith(form_id_upper.lower()) for d in docs):
-            docs.append({
-                "code": form_id_upper.lower(),
-                "name_en": f"Form {form_id_upper}",
-                "is_required": False,
-                "how_to_obtain": f"Download from uscis.gov/forms/{form_id_upper.lower()}",
-                "why_required": "Referenced on USCIS page",
-            })
+            docs.append(
+                {
+                    "code": form_id_upper.lower(),
+                    "name_en": f"Form {form_id_upper}",
+                    "is_required": False,
+                    "how_to_obtain": f"Download from uscis.gov/forms/{form_id_upper.lower()}",
+                    "why_required": "Referenced on USCIS page",
+                }
+            )
 
     return docs
 
@@ -492,51 +844,144 @@ def _extract_us_eligibility(html: str, visa_type: str) -> list[dict[str, Any]]:
     rules = []
 
     if visa_type == "h1b":
-        rules.extend([
-            {"key": "has_bachelors_degree", "operator": "equals", "value": "true",
-             "failure_status": "fail", "message": "Must have at minimum a bachelor's degree or equivalent in a specialty occupation"},
-            {"key": "job_requires_degree", "operator": "equals", "value": "true",
-             "failure_status": "fail", "message": "The position must require a bachelor's degree or higher"},
-            {"key": "employer_filed_lca", "operator": "equals", "value": "true",
-             "failure_status": "fail", "message": "Employer must have a certified Labor Condition Application"},
-            {"key": "prevailing_wage_met", "operator": "equals", "value": "true",
-             "failure_status": "at_risk", "message": "Employer must pay at least the prevailing wage for the occupation"},
-            {"key": "annual_cap_not_reached", "operator": "equals", "value": "true",
-             "failure_status": "at_risk", "message": "H-1B petitions are subject to an annual cap (currently 65,000 + 20,000 for US master's)"},
-        ])
+        rules.extend(
+            [
+                {
+                    "key": "has_bachelors_degree",
+                    "operator": "equals",
+                    "value": "true",
+                    "failure_status": "fail",
+                    "message": "Must have at minimum a bachelor's degree or equivalent in a specialty occupation",
+                },
+                {
+                    "key": "job_requires_degree",
+                    "operator": "equals",
+                    "value": "true",
+                    "failure_status": "fail",
+                    "message": "The position must require a bachelor's degree or higher",
+                },
+                {
+                    "key": "employer_filed_lca",
+                    "operator": "equals",
+                    "value": "true",
+                    "failure_status": "fail",
+                    "message": "Employer must have a certified Labor Condition Application",
+                },
+                {
+                    "key": "prevailing_wage_met",
+                    "operator": "equals",
+                    "value": "true",
+                    "failure_status": "at_risk",
+                    "message": "Employer must pay at least the prevailing wage for the occupation",
+                },
+                {
+                    "key": "annual_cap_not_reached",
+                    "operator": "equals",
+                    "value": "true",
+                    "failure_status": "at_risk",
+                    "message": "H-1B petitions are subject to an annual cap (currently 65,000 + 20,000 for US master's)",
+                },
+            ]
+        )
     elif visa_type == "l1":
-        rules.extend([
-            {"key": "worked_at_foreign_entity_1yr", "operator": "equals", "value": "true",
-             "failure_status": "fail", "message": "Must have worked for qualifying foreign entity for at least 1 year in the past 3 years"},
-            {"key": "qualifying_relationship_exists", "operator": "equals", "value": "true",
-             "failure_status": "fail", "message": "US and foreign entities must have a qualifying relationship (parent, subsidiary, affiliate)"},
-            {"key": "managerial_executive_specialized", "operator": "equals", "value": "true",
-             "failure_status": "fail", "message": "Position must be managerial, executive, or require specialized knowledge"},
-        ])
+        rules.extend(
+            [
+                {
+                    "key": "worked_at_foreign_entity_1yr",
+                    "operator": "equals",
+                    "value": "true",
+                    "failure_status": "fail",
+                    "message": "Must have worked for qualifying foreign entity for at least 1 year in the past 3 years",
+                },
+                {
+                    "key": "qualifying_relationship_exists",
+                    "operator": "equals",
+                    "value": "true",
+                    "failure_status": "fail",
+                    "message": "US and foreign entities must have a qualifying relationship (parent, subsidiary, affiliate)",
+                },
+                {
+                    "key": "managerial_executive_specialized",
+                    "operator": "equals",
+                    "value": "true",
+                    "failure_status": "fail",
+                    "message": "Position must be managerial, executive, or require specialized knowledge",
+                },
+            ]
+        )
     elif visa_type in ("b1b2", "tourist"):
-        rules.extend([
-            {"key": "has_sufficient_funds", "operator": "equals", "value": True,
-             "failure_status": "fail", "message": "Must demonstrate sufficient liquid funds under INA 214(b)"},
-            {"key": "has_criminal_record", "operator": "equals", "value": False,
-             "failure_status": "fail", "message": "Must not have disqualifying criminal record under INA 212(a)"},
-            {"key": "has_vwp_denial_history", "operator": "equals", "value": False,
-             "failure_status": "fail", "message": "Prior ESTA denial or U.S. overstay requires consular adjudication"},
-            {"key": "intended_length_of_stay_days", "operator": "max", "value": 90,
-             "failure_status": "warning", "message": "Stays over 90 days require full B1/B2 visa and face high scrutiny"},
-        ])
+        rules.extend(
+            [
+                {
+                    "key": "has_sufficient_funds",
+                    "operator": "equals",
+                    "value": True,
+                    "failure_status": "fail",
+                    "message": "Must demonstrate sufficient liquid funds under INA 214(b)",
+                },
+                {
+                    "key": "has_criminal_record",
+                    "operator": "equals",
+                    "value": False,
+                    "failure_status": "fail",
+                    "message": "Must not have disqualifying criminal record under INA 212(a)",
+                },
+                {
+                    "key": "has_vwp_denial_history",
+                    "operator": "equals",
+                    "value": False,
+                    "failure_status": "fail",
+                    "message": "Prior ESTA denial or U.S. overstay requires consular adjudication",
+                },
+                {
+                    "key": "intended_length_of_stay_days",
+                    "operator": "max",
+                    "value": 90,
+                    "failure_status": "warning",
+                    "message": "Stays over 90 days require full B1/B2 visa and face high scrutiny",
+                },
+            ]
+        )
     elif visa_type in ("f1", "student"):
-        rules.extend([
-            {"key": "has_i20", "operator": "equals", "value": True,
-             "failure_status": "fail", "message": "Must have valid signed Form I-20 from SEVP-certified institution"},
-            {"key": "has_sevis_fee_receipt", "operator": "equals", "value": True,
-             "failure_status": "fail", "message": "Must pay SEVIS I-901 fee ($350) prior to interview"},
-            {"key": "has_financial_support", "operator": "equals", "value": True,
-             "failure_status": "fail", "message": "Must document liquid funds covering Year 1 cost on I-20"},
-            {"key": "interview_aware", "operator": "equals", "value": True,
-             "failure_status": "review", "message": "Mandatory in-person interview required for student visas"},
-            {"key": "criminal_disclosures", "operator": "equals", "value": False,
-             "failure_status": "review", "message": "Must be admissible under INA 212(a)"},
-        ])
+        rules.extend(
+            [
+                {
+                    "key": "has_i20",
+                    "operator": "equals",
+                    "value": True,
+                    "failure_status": "fail",
+                    "message": "Must have valid signed Form I-20 from SEVP-certified institution",
+                },
+                {
+                    "key": "has_sevis_fee_receipt",
+                    "operator": "equals",
+                    "value": True,
+                    "failure_status": "fail",
+                    "message": "Must pay SEVIS I-901 fee ($350) prior to interview",
+                },
+                {
+                    "key": "has_financial_support",
+                    "operator": "equals",
+                    "value": True,
+                    "failure_status": "fail",
+                    "message": "Must document liquid funds covering Year 1 cost on I-20",
+                },
+                {
+                    "key": "interview_aware",
+                    "operator": "equals",
+                    "value": True,
+                    "failure_status": "review",
+                    "message": "Mandatory in-person interview required for student visas",
+                },
+                {
+                    "key": "criminal_disclosures",
+                    "operator": "equals",
+                    "value": False,
+                    "failure_status": "review",
+                    "message": "Must be admissible under INA 212(a)",
+                },
+            ]
+        )
 
     return rules
 
@@ -554,12 +999,14 @@ def _extract_us_forms(html: str) -> list[dict[str, Any]]:
         form_id = match.group(1).upper()
         title = re.sub(r"<[^>]+>", "", match.group(2)).strip()
         if title and len(title) > 5:
-            forms.append({
-                "code": form_id,
-                "version": datetime.now(UTC).strftime("%Y-%m"),
-                "official_title": title,
-                "url": f"https://www.uscis.gov/forms/{form_id.lower()}",
-            })
+            forms.append(
+                {
+                    "code": form_id,
+                    "version": datetime.now(UTC).strftime("%Y-%m"),
+                    "official_title": title,
+                    "url": f"https://www.uscis.gov/forms/{form_id.lower()}",
+                }
+            )
 
     # Add well-known forms even if not found in text
     known_forms = [
@@ -575,12 +1022,14 @@ def _extract_us_forms(html: str) -> list[dict[str, Any]]:
     existing_codes = {f["code"] for f in forms}
     for code, title in known_forms:
         if code not in existing_codes:
-            forms.append({
-                "code": code,
-                "version": datetime.now(UTC).strftime("%Y-%m"),
-                "official_title": title,
-                "url": f"https://www.uscis.gov/forms/{code.lower()}",
-            })
+            forms.append(
+                {
+                    "code": code,
+                    "version": datetime.now(UTC).strftime("%Y-%m"),
+                    "official_title": title,
+                    "url": f"https://www.uscis.gov/forms/{code.lower()}",
+                }
+            )
 
     return forms
 

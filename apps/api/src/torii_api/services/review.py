@@ -38,31 +38,39 @@ def review_packet(
 
     # --- Intake completeness ---
     if answers:
-        checks.append(ReviewCheck(
-            code="intake_complete",
-            message=f"Intake answers provided ({len(answers)} fields).",
-            passed=True,
-        ))
+        checks.append(
+            ReviewCheck(
+                code="intake_complete",
+                message=f"Intake answers provided ({len(answers)} fields).",
+                passed=True,
+            )
+        )
     else:
-        flags.append(ReviewFlag(
-            code="intake_missing",
-            message="No intake answers found.",
-            fields=[],
-        ))
+        flags.append(
+            ReviewFlag(
+                code="intake_missing",
+                message="No intake answers found.",
+                fields=[],
+            )
+        )
 
     # --- Form generation ---
     if generated_forms:
-        checks.append(ReviewCheck(
-            code="forms_generated",
-            message=f"{len(generated_forms)} form(s) generated.",
-            passed=True,
-        ))
+        checks.append(
+            ReviewCheck(
+                code="forms_generated",
+                message=f"{len(generated_forms)} form(s) generated.",
+                passed=True,
+            )
+        )
     else:
-        flags.append(ReviewFlag(
-            code="forms_missing",
-            message="No forms have been generated yet.",
-            fields=[],
-        ))
+        flags.append(
+            ReviewFlag(
+                code="forms_missing",
+                message="No forms have been generated yet.",
+                fields=[],
+            )
+        )
 
     # --- Per-form checks ---
     for form in generated_forms:
@@ -76,11 +84,13 @@ def review_packet(
                 )
             )
         else:
-            checks.append(ReviewCheck(
-                code=f"form_{form['form_code']}_fields_ok",
-                message=f"{form['form_code']} — all required fields filled.",
-                passed=True,
-            ))
+            checks.append(
+                ReviewCheck(
+                    code=f"form_{form['form_code']}_fields_ok",
+                    message=f"{form['form_code']} — all required fields filled.",
+                    passed=True,
+                )
+            )
 
         if is_stale(str(form["form_code"]), str(form["form_version"]), live_versions):
             flags.append(
@@ -91,29 +101,35 @@ def review_packet(
                 )
             )
         else:
-            checks.append(ReviewCheck(
-                code=f"form_{form['form_code']}_version_ok",
-                message=f"{form['form_code']} v{form['form_version']} is current.",
-                passed=True,
-            ))
+            checks.append(
+                ReviewCheck(
+                    code=f"form_{form['form_code']}_version_ok",
+                    message=f"{form['form_code']} v{form['form_version']} is current.",
+                    passed=True,
+                )
+            )
 
     # --- Document checks ---
     confirmed_docs = [d for d in documents if d.get("confirmed")]
     unconfirmed_docs = [d for d in documents if not d.get("confirmed")]
 
     if confirmed_docs:
-        checks.append(ReviewCheck(
-            code="documents_confirmed",
-            message=f"{len(confirmed_docs)} document(s) confirmed.",
-            passed=True,
-        ))
+        checks.append(
+            ReviewCheck(
+                code="documents_confirmed",
+                message=f"{len(confirmed_docs)} document(s) confirmed.",
+                passed=True,
+            )
+        )
 
     if unconfirmed_docs:
-        checks.append(ReviewCheck(
-            code="documents_unconfirmed",
-            message=f"{len(unconfirmed_docs)} document(s) not yet confirmed.",
-            passed=False,
-        ))
+        checks.append(
+            ReviewCheck(
+                code="documents_unconfirmed",
+                message=f"{len(unconfirmed_docs)} document(s) not yet confirmed.",
+                passed=False,
+            )
+        )
 
     # --- Cross-field mismatch ---
     for document in confirmed_docs:
@@ -133,10 +149,12 @@ def review_packet(
                 )
 
     if not any(f.code == "cross_field_mismatch" for f in flags):
-        checks.append(ReviewCheck(
-            code="cross_field_match",
-            message="Document fields match intake answers.",
-            passed=True,
-        ))
+        checks.append(
+            ReviewCheck(
+                code="cross_field_match",
+                message="Document fields match intake answers.",
+                passed=True,
+            )
+        )
 
     return ReviewResult(flags=flags, checks=checks, ready=not flags)

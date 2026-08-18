@@ -93,7 +93,15 @@ class AssistantService:
 
 def _generate_procedural_fallback(message: str, locale: str) -> str:
     msg = message.lower()
-    if "purpose" in msg or "disqualified" in msg or "warning" in msg or "eligibility" in msg or "fix" in msg or "34" in msg or "tour" in msg:
+    if (
+        "purpose" in msg
+        or "disqualified" in msg
+        or "warning" in msg
+        or "eligibility" in msg
+        or "fix" in msg
+        or "34" in msg
+        or "tour" in msg
+    ):
         return (
             "To fix the **Purpose of Stay DISQUALIFIED** warning:\n\n"
             "Your intake answer for Purpose of Visit was set to an invalid value. For a short-term visitor visa to Japan, the purpose must be a legitimate visitor intent (such as *Tourism*, *Sightseeing*, or *Visiting Family*).\n\n"
@@ -115,7 +123,6 @@ def _generate_procedural_fallback(message: str, locale: str) -> str:
     )
 
 
-
 def _build_user_prompt(*, message: str, locale: str, hits: list[TavilySearchResult]) -> str:
     lines = [
         f"Locale: {locale}",
@@ -124,7 +131,9 @@ def _build_user_prompt(*, message: str, locale: str, hits: list[TavilySearchResu
         "Instructions:",
         "Answer the applicant's question clearly and helpfully based on official immigration guidelines. Provide actionable steps.",
         "",
-        "Snippets:" if hits else "(No external search snippets available; answer using standard official visa procedures)",
+        "Snippets:"
+        if hits
+        else "(No external search snippets available; answer using standard official visa procedures)",
     ]
     for i, hit in enumerate(hits):
         lines.append(f"[{i}] title={hit.title}")
@@ -193,7 +202,6 @@ def _parse_model_reply(
     kind = "escalation" if escalation else "reply"
     reason = str(escalation) if escalation else None
     return AssistantReply(kind=kind, bubbles=bubbles_out, escalation_reason=reason)
-
 
 
 def _instruction_from_model(

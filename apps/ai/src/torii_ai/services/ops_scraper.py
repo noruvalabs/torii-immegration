@@ -77,6 +77,7 @@ def mission_domains_for(destination: str, nationality: str | None) -> list[str]:
     cc = nationality.lower()
     return [pattern.format(cc=cc) for pattern in patterns]
 
+
 _COUNTRY_NAMES: dict[str, str] = {
     "JP": "Japan",
     "US": "United States",
@@ -135,16 +136,12 @@ def build_queries(
     if origin:
         queries.append(f"{dest} {vc} visa {act} for {origin} citizens official")
     if residence and residence != dest:
-        queries.append(
-            f"{vc} visa applying from {residence} proof of residence documents"
-        )
+        queries.append(f"{vc} visa applying from {residence} proof of residence documents")
         queries.append(f"{dest} visa {act} from {residence} foreign resident official")
     return queries
 
 
-def official_domains_for(
-    destination: str, nationality: str | None = None
-) -> list[str] | None:
+def official_domains_for(destination: str, nationality: str | None = None) -> list[str] | None:
     """Official-domain allowlist for a destination, unioned with mission-in-origin domains
     for ``nationality`` when known. ``None`` (only when nothing at all matches) tells the
     caller to fall back to the settings-level base allowlist.
@@ -158,6 +155,7 @@ def official_domains_for(
         if domain not in combined:
             combined.append(domain)
     return combined
+
 
 EXTRACT_SYSTEM = """You are an immigration data extractor. Given scraped government page content,
 extract structured immigration data for a specific jurisdiction and visa category.
@@ -487,8 +485,7 @@ class OpsScraper:
 
         # Build the prompt with all scraped content
         content_block = "\n\n".join(
-            f"=== Source {i+1}: {c['url']} ===\n{c['text']}"
-            for i, c in enumerate(content)
+            f"=== Source {i + 1}: {c['url']} ===\n{c['text']}" for i, c in enumerate(content)
         )
 
         origin_label = country_label(origin_country)
@@ -509,7 +506,7 @@ class OpsScraper:
 Visa category: {visa_category}
 Action: {action}
 {case_context}
-Scraped date: {now.strftime('%Y-%m-%d')}
+Scraped date: {now.strftime("%Y-%m-%d")}
 
 Scraped content from official government sources:
 
@@ -539,16 +536,19 @@ Return JSON only."""
                 origin_country=origin_country,
                 residence_country=residence_country,
                 source_pages=[
-                    {"url": c["url"], "title": "", "retrieved_at": now.isoformat()}
-                    for c in content
+                    {"url": c["url"], "title": "", "retrieved_at": now.isoformat()} for c in content
                 ],
                 scraped_at=now.isoformat(),
             )
 
-        default_url = content[0]["url"] if content and content[0].get("url") else (
-            "https://www.isa.go.jp/en/applications/procedures/16-1.html"
-            if jurisdiction_code.upper() == "JP"
-            else f"https://www.gov.{jurisdiction_code.lower()}/visa"
+        default_url = (
+            content[0]["url"]
+            if content and content[0].get("url")
+            else (
+                "https://www.isa.go.jp/en/applications/procedures/16-1.html"
+                if jurisdiction_code.upper() == "JP"
+                else f"https://www.gov.{jurisdiction_code.lower()}/visa"
+            )
         )
         dest_name = country_label(jurisdiction_code) or jurisdiction_code
         default_authority = f"{dest_name} Immigration Authority"
@@ -570,10 +570,14 @@ Return JSON only."""
             document_requirements=data.get("document_requirements", []),
             intake_questions=data.get("intake_questions", []),
             form_templates=data.get("form_templates", []),
-            source_pages=data.get("source_pages") or [
-                {"url": c["url"], "title": "", "retrieved_at": now.isoformat()} for c in content
-            ] or [
-                {"url": default_url, "title": f"Official {dest_name} Immigration", "retrieved_at": now.isoformat()}
+            source_pages=data.get("source_pages")
+            or [{"url": c["url"], "title": "", "retrieved_at": now.isoformat()} for c in content]
+            or [
+                {
+                    "url": default_url,
+                    "title": f"Official {dest_name} Immigration",
+                    "retrieved_at": now.isoformat(),
+                }
             ],
             scraped_at=now.isoformat(),
         )
@@ -628,20 +632,105 @@ def _fallback_structured_data(
     now_str = datetime.now(UTC).strftime("%Y-%m")
 
     questions = [
-        {"key": "full_name", "prompt": "What is your full name (as written in your passport)?", "type": "string", "required": True, "section": "1. Personal Information"},
-        {"key": "nationality", "prompt": "What is your nationality / citizenship?", "type": "string", "required": True, "section": "1. Personal Information"},
-        {"key": "passport_number", "prompt": "Passport number", "type": "string", "required": True, "section": "1. Personal Information"},
-        {"key": "passport_expiry", "prompt": "Passport expiration date", "type": "date", "required": True, "section": "1. Personal Information"},
-        {"key": "date_of_birth", "prompt": "Date of birth", "type": "date", "required": True, "section": "1. Personal Information"},
-        {"key": "current_country", "prompt": "Current country of residence", "type": "string", "required": True, "section": "1. Personal Information"},
-        {"key": "purpose_of_stay", "prompt": f"Detailed purpose for {cat_label} ({act_label})", "type": "string", "required": True, "section": "2. Trip & Purpose"},
-        {"key": "planned_arrival_date", "prompt": f"Intended arrival date in {dest}", "type": "date", "required": True, "section": "2. Trip & Purpose"},
-        {"key": "stay_duration_months", "prompt": "Intended duration of stay (months)", "type": "integer", "required": True, "section": "2. Trip & Purpose"},
-        {"key": "has_host_or_sponsor", "prompt": "Do you have an inviting host institution, school, or employer in destination?", "type": "boolean", "required": True, "section": "3. Sponsor & Organization"},
-        {"key": "sponsor_organization_name", "prompt": "Name of host school, university, employer, or sponsoring organization", "type": "string", "required": False, "section": "3. Sponsor & Organization", "show_when": {"key": "has_host_or_sponsor", "equals": True}},
-        {"key": "has_sufficient_funds", "prompt": "Do you have verified proof of sufficient funds / financial sponsorship?", "type": "boolean", "required": True, "section": "4. Financial Support"},
-        {"key": "financial_support_details", "prompt": "Total funds available or sponsor declaration details", "type": "string", "required": False, "section": "4. Financial Support"},
-        {"key": "has_prior_visa_refusals", "prompt": "Have you ever had a visa refusal or immigration violation in any country?", "type": "boolean", "required": True, "section": "5. Compliance & History"},
+        {
+            "key": "full_name",
+            "prompt": "What is your full name (as written in your passport)?",
+            "type": "string",
+            "required": True,
+            "section": "1. Personal Information",
+        },
+        {
+            "key": "nationality",
+            "prompt": "What is your nationality / citizenship?",
+            "type": "string",
+            "required": True,
+            "section": "1. Personal Information",
+        },
+        {
+            "key": "passport_number",
+            "prompt": "Passport number",
+            "type": "string",
+            "required": True,
+            "section": "1. Personal Information",
+        },
+        {
+            "key": "passport_expiry",
+            "prompt": "Passport expiration date",
+            "type": "date",
+            "required": True,
+            "section": "1. Personal Information",
+        },
+        {
+            "key": "date_of_birth",
+            "prompt": "Date of birth",
+            "type": "date",
+            "required": True,
+            "section": "1. Personal Information",
+        },
+        {
+            "key": "current_country",
+            "prompt": "Current country of residence",
+            "type": "string",
+            "required": True,
+            "section": "1. Personal Information",
+        },
+        {
+            "key": "purpose_of_stay",
+            "prompt": f"Detailed purpose for {cat_label} ({act_label})",
+            "type": "string",
+            "required": True,
+            "section": "2. Trip & Purpose",
+        },
+        {
+            "key": "planned_arrival_date",
+            "prompt": f"Intended arrival date in {dest}",
+            "type": "date",
+            "required": True,
+            "section": "2. Trip & Purpose",
+        },
+        {
+            "key": "stay_duration_months",
+            "prompt": "Intended duration of stay (months)",
+            "type": "integer",
+            "required": True,
+            "section": "2. Trip & Purpose",
+        },
+        {
+            "key": "has_host_or_sponsor",
+            "prompt": "Do you have an inviting host institution, school, or employer in destination?",
+            "type": "boolean",
+            "required": True,
+            "section": "3. Sponsor & Organization",
+        },
+        {
+            "key": "sponsor_organization_name",
+            "prompt": "Name of host school, university, employer, or sponsoring organization",
+            "type": "string",
+            "required": False,
+            "section": "3. Sponsor & Organization",
+            "show_when": {"key": "has_host_or_sponsor", "equals": True},
+        },
+        {
+            "key": "has_sufficient_funds",
+            "prompt": "Do you have verified proof of sufficient funds / financial sponsorship?",
+            "type": "boolean",
+            "required": True,
+            "section": "4. Financial Support",
+        },
+        {
+            "key": "financial_support_details",
+            "prompt": "Total funds available or sponsor declaration details",
+            "type": "string",
+            "required": False,
+            "section": "4. Financial Support",
+        },
+        {
+            "key": "has_prior_visa_refusals",
+            "prompt": "Have you ever had a visa refusal or immigration violation in any country?",
+            "type": "boolean",
+            "required": True,
+            "section": "5. Compliance & History",
+        },
     ]
 
     rules = [
@@ -651,7 +740,12 @@ def _fallback_structured_data(
             "value": None,
             "failure_status": "fail",
             "message": f"Must possess a valid passport recognized by {dest} immigration authorities.",
-            "citation": {"authority": default_authority, "title": f"Passport Validity Guidelines for {dest}", "url": default_url, "source_version": now_str},
+            "citation": {
+                "authority": default_authority,
+                "title": f"Passport Validity Guidelines for {dest}",
+                "url": default_url,
+                "source_version": now_str,
+            },
         },
         {
             "key": "has_sufficient_funds",
@@ -659,7 +753,12 @@ def _fallback_structured_data(
             "value": True,
             "failure_status": "fail",
             "message": f"Applicants must demonstrate adequate financial capability for the intended {cat_label} stay.",
-            "citation": {"authority": default_authority, "title": f"{cat_label} Financial Requirement Guidelines", "url": default_url, "source_version": now_str},
+            "citation": {
+                "authority": default_authority,
+                "title": f"{cat_label} Financial Requirement Guidelines",
+                "url": default_url,
+                "source_version": now_str,
+            },
         },
         {
             "key": "has_prior_visa_refusals",
@@ -667,42 +766,95 @@ def _fallback_structured_data(
             "value": False,
             "failure_status": "at_risk",
             "message": "Prior visa refusals or immigration violations require disclosure and supporting explanation.",
-            "citation": {"authority": default_authority, "title": "General Eligibility and Entry Clearances", "url": default_url, "source_version": now_str},
+            "citation": {
+                "authority": default_authority,
+                "title": "General Eligibility and Entry Clearances",
+                "url": default_url,
+                "source_version": now_str,
+            },
         },
     ]
 
     documents = [
         {
             "code": "passport",
-            "name": {"en": "Valid Passport (Bio-data & Signature Page)", "ja": "旅券（パスポート）写し"},
-            "how_to_obtain": {"en": "Color copy of the bio-data page of your valid national passport."},
-            "why_required": {"en": "Required for primary international identification and visa issuance."},
+            "name": {
+                "en": "Valid Passport (Bio-data & Signature Page)",
+                "ja": "旅券（パスポート）写し",
+            },
+            "how_to_obtain": {
+                "en": "Color copy of the bio-data page of your valid national passport."
+            },
+            "why_required": {
+                "en": "Required for primary international identification and visa issuance."
+            },
             "is_required": True,
-            "citation": {"authority": default_authority, "title": "Required Travel Documents", "url": default_url, "source_version": now_str},
+            "citation": {
+                "authority": default_authority,
+                "title": "Required Travel Documents",
+                "url": default_url,
+                "source_version": now_str,
+            },
         },
         {
             "code": "photo",
-            "name": {"en": "Official Visa Photograph (45x35mm, White Background)", "ja": "写真（縦4cm×横3cm）"},
-            "how_to_obtain": {"en": "Standard recent passport-style photograph taken within the last 3 months."},
-            "why_required": {"en": "Required for visa certificate and immigration registration records."},
+            "name": {
+                "en": "Official Visa Photograph (45x35mm, White Background)",
+                "ja": "写真（縦4cm×横3cm）",
+            },
+            "how_to_obtain": {
+                "en": "Standard recent passport-style photograph taken within the last 3 months."
+            },
+            "why_required": {
+                "en": "Required for visa certificate and immigration registration records."
+            },
             "is_required": True,
-            "citation": {"authority": default_authority, "title": "Photograph Standards for Visa Applications", "url": default_url, "source_version": now_str},
+            "citation": {
+                "authority": default_authority,
+                "title": "Photograph Standards for Visa Applications",
+                "url": default_url,
+                "source_version": now_str,
+            },
         },
         {
             "code": "proof_of_funds",
-            "name": {"en": "Proof of Financial Capability / Bank Statement", "ja": "経費支弁能力を証する文書"},
-            "how_to_obtain": {"en": "Official bank balance certificate, bank statements (last 3-6 months), or sponsor financial guarantee."},
-            "why_required": {"en": "Demonstrates capability to cover tuition, living expenses, and travel costs."},
+            "name": {
+                "en": "Proof of Financial Capability / Bank Statement",
+                "ja": "経費支弁能力を証する文書",
+            },
+            "how_to_obtain": {
+                "en": "Official bank balance certificate, bank statements (last 3-6 months), or sponsor financial guarantee."
+            },
+            "why_required": {
+                "en": "Demonstrates capability to cover tuition, living expenses, and travel costs."
+            },
             "is_required": True,
-            "citation": {"authority": default_authority, "title": "Financial Documentation Proof Guidelines", "url": default_url, "source_version": now_str},
+            "citation": {
+                "authority": default_authority,
+                "title": "Financial Documentation Proof Guidelines",
+                "url": default_url,
+                "source_version": now_str,
+            },
         },
         {
             "code": "sponsor_certificate",
-            "name": {"en": "Certificate of Eligibility (COE) / Admission or Employment Letter", "ja": "在留資格認定証明書または受入機関文書"},
-            "how_to_obtain": {"en": "Issued by the host institution, university, language school, or sponsoring entity."},
-            "why_required": {"en": "Validates official acceptance, sponsoring status, and qualification for the immigration route."},
+            "name": {
+                "en": "Certificate of Eligibility (COE) / Admission or Employment Letter",
+                "ja": "在留資格認定証明書または受入機関文書",
+            },
+            "how_to_obtain": {
+                "en": "Issued by the host institution, university, language school, or sponsoring entity."
+            },
+            "why_required": {
+                "en": "Validates official acceptance, sponsoring status, and qualification for the immigration route."
+            },
             "is_required": True,
-            "citation": {"authority": default_authority, "title": "Host Institution Documentation Criteria", "url": default_url, "source_version": now_str},
+            "citation": {
+                "authority": default_authority,
+                "title": "Host Institution Documentation Criteria",
+                "url": default_url,
+                "source_version": now_str,
+            },
         },
     ]
 
@@ -713,12 +865,29 @@ def _fallback_structured_data(
             "official_title": f"{dest} {cat_label} Application Form",
             "field_mappings": [
                 {"form_field": "applicant.full_name", "answer_key": "full_name", "required": True},
-                {"form_field": "applicant.nationality", "answer_key": "nationality", "required": True},
-                {"form_field": "applicant.passport_number", "answer_key": "passport_number", "required": True},
-                {"form_field": "applicant.date_of_birth", "answer_key": "date_of_birth", "required": True},
+                {
+                    "form_field": "applicant.nationality",
+                    "answer_key": "nationality",
+                    "required": True,
+                },
+                {
+                    "form_field": "applicant.passport_number",
+                    "answer_key": "passport_number",
+                    "required": True,
+                },
+                {
+                    "form_field": "applicant.date_of_birth",
+                    "answer_key": "date_of_birth",
+                    "required": True,
+                },
                 {"form_field": "stay.purpose", "answer_key": "purpose_of_stay", "required": True},
             ],
-            "citation": {"authority": default_authority, "title": f"Official {dest} Application Forms", "url": default_url, "source_version": now_str},
+            "citation": {
+                "authority": default_authority,
+                "title": f"Official {dest} Application Forms",
+                "url": default_url,
+                "source_version": now_str,
+            },
         }
     ]
 

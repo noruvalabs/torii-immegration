@@ -24,7 +24,7 @@ from torii_api.db.models import (
     OutboxEvent,
     VisaCategory,
 )
-from torii_api.services.content_packs import effective_window, is_effective_on
+from torii_api.services.content_packs import effective_window
 from torii_api.services.intake import parse_questions
 
 log = structlog.get_logger()

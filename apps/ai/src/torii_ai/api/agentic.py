@@ -123,7 +123,9 @@ async def research_stage(payload: StageResearchIn) -> StageResearchOut:
 
 
 @router.post("/evaluate-eligibility", response_model=AIEvaluateEligibilityOut)
-async def evaluate_eligibility_endpoint(payload: AIEvaluateEligibilityIn) -> AIEvaluateEligibilityOut:
+async def evaluate_eligibility_endpoint(
+    payload: AIEvaluateEligibilityIn,
+) -> AIEvaluateEligibilityOut:
     """Run AI-assisted eligibility screening on applicant answers."""
     settings = get_settings()
     evaluator = _build_evaluator(settings)
@@ -147,12 +149,16 @@ async def evaluate_eligibility_endpoint(payload: AIEvaluateEligibilityIn) -> AIE
         result = await evaluator.evaluate(request)
     except Exception as exc:
         log.error("agentic.evaluate_eligibility.failed", error=str(exc))
-        raise HTTPException(status_code=500, detail=f"AI eligibility evaluation failed: {exc}") from exc
+        raise HTTPException(
+            status_code=500, detail=f"AI eligibility evaluation failed: {exc}"
+        ) from exc
 
     return AIEvaluateEligibilityOut(
         result=result.get("result", "pass"),
         findings=result.get("findings", []),
-        disclaimer=result.get("disclaimer", "This is an AI-assisted preparation check based on official published criteria, not legal advice or a government decision."),
+        disclaimer=result.get(
+            "disclaimer",
+            "This is an AI-assisted preparation check based on official published criteria, not legal advice or a government decision.",
+        ),
         summary=result.get("summary"),
     )
-

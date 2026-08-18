@@ -67,15 +67,15 @@ def upgrade() -> None:
         "jurisdictions",
         sa.Column("efile_enabled", sa.Boolean(), server_default="0", nullable=False),
     )
-    op.add_column("cases", sa.Column("locale", sa.String(length=16), server_default="en", nullable=False))
+    op.add_column(
+        "cases", sa.Column("locale", sa.String(length=16), server_default="en", nullable=False)
+    )
     op.add_column(
         "cases", sa.Column("host_locale", sa.String(length=16), server_default="ja", nullable=False)
     )
     op.add_column(
         "cases",
-        sa.Column(
-            "review_flags_acknowledged", sa.Boolean(), server_default="0", nullable=False
-        ),
+        sa.Column("review_flags_acknowledged", sa.Boolean(), server_default="0", nullable=False),
     )
     op.add_column("cases", sa.Column("submission_reference", sa.String(length=128), nullable=True))
     op.add_column("cases", sa.Column("packet_snapshot", sa.JSON(), nullable=True))
@@ -246,9 +246,7 @@ def downgrade() -> None:
     )
     op.drop_index(op.f("ix_case_generated_forms_case_id"), table_name="case_generated_forms")
     op.drop_table("case_generated_forms")
-    op.drop_index(
-        op.f("ix_case_checklist_items_document_id"), table_name="case_checklist_items"
-    )
+    op.drop_index(op.f("ix_case_checklist_items_document_id"), table_name="case_checklist_items")
     op.drop_index(op.f("ix_case_checklist_items_code"), table_name="case_checklist_items")
     op.drop_index(op.f("ix_case_checklist_items_case_id"), table_name="case_checklist_items")
     op.drop_table("case_checklist_items")

@@ -306,9 +306,7 @@ async def scope_case(
             detail=f"action '{payload.action_code}' is not available in {jurisdiction.code}",
         )
 
-    is_live_scope = (
-        jurisdiction.is_live and visa_category.is_live and case_action.is_live
-    )
+    is_live_scope = jurisdiction.is_live and visa_category.is_live and case_action.is_live
     is_research_scope = visa_category.research_enabled and case_action.research_enabled
     if not is_live_scope and not is_research_scope:
         raise HTTPException(
@@ -481,9 +479,7 @@ async def _owned_case(session: AsyncSession, case_id: int, user: User) -> Case:
     return case
 
 
-async def _intake_questions_for_case(
-    session: AsyncSession, case: Case
-) -> list[dict[str, Any]]:
+async def _intake_questions_for_case(session: AsyncSession, case: Case) -> list[dict[str, Any]]:
     """Resolve intake questions for the case: research snapshot, else live definition fallback."""
     if case.visa_category_id is None or case.case_action_id is None:
         raise HTTPException(

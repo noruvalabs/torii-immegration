@@ -7,6 +7,7 @@ HTML stripping, dedup by content hash).
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import re
 
@@ -89,8 +90,6 @@ async def fetch_page_text(client: httpx.AsyncClient, url: str) -> str:
         return ""
 
 
-import asyncio
-
 async def scrape_pages(
     urls: list[str], *, timeout_seconds: float, page_chars: int
 ) -> list[dict[str, str]]:
@@ -104,6 +103,7 @@ async def scrape_pages(
         follow_redirects=True,
         headers={"User-Agent": "Torii-OPS-Worker/1.0"},
     ) as client:
+
         async def _fetch(u: str) -> tuple[str, str]:
             async with semaphore:
                 t = await fetch_page_text(client, u)

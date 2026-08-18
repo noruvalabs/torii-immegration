@@ -30,7 +30,6 @@ from torii_api.db.session import get_session
 from torii_api.services.checklist import ChecklistStatus, update_status, visible_requirement_items
 from torii_api.services.eligibility import (
     EligibilityResult,
-    evaluate_eligibility,
     evaluate_eligibility_with_ai,
 )
 from torii_api.services.forms import fill_form
@@ -154,7 +153,9 @@ async def _research_is_usable_for(session: AsyncSession, case: Case) -> bool:
     return research is not None and research_is_usable(research)
 
 
-async def _resolve_action_ids(session: AsyncSession, jurisdiction_id: int, action_id: int | None) -> list[int]:
+async def _resolve_action_ids(
+    session: AsyncSession, jurisdiction_id: int, action_id: int | None
+) -> list[int]:
     if action_id is None:
         return []
     action_ids = [action_id]
@@ -352,8 +353,10 @@ async def evaluate_case_eligibility(
         destination_code=j_code or "JP",
         purpose_code=v_code or "tourist",
         action_code=a_code or "new_application",
-        nationality=case.origin_country or str(answers.get("visitor_nationality") or answers.get("nationality") or ""),
-        residence_country=case.residence_country or str(answers.get("current_residence_country") or answers.get("residence_country") or ""),
+        nationality=case.origin_country
+        or str(answers.get("visitor_nationality") or answers.get("nationality") or ""),
+        residence_country=case.residence_country
+        or str(answers.get("current_residence_country") or answers.get("residence_country") or ""),
         as_of=as_of,
         context=context,
     )
@@ -532,10 +535,7 @@ async def generate_forms(
                 status_code=400,
                 detail="no form templates available and intake answers are empty",
             )
-        mappings = [
-            {"form_field": key, "answer_key": key, "required": False}
-            for key in answers
-        ]
+        mappings = [{"form_field": key, "answer_key": key, "required": False} for key in answers]
         templates = [
             _FormDescriptor(
                 code="application_summary",
@@ -718,7 +718,9 @@ async def download_dossier_packet_pdf(
         for item in await _checklist(session, case.id)
     ]
     j_code, _, _, scope_label = await _scope_label(session, case)
-    submission_kit = resolve_jurisdiction_submission_kit(jurisdiction_code=j_code, scope_label=scope_label)
+    submission_kit = resolve_jurisdiction_submission_kit(
+        jurisdiction_code=j_code, scope_label=scope_label
+    )
     pdf_bytes = generate_dossier_packet_pdf(
         case.reference or f"CASE-{case.id}",
         answers,
