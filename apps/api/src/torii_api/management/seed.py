@@ -527,19 +527,28 @@ async def seed() -> None:
             act_code = row["action"]
             jid = jurisdiction_ids.get(j_code)
             cid = category_ids.get((j_code, cat_code))
-            aid = action_ids.get((j_code, act_code))
-            if jid and cid and aid:
-                created_workflow_definitions += await _seed_workflow(
-                    session,
-                    jurisdiction_id=jid,
-                    visa_category_id=cid,
-                    case_action_id=aid,
-                    questions=row["questions"],
-                    rules=row["rules"],
-                    documents=row["documents"],
-                    form=row.get("form"),
-                    forms=row.get("forms"),
-                )
+
+            # Match action and aliases (e.g. "new" vs "new_application")
+            target_actions = [act_code]
+            if act_code == "new_application":
+                target_actions.append("new")
+            elif act_code == "new":
+                target_actions.append("new_application")
+
+            for target_act in target_actions:
+                aid = action_ids.get((j_code, target_act))
+                if jid and cid and aid:
+                    created_workflow_definitions += await _seed_workflow(
+                        session,
+                        jurisdiction_id=jid,
+                        visa_category_id=cid,
+                        case_action_id=aid,
+                        questions=row["questions"],
+                        rules=row["rules"],
+                        documents=row["documents"],
+                        form=row.get("form"),
+                        forms=row.get("forms"),
+                    )
 
         await session.commit()
 

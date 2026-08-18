@@ -7,6 +7,7 @@ the worker, or Alembic — needs to know which database is in play.
 
 from __future__ import annotations
 
+from sqlalchemy import event
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -34,9 +35,18 @@ def to_async_url(database_url: str) -> str:
 def create_engine(database_url: str) -> AsyncEngine:
     """Create the async engine (``pool_pre_ping`` guards against stale connections)."""
     url = to_async_url(database_url)
-    # SQLite gets no connection pool tuning; Postgres benefits from pre-ping.
+    # SQLite gets WAL mode and timeout for high concurrency; Postgres benefits from pre-ping.
     if url.startswith("sqlite"):
-        return create_async_engine(url)
+        engine = create_async_engine(url, connect_args={"timeout": 30.0})
+
+        @event.listens_for(engine.sync_engine, "connect")
+        def set_sqlite_pragma(dbapi_connection, connection_record):  # type: ignore
+            cursor = dbapi_connection.cursor()
+            cursor.execute("PRAGMA journal_mode=WAL")
+            cursor.execute("PRAGMA busy_timeout=5000")
+            cursor.close()
+
+        return engine
     return create_async_engine(url, pool_pre_ping=True)
 
 

@@ -258,7 +258,12 @@ async def evaluate_eligibility_with_ai(
     as_of: date | None = None,
     context: dict[str, Any] | None = None,
 ) -> EligibilityResult:
-    """Evaluate eligibility using the AI service, falling back to deterministic rules if offline."""
+    """Evaluate eligibility using deterministic statutory rules, enhancing with AI when beneficial."""
+    # Deterministic rules are statutory ground truth
+    deterministic = evaluate_eligibility(answers, rules, as_of=as_of, context=context)
+    if rules and deterministic.findings:
+        return deterministic
+
     settings = get_settings()
     if settings.ai_service_url:
         payload = {
@@ -301,5 +306,5 @@ async def evaluate_eligibility_with_ai(
         except Exception as exc:
             log.info("eligibility.ai_eval_failed_fallback_to_rules", error=str(exc))
 
-    return evaluate_eligibility(answers, rules, as_of=as_of, context=context)
+    return deterministic
 

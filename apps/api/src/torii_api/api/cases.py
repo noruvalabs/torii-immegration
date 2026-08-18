@@ -495,11 +495,29 @@ async def _intake_questions_for_case(
         questions = research_questions(research.payload)
         if questions:
             return questions
+    action_ids = [case.case_action_id]
+    case_act = await session.get(CaseAction, case.case_action_id)
+    if case_act is not None:
+        alt_code = (
+            "new_application"
+            if case_act.code == "new"
+            else ("new" if case_act.code == "new_application" else None)
+        )
+        if alt_code:
+            alt_act = await session.scalar(
+                select(CaseAction).where(
+                    CaseAction.jurisdiction_id == case.jurisdiction_id,
+                    CaseAction.code == alt_code,
+                )
+            )
+            if alt_act is not None:
+                action_ids.append(alt_act.id)
+
     definition = await session.scalar(
         select(IntakeDefinition).where(
             IntakeDefinition.jurisdiction_id == case.jurisdiction_id,
             IntakeDefinition.visa_category_id == case.visa_category_id,
-            IntakeDefinition.case_action_id == case.case_action_id,
+            IntakeDefinition.case_action_id.in_(action_ids),
             IntakeDefinition.is_live.is_(True),
         )
     )

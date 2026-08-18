@@ -16,6 +16,7 @@ from torii_api.auth.deps import CurrentUserDep
 from torii_api.config import get_settings
 from torii_api.db.models import (
     Case,
+    CaseAction,
     CaseChecklistItem,
     CaseDocument,
     CaseEscalation,
@@ -153,6 +154,29 @@ async def _research_is_usable_for(session: AsyncSession, case: Case) -> bool:
     return research is not None and research_is_usable(research)
 
 
+async def _resolve_action_ids(session: AsyncSession, jurisdiction_id: int, action_id: int | None) -> list[int]:
+    if action_id is None:
+        return []
+    action_ids = [action_id]
+    case_act = await session.get(CaseAction, action_id)
+    if case_act is not None:
+        alt_code = (
+            "new_application"
+            if case_act.code == "new"
+            else ("new" if case_act.code == "new_application" else None)
+        )
+        if alt_code:
+            alt_act = await session.scalar(
+                select(CaseAction).where(
+                    CaseAction.jurisdiction_id == jurisdiction_id,
+                    CaseAction.code == alt_code,
+                )
+            )
+            if alt_act is not None:
+                action_ids.append(alt_act.id)
+    return action_ids
+
+
 async def _effective_rules(session: AsyncSession, case: Case) -> list[dict[str, Any]]:
     """Eligibility rules for the case: research snapshot, else live definition fallback."""
     research = await _research_for_case(session, case)
@@ -161,11 +185,12 @@ async def _effective_rules(session: AsyncSession, case: Case) -> list[dict[str, 
         if rules:
             return rules
     if case.visa_category_id is not None and case.case_action_id is not None:
+        action_ids = await _resolve_action_ids(session, case.jurisdiction_id, case.case_action_id)
         definition = await session.scalar(
             select(EligibilityRuleSet).where(
                 EligibilityRuleSet.jurisdiction_id == case.jurisdiction_id,
                 EligibilityRuleSet.visa_category_id == case.visa_category_id,
-                EligibilityRuleSet.case_action_id == case.case_action_id,
+                EligibilityRuleSet.case_action_id.in_(action_ids),
                 EligibilityRuleSet.is_live.is_(True),
             )
         )
@@ -182,11 +207,12 @@ async def _effective_documents(session: AsyncSession, case: Case) -> list[dict[s
         if docs:
             return docs
     if case.visa_category_id is not None and case.case_action_id is not None:
+        action_ids = await _resolve_action_ids(session, case.jurisdiction_id, case.case_action_id)
         definition = await session.scalar(
             select(DocumentRequirementSet).where(
                 DocumentRequirementSet.jurisdiction_id == case.jurisdiction_id,
                 DocumentRequirementSet.visa_category_id == case.visa_category_id,
-                DocumentRequirementSet.case_action_id == case.case_action_id,
+                DocumentRequirementSet.case_action_id.in_(action_ids),
                 DocumentRequirementSet.is_live.is_(True),
             )
         )
@@ -214,12 +240,13 @@ async def _effective_templates(session: AsyncSession, case: Case) -> list[_FormD
         if forms:
             return forms
     if case.visa_category_id is not None and case.case_action_id is not None:
+        action_ids = await _resolve_action_ids(session, case.jurisdiction_id, case.case_action_id)
         result = await session.execute(
             select(FormTemplate)
             .where(
                 FormTemplate.jurisdiction_id == case.jurisdiction_id,
                 FormTemplate.visa_category_id == case.visa_category_id,
-                FormTemplate.case_action_id == case.case_action_id,
+                FormTemplate.case_action_id.in_(action_ids),
                 FormTemplate.is_live.is_(True),
             )
             .order_by(FormTemplate.code)

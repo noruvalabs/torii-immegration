@@ -210,6 +210,24 @@ intake:
 
 eligibility:
   rules:
+    - key: visitor_nationality
+      operator: nationality_in
+      value:
+        - US
+        - CA
+        - GB
+        - AU
+        - SG
+        - KR
+        - DE
+        - FR
+      failure_status: at_risk
+      message: Non-visa-waiver passport holders (e.g. Bangladesh) require advance consular visa filing before departure.
+      citation:
+        authority: Ministry of Foreign Affairs of Japan (MOFA)
+        title: Exemption of Visa (Short-Term Stay)
+        url: https://www.mofa.go.jp/j_info/visit/visa/short/novisa.html
+
     - key: intended_length_of_stay_days
       operator: max
       value: 90
