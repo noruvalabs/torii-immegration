@@ -330,16 +330,21 @@ export function PacketStep({ packet, caseData, loading, onBuild, onSubmit }: Pac
     endpoint: "application-form" | "cover-letter" | "dossier-packet",
     defaultFilename: string
   ) {
-    if (!token) return;
+    const activeToken = token || (typeof window !== "undefined" ? localStorage.getItem("torii_token") : null);
+    if (!activeToken) return;
     setDownloadingPdf(endpoint);
     try {
       const res = await fetch(`/backend/v1/cases/${caseData.id}/pdf/${endpoint}`, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Authorization: `Bearer ${activeToken}` },
       });
       if (!res.ok) {
-        throw new Error("Failed to download PDF");
+        const errDetail = await res.text();
+        console.error("PDF download failed:", res.status, errDetail);
+        alert(`Failed to download PDF (${res.status}): ${errDetail || res.statusText}`);
+        return;
       }
-      const blob = await res.blob();
+      const buffer = await res.arrayBuffer();
+      const blob = new Blob([buffer], { type: "application/pdf" });
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;

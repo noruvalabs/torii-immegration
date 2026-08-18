@@ -111,16 +111,21 @@ export function FormsStep({
   }
 
   async function handleDownloadPdf(formCode: string) {
-    if (!token || !caseId) return;
+    const activeToken = token || (typeof window !== "undefined" ? localStorage.getItem("torii_token") : null);
+    if (!activeToken || !caseId) return;
     setDownloadingPdf(formCode);
     try {
       const res = await fetch(`/backend/v1/cases/${caseId}/pdf/application-form`, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Authorization: `Bearer ${activeToken}` },
       });
       if (!res.ok) {
-        throw new Error("Failed to download PDF");
+        const errDetail = await res.text();
+        console.error("PDF download failed:", res.status, errDetail);
+        alert(`Failed to download form PDF: ${errDetail || res.statusText}`);
+        return;
       }
-      const blob = await res.blob();
+      const buffer = await res.arrayBuffer();
+      const blob = new Blob([buffer], { type: "application/pdf" });
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;

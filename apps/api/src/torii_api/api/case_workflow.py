@@ -680,7 +680,8 @@ async def download_application_form_pdf(
         content=pdf_bytes,
         media_type="application/pdf",
         headers={
-            "Content-Disposition": f'attachment; filename="{case.reference or case_id}_Application_Form.pdf"'
+            "Content-Disposition": f'attachment; filename="{case.reference or case_id}_Application_Form.pdf"',
+            "Content-Length": str(len(pdf_bytes)),
         },
     )
 
@@ -708,7 +709,8 @@ async def download_cover_letter_pdf(
         content=pdf_bytes,
         media_type="application/pdf",
         headers={
-            "Content-Disposition": f'attachment; filename="{case.reference or case_id}_Cover_Letter.pdf"'
+            "Content-Disposition": f'attachment; filename="{case.reference or case_id}_Cover_Letter.pdf"',
+            "Content-Length": str(len(pdf_bytes)),
         },
     )
 
@@ -746,7 +748,8 @@ async def download_dossier_packet_pdf(
         content=pdf_bytes,
         media_type="application/pdf",
         headers={
-            "Content-Disposition": f'attachment; filename="{case.reference or case_id}_Complete_Dossier_Packet.pdf"'
+            "Content-Disposition": f'attachment; filename="{case.reference or case_id}_Complete_Dossier_Packet.pdf"',
+            "Content-Length": str(len(pdf_bytes)),
         },
     )
 
