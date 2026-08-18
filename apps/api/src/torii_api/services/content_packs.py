@@ -175,7 +175,7 @@ class ContentPack(BaseModel):
 
     @property
     def document_items(self) -> list[dict[str, Any]]:
-        raw = self.documents.get("items")
+        raw = self.documents.get("items") or self.documents.get("requirements")
         if not isinstance(raw, list):
             raise ValueError(f"{self.scope_id}: documents.items must be a list")
         return [dict(item) for item in raw]

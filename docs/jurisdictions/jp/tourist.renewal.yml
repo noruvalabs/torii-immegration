@@ -1,0 +1,242 @@
+scope:
+  jurisdiction: JP
+  visa_category: tourist
+  action: renewal
+  is_live: true
+  name: Japan Short-Stay Tourist Extension (短期滞在・在留期間更新許可申請)
+
+stages:
+  - sequence: 1
+    code: applicant_filing
+    actor: applicant
+
+intake:
+  questions:
+    # --- Section 1: Identity & Current Stay in Japan ---
+    - key: full_name
+      section: Identity & Current Stay
+      prompt: What is your full name as it appears on your passport?
+      type: string
+      min_length: 2
+      max_length: 200
+      required: true
+      citation:
+        authority: Immigration Services Agency of Japan (MOJ)
+        title: Application for Extension of Period of Stay (Temporary Visitor)
+        url: https://www.moj.go.jp/isa/applications/procedures/16-3.html
+
+    - key: nationality
+      section: Identity & Current Stay
+      prompt: What is your nationality (passport country)?
+      type: enum
+      options:
+        - BD
+        - US
+        - GB
+        - CA
+        - AU
+        - DE
+        - FR
+        - SG
+        - KR
+        - IN
+        - CN
+        - PH
+        - VN
+        - ID
+        - TH
+        - MY
+        - other
+      required: true
+      citation:
+        authority: Immigration Services Agency of Japan (MOJ)
+        title: Nationality Verification Criteria
+        url: https://www.moj.go.jp/isa/applications/procedures/16-3.html
+
+    - key: passport_number
+      section: Identity & Current Stay
+      prompt: What is your passport number?
+      type: string
+      min_length: 5
+      max_length: 32
+      required: true
+      citation:
+        authority: Immigration Services Agency of Japan (MOJ)
+        title: Passport Identification Requirements
+        url: https://www.moj.go.jp/isa/applications/procedures/16-3.html
+
+    - key: current_landing_permission_date
+      section: Identity & Current Stay
+      prompt: When did you enter Japan on your current temporary visitor permit (YYYY-MM-DD)?
+      type: date
+      required: true
+      citation:
+        authority: Immigration Services Agency of Japan (MOJ)
+        title: Landing Permission Stamp (上陸許可証印) Verification
+        url: https://www.moj.go.jp/isa/applications/procedures/16-3.html
+
+    - key: current_stay_expiry_date
+      section: Identity & Current Stay
+      prompt: What is the current expiration date of your temporary stay (YYYY-MM-DD)?
+      type: date
+      required: true
+      citation:
+        authority: Immigration Services Agency of Japan (MOJ)
+        title: Statutory Application Deadline (Must apply prior to expiration)
+        url: https://www.moj.go.jp/isa/applications/procedures/16-3.html
+
+    # --- Section 2: Compelling Grounds for Extension ---
+    - key: extension_reason_category
+      section: Grounds for Extension
+      prompt: What is the unavoidable reason requiring an extension of your temporary stay?
+      type: enum
+      options:
+        - medical_treatment_or_illness
+        - flight_cancellation_or_unavoidable_transit
+        - sudden_humanitarian_emergency
+        - extended_commercial_negotiations
+      required: true
+      citation:
+        authority: Immigration Services Agency of Japan (MOJ)
+        title: Immigration Control Act Article 21 (Special Circumstances Criteria)
+        url: https://www.moj.go.jp/isa/applications/procedures/16-3.html
+
+    - key: extension_explanation_details
+      section: Grounds for Extension
+      prompt: Please describe the detailed facts justifying your need to remain in Japan temporarily.
+      type: string
+      min_length: 10
+      max_length: 1000
+      required: true
+      citation:
+        authority: Immigration Services Agency of Japan (MOJ)
+        title: Reason Letter (理由書) Guidelines
+        url: https://www.moj.go.jp/isa/applications/procedures/16-3.html
+
+    - key: desired_extension_days
+      section: Grounds for Extension
+      prompt: How many additional days of extension are you requesting (e.g. 15, 30, 90)?
+      type: integer
+      min_value: 1
+      max_value: 90
+      required: true
+      citation:
+        authority: Immigration Services Agency of Japan (MOJ)
+        title: Temporary Extension Duration Limits
+        url: https://www.moj.go.jp/isa/applications/procedures/16-3.html
+
+    # --- Section 3: Financial & Host Support in Japan ---
+    - key: resident_guarantor_name
+      section: Support & Guarantor
+      prompt: What is the name of your contact person or host organization in Japan?
+      type: string
+      min_length: 2
+      max_length: 200
+      required: true
+      citation:
+        authority: Immigration Services Agency of Japan (MOJ)
+        title: Guarantor / Host Verification in Japan
+        url: https://www.moj.go.jp/isa/applications/procedures/16-3.html
+
+    - key: guarantor_telephone
+      section: Support & Guarantor
+      prompt: What is the telephone number of your host or guarantor in Japan?
+      type: string
+      min_length: 5
+      max_length: 50
+      required: true
+      citation:
+        authority: Immigration Services Agency of Japan (MOJ)
+        title: Contact Verification for Stay Extension
+        url: https://www.moj.go.jp/isa/applications/procedures/16-3.html
+
+    # --- Section 4: Confirmed Departure Logistics ---
+    - key: rescheduled_departure_date
+      section: Departure Logistics
+      prompt: What is your rescheduled departure date from Japan (YYYY-MM-DD)?
+      type: date
+      required: true
+      citation:
+        authority: Immigration Services Agency of Japan (MOJ)
+        title: Proof of Guaranteed Departure from Japan
+        url: https://www.moj.go.jp/isa/applications/procedures/16-3.html
+
+    - key: departure_airport
+      section: Departure Logistics
+      prompt: Which airport will you depart from (e.g. Narita, Haneda, Kansai)?
+      type: string
+      min_length: 2
+      max_length: 50
+      required: true
+      citation:
+        authority: Immigration Services Agency of Japan (MOJ)
+        title: Port of Departure Disclosure
+        url: https://www.moj.go.jp/isa/applications/procedures/16-3.html
+
+eligibility:
+  rules:
+    - key: desired_extension_days
+      operator: max
+      value: 90
+      failure_status: at_risk
+      message: Extension of temporary visitor status cannot exceed 90 additional days.
+      citation:
+        authority: Immigration Services Agency of Japan (MOJ)
+        title: Temporary Extension Limits (MOJ Procedure 16-3)
+        url: https://www.moj.go.jp/isa/applications/procedures/16-3.html
+
+documents:
+  requirements:
+    - code: extension_application_form
+      name: Official Application for Extension of Period of Stay (在留期間更新許可申請書)
+      is_required: true
+      citation:
+        authority: Immigration Services Agency of Japan (MOJ)
+        title: Official Procedure 16-3
+        url: https://www.moj.go.jp/isa/applications/procedures/16-3.html
+
+    - code: reason_statement_letter
+      name: Written Statement of Reasons for Extension (理由書) with Evidence
+      is_required: true
+      citation:
+        authority: Immigration Services Agency of Japan (MOJ)
+        title: Justification Statement Requirements
+        url: https://www.moj.go.jp/isa/applications/procedures/16-3.html
+
+    - code: medical_or_flight_evidence
+      name: Supporting Evidence (Medical Certificate / Flight Reschedule Notice / Police Report)
+      is_required: true
+      citation:
+        authority: Immigration Services Agency of Japan (MOJ)
+        title: Documentary Proof of Unavoidable Circumstances
+        url: https://www.moj.go.jp/isa/applications/procedures/16-3.html
+
+    - code: booked_departure_ticket
+      name: Rescheduled Confirmed Outbound Flight Ticket
+      is_required: true
+      citation:
+        authority: Immigration Services Agency of Japan (MOJ)
+        title: Proof of Departure Availability
+        url: https://www.moj.go.jp/isa/applications/procedures/16-3.html
+
+forms:
+  - code: moj_extension_short_stay
+    version: "2026-04"
+    official_title: Application for Extension of Period of Stay (在留期間更新許可申請書)
+    citation:
+      authority: Immigration Services Agency of Japan (MOJ)
+      title: Official Procedure 16-3
+      url: https://www.moj.go.jp/isa/applications/procedures/16-3.html
+    field_mappings:
+      - form_field: applicant_name
+        answer_key: full_name
+        required: true
+      - form_field: nationality
+        answer_key: nationality
+        required: true
+      - form_field: passport_no
+        answer_key: passport_number
+        required: true
+      - form_field: reason_details
+        answer_key: extension_explanation_details
+        required: true

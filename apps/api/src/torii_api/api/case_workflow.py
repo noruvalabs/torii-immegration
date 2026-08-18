@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import date
 from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -620,6 +620,93 @@ async def get_packet(case_id: int, session: SessionDep, user: CurrentUserDep) ->
                 detail="packet download requires a completed payment entitlement",
             )
     return case.packet_snapshot
+
+
+@router.get("/{case_id}/pdf/application-form")
+async def download_application_form_pdf(
+    case_id: int, session: SessionDep, user: CurrentUserDep
+) -> Response:
+    from torii_api.services.pdf_generator import generate_japan_work_renewal_pdf
+
+    case = await _owned_case(session, case_id, user)
+    answers = dict(case.intake_answers or {})
+    _, _, _, scope_label = await _scope_label(session, case)
+    pdf_bytes = generate_japan_work_renewal_pdf(
+        case.reference or f"CASE-{case.id}",
+        answers,
+        destination_label=scope_label or "Japan",
+    )
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="{case.reference or case_id}_Application_Form.pdf"'
+        },
+    )
+
+
+@router.get("/{case_id}/pdf/cover-letter")
+async def download_cover_letter_pdf(
+    case_id: int, session: SessionDep, user: CurrentUserDep
+) -> Response:
+    from torii_api.services.pdf_generator import generate_cover_letter_pdf
+
+    case = await _owned_case(session, case_id, user)
+    answers = dict(case.intake_answers or {})
+    checklist = [
+        ChecklistItemOut.model_validate(item).model_dump(mode="json")
+        for item in await _checklist(session, case.id)
+    ]
+    _, _, _, scope_label = await _scope_label(session, case)
+    pdf_bytes = generate_cover_letter_pdf(
+        case.reference or f"CASE-{case.id}",
+        answers,
+        checklist,
+        scope_label=scope_label or "Visa Submission Dossier",
+    )
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="{case.reference or case_id}_Cover_Letter.pdf"'
+        },
+    )
+
+
+@router.get("/{case_id}/pdf/dossier-packet")
+async def download_dossier_packet_pdf(
+    case_id: int, session: SessionDep, user: CurrentUserDep
+) -> Response:
+    from torii_api.services.packet import resolve_jurisdiction_submission_kit
+    from torii_api.services.pdf_generator import generate_dossier_packet_pdf
+
+    case = await _owned_case(session, case_id, user)
+    answers = dict(case.intake_answers or {})
+    forms = [
+        GeneratedFormOut.model_validate(item).model_dump(mode="json")
+        for item in await _forms(session, case.id)
+    ]
+    checklist = [
+        ChecklistItemOut.model_validate(item).model_dump(mode="json")
+        for item in await _checklist(session, case.id)
+    ]
+    j_code, _, _, scope_label = await _scope_label(session, case)
+    submission_kit = resolve_jurisdiction_submission_kit(jurisdiction_code=j_code, scope_label=scope_label)
+    pdf_bytes = generate_dossier_packet_pdf(
+        case.reference or f"CASE-{case.id}",
+        answers,
+        forms,
+        checklist,
+        submission_kit=submission_kit,
+        scope_label=scope_label or "Immigration Filing Dossier",
+    )
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="{case.reference or case_id}_Complete_Dossier_Packet.pdf"'
+        },
+    )
 
 
 @router.post("/{case_id}/submit")

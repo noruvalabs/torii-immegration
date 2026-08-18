@@ -18,6 +18,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { useAuth } from "@/lib/auth-context";
 import type { Case } from "./types";
 
 type PacketStepProps = {
@@ -314,14 +315,45 @@ End of Complete Filing Kit · Torii Immigration Platform
 type DocType = "cover" | "schedule" | "reason" | "financial" | "form" | "full";
 
 export function PacketStep({ packet, caseData, loading, onBuild, onSubmit }: PacketStepProps) {
+  const { token } = useAuth();
   const [activeDoc, setActiveDoc] = useState<DocType>("cover");
   const [copiedDoc, setCopiedDoc] = useState(false);
+  const [downloadingPdf, setDownloadingPdf] = useState<string | null>(null);
   const [trackedSteps, setTrackedSteps] = useState({
     filledOnline: false,
     paidFee: false,
     bookedAppointment: false,
     submittedDossier: caseData.status === "submitted",
   });
+
+  async function downloadPdf(
+    endpoint: "application-form" | "cover-letter" | "dossier-packet",
+    defaultFilename: string
+  ) {
+    if (!token) return;
+    setDownloadingPdf(endpoint);
+    try {
+      const res = await fetch(`/backend/v1/cases/${caseData.id}/pdf/${endpoint}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        throw new Error("Failed to download PDF");
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = defaultFilename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("PDF download error:", err);
+    } finally {
+      setDownloadingPdf(null);
+    }
+  }
 
   function getActiveDocText(): { title: string; filename: string; text: string } {
     switch (activeDoc) {
@@ -408,7 +440,7 @@ export function PacketStep({ packet, caseData, loading, onBuild, onSubmit }: Pac
         <div>
           <h3 className="text-base font-semibold text-foreground">Application Filing Kit &amp; Package</h3>
           <p className="mt-1 text-xs text-muted-foreground">
-            Everything assembled for your application — Cover Letter, Form Guide, Submission Roadmap, and Filing Kit.
+            Everything assembled for your application — Official PDFs, Cover Letter, Form Guide, and Filing Kit.
           </p>
         </div>
         <Badge tone="success" className="w-fit">
@@ -423,7 +455,7 @@ export function PacketStep({ packet, caseData, loading, onBuild, onSubmit }: Pac
             <div>
               <p className="text-base font-semibold">Assemble Your Complete Filing Kit</p>
               <p className="text-xs text-muted-foreground mt-1 max-w-md mx-auto">
-                Generate your personalized Embassy Cover Letter, Step-by-Step Filing Instructions, and Complete Download Package.
+                Generate your personalized Embassy Cover Letter, Step-by-Step Filing Instructions, and Official PDF Package.
               </p>
             </div>
             <Button onClick={onBuild} disabled={loading} className="mt-2">
@@ -436,7 +468,7 @@ export function PacketStep({ packet, caseData, loading, onBuild, onSubmit }: Pac
         <div className="space-y-6">
           {/* Top Banner: Success & Agency Value */}
           <Card className="border-[var(--color-success)]/30 bg-[var(--color-success)]/5">
-            <CardContent className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <CardContent className="p-5 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
               <div className="flex items-start gap-3">
                 <div className="flex size-10 items-center justify-center rounded-full bg-[var(--color-success)]/20 text-[var(--color-success)] shrink-0">
                   <Check className="size-5" />
@@ -449,14 +481,57 @@ export function PacketStep({ packet, caseData, loading, onBuild, onSubmit }: Pac
                     Scope: <span className="font-semibold text-foreground">{caseData.scope_label ?? caseData.locale.toUpperCase()}</span>
                   </p>
                   <p className="mt-1 text-xs text-foreground/80">
-                    🎉 Torii has auto-filled your forms, verified your document checklist, and drafted your Embassy Cover Letter.
+                    🎉 Torii has auto-filled your official forms, verified your document checklist, and prepared your official PDF package.
                   </p>
                 </div>
               </div>
 
-              <Button onClick={downloadFullFilingKit} className="shrink-0 px-3 py-1.5 text-xs">
-                <Download className="mr-2 size-4" /> Download Complete Kit (.txt)
-              </Button>
+              <div className="flex flex-wrap items-center gap-2 shrink-0">
+                <Button
+                  onClick={() =>
+                    downloadPdf("dossier-packet", `${caseData.reference}-Complete-Dossier.pdf`)
+                  }
+                  disabled={downloadingPdf === "dossier-packet"}
+                  className="px-3.5 py-1.5 text-xs font-semibold shadow"
+                >
+                  {downloadingPdf === "dossier-packet" ? (
+                    <Loader2 className="mr-1.5 size-4 animate-spin" />
+                  ) : (
+                    <Download className="mr-1.5 size-4" />
+                  )}
+                  Download Official Dossier (PDF)
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() =>
+                    downloadPdf("application-form", `${caseData.reference}-Application-Form.pdf`)
+                  }
+                  disabled={downloadingPdf === "application-form"}
+                  className="px-3 py-1.5 text-xs"
+                >
+                  {downloadingPdf === "application-form" ? (
+                    <Loader2 className="mr-1.5 size-4 animate-spin" />
+                  ) : (
+                    <FileText className="mr-1.5 size-4 text-primary" />
+                  )}
+                  Application Form (PDF)
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() =>
+                    downloadPdf("cover-letter", `${caseData.reference}-Cover-Letter.pdf`)
+                  }
+                  disabled={downloadingPdf === "cover-letter"}
+                  className="px-3 py-1.5 text-xs"
+                >
+                  {downloadingPdf === "cover-letter" ? (
+                    <Loader2 className="mr-1.5 size-4 animate-spin" />
+                  ) : (
+                    <FileText className="mr-1.5 size-4" />
+                  )}
+                  Cover Letter (PDF)
+                </Button>
+              </div>
             </CardContent>
           </Card>
 
