@@ -254,6 +254,12 @@ async def _effective_templates(session: AsyncSession, case: Case) -> list[_FormD
         )
         live = list(result.scalars().all())
         if live:
+            seen_codes: set[str] = set()
+            unique_live: list[FormTemplate] = []
+            for t in live:
+                if t.code not in seen_codes:
+                    seen_codes.add(t.code)
+                    unique_live.append(t)
             return [
                 _FormDescriptor(
                     code=t.code,
@@ -263,7 +269,7 @@ async def _effective_templates(session: AsyncSession, case: Case) -> list[_FormD
                     field_mappings=list(t.field_mappings or []),
                     template_id=t.id,
                 )
-                for t in live
+                for t in unique_live
             ]
     return []
 
@@ -409,15 +415,22 @@ async def refresh_checklist(
     new_items: list[CaseChecklistItem] = []
     for item in visible_requirement_items(items, dict(case.intake_answers or {})):
         old = old_items.get(item.code)
+        doc_name = localized(item.name, case.locale) or item.code or "Document"
+        how = localized(item.how_to_obtain, case.locale) if item.how_to_obtain else ""
+        if not how:
+            how = f"Obtain official {doc_name} from the issuing authority or institution."
+        why = localized(item.why_required, case.locale) if item.why_required else ""
+        if not why:
+            why = "Required supporting document for your visa application dossier."
         created = CaseChecklistItem(
             case_id=case.id,
             code=item.code,
-            name=localized(item.name, case.locale),
-            how_to_obtain=localized(item.how_to_obtain, case.locale),
-            why_required=localized(item.why_required, case.locale),
+            name=doc_name,
+            how_to_obtain=how,
+            why_required=why,
             is_required=item.is_required,
             status=old.status if old else "needed",
-            citation=item.citation,
+            citation=item.citation or {},
             document_id=old.document_id if old else None,
         )
         session.add(created)

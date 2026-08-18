@@ -469,6 +469,8 @@ export default function CaseDetailPage() {
               loading={submitting}
               onGenerate={handleGenerateForms}
               intakeAnswers={caseData.intake_answers}
+              caseId={caseId}
+              reference={caseData.reference}
             />
           )}
           {!stepError && activeStep === "review" && (

@@ -403,14 +403,18 @@ export function ChecklistStep({
                         <Badge tone="default">In your documents</Badge>
                       )}
                     </div>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      <span className="font-medium text-foreground">How: </span>
-                      {item.how_to_obtain}
-                    </p>
-                    <p className="mt-0.5 text-xs text-muted-foreground">
-                      <span className="font-medium text-foreground">Why: </span>
-                      {item.why_required}
-                    </p>
+                    {item.how_to_obtain ? (
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        <span className="font-medium text-foreground">How: </span>
+                        {item.how_to_obtain}
+                      </p>
+                    ) : null}
+                    {item.why_required ? (
+                      <p className="mt-0.5 text-xs text-muted-foreground">
+                        <span className="font-medium text-foreground">Why: </span>
+                        {item.why_required}
+                      </p>
+                    ) : null}
                     {url && (
                       <a
                         href={url}

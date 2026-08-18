@@ -153,7 +153,7 @@ def generate_japan_work_renewal_pdf(
     answers: dict[str, Any],
     destination_label: str = "Japan",
 ) -> bytes:
-    """Generate official Japan ISA Application for Extension of Period of Stay (在留期間更新許可申請書)."""
+    """Generate official Application Form PDF tailored to the visa purpose."""
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(
         buffer,
@@ -166,16 +166,32 @@ def generate_japan_work_renewal_pdf(
     styles = _get_styles()
     story = []
 
+    is_tourist = (
+        "tourist" in destination_label.lower()
+        or "tourism" in str(answers.get("purpose_of_visit", "")).lower()
+        or "tourism" in str(answers.get("main_purpose", "")).lower()
+        or "travel" in destination_label.lower()
+        or "visitor" in destination_label.lower()
+    )
+
     # 1. Header Banners
     story.append(
-        Paragraph("MINISTRY OF JUSTICE · IMMIGRATION SERVICES AGENCY OF JAPAN", styles["jp_header"])
+        Paragraph("MINISTRY OF FOREIGN AFFAIRS / IMMIGRATION SERVICES AGENCY OF JAPAN", styles["jp_header"])
     )
-    story.append(Paragraph("APPLICATION FOR EXTENSION OF PERIOD OF STAY", styles["title"]))
-    story.append(
-        Paragraph(
-            "在留期間更新許可申請書 (技術・人文知識・国際業務 / 教授・教育等)", styles["subtitle"]
+    if is_tourist:
+        story.append(Paragraph("VISA APPLICATION FORM TO ENTER JAPAN", styles["title"]))
+        story.append(
+            Paragraph(
+                "日本国査証申請書 (短期滞在 · 観光 / 業務 / 知人訪問等)", styles["subtitle"]
+            )
         )
-    )
+    else:
+        story.append(Paragraph("APPLICATION FOR EXTENSION OF PERIOD OF STAY", styles["title"]))
+        story.append(
+            Paragraph(
+                "在留期間更新許可申請書 (技術・人文知識・国際業務 / 教授・教育等)", styles["subtitle"]
+            )
+        )
     story.append(
         HRFlowable(width="100%", thickness=1.5, color=colors.HexColor("#0f172a"), spaceAfter=10)
     )
@@ -185,12 +201,12 @@ def generate_japan_work_renewal_pdf(
         ("Application Reference", case_reference or "DRAFT-APPLICATION"),
         ("Date of Preparation", datetime.now(UTC).strftime("%Y-%m-%d")),
         (
-            "Regional Bureau of Filing",
-            "Regional Immigration Services Bureau (地方出入国在留管理局)",
+            "Issuing Authority / Filing Portal",
+            "Embassy / Consular Mission / Regional Immigration Bureau",
         ),
         (
-            "Intended Status of Residence",
-            "Engineer / Specialist in Humanities / International Services",
+            "Target Visa Category",
+            destination_label or "Temporary Visitor / Short-Term Stay",
         ),
     ]
     story.append(_build_key_value_table(meta_rows, styles))
@@ -216,17 +232,13 @@ def generate_japan_work_renewal_pdf(
             str(answers.get("passport_expiry_date") or answers.get("passport_expiry") or "—"),
         ),
         (
-            "Current Residence Card Number (在留カード番号)",
-            str(answers.get("residence_card_number") or "—"),
+            "Current Country of Residence",
+            str(answers.get("current_residence_country") or answers.get("residence_country") or answers.get("nationality") or "—"),
         ),
         (
-            "Current Status of Residence Expiry",
-            str(answers.get("residence_card_expiry") or answers.get("status_expiry_date") or "—"),
-        ),
-        (
-            "Current Address in Japan",
+            "Residential Address",
             str(
-                answers.get("address_in_japan") or answers.get("current_address") or "Tokyo, Japan"
+                answers.get("address_in_japan") or answers.get("current_address") or answers.get("accommodation_address") or "—"
             ),
         ),
         (
@@ -234,92 +246,160 @@ def generate_japan_work_renewal_pdf(
             str(answers.get("phone_number") or answers.get("telephone") or "—"),
         ),
     ]
+    if not is_tourist and answers.get("residence_card_number"):
+        sec1_rows.append(("Current Residence Card Number (在留カード番号)", str(answers.get("residence_card_number"))))
     story.append(_build_key_value_table(sec1_rows, styles))
     story.append(Spacer(1, 10))
 
-    # 3. Section 2: Sponsoring Organization / Employer
-    story.append(
-        Paragraph(
-            "2. ORGANIZATION / EMPLOYER DETAILS / 勤務先・所属機関に関する事項",
-            styles["section_heading"],
+    if is_tourist:
+        # 3. Section 2: Trip & Itinerary Details (Tourist / Short Stay)
+        story.append(
+            Paragraph(
+                "2. TRIP ITINERARY & FINANCIAL COVERAGE / 渡航目的・滞在日程に関する事項",
+                styles["section_heading"],
+            )
         )
-    )
-    salary_val = answers.get("monthly_salary") or answers.get("monthly_income") or "—"
-    if str(salary_val).isdigit():
-        salary_display = f"¥{int(salary_val):,} JPY / Month"
-    else:
-        salary_display = str(salary_val)
-
-    sec2_rows = [
-        (
-            "Employer / Organization Name",
-            str(answers.get("employer_name") or answers.get("company_name") or "—"),
-        ),
-        (
-            "Corporate Number (法人番号)",
-            str(answers.get("corporate_number") or answers.get("employer_corporate_number") or "—"),
-        ),
-        (
-            "Organization Category (所属機関区分)",
-            str(answers.get("employer_category") or "Category 3 (Listed / Standard)"),
-        ),
-        (
-            "Workplace Address in Japan",
-            str(answers.get("employer_address") or answers.get("workplace_address") or "—"),
-        ),
-        (
-            "Workplace Telephone",
-            str(answers.get("employer_telephone") or answers.get("workplace_phone") or "—"),
-        ),
-        (
-            "Occupation / Primary Duties",
-            str(
-                answers.get("job_description")
-                or answers.get("occupation")
-                or "Software Engineering / Technical Consulting"
+        sec2_rows = [
+            (
+                "Purpose of Visit",
+                str(answers.get("purpose_of_visit") or answers.get("main_purpose") or "Tourism / Sightseeing"),
             ),
-        ),
-        ("Monthly Remuneration (報酬額)", salary_display),
-        (
-            "Contract Type & Duration",
-            str(answers.get("contract_type") or "Full-time (Seishain) / Permanent"),
-        ),
-    ]
-    story.append(_build_key_value_table(sec2_rows, styles))
-    story.append(Spacer(1, 10))
+            (
+                "Intended Length of Stay",
+                f"{answers.get('intended_length_of_stay_days') or answers.get('stay_duration_days') or 15} Days",
+            ),
+            (
+                "Planned Arrival Date",
+                str(answers.get("planned_arrival_date") or answers.get("arrival_date") or "—"),
+            ),
+            (
+                "Hotel / Accommodation Name",
+                str(answers.get("accommodation_name") or "Hotel / Reserved Lodging"),
+            ),
+            (
+                "Accommodation Address in Japan",
+                str(answers.get("accommodation_address") or "Tokyo, Japan"),
+            ),
+            (
+                "Funding Source / Trip Payer",
+                str(answers.get("trip_payer") or "Self-Funded").replace("_", " ").title(),
+            ),
+            (
+                "Available Funds / Savings",
+                str(answers.get("estimated_savings_available") or "Verified via Bank Solvency Certificate"),
+            ),
+            (
+                "Current Profession / Occupation",
+                str(answers.get("occupation") or "Employed Professional"),
+            ),
+        ]
+        story.append(_build_key_value_table(sec2_rows, styles))
+        story.append(Spacer(1, 10))
 
-    # 4. Section 3: Legal Compliance & Continuity
-    story.append(
-        Paragraph("3. COMPLIANCE & DECLARATIONS / 遵守状況・申告事項", styles["section_heading"])
-    )
-    sec3_rows = [
-        (
-            "Tax Payment Compliance (住民税・所得税)",
-            "Compliant / Certificates Attached"
-            if answers.get("tax_compliance_certified", True)
-            else "Pending Review",
-        ),
-        (
-            "National Pension / Health Insurance Status",
-            "Enrolled & Up to Date (厚生年金・健康保険)"
-            if answers.get("pension_compliance_certified", True)
-            else "Enrolled",
-        ),
-        (
-            "Criminal / Deportation Record",
-            "None (無)" if not answers.get("criminal_record", False) else "Disclosed",
-        ),
-        (
-            "Desired Period of Stay Extension",
-            str(answers.get("desired_period_years") or "3 Years / 5 Years"),
-        ),
-        (
-            "Reason for Extension",
-            "Continuation of current professional engineering activities under valid employment contract.",
-        ),
-    ]
-    story.append(_build_key_value_table(sec3_rows, styles))
-    story.append(Spacer(1, 14))
+        # 4. Section 3: Legal Declarations
+        story.append(
+            Paragraph("3. COMPLIANCE & DECLARATIONS / 申告事項", styles["section_heading"])
+        )
+        sec3_rows = [
+            (
+                "Criminal Conviction Record",
+                "None (無)" if not answers.get("criminal_record", False) else "Disclosed",
+            ),
+            (
+                "Prior Deportation / Entry Ban History",
+                "None (無)" if not answers.get("prior_deportation", False) else "Disclosed",
+            ),
+            (
+                "Financial Self-Sufficiency",
+                "Certified / Solvency Proof & Bank Statements Attached",
+            ),
+        ]
+        story.append(_build_key_value_table(sec3_rows, styles))
+        story.append(Spacer(1, 14))
+    else:
+        # 3. Section 2: Sponsoring Organization / Employer (Work / Extension)
+        story.append(
+            Paragraph(
+                "2. ORGANIZATION / EMPLOYER DETAILS / 勤務先・所属機関に関する事項",
+                styles["section_heading"],
+            )
+        )
+        salary_val = answers.get("monthly_salary") or answers.get("monthly_income") or "—"
+        if str(salary_val).isdigit():
+            salary_display = f"¥{int(salary_val):,} JPY / Month"
+        else:
+            salary_display = str(salary_val)
+
+        sec2_rows = [
+            (
+                "Employer / Organization Name",
+                str(answers.get("employer_name") or answers.get("company_name") or "—"),
+            ),
+            (
+                "Corporate Number (法人番号)",
+                str(answers.get("corporate_number") or answers.get("employer_corporate_number") or "—"),
+            ),
+            (
+                "Organization Category (所属機関区分)",
+                str(answers.get("employer_category") or "Category 3 (Listed / Standard)"),
+            ),
+            (
+                "Workplace Address in Japan",
+                str(answers.get("employer_address") or answers.get("workplace_address") or "—"),
+            ),
+            (
+                "Workplace Telephone",
+                str(answers.get("employer_telephone") or answers.get("workplace_phone") or "—"),
+            ),
+            (
+                "Occupation / Primary Duties",
+                str(
+                    answers.get("job_description")
+                    or answers.get("occupation")
+                    or "Software Engineering / Technical Consulting"
+                ),
+            ),
+            ("Monthly Remuneration (報酬額)", salary_display),
+            (
+                "Contract Type & Duration",
+                str(answers.get("contract_type") or "Full-time (Seishain) / Permanent"),
+            ),
+        ]
+        story.append(_build_key_value_table(sec2_rows, styles))
+        story.append(Spacer(1, 10))
+
+        # 4. Section 3: Legal Compliance & Continuity
+        story.append(
+            Paragraph("3. COMPLIANCE & DECLARATIONS / 遵守状況・申告事項", styles["section_heading"])
+        )
+        sec3_rows = [
+            (
+                "Tax Payment Compliance (住民税・所得税)",
+                "Compliant / Certificates Attached"
+                if answers.get("tax_compliance_certified", True)
+                else "Pending Review",
+            ),
+            (
+                "National Pension / Health Insurance Status",
+                "Enrolled & Up to Date (厚生年金・健康保険)"
+                if answers.get("pension_compliance_certified", True)
+                else "Enrolled",
+            ),
+            (
+                "Criminal / Deportation Record",
+                "None (無)" if not answers.get("criminal_record", False) else "Disclosed",
+            ),
+            (
+                "Desired Period of Stay Extension",
+                str(answers.get("desired_period_years") or "3 Years / 5 Years"),
+            ),
+            (
+                "Reason for Extension",
+                "Continuation of current professional engineering activities under valid employment contract.",
+            ),
+        ]
+        story.append(_build_key_value_table(sec3_rows, styles))
+        story.append(Spacer(1, 14))
 
     # 5. Declaration & Signature Block
     story.append(

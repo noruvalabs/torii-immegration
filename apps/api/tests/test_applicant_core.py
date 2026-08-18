@@ -176,3 +176,33 @@ async def test_eligibility_checklist_and_locale(client: AsyncClient, engine: Asy
     )
     assert locale.status_code == 200
     assert locale.json()["locale"] == "ja"
+
+
+async def test_visible_requirement_items_handles_partial_data() -> None:
+    from torii_api.services.checklist import visible_requirement_items
+
+    raw_items = [
+        {
+            "code": "passport_original",
+            "name": "Original Valid Passport",
+            "is_required": True,
+            "citation": {
+                "authority": "MOFA",
+                "title": "Standard Dossier",
+                "url": "https://www.moj.go.jp/isa/applications/procedures/16-1.html",
+            },
+        },
+        {
+            "code": "schedule_of_stay",
+            "name": "Schedule of Stay",
+            "how_to_obtain": None,
+            "why_required": None,
+        },
+    ]
+
+    items = visible_requirement_items(raw_items, {})
+    assert len(items) == 2
+    assert items[0].code == "passport_original"
+    assert items[0].how_to_obtain == ""
+    assert items[0].why_required == ""
+    assert items[1].code == "schedule_of_stay"

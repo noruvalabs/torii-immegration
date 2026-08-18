@@ -11,9 +11,11 @@ import {
   HelpCircle,
   ExternalLink,
   ShieldCheck,
+  Download,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/lib/auth-context";
 import type { GeneratedForm } from "./types";
 
 type FormsStepProps = {
@@ -21,6 +23,8 @@ type FormsStepProps = {
   loading: boolean;
   onGenerate: () => void;
   intakeAnswers?: Record<string, unknown>;
+  caseId?: number;
+  reference?: string;
 };
 
 function getFormMetadata(code: string): { title: string; purpose: string; officialUrl?: string } {
@@ -88,13 +92,48 @@ function getFormMetadata(code: string): { title: string; purpose: string; offici
   };
 }
 
-export function FormsStep({ forms, loading, onGenerate, intakeAnswers }: FormsStepProps) {
+export function FormsStep({
+  forms,
+  loading,
+  onGenerate,
+  intakeAnswers,
+  caseId,
+  reference,
+}: FormsStepProps) {
+  const { token } = useAuth();
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [downloadingPdf, setDownloadingPdf] = useState<string | null>(null);
 
   function handleCopy(key: string, value: string) {
     void navigator.clipboard.writeText(value);
     setCopiedKey(key);
     setTimeout(() => setCopiedKey(null), 2000);
+  }
+
+  async function handleDownloadPdf(formCode: string) {
+    if (!token || !caseId) return;
+    setDownloadingPdf(formCode);
+    try {
+      const res = await fetch(`/backend/v1/cases/${caseId}/pdf/application-form`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        throw new Error("Failed to download PDF");
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${reference || `Case-${caseId}`}_Application_Form.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("PDF download error:", err);
+    } finally {
+      setDownloadingPdf(null);
+    }
   }
 
   return (
@@ -106,10 +145,23 @@ export function FormsStep({ forms, loading, onGenerate, intakeAnswers }: FormsSt
             Torii automatically maps your intake data and scanned documents directly into official embassy application forms.
           </p>
         </div>
-        <Button onClick={onGenerate} disabled={loading}>
-          {loading ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Sparkles className="mr-2 size-4" />}
-          {forms.length === 0 ? "Auto-fill official forms" : "Regenerate forms"}
-        </Button>
+        <div className="flex items-center gap-2">
+          {caseId && forms.length > 0 && (
+            <Button
+              variant="outline"
+              onClick={() => handleDownloadPdf("all")}
+              disabled={downloadingPdf !== null}
+              className="gap-1.5"
+            >
+              {downloadingPdf ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
+              Download PDF Form
+            </Button>
+          )}
+          <Button onClick={onGenerate} disabled={loading}>
+            {loading ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Sparkles className="mr-2 size-4" />}
+            {forms.length === 0 ? "Auto-fill official forms" : "Regenerate forms"}
+          </Button>
+        </div>
       </div>
 
       {forms.length === 0 ? (
@@ -177,16 +229,33 @@ export function FormsStep({ forms, loading, onGenerate, intakeAnswers }: FormsSt
                     )}
                   </div>
 
-                  {meta.officialUrl && (
-                    <a
-                      href={meta.officialUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex items-center gap-1 text-xs text-primary font-medium hover:underline shrink-0"
-                    >
-                      Government Portal <ExternalLink className="size-3" />
-                    </a>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {caseId && (
+                      <Button
+                        variant="outline"
+                        onClick={() => handleDownloadPdf(form.form_code)}
+                        disabled={downloadingPdf === form.form_code}
+                        className="text-xs h-8 gap-1.5 px-3 py-1"
+                      >
+                        {downloadingPdf === form.form_code ? (
+                          <Loader2 className="size-3.5 animate-spin" />
+                        ) : (
+                          <Download className="size-3.5" />
+                        )}
+                        Download PDF
+                      </Button>
+                    )}
+                    {meta.officialUrl && (
+                      <a
+                        href={meta.officialUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1 text-xs text-primary font-medium hover:underline shrink-0"
+                      >
+                        Government Portal <ExternalLink className="size-3" />
+                      </a>
+                    )}
+                  </div>
                 </div>
 
                 {/* Why required explanation */}

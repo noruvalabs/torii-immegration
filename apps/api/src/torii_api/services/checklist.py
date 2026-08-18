@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from torii_api.services.pack_exports import pack_documents
 
@@ -24,12 +24,12 @@ JP_TOURIST_NEW_APPLICATION_DOCUMENT_REQUIREMENTS: list[dict[str, Any]] = pack_do
 
 
 class ChecklistDefinitionItem(BaseModel):
-    code: str
-    name: str | dict[str, str]
-    how_to_obtain: str | dict[str, str]
-    why_required: str | dict[str, str]
+    code: str = "document"
+    name: str | dict[str, str] = "Document"
+    how_to_obtain: str | dict[str, str] | None = ""
+    why_required: str | dict[str, str] | None = ""
     is_required: bool = True
-    citation: dict[str, Any]
+    citation: dict[str, Any] = Field(default_factory=dict)
     show_when: dict[str, Any] | None = None
 
 
@@ -37,7 +37,31 @@ def visible_requirement_items(
     raw_items: list[dict[str, Any]], answers: dict[str, Any]
 ) -> list[ChecklistDefinitionItem]:
     """Return requirement items whose optional ``show_when`` condition matches."""
-    items = [ChecklistDefinitionItem.model_validate(item) for item in raw_items]
+    items: list[ChecklistDefinitionItem] = []
+    for raw in raw_items:
+        if not isinstance(raw, dict):
+            continue
+        try:
+            item_data = dict(raw)
+            if not item_data.get("code"):
+                item_data["code"] = (
+                    item_data.get("key")
+                    or item_data.get("id")
+                    or item_data.get("doc_type")
+                    or str(item_data.get("name") or "document").lower().replace(" ", "_")[:64]
+                )
+            if not item_data.get("name"):
+                item_data["name"] = item_data.get("code") or "Document"
+            if item_data.get("how_to_obtain") is None:
+                item_data["how_to_obtain"] = ""
+            if item_data.get("why_required") is None:
+                item_data["why_required"] = ""
+            if item_data.get("citation") is None or not isinstance(item_data.get("citation"), dict):
+                item_data["citation"] = {}
+            items.append(ChecklistDefinitionItem.model_validate(item_data))
+        except Exception:
+            continue
+
     return [
         item
         for item in items
