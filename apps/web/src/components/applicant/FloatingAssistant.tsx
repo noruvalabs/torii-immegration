@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import {
   Bot,
@@ -20,7 +20,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth-context";
-import { answerIntake, evaluateEligibility } from "@/lib/api/cases";
+import { answerIntake, evaluateEligibility, getCase, type Case } from "@/lib/api/cases";
 
 type ChatRole = "user" | "assistant";
 type ChatMessage = { role: ChatRole; text: string };
@@ -31,11 +31,32 @@ type IntakeAction = {
   label: string;
 };
 
-const QUICK_PROMPTS = [
-  "Fix my Purpose of Stay to Tourism",
-  "How do I fix eligibility warnings?",
-  "What is required for Purpose of Stay?",
+const CATEGORY_PROMPTS: Record<string, string[]> = {
+  student: [
+    "What documents are required for COE / Student Visa?",
+    "How much bank balance / sponsor income is needed?",
+    "What are the rules for part-time work (28 hrs/week)?",
+    "How do I fix eligibility warnings?",
+  ],
+  work: [
+    "What documents are required for Work Visa (技人国)?",
+    "How do employer categories (1-4) affect documents?",
+    "What are the Resident Tax and Pension renewal rules?",
+    "How do I fix eligibility warnings?",
+  ],
+  tourist: [
+    "What documents do I need for a Temporary Visitor visa?",
+    "How do I prove financial solvency for tourism?",
+    "What should be included in the itinerary (滞在予定表)?",
+    "How do I fix eligibility warnings?",
+  ],
+};
+
+const DEFAULT_PROMPTS = [
   "Which documents do I need to gather?",
+  "How do I fix eligibility warnings?",
+  "What are the official processing times?",
+  "Can you review my intake answers?",
 ];
 
 function parseMessageWithActions(text: string): { cleanText: string; actions: IntakeAction[] } {
@@ -64,11 +85,39 @@ export function FloatingAssistant() {
   const [sending, setSending] = useState(false);
   const [applyingAction, setApplyingAction] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [activeCase, setActiveCase] = useState<Case | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Extract case ID if currently on a case page
   const caseMatch = pathname?.match(/\/cases\/(\d+)/);
   const caseId = caseMatch ? Number(caseMatch[1]) : null;
+
+  // Fetch active case context
+  useEffect(() => {
+    if (!token || !caseId) {
+      setActiveCase(null);
+      return;
+    }
+    void (async () => {
+      try {
+        const c = await getCase(token, caseId);
+        setActiveCase(c);
+      } catch {
+        // Fallback gracefully
+      }
+    })();
+  }, [token, caseId]);
+
+  const visaCategory = (activeCase?.visa_category_code || "").toLowerCase();
+  const jurisdictionCode = activeCase?.jurisdiction_code || "JP";
+  const actionCode = activeCase?.case_action_code || "new";
+
+  const quickPrompts = useMemo(() => {
+    if (visaCategory && CATEGORY_PROMPTS[visaCategory]) {
+      return CATEGORY_PROMPTS[visaCategory];
+    }
+    return DEFAULT_PROMPTS;
+  }, [visaCategory]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -92,10 +141,18 @@ export function FloatingAssistant() {
         if (hydrated.length > 0) {
           setMessages(hydrated);
         } else {
+          let welcome = "Hello! I am your Torii AI Immigration Assistant. How can I help you with your visa application today?";
+          if (visaCategory === "student") {
+            welcome = "Hello! I am your Torii AI Assistant for your Student Visa. Ask me about school admission, COE requirements, sponsor proofs, or eligibility!";
+          } else if (visaCategory === "work") {
+            welcome = "Hello! I am your Torii AI Assistant for your Work Visa. Ask me about employer categories, employment contracts, tax certificates, or extension rules!";
+          } else if (visaCategory === "tourist") {
+            welcome = "Hello! I am your Torii AI Assistant for your Temporary Visitor Visa. Ask me about itineraries, flight/hotel bookings, financial proofs, or eligibility!";
+          }
           setMessages([
             {
               role: "assistant",
-              text: "Hello! I am your Torii AI Immigration Assistant. How can I help you with your visa application, requirements, or eligibility today?",
+              text: welcome,
             },
           ]);
         }
@@ -108,7 +165,7 @@ export function FloatingAssistant() {
         ]);
       }
     })();
-  }, [isOpen, caseId]);
+  }, [isOpen, caseId, visaCategory]);
 
   useEffect(() => {
     if (isOpen) {
@@ -169,6 +226,10 @@ export function FloatingAssistant() {
         body: JSON.stringify({
           message: text,
           case_id: caseId ? String(caseId) : null,
+          jurisdiction_code: jurisdictionCode,
+          visa_category_code: visaCategory || null,
+          action_code: actionCode || null,
+          intake_answers: activeCase?.intake_answers || null,
           locale: "en",
         }),
       });
@@ -263,7 +324,9 @@ export function FloatingAssistant() {
                   <Badge tone="success" className="text-[9px] px-1.5 py-0">Online</Badge>
                 </div>
                 <p className="text-[11px] text-muted-foreground">
-                  {caseId ? `Connected to Case #${caseId} · Can fix intake` : "Official guidance helper"}
+                  {caseId
+                    ? `Case #${caseId} · ${jurisdictionCode} ${visaCategory ? visaCategory.toUpperCase() : "VISA"} (${actionCode})`
+                    : "Official immigration guidance"}
                 </p>
               </div>
             </div>
@@ -355,7 +418,7 @@ export function FloatingAssistant() {
           {/* Quick Prompts Suggestions */}
           {messages.length <= 2 && (
             <div className="px-3 py-2 border-t bg-muted/20 flex flex-wrap gap-1.5">
-              {QUICK_PROMPTS.map((prompt) => (
+              {quickPrompts.map((prompt) => (
                 <button
                   key={prompt}
                   onClick={() => void handleSend(prompt)}
@@ -380,7 +443,15 @@ export function FloatingAssistant() {
               <input
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                placeholder="Ask or say 'Fix my purpose of stay to Tourism'..."
+                placeholder={
+                  visaCategory === "student"
+                    ? "Ask about COE, admission, tuition funds, or part-time work..."
+                    : visaCategory === "work"
+                    ? "Ask about employer category, tax proof, or contract renewal..."
+                    : visaCategory === "tourist"
+                    ? "Ask about itinerary, financial proof, or duration..."
+                    : "Ask any immigration or checklist question..."
+                }
                 className="flex-1 rounded-lg border bg-muted/30 px-3 py-2 text-xs outline-none focus:border-primary focus:bg-background focus:ring-1 focus:ring-primary"
                 disabled={sending || Boolean(applyingAction)}
               />

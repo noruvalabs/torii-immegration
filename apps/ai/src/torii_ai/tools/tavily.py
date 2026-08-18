@@ -118,26 +118,56 @@ def _default_results_for_query(
             title = "Immigration Services Agency of Japan: Application for Certificate of Eligibility (Student)"
             content = (
                 "Official requirements for Student visa status in Japan. Necessary documents include "
-                "valid passport, official application form, photograph (4cm x 3cm), letter of admission from "
-                "the educational institution, and proof of financial solvency or sponsorship."
+                "valid passport, official application form, photograph (4cm x 3cm), letter of admission (入学許可書) from "
+                "the educational institution, and proof of financial solvency or sponsorship (~¥2,000,000+)."
+            )
+        elif "renewal" in q_lower or "extension" in q_lower:
+            url = "https://www.isa.go.jp/en/applications/procedures/16-3.html"
+            title = "Immigration Services Agency of Japan: Extension of Period of Stay (在留期間更新許可申請)"
+            content = (
+                "Official procedures for extending period of stay in Japan. Requires passport, current residence card, "
+                "Certificate of Employment (在職証明書), Resident Tax certificates (住民税の課税・納税証明書), and employer category proof."
+            )
+        elif "change" in q_lower or "status" in q_lower:
+            url = "https://www.isa.go.jp/en/applications/procedures/16-2.html"
+            title = "Immigration Services Agency of Japan: Change of Status of Residence (在留資格変更許可申請)"
+            content = (
+                "Official procedures for changing status of residence. Requires passport, residence card, statement of reasons (理由書), "
+                "and supporting materials justifying the transition between visa categories."
             )
         elif "tourist" in q_lower or "visit" in q_lower:
             url = "https://www.mofa.go.jp/j_info/visit/visa/short/novisa.html"
             title = "Ministry of Foreign Affairs of Japan: Temporary Visitor Visa Guidelines"
             content = (
                 "Temporary visitor visa documentation: passport, visa application form with photo, "
-                "proof of financial stability (bank statements), itinerary / schedule of stay, and invitation documents."
+                "proof of financial stability (bank statements), itinerary / schedule of stay (滞在予定表), and return flight tickets."
             )
         else:
             url = "https://www.isa.go.jp/en/applications/procedures/nyuukokukanri07_00093.html"
-            title = "Immigration Services Agency of Japan: Work and Long-Term Stay Procedures"
+            title = "Immigration Services Agency of Japan: Engineer / Specialist in Humanities / International Services"
             content = (
                 "Application for Certificate of Eligibility and Status of Residence for Engineer / Specialist in Humanities / "
-                "International Services. Requires passport, photograph, proof of employment, qualification certificates, and company statutory documents."
+                "International Services. Requires passport, photograph, employment contract, university degree / qualification certificates, and company statutory withholding proof."
             )
 
         cit = Citation(
             authority="Immigration Services Agency of Japan (ISA)",
+            title=title,
+            url=url,
+            retrieved_at=now,
+            source_version=now_str,
+        )
+        return [TavilySearchResult(title=title, url=url, content=content, citation=cit)]
+
+    if "us" in q_lower or "united states" in q_lower or "h1b" in q_lower:
+        url = "https://www.uscis.gov/working-in-the-united-states/temporary-workers/h-1b-specialty-occupations"
+        title = "USCIS: H-1B Specialty Occupations Overview"
+        content = (
+            "H-1B visa documentation requirements: Form I-129, certified Labor Condition Application (LCA Form ETA-9035), "
+            "degree evaluation proving specialty occupation qualification, and employer petition letter."
+        )
+        cit = Citation(
+            authority="USCIS",
             title=title,
             url=url,
             retrieved_at=now,

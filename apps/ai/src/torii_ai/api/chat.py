@@ -36,6 +36,13 @@ class SessionOut(BaseModel):
 class MessageIn(BaseModel):
     message: str = Field(min_length=1, max_length=4000)
     case_id: str | None = None
+    jurisdiction_code: str | None = None
+    visa_category_code: str | None = None
+    action_code: str | None = None
+    origin_country: str | None = None
+    residence_country: str | None = None
+    intake_answers: dict[str, Any] | None = None
+    eligibility_findings: list[dict[str, Any]] | None = None
     locale: str = Field(default="en", max_length=16)
 
 
@@ -94,7 +101,17 @@ async def post_message(
         ChatMessage(role="user", content=payload.message, created_at=utcnow()),
     )
 
-    reply = await assistant.reply(message=payload.message, locale=payload.locale or convo.locale)
+    reply = await assistant.reply(
+        message=payload.message,
+        locale=payload.locale or convo.locale,
+        jurisdiction_code=payload.jurisdiction_code,
+        visa_category_code=payload.visa_category_code,
+        action_code=payload.action_code,
+        origin_country=payload.origin_country,
+        residence_country=payload.residence_country,
+        intake_answers=payload.intake_answers,
+        eligibility_findings=payload.eligibility_findings,
+    )
 
     async def event_stream() -> AsyncIterator[bytes]:
         assistant_parts: list[str] = []
