@@ -9,12 +9,24 @@ from __future__ import annotations
 from datetime import date
 from typing import Any, Literal
 
+import httpx
+import structlog
 from pydantic import BaseModel
 
+from torii_api.config import get_settings
 from torii_api.services.content_packs import is_effective_on
 from torii_api.services.pack_exports import pack_rules
 
-EligibilityStatus = Literal["pass", "at_risk", "fail", "out_of_scope"]
+log = structlog.get_logger()
+
+EligibilityStatus = Literal["pass", "at_risk", "fail", "out_of_scope", "warning"]
+
+
+def _normalize_eligibility_status(val: Any) -> EligibilityStatus:
+    if val in ("pass", "at_risk", "fail", "out_of_scope", "warning"):
+        return val
+    return "fail"
+
 
 JP_IMMIGRATION_CITATION = {
     "authority": "Immigration Services Agency of Japan",
@@ -207,7 +219,7 @@ def evaluate_eligibility(
             findings.append(
                 EligibilityFinding(
                     key=key,
-                    status=rule.get("failure_status", "fail"),
+                    status=_normalize_eligibility_status(rule.get("failure_status", "fail")),
                     message=str(rule.get("message", f"Rule for '{key.replace('_', ' ')}' was not met.")),
                     citation=dict(rule.get("citation") or {}),
                 )
@@ -232,3 +244,62 @@ def evaluate_eligibility(
     else:
         result = "pass"
     return EligibilityResult(result=result, findings=findings)
+
+
+async def evaluate_eligibility_with_ai(
+    answers: dict[str, Any],
+    rules: list[dict[str, Any]],
+    *,
+    destination_code: str = "JP",
+    purpose_code: str = "tourist",
+    action_code: str = "new_application",
+    nationality: str | None = None,
+    residence_country: str | None = None,
+    as_of: date | None = None,
+    context: dict[str, Any] | None = None,
+) -> EligibilityResult:
+    """Evaluate eligibility using the AI service, falling back to deterministic rules if offline."""
+    settings = get_settings()
+    if settings.ai_service_url:
+        payload = {
+            "destination_code": destination_code,
+            "purpose_code": purpose_code,
+            "action_code": action_code,
+            "nationality": nationality,
+            "residence_country": residence_country,
+            "answers": answers,
+            "rules": rules,
+            "context": context or {},
+        }
+        try:
+            async with httpx.AsyncClient(timeout=httpx.Timeout(2.0, connect=0.5)) as client:
+                res = await client.post(
+                    f"{settings.ai_service_url.rstrip('/')}/ai/agentic/evaluate-eligibility",
+                    json=payload,
+                )
+                if res.status_code == 200:
+                    data = res.json()
+                    findings = [
+                        EligibilityFinding(
+                            key=f.get("key", "finding"),
+                            status=f.get("status", "pass"),
+                            message=f.get("message", ""),
+                            citation=dict(f.get("citation") or {}),
+                        )
+                        for f in data.get("findings", [])
+                        if isinstance(f, dict)
+                    ]
+                    if findings:
+                        return EligibilityResult(
+                            result=data.get("result", "pass"),
+                            findings=findings,
+                            disclaimer=data.get(
+                                "disclaimer",
+                                "This is an AI-assisted preparation check based on official published criteria, not legal advice or a government decision.",
+                            ),
+                        )
+        except Exception as exc:
+            log.info("eligibility.ai_eval_failed_fallback_to_rules", error=str(exc))
+
+    return evaluate_eligibility(answers, rules, as_of=as_of, context=context)
+

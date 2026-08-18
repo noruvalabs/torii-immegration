@@ -27,7 +27,11 @@ from torii_api.db.models import (
 )
 from torii_api.db.session import get_session
 from torii_api.services.checklist import ChecklistStatus, update_status, visible_requirement_items
-from torii_api.services.eligibility import EligibilityResult, evaluate_eligibility
+from torii_api.services.eligibility import (
+    EligibilityResult,
+    evaluate_eligibility,
+    evaluate_eligibility_with_ai,
+)
 from torii_api.services.forms import fill_form
 from torii_api.services.guidance import next_status_for_phase
 from torii_api.services.i18n import localized
@@ -313,7 +317,19 @@ async def evaluate_case_eligibility(
     }
     if case.prior_application:
         context.update(case.prior_application)
-    result = evaluate_eligibility(dict(case.intake_answers or {}), rules, as_of=as_of, context=context)
+    j_code, v_code, a_code, _ = await _scope_label(session, case)
+    answers = dict(case.intake_answers or {})
+    result = await evaluate_eligibility_with_ai(
+        answers,
+        rules,
+        destination_code=j_code or "JP",
+        purpose_code=v_code or "tourist",
+        action_code=a_code or "new_application",
+        nationality=case.origin_country or str(answers.get("visitor_nationality") or answers.get("nationality") or ""),
+        residence_country=case.residence_country or str(answers.get("current_residence_country") or answers.get("residence_country") or ""),
+        as_of=as_of,
+        context=context,
+    )
     case.eligibility_snapshot = result.model_dump(mode="json")
     new_status = next_status_for_phase("checklist", case.status)
     if new_status is not None:

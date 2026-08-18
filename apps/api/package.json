@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
-    "dev": "uv run alembic upgrade head && uv run uvicorn torii_api.main:app --reload --port 8000",
+    "dev": "uv run alembic upgrade head && uv run uvicorn torii_api.main:app --reload --reload-dir src --port 8000",
     "lint": "uv run ruff check . && uv run ruff format --check .",
     "typecheck": "uv run pyright",
     "test": "uv run pytest"

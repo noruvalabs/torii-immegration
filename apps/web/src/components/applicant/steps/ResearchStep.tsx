@@ -298,10 +298,10 @@ export function ResearchStep({ caseId, token, onPhaseChange }: ResearchStepProps
           <div className="flex items-start gap-3 rounded-[var(--radius)] border border-[var(--color-warning)]/30 bg-[var(--color-warning)]/5 p-4">
             <AlertTriangle className="mt-0.5 size-4 shrink-0 text-[var(--color-warning)]" />
             <div className="flex-1">
-              <p className="text-sm font-medium">Research seems to be taking longer than expected</p>
+              <p className="text-sm font-medium">Research is taking longer than expected</p>
               <p className="mt-1 text-xs text-muted-foreground">
-                The research has been running for over {Math.floor(elapsed / 60)}m {elapsed % 60}s.
-                You can retry or request manual help from our team.
+                Official source verification is in progress ({Math.floor(elapsed / 60)}m {elapsed % 60}s).
+                You can restart research or request expedited human assistance below.
               </p>
             </div>
           </div>
@@ -309,7 +309,7 @@ export function ResearchStep({ caseId, token, onPhaseChange }: ResearchStepProps
           <div className="flex flex-wrap items-center gap-2">
             <Button variant="outline" onClick={() => void retryResearch()}>
               <RotateCcw className="size-4" />
-              Retry research
+              Retry Research
             </Button>
           </div>
 

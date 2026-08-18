@@ -1,19 +1,29 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { FolderKanban, Search, ExternalLink } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { PaginationBar } from "@/components/ui/pagination";
 import { useAuth } from "@/lib/auth-context";
 import { adminListCases, type AdminCase } from "@/lib/api/cases";
 
-const statusConfig: Record<string, { tone: "default" | "success" | "warning" | "danger" | "muted" }> = {
-  draft: { tone: "muted" },
-  intake_complete: { tone: "default" },
-  checklist_ready: { tone: "default" },
-  forms_generated: { tone: "default" },
-  packet_ready: { tone: "success" },
-  submitted: { tone: "success" },
+const statusConfig: Record<string, { label: string; tone: "default" | "success" | "warning" | "danger" | "muted" }> = {
+  draft: { label: "Draft", tone: "muted" },
+  intake_complete: { label: "Intake complete", tone: "default" },
+  checklist_ready: { label: "Checklist ready", tone: "default" },
+  forms_generated: { label: "Forms generated", tone: "default" },
+  packet_ready: { label: "Packet ready", tone: "success" },
+  submitted: { label: "Submitted", tone: "success" },
 };
 
 export default function CasesPage() {
@@ -23,6 +33,8 @@ export default function CasesPage() {
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState("");
   const [search, setSearch] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   const load = useCallback(async () => {
     if (!token) return;
@@ -40,10 +52,25 @@ export default function CasesPage() {
 
   useEffect(() => { void load(); }, [load]);
 
-  const filtered = cases.filter((c) => {
-    if (search && c.reference && !c.reference.toLowerCase().includes(search.toLowerCase())) return false;
-    return true;
-  });
+  // Reset to page 1 whenever filter or search query changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filter, search]);
+
+  const filtered = useMemo(() => {
+    return cases.filter((c) => {
+      if (search && c.reference && !c.reference.toLowerCase().includes(search.toLowerCase())) {
+        return false;
+      }
+      return true;
+    });
+  }, [cases, search]);
+
+  const totalPages = Math.ceil(filtered.length / pageSize) || 1;
+  const paginatedCases = useMemo(() => {
+    const startIndex = (currentPage - 1) * pageSize;
+    return filtered.slice(startIndex, startIndex + pageSize);
+  }, [filtered, currentPage, pageSize]);
 
   return (
     <div className="space-y-6">
@@ -66,30 +93,32 @@ export default function CasesPage() {
         </p>
       )}
 
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="relative flex-1 sm:max-w-xs">
-          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by reference…"
-            className="h-9 w-full rounded-[var(--radius)] border bg-background pl-9 pr-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          />
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-3 flex-1">
+          <div className="relative flex-1 sm:max-w-xs">
+            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search by reference…"
+              className="h-9 w-full rounded-[var(--radius)] border bg-background pl-9 pr-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            />
+          </div>
+          <select
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            className="h-9 rounded-[var(--radius)] border bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <option value="">All statuses</option>
+            <option value="draft">Draft</option>
+            <option value="intake_complete">Intake complete</option>
+            <option value="checklist_ready">Checklist ready</option>
+            <option value="forms_generated">Forms generated</option>
+            <option value="packet_ready">Packet ready</option>
+            <option value="submitted">Submitted</option>
+          </select>
         </div>
-        <select
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-          className="h-9 rounded-[var(--radius)] border bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <option value="">All statuses</option>
-          <option value="draft">Draft</option>
-          <option value="intake_complete">Intake complete</option>
-          <option value="checklist_ready">Checklist ready</option>
-          <option value="forms_generated">Forms generated</option>
-          <option value="packet_ready">Packet ready</option>
-          <option value="submitted">Submitted</option>
-        </select>
       </div>
 
       {loading ? (
@@ -106,48 +135,70 @@ export default function CasesPage() {
           </CardContent>
         </Card>
       ) : (
-        <Card>
-          <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b text-left text-xs uppercase tracking-wider text-muted-foreground">
-                    <th className="px-5 py-3 font-medium">Reference</th>
-                    <th className="px-5 py-3 font-medium">Status</th>
-                    <th className="px-5 py-3 font-medium">Locale</th>
-                    <th className="px-5 py-3 font-medium">Created</th>
-                    <th className="px-5 py-3 font-medium text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered.map((c) => {
-                    const sc = statusConfig[c.status] ?? { tone: "default" as const };
+        <div className="space-y-4">
+          <Card>
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="px-5">Reference</TableHead>
+                    <TableHead className="px-5">Status</TableHead>
+                    <TableHead className="px-5">Locale</TableHead>
+                    <TableHead className="px-5">Created</TableHead>
+                    <TableHead className="px-5 text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {paginatedCases.map((c) => {
+                    const sc = statusConfig[c.status] ?? { label: c.status, tone: "default" as const };
                     return (
-                      <tr key={c.id} className="border-b last:border-0">
-                        <td className="px-5 py-3 font-mono text-sm font-semibold">
-                          {c.reference ?? `#${c.id}`}
-                        </td>
-                        <td className="px-5 py-3">
-                          <Badge tone={sc.tone}>{c.status}</Badge>
-                        </td>
-                        <td className="px-5 py-3 text-muted-foreground">{c.locale ?? "—"}</td>
-                        <td className="px-5 py-3 text-muted-foreground">
+                      <TableRow key={c.id}>
+                        <TableCell className="px-5 font-mono text-sm font-semibold">
+                          <Link
+                            href={`/cases/${c.id}`}
+                            className="hover:underline text-foreground"
+                          >
+                            {c.reference ?? `#${c.id}`}
+                          </Link>
+                        </TableCell>
+                        <TableCell className="px-5">
+                          <Badge tone={sc.tone}>{sc.label}</Badge>
+                        </TableCell>
+                        <TableCell className="px-5 text-muted-foreground">{c.locale ?? "—"}</TableCell>
+                        <TableCell className="px-5 text-muted-foreground">
                           {c.created_at ? new Date(c.created_at).toLocaleDateString() : "—"}
-                        </td>
-                        <td className="px-5 py-3 text-right">
-                          <button className="inline-flex items-center gap-1 text-xs text-primary hover:underline">
+                        </TableCell>
+                        <TableCell className="px-5 text-right">
+                          <Link
+                            href={`/cases/${c.id}`}
+                            className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+                          >
                             View <ExternalLink className="size-3" />
-                          </button>
-                        </td>
-                      </tr>
+                          </Link>
+                        </TableCell>
+                      </TableRow>
                     );
                   })}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+
+          <PaginationBar
+            currentPage={currentPage}
+            totalPages={totalPages}
+            totalItems={filtered.length}
+            pageSize={pageSize}
+            onPageChange={setCurrentPage}
+            onPageSizeChange={(size) => {
+              setPageSize(size);
+              setCurrentPage(1);
+            }}
+            itemName="cases"
+          />
+        </div>
       )}
     </div>
   );
 }
+

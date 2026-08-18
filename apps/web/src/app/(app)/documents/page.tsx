@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   FileText,
   Upload,
@@ -19,10 +19,21 @@ import {
   RefreshCw,
   X,
   History,
+  LayoutGrid,
+  Table as TableIcon,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { PaginationBar } from "@/components/ui/pagination";
 import { useAuth } from "@/lib/auth-context";
 import { formatErrorMessage } from "@/lib/api/errors";
 import {
@@ -268,16 +279,33 @@ export default function DocumentVaultPage() {
     }
   }
 
+  const [docViewMode, setDocViewMode] = useState<"cards" | "table">("cards");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(6);
+
+  // Reset pagination when switching categories
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [activeCategory]);
+
   const categories = ["All", ...Array.from(new Set(docTypes.map((t) => t.category)))];
 
-  const filteredDocs = documents.filter((doc) => {
-    if (activeCategory === "All" || activeCategory === "all") return true;
-    const typeObj = docTypes.find(
-      (t) => t.code === doc.doc_type || t.name.toLowerCase() === doc.doc_type.toLowerCase()
-    );
-    const docCategory = typeObj?.category || (doc as unknown as { category?: string }).category;
-    return docCategory?.toLowerCase() === activeCategory.toLowerCase();
-  });
+  const filteredDocs = useMemo(() => {
+    return documents.filter((doc) => {
+      if (activeCategory === "All" || activeCategory === "all") return true;
+      const typeObj = docTypes.find(
+        (t) => t.code === doc.doc_type || t.name.toLowerCase() === doc.doc_type.toLowerCase()
+      );
+      const docCategory = typeObj?.category || (doc as unknown as { category?: string }).category;
+      return docCategory?.toLowerCase() === activeCategory.toLowerCase();
+    });
+  }, [documents, activeCategory, docTypes]);
+
+  const totalPages = Math.ceil(filteredDocs.length / pageSize) || 1;
+  const paginatedDocs = useMemo(() => {
+    const startIndex = (currentPage - 1) * pageSize;
+    return filteredDocs.slice(startIndex, startIndex + pageSize);
+  }, [filteredDocs, currentPage, pageSize]);
 
   return (
     <div className="w-full max-w-7xl mx-auto space-y-6">
@@ -455,20 +483,50 @@ export default function DocumentVaultPage() {
       <div className="space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-lg font-semibold">Your Saved Documents</h2>
-          <div className="flex flex-wrap gap-1">
-            {categories.map((cat) => (
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap gap-1">
+              {categories.map((cat) => (
+                <button
+                  key={cat}
+                  onClick={() => setActiveCategory(cat)}
+                  className={`rounded-[var(--radius)] px-3 py-1 text-xs font-medium transition-colors ${
+                    activeCategory === cat
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-accent/50 text-muted-foreground hover:bg-accent hover:text-foreground"
+                  }`}
+                >
+                  {cat}
+                </button>
+              ))}
+            </div>
+
+            {/* View Mode Switcher */}
+            <div className="flex items-center rounded-[var(--radius)] border bg-muted/40 p-0.5 ml-auto">
               <button
-                key={cat}
-                onClick={() => setActiveCategory(cat)}
-                className={`rounded-[var(--radius)] px-3 py-1 text-xs font-medium transition-colors ${
-                  activeCategory === cat
-                    ? "bg-primary text-primary-foreground"
-                    : "bg-accent/50 text-muted-foreground hover:bg-accent hover:text-foreground"
+                type="button"
+                onClick={() => setDocViewMode("cards")}
+                aria-label="Cards view"
+                className={`inline-flex items-center gap-1 rounded-[calc(var(--radius)-2px)] px-2 py-1 text-xs font-medium transition-colors ${
+                  docViewMode === "cards"
+                    ? "bg-background text-foreground shadow-xs font-semibold"
+                    : "text-muted-foreground hover:text-foreground"
                 }`}
               >
-                {cat}
+                <LayoutGrid className="size-3.5" /> Cards
               </button>
-            ))}
+              <button
+                type="button"
+                onClick={() => setDocViewMode("table")}
+                aria-label="Table view"
+                className={`inline-flex items-center gap-1 rounded-[calc(var(--radius)-2px)] px-2 py-1 text-xs font-medium transition-colors ${
+                  docViewMode === "table"
+                    ? "bg-background text-foreground shadow-xs font-semibold"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <TableIcon className="size-3.5" /> Table
+              </button>
+            </div>
           </div>
         </div>
 
@@ -486,97 +544,231 @@ export default function DocumentVaultPage() {
               </p>
             </CardContent>
           </Card>
+        ) : docViewMode === "table" ? (
+          /* Table View */
+          <div className="space-y-4">
+            <Card>
+              <CardContent className="p-0">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="px-5">Document</TableHead>
+                      <TableHead className="px-5">Type / Category</TableHead>
+                      <TableHead className="px-5">File &amp; Size</TableHead>
+                      <TableHead className="px-5">Expiry</TableHead>
+                      <TableHead className="px-5">Status</TableHead>
+                      <TableHead className="px-5 text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {paginatedDocs.map((doc) => {
+                      const matchedType = docTypes.find((t) => t.code === doc.doc_type);
+                      const category = matchedType?.category || "Document";
+                      const isImage =
+                        doc.content_type?.startsWith("image/") ||
+                        /\.(png|jpg|jpeg|webp|gif)$/i.test(doc.filename);
+
+                      return (
+                        <TableRow key={doc.id}>
+                          <TableCell className="px-5">
+                            <div className="flex items-center gap-2.5">
+                              <div className="flex size-8 items-center justify-center rounded-lg bg-primary/10 text-primary shrink-0">
+                                {isImage ? <ImageIcon className="size-4" /> : <FileText className="size-4" />}
+                              </div>
+                              <div className="min-w-0">
+                                <p className="font-semibold text-sm text-foreground truncate">{doc.name}</p>
+                                <span className="text-[11px] font-semibold text-primary">v{doc.version}</span>
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell className="px-5">
+                            <p className="text-xs font-mono text-foreground">{doc.doc_type}</p>
+                            <Badge tone="muted" className="text-[9px] mt-0.5">
+                              {category}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="px-5 text-xs">
+                            <p className="font-mono text-foreground truncate max-w-[140px]" title={doc.filename}>
+                              {doc.filename}
+                            </p>
+                            <p className="text-muted-foreground text-[11px]">{formatBytes(doc.file_size)}</p>
+                          </TableCell>
+                          <TableCell className="px-5 text-xs text-muted-foreground">
+                            {doc.expiry_date ? (
+                              <span className="font-medium text-foreground">{doc.expiry_date}</span>
+                            ) : (
+                              "—"
+                            )}
+                          </TableCell>
+                          <TableCell className="px-5">
+                            <Badge tone={doc.status === "active" ? "success" : "muted"} className="text-[10px] capitalize">
+                              {doc.status}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="px-5 text-right">
+                            <div className="flex items-center justify-end gap-1">
+                              <Button
+                                variant="outline"
+                                onClick={() => handleOpenView(doc)}
+                                className="h-7 text-xs gap-1 px-2"
+                                title="View details"
+                              >
+                                <Eye className="size-3" />
+                              </Button>
+                              <Button
+                                variant="outline"
+                                onClick={() => handleOpenUpdate(doc)}
+                                className="h-7 text-xs gap-1 px-2 text-primary border-primary/30 hover:bg-primary/10"
+                                title="Upload new version"
+                              >
+                                <RefreshCw className="size-3" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                onClick={() => handleOpenEdit(doc)}
+                                className="h-7 text-xs gap-1 px-1.5 text-muted-foreground hover:text-foreground"
+                                title="Edit metadata"
+                              >
+                                <Edit2 className="size-3" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                onClick={() => handleDelete(doc.id, doc.name)}
+                                className="h-7 text-xs text-[var(--color-danger)] hover:bg-[var(--color-danger)]/10 px-1.5"
+                                title="Delete document"
+                              >
+                                <Trash2 className="size-3.5" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+
+            <PaginationBar
+              currentPage={currentPage}
+              totalPages={totalPages}
+              totalItems={filteredDocs.length}
+              pageSize={pageSize}
+              onPageChange={setCurrentPage}
+              onPageSizeChange={(size) => {
+                setPageSize(size);
+                setCurrentPage(1);
+              }}
+              itemName="documents"
+            />
+          </div>
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2">
-            {filteredDocs.map((doc) => {
-              const matchedType = docTypes.find((t) => t.code === doc.doc_type);
-              const category = matchedType?.category || "Document";
-              const isImage =
-                doc.content_type?.startsWith("image/") ||
-                /\.(png|jpg|jpeg|webp|gif)$/i.test(doc.filename);
+          /* Cards View */
+          <div className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              {paginatedDocs.map((doc) => {
+                const matchedType = docTypes.find((t) => t.code === doc.doc_type);
+                const category = matchedType?.category || "Document";
+                const isImage =
+                  doc.content_type?.startsWith("image/") ||
+                  /\.(png|jpg|jpeg|webp|gif)$/i.test(doc.filename);
 
-              return (
-                <Card key={doc.id} className="relative transition-all hover:border-primary/40 flex flex-col justify-between">
-                  <CardContent className="p-4 space-y-3">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex items-center gap-2.5">
-                        <div className="flex size-9 items-center justify-center rounded-lg bg-primary/10 text-primary shrink-0">
-                          {isImage ? <ImageIcon className="size-5" /> : <FileText className="size-5" />}
+                return (
+                  <Card key={doc.id} className="relative transition-all hover:border-primary/40 flex flex-col justify-between">
+                    <CardContent className="p-4 space-y-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-2.5">
+                          <div className="flex size-9 items-center justify-center rounded-lg bg-primary/10 text-primary shrink-0">
+                            {isImage ? <ImageIcon className="size-5" /> : <FileText className="size-5" />}
+                          </div>
+                          <div>
+                            <p className="text-sm font-semibold tracking-tight">{doc.name}</p>
+                            <p className="text-[11px] text-muted-foreground">
+                              {doc.doc_type} · <span className="font-semibold text-primary">v{doc.version}</span> {isImage ? "· Image" : ""}
+                            </p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="text-sm font-semibold tracking-tight">{doc.name}</p>
-                          <p className="text-[11px] text-muted-foreground">
-                            {doc.doc_type} · <span className="font-semibold text-primary">v{doc.version}</span> {isImage ? "· Image" : ""}
-                          </p>
-                        </div>
+                        <Badge tone="muted" className="text-[10px]">
+                          {category}
+                        </Badge>
                       </div>
-                      <Badge tone="muted" className="text-[10px]">
-                        {category}
-                      </Badge>
-                    </div>
 
-                    <div className="rounded border bg-muted/30 p-2.5 space-y-1.5 text-xs">
-                      <div className="flex items-center justify-between text-muted-foreground">
-                        <span>File:</span>
-                        <span className="font-mono text-foreground truncate max-w-[180px]" title={doc.filename}>
-                          {doc.filename}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between text-muted-foreground">
-                        <span>Size:</span>
-                        <span className="font-medium text-foreground">{formatBytes(doc.file_size)}</span>
-                      </div>
-                      {doc.expiry_date && (
+                      <div className="rounded border bg-muted/30 p-2.5 space-y-1.5 text-xs">
                         <div className="flex items-center justify-between text-muted-foreground">
-                          <span className="flex items-center gap-1">
-                            <Calendar className="size-3" /> Expiry:
+                          <span>File:</span>
+                          <span className="font-mono text-foreground truncate max-w-[180px]" title={doc.filename}>
+                            {doc.filename}
                           </span>
-                          <span className="font-medium text-foreground">{doc.expiry_date}</span>
                         </div>
-                      )}
-                    </div>
+                        <div className="flex items-center justify-between text-muted-foreground">
+                          <span>Size:</span>
+                          <span className="font-medium text-foreground">{formatBytes(doc.file_size)}</span>
+                        </div>
+                        {doc.expiry_date && (
+                          <div className="flex items-center justify-between text-muted-foreground">
+                            <span className="flex items-center gap-1">
+                              <Calendar className="size-3" /> Expiry:
+                            </span>
+                            <span className="font-medium text-foreground">{doc.expiry_date}</span>
+                          </div>
+                        )}
+                      </div>
 
-                    {/* Action buttons bar */}
-                    <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t">
-                      <div className="flex items-center gap-1.5">
-                        <Button
-                          variant="outline"
-                          onClick={() => handleOpenView(doc)}
-                          className="h-7 text-xs gap-1 px-2.5"
-                          title="View details and version history"
-                        >
-                          <Eye className="size-3" /> View
-                        </Button>
-                        <Button
-                          variant="outline"
-                          onClick={() => handleOpenUpdate(doc)}
-                          className="h-7 text-xs gap-1 px-2.5 text-primary border-primary/30 hover:bg-primary/10"
-                          title="Upload a new version of this file"
-                        >
-                          <RefreshCw className="size-3" /> Update
-                        </Button>
+                      {/* Action buttons bar */}
+                      <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t">
+                        <div className="flex items-center gap-1.5">
+                          <Button
+                            variant="outline"
+                            onClick={() => handleOpenView(doc)}
+                            className="h-7 text-xs gap-1 px-2.5"
+                            title="View details and version history"
+                          >
+                            <Eye className="size-3" /> View
+                          </Button>
+                          <Button
+                            variant="outline"
+                            onClick={() => handleOpenUpdate(doc)}
+                            className="h-7 text-xs gap-1 px-2.5 text-primary border-primary/30 hover:bg-primary/10"
+                            title="Upload a new version of this file"
+                          >
+                            <RefreshCw className="size-3" /> Update
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            onClick={() => handleOpenEdit(doc)}
+                            className="h-7 text-xs gap-1 px-2 text-muted-foreground hover:text-foreground"
+                            title="Edit display name or dates"
+                          >
+                            <Edit2 className="size-3" /> Edit
+                          </Button>
+                        </div>
+
                         <Button
                           variant="ghost"
-                          onClick={() => handleOpenEdit(doc)}
-                          className="h-7 text-xs gap-1 px-2 text-muted-foreground hover:text-foreground"
-                          title="Edit display name or dates"
+                          onClick={() => handleDelete(doc.id, doc.name)}
+                          className="h-7 text-xs text-[var(--color-danger)] hover:bg-[var(--color-danger)]/10 px-2"
                         >
-                          <Edit2 className="size-3" /> Edit
+                          <Trash2 className="size-3.5" />
                         </Button>
                       </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
 
-                      <Button
-                        variant="ghost"
-                        onClick={() => handleDelete(doc.id, doc.name)}
-                        className="h-7 text-xs text-[var(--color-danger)] hover:bg-[var(--color-danger)]/10 px-2"
-                      >
-                        <Trash2 className="size-3.5" />
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
+            <PaginationBar
+              currentPage={currentPage}
+              totalPages={totalPages}
+              totalItems={filteredDocs.length}
+              pageSize={pageSize}
+              onPageChange={setCurrentPage}
+              onPageSizeChange={(size) => {
+                setPageSize(size);
+                setCurrentPage(1);
+              }}
+              itemName="documents"
+            />
           </div>
         )}
       </div>

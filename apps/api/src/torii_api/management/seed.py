@@ -520,7 +520,26 @@ async def seed() -> None:
                 )
 
         created_workflow_definitions = 0
-        # Static YAML pack workflow definitions are disabled: all scopes are research-driven via live web search + LLM.
+        workflow_rows = workflow_rows_from_packs(packs)
+        for row in workflow_rows:
+            j_code = row["jurisdiction"]
+            cat_code = row["visa_category"]
+            act_code = row["action"]
+            jid = jurisdiction_ids.get(j_code)
+            cid = category_ids.get((j_code, cat_code))
+            aid = action_ids.get((j_code, act_code))
+            if jid and cid and aid:
+                created_workflow_definitions += await _seed_workflow(
+                    session,
+                    jurisdiction_id=jid,
+                    visa_category_id=cid,
+                    case_action_id=aid,
+                    questions=row["questions"],
+                    rules=row["rules"],
+                    documents=row["documents"],
+                    form=row.get("form"),
+                    forms=row.get("forms"),
+                )
 
         await session.commit()
 

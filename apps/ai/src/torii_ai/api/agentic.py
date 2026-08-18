@@ -17,6 +17,10 @@ from torii_ai.config import Settings, get_settings
 from torii_ai.llm.groq import FakeChatClient, GroqChatClient
 from torii_ai.llm.nvidia import NvidiaChatClient
 from torii_ai.services.agentic_research import AgenticStageResearcher, Stage, StageResearchRequest
+from torii_ai.services.eligibility_evaluator import (
+    AIElegibilityEvaluator,
+    AIEvaluationRequest,
+)
 from torii_ai.tools.tavily import FakeSearchClient, TavilyClient
 
 log = structlog.get_logger()
@@ -26,11 +30,11 @@ router = APIRouter(prefix="/ai/agentic", tags=["agentic"])
 
 class StageResearchIn(BaseModel):
     stage: Stage
-    destination_code: str = Field(min_length=2, max_length=8, examples=["JP"])
+    destination_code: str = Field(min_length=2, max_length=16, examples=["JP"])
     purpose_code: str = Field(min_length=1, max_length=32, examples=["tourist"])
     action_code: str = Field(min_length=1, max_length=32, examples=["new_application"])
-    nationality: str | None = Field(default=None, max_length=8, examples=["BD"])
-    residence_country: str | None = Field(default=None, max_length=8, examples=["BD"])
+    nationality: str | None = Field(default=None, max_length=64, examples=["BD"])
+    residence_country: str | None = Field(default=None, max_length=64, examples=["BD"])
     # Stage-defined accumulated context — see agentic_research.StageResearchRequest.
     context: dict[str, Any] = Field(default_factory=dict)
 
@@ -43,6 +47,24 @@ class StageResearchOut(BaseModel):
     researched_at: str
 
 
+class AIEvaluateEligibilityIn(BaseModel):
+    destination_code: str = Field(min_length=2, max_length=16, examples=["JP"])
+    purpose_code: str = Field(min_length=1, max_length=32, examples=["tourist"])
+    action_code: str = Field(min_length=1, max_length=32, examples=["new_application"])
+    nationality: str | None = Field(default=None, max_length=64, examples=["BD"])
+    residence_country: str | None = Field(default=None, max_length=64, examples=["BD"])
+    answers: dict[str, Any] = Field(default_factory=dict)
+    rules: list[dict[str, Any]] = Field(default_factory=list)
+    context: dict[str, Any] = Field(default_factory=dict)
+
+
+class AIEvaluateEligibilityOut(BaseModel):
+    result: str
+    findings: list[dict[str, Any]]
+    disclaimer: str
+    summary: str | None = None
+
+
 def _build_researcher(settings: Settings) -> AgenticStageResearcher:
     """Real Tavily/LLM clients when configured, fake stand-ins otherwise (local dev/tests)."""
     search = TavilyClient(settings) if settings.tavily_api_key else FakeSearchClient()
@@ -53,6 +75,16 @@ def _build_researcher(settings: Settings) -> AgenticStageResearcher:
     else:
         chat = FakeChatClient()
     return AgenticStageResearcher(search=search, chat=chat, settings=settings)
+
+
+def _build_evaluator(settings: Settings) -> AIElegibilityEvaluator:
+    if settings.groq_api_key:
+        chat = GroqChatClient(settings, model=settings.groq_extract_model or settings.groq_model)
+    elif settings.nvidia_api_key:
+        chat = NvidiaChatClient(settings)
+    else:
+        chat = FakeChatClient()
+    return AIElegibilityEvaluator(chat=chat, settings=settings)
 
 
 @router.post("/research-stage", response_model=StageResearchOut)
@@ -88,3 +120,39 @@ async def research_stage(payload: StageResearchIn) -> StageResearchOut:
         insufficient=result.insufficient,
         researched_at=result.researched_at,
     )
+
+
+@router.post("/evaluate-eligibility", response_model=AIEvaluateEligibilityOut)
+async def evaluate_eligibility_endpoint(payload: AIEvaluateEligibilityIn) -> AIEvaluateEligibilityOut:
+    """Run AI-assisted eligibility screening on applicant answers."""
+    settings = get_settings()
+    evaluator = _build_evaluator(settings)
+    request = AIEvaluationRequest(
+        destination_code=payload.destination_code,
+        purpose_code=payload.purpose_code,
+        action_code=payload.action_code,
+        nationality=payload.nationality,
+        residence_country=payload.residence_country,
+        answers=payload.answers,
+        rules=payload.rules,
+        context=payload.context,
+    )
+    log.info(
+        "agentic.evaluate_eligibility.start",
+        destination=payload.destination_code,
+        purpose=payload.purpose_code,
+        nationality=payload.nationality,
+    )
+    try:
+        result = await evaluator.evaluate(request)
+    except Exception as exc:
+        log.error("agentic.evaluate_eligibility.failed", error=str(exc))
+        raise HTTPException(status_code=500, detail=f"AI eligibility evaluation failed: {exc}") from exc
+
+    return AIEvaluateEligibilityOut(
+        result=result.get("result", "pass"),
+        findings=result.get("findings", []),
+        disclaimer=result.get("disclaimer", "This is an AI-assisted preparation check based on official published criteria, not legal advice or a government decision."),
+        summary=result.get("summary"),
+    )
+

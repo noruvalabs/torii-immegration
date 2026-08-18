@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -80,8 +81,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             or (":memory:" in settings.database_url)
             or (settings.database_url == "sqlite+aiosqlite://")
         )
-        if app.state.arq_pool is None and not is_test:
-            import asyncio
+        if not is_test:
             from torii_api.worker.scheduler import poll_outbox
 
             async def _in_process_outbox_drainer() -> None:

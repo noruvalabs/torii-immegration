@@ -25,7 +25,6 @@ import {
   STEPS, phaseToStep, canVisitStep, nextWorkflowStep,
   type Step,
 } from "@/components/applicant/steps";
-import { CaseDocuments } from "@/components/applicant/CaseDocuments";
 
 
 export default function CaseDetailPage() {
@@ -506,8 +505,6 @@ export default function CaseDetailPage() {
           )}
         </CardContent>
       </Card>
-
-      {token && <CaseDocuments caseId={caseId} token={token} />}
 
     </div>
   );

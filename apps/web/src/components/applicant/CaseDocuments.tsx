@@ -1,9 +1,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { FileText, Loader2, Download } from "lucide-react";
+import { FileText, Loader2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { getDocuments, type Document } from "@/lib/api/cases";
 
 type CaseDocumentsProps = {
@@ -68,40 +76,39 @@ export function CaseDocuments({ caseId, token }: CaseDocumentsProps) {
             Documents that have been uploaded or attached to this case.
           </p>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-muted/50 text-xs text-muted-foreground">
-              <tr>
-                <th className="px-6 py-3 font-medium">Filename</th>
-                <th className="px-6 py-3 font-medium">Type</th>
-                <th className="px-6 py-3 font-medium">Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {documents.map((doc) => (
-                <tr key={doc.id} className="hover:bg-muted/30">
-                  <td className="px-6 py-3">
-                    <div className="flex items-center gap-2">
-                      <FileText className="size-4 text-muted-foreground" />
-                      <span className="font-medium text-foreground">{doc.filename}</span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-3 text-muted-foreground">
-                    {doc.doc_type.replace(/_/g, " ")}
-                  </td>
-                  <td className="px-6 py-3">
-                    {doc.confirmed ? (
-                      <Badge tone="success">Confirmed</Badge>
-                    ) : (
-                      <Badge tone="default">Uploaded</Badge>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="px-6">Filename</TableHead>
+              <TableHead className="px-6">Type</TableHead>
+              <TableHead className="px-6">Status</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {documents.map((doc) => (
+              <TableRow key={doc.id}>
+                <TableCell className="px-6">
+                  <div className="flex items-center gap-2">
+                    <FileText className="size-4 text-muted-foreground" />
+                    <span className="font-medium text-foreground">{doc.filename}</span>
+                  </div>
+                </TableCell>
+                <TableCell className="px-6 text-muted-foreground">
+                  {doc.doc_type.replace(/_/g, " ")}
+                </TableCell>
+                <TableCell className="px-6">
+                  {doc.confirmed ? (
+                    <Badge tone="success">Confirmed</Badge>
+                  ) : (
+                    <Badge tone="default">Uploaded</Badge>
+                  )}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
       </CardContent>
     </Card>
   );
 }
+

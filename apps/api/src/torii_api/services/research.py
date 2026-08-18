@@ -39,7 +39,13 @@ def research_is_usable(research: ScopeResearch | None, now: datetime | None = No
         return False
     if research.expires_at is None:
         return False
-    return (now or datetime.now(UTC)) < research.expires_at
+    current = now or datetime.now(UTC)
+    expires = research.expires_at
+    if expires.tzinfo is None and current.tzinfo is not None:
+        expires = expires.replace(tzinfo=UTC)
+    elif expires.tzinfo is not None and current.tzinfo is None:
+        current = current.replace(tzinfo=UTC)
+    return current < expires
 
 
 def research_slice(payload: dict[str, Any], key: str) -> list[dict[str, Any]]:
