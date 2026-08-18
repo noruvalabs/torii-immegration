@@ -11,9 +11,11 @@ import {
   HelpCircle,
   ExternalLink,
   ShieldCheck,
+  Download,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/lib/auth-context";
 import type { GeneratedForm } from "./types";
 
 type FormsStepProps = {
@@ -21,14 +23,44 @@ type FormsStepProps = {
   loading: boolean;
   onGenerate: () => void;
   intakeAnswers?: Record<string, unknown>;
+  caseId?: number;
+  reference?: string;
 };
 
 function getFormMetadata(code: string): { title: string; purpose: string; officialUrl?: string } {
   const c = code.toLowerCase();
-  if (c.includes("ds_160") || c.includes("ds160") || c.includes("b1") || c.includes("b2")) {
+  if (c === "i901" || c.includes("i901") || c.includes("sevis_fee")) {
     return {
-      title: "US Nonimmigrant Visa Application (DS-160)",
-      purpose: "Official US Department of State form required for all tourist (B2) and business (B1) travel. Collects biographical data, travel itinerary, and security declaration.",
+      title: "Form I-901 (SEVIS Fee Payment Confirmation)",
+      purpose: "Mandatory Student and Exchange Visitor Program (SEVP) fee payment filed online at FMJfee.com ($350 for F-1 / $220 for J-1). Required before consular interview.",
+      officialUrl: "https://www.fmjfee.com/i901fee/index.html",
+    };
+  }
+  if (c === "i20" || c.includes("i20") || c.includes("i-20")) {
+    return {
+      title: "Form I-20 (Certificate of Eligibility for F-1 Student Status)",
+      purpose: "Official Department of Homeland Security certificate issued by your SEVP-certified U.S. school confirming admission, SEVIS ID, degree level, and estimated cost.",
+      officialUrl: "https://www.ice.gov/sevis",
+    };
+  }
+  if (c === "i134" || c.includes("i134") || c.includes("i-134") || c.includes("affidavit")) {
+    return {
+      title: "Form I-134 (Declaration of Financial Support)",
+      purpose: "USCIS declaration executed by a sponsor (parent, relative, or employer) proving sufficient liquid funds and income to support the applicant without unauthorized work.",
+      officialUrl: "https://www.uscis.gov/i-134",
+    };
+  }
+  if (c.includes("appointment") || c.includes("mrv")) {
+    return {
+      title: "U.S. Visa Appointment Portal & MRV Fee Scheduling",
+      purpose: "Official U.S. Embassy scheduling profile generating the MRV fee payment slip ($185) and the in-person interview confirmation appointment letter.",
+      officialUrl: "https://travel.state.gov/content/travel/en/us-visas/visa-information-resources/policy-updates.html",
+    };
+  }
+  if (c.includes("ds_160") || c.includes("ds160") || c.includes("b1") || c.includes("b2") || c.includes("f1")) {
+    return {
+      title: "Online Nonimmigrant Visa Application (Form DS-160)",
+      purpose: "Official U.S. Department of State application submitted via CEAC. Collects biographical data, passport info, travel plans, SEVIS/educational records, and security screening.",
       officialUrl: "https://ceac.state.gov/genniv/",
     };
   }
@@ -46,20 +78,67 @@ function getFormMetadata(code: string): { title: string; purpose: string; offici
       officialUrl: "https://www.gov.uk/standard-visitor-visa/apply",
     };
   }
+  if (c.includes("extension") || c.includes("stay")) {
+    return {
+      title: "Application for Extension of Period of Stay (在留期間更新許可申請書)",
+      purpose: "Official Immigration Services Agency of Japan (MOJ) form for extending lawful residence status in Japan.",
+      officialUrl: "https://www.moj.go.jp/isa/applications/procedures/16-3.html",
+    };
+  }
   return {
-    title: "Standard Tourist / Visitor Visa Application Form",
-    purpose: "Mandated government filing form required by immigration authorities to verify passport details, travel itinerary, return ticket, and financial sufficiency prior to entry authorization.",
+    title: "Official Visa Application Form",
+    purpose: "Mandated government filing form required by immigration authorities to verify applicant credentials, itinerary, and financial backing.",
     officialUrl: undefined,
   };
 }
 
-export function FormsStep({ forms, loading, onGenerate, intakeAnswers }: FormsStepProps) {
+export function FormsStep({
+  forms,
+  loading,
+  onGenerate,
+  intakeAnswers,
+  caseId,
+  reference,
+}: FormsStepProps) {
+  const { token } = useAuth();
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [downloadingPdf, setDownloadingPdf] = useState<string | null>(null);
 
   function handleCopy(key: string, value: string) {
     void navigator.clipboard.writeText(value);
     setCopiedKey(key);
     setTimeout(() => setCopiedKey(null), 2000);
+  }
+
+  async function handleDownloadPdf(formCode: string) {
+    const activeToken = token || (typeof window !== "undefined" ? localStorage.getItem("torii_token") : null);
+    if (!activeToken || !caseId) return;
+    setDownloadingPdf(formCode);
+    try {
+      const res = await fetch(`/backend/v1/cases/${caseId}/pdf/application-form`, {
+        headers: { Authorization: `Bearer ${activeToken}` },
+      });
+      if (!res.ok) {
+        const errDetail = await res.text();
+        console.error("PDF download failed:", res.status, errDetail);
+        alert(`Failed to download form PDF: ${errDetail || res.statusText}`);
+        return;
+      }
+      const buffer = await res.arrayBuffer();
+      const blob = new Blob([buffer], { type: "application/pdf" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${reference || `Case-${caseId}`}_Application_Form.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("PDF download error:", err);
+    } finally {
+      setDownloadingPdf(null);
+    }
   }
 
   return (
@@ -71,10 +150,23 @@ export function FormsStep({ forms, loading, onGenerate, intakeAnswers }: FormsSt
             Torii automatically maps your intake data and scanned documents directly into official embassy application forms.
           </p>
         </div>
-        <Button onClick={onGenerate} disabled={loading}>
-          {loading ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Sparkles className="mr-2 size-4" />}
-          {forms.length === 0 ? "Auto-fill official forms" : "Regenerate forms"}
-        </Button>
+        <div className="flex items-center gap-2">
+          {caseId && forms.length > 0 && (
+            <Button
+              variant="outline"
+              onClick={() => handleDownloadPdf("all")}
+              disabled={downloadingPdf !== null}
+              className="gap-1.5"
+            >
+              {downloadingPdf ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
+              Download PDF Form
+            </Button>
+          )}
+          <Button onClick={onGenerate} disabled={loading}>
+            {loading ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Sparkles className="mr-2 size-4" />}
+            {forms.length === 0 ? "Auto-fill official forms" : "Regenerate forms"}
+          </Button>
+        </div>
       </div>
 
       {forms.length === 0 ? (
@@ -142,16 +234,33 @@ export function FormsStep({ forms, loading, onGenerate, intakeAnswers }: FormsSt
                     )}
                   </div>
 
-                  {meta.officialUrl && (
-                    <a
-                      href={meta.officialUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex items-center gap-1 text-xs text-primary font-medium hover:underline shrink-0"
-                    >
-                      Government Portal <ExternalLink className="size-3" />
-                    </a>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {caseId && (
+                      <Button
+                        variant="outline"
+                        onClick={() => handleDownloadPdf(form.form_code)}
+                        disabled={downloadingPdf === form.form_code}
+                        className="text-xs h-8 gap-1.5 px-3 py-1"
+                      >
+                        {downloadingPdf === form.form_code ? (
+                          <Loader2 className="size-3.5 animate-spin" />
+                        ) : (
+                          <Download className="size-3.5" />
+                        )}
+                        Download PDF
+                      </Button>
+                    )}
+                    {meta.officialUrl && (
+                      <a
+                        href={meta.officialUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1 text-xs text-primary font-medium hover:underline shrink-0"
+                      >
+                        Government Portal <ExternalLink className="size-3" />
+                      </a>
+                    )}
+                  </div>
                 </div>
 
                 {/* Why required explanation */}

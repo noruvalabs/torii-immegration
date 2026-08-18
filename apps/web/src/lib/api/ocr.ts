@@ -1,4 +1,4 @@
-const AI_API = "/assistant";
+const AI_API = "/assistant/ai";
 
 export type DocumentType = "passport" | "residence_card" | "employment_contract" | "proof_of_funds" | "travel_itinerary";
 
@@ -17,7 +17,7 @@ export function extractDocumentFields(
   filename: string,
   hintText?: string,
 ): Promise<OCRResult> {
-  const token = localStorage.getItem("token");
+  const token = localStorage.getItem("torii_token");
   return fetch(`${AI_API}/ocr/extract`, {
     method: "POST",
     headers: {
@@ -42,7 +42,7 @@ export function extractFromFile(
   file: File,
   docType: DocumentType,
 ): Promise<OCRResult> {
-  const token = localStorage.getItem("token");
+  const token = localStorage.getItem("torii_token");
   const formData = new FormData();
   formData.append("file", file);
   formData.append("doc_type", docType);

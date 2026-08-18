@@ -89,12 +89,11 @@ class DocumentTypesOut(BaseModel):
 async def list_document_types() -> DocumentTypesOut:
     """List all supported document types."""
     doc_types = get_document_types()
-    return DocumentTypesOut(
-        document_types=[DocumentTypeOut(**dt) for dt in doc_types]
-    )
+    return DocumentTypesOut(document_types=[DocumentTypeOut(**dt) for dt in doc_types])
 
 
-@router.get("/", response_model=list[WalletDocumentOut])
+@router.get("", response_model=list[WalletDocumentOut])
+@router.get("/", response_model=list[WalletDocumentOut], include_in_schema=False)
 async def get_wallet(
     current_user: CurrentUserDep,
     session: SessionDep,
@@ -127,6 +126,7 @@ async def upload_wallet_document(
 ) -> WalletUploadOut:
     """Upload a document to the wallet."""
     from torii_api.services.wallet import normalize_doc_type
+
     doc_type = normalize_doc_type(doc_type)
 
     # Read file content
@@ -211,6 +211,49 @@ async def expire_document(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 
+    return WalletDocumentOut.model_validate(document)
+
+
+class WalletDocumentUpdateIn(BaseModel):
+    name: str | None = None
+    issued_date: str | None = None
+    expiry_date: str | None = None
+    notes: str | None = None
+
+
+@router.patch("/{document_id}", response_model=WalletDocumentOut)
+async def update_wallet_document_metadata(
+    current_user: CurrentUserDep,
+    session: SessionDep,
+    document_id: int,
+    payload: WalletDocumentUpdateIn,
+) -> WalletDocumentOut:
+    """Update metadata for a document (name, issued_date, expiry_date)."""
+    from sqlalchemy import select
+
+    from torii_api.db.models import DocumentWalletItem
+
+    result = await session.execute(
+        select(DocumentWalletItem).where(
+            DocumentWalletItem.id == document_id,
+            DocumentWalletItem.user_id == current_user.id,
+        )
+    )
+    document = result.scalar_one_or_none()
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    if payload.name is not None:
+        document.name = payload.name.strip()
+    if payload.issued_date is not None:
+        document.issued_date = payload.issued_date
+    if payload.expiry_date is not None:
+        document.expiry_date = payload.expiry_date
+    if payload.notes is not None:
+        document.notes = payload.notes
+
+    await session.flush()
+    await session.refresh(document)
     return WalletDocumentOut.model_validate(document)
 
 

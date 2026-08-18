@@ -76,12 +76,8 @@ def upgrade() -> None:
     op.create_index(op.f("ix_case_actions_code"), "case_actions", ["code"], unique=False)
 
     with op.batch_alter_table("cases", schema=None) as batch_op:
-        batch_op.add_column(
-            sa.Column("visa_category_id", sa.Integer(), nullable=True)
-        )
-        batch_op.add_column(
-            sa.Column("case_action_id", sa.Integer(), nullable=True)
-        )
+        batch_op.add_column(sa.Column("visa_category_id", sa.Integer(), nullable=True))
+        batch_op.add_column(sa.Column("case_action_id", sa.Integer(), nullable=True))
         batch_op.create_index(
             batch_op.f("ix_cases_visa_category_id"), ["visa_category_id"], unique=False
         )

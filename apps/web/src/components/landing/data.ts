@@ -41,12 +41,12 @@ export const FAQ_ORDER: FaqId[] = [
   "finalOutput",
 ];
 
-export type JurisdictionId = "jp" | "us" | "de";
+export type JurisdictionId = "jp" | "us" | "uk";
 
 export const JURISDICTION_ORDER: { id: JurisdictionId; flag: string; live: boolean }[] = [
   { id: "jp", flag: "🇯🇵", live: true },
   { id: "us", flag: "🇺🇸", live: true },
-  { id: "de", flag: "🇩🇪", live: false },
+  { id: "uk", flag: "🇬🇧", live: true },
 ];
 
 export type PricingTierId = "scope" | "guided" | "review";

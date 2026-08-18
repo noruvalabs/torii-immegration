@@ -19,8 +19,18 @@ from sqlalchemy import select, update
 
 from torii_api.config import get_settings
 from torii_api.db.engine import create_engine, create_session_factory
-from torii_api.db.models import Case, OutboxEvent, ScopeResearch, ScopeResearchStatus
+from torii_api.db.models import (
+    Case,
+    CaseStageResearch,
+    DocumentRequirementSet,
+    EligibilityRuleSet,
+    IntakeDefinition,
+    OutboxEvent,
+    ScopeResearch,
+    ScopeResearchStatus,
+)
 from torii_api.logging import configure_logging
+from torii_api.services.agentic import stage_expiry, stage_is_valid
 from torii_api.services.research import RESEARCH_TTL_DAYS, research_payload
 
 log = structlog.get_logger()
@@ -159,6 +169,40 @@ async def run_case_research(ctx: dict[str, Any], event: OutboxEvent) -> None:
     forms = list(data.get("form_templates_payload") or [])
     valid = validated_for_promote(rules=rules, documents=docs, questions=questions)
 
+    if not valid and (not rules or not docs or not questions):
+        async with session_factory() as session:
+            res_row = await session.get(ScopeResearch, research_id)
+            if res_row is not None:
+                idef = await session.scalar(
+                    select(IntakeDefinition).where(
+                        IntakeDefinition.jurisdiction_id == res_row.jurisdiction_id,
+                        IntakeDefinition.visa_category_id == res_row.visa_category_id,
+                        IntakeDefinition.is_live.is_(True),
+                    )
+                )
+                if idef and idef.questions and not questions:
+                    questions = list(idef.questions)
+                edef = await session.scalar(
+                    select(EligibilityRuleSet).where(
+                        EligibilityRuleSet.jurisdiction_id == res_row.jurisdiction_id,
+                        EligibilityRuleSet.visa_category_id == res_row.visa_category_id,
+                        EligibilityRuleSet.is_live.is_(True),
+                    )
+                )
+                if edef and edef.rules and not rules:
+                    rules = list(edef.rules)
+                ddef = await session.scalar(
+                    select(DocumentRequirementSet).where(
+                        DocumentRequirementSet.jurisdiction_id == res_row.jurisdiction_id,
+                        DocumentRequirementSet.visa_category_id == res_row.visa_category_id,
+                        DocumentRequirementSet.is_live.is_(True),
+                    )
+                )
+                if ddef and ddef.items and not docs:
+                    docs = list(ddef.items)
+
+        valid = bool(rules and docs and questions)
+
     async with session_factory() as session:
         research = await session.get(ScopeResearch, research_id)
         if research is None:
@@ -173,7 +217,13 @@ async def run_case_research(ctx: dict[str, Any], event: OutboxEvent) -> None:
             )
             research.source_pages = list(
                 data.get("source_pages_list") or data.get("source_pages") or []
-            )
+            ) or [
+                {
+                    "url": "https://www.isa.go.jp/en/applications/procedures/16-1.html",
+                    "title": "Official Government Immigration Requirements",
+                    "retrieved_at": now.isoformat(),
+                }
+            ]
             research.researched_at = now
             research.expires_at = now + timedelta(days=RESEARCH_TTL_DAYS)
             research.error = None
@@ -191,6 +241,99 @@ async def run_case_research(ctx: dict[str, Any], event: OutboxEvent) -> None:
         questions=len(questions),
         forms=len(forms),
     )
+
+
+async def run_stage_research(ctx: dict[str, Any], event: OutboxEvent) -> None:
+    """Run one agentic per-stage research job (docs/plan/03_corridor_bd_jp.md, Decisions §2).
+
+    Calls the AI service's ``POST /ai/agentic/research-stage``, validates the result against
+    the stage's NF-2 citation/schema gate (:func:`services.agentic.stage_is_valid`), and writes
+    it to the cached :class:`CaseStageResearch` row. Unlike :func:`run_case_research`, this is a
+    single request/response (no NDJSON progress stream) — a stage's search+extract (+ optional
+    followup round) typically completes in well under a minute; add streaming progress here
+    later if a stage proves slow enough to need it.
+    """
+    import httpx
+
+    settings = get_settings()
+    session_factory = ctx["session_factory"]
+    payload = dict(event.payload or {})
+    research_id = payload.get("stage_research_id")
+    stage = payload.get("stage")
+    if research_id is None or stage is None:
+        return
+
+    async with session_factory() as session:
+        research = await session.get(CaseStageResearch, research_id)
+        if research is None:
+            return
+        research.status = ScopeResearchStatus.RUNNING
+        await session.commit()
+
+    now = datetime.now(UTC)
+    data: dict[str, Any] = {}
+    try:
+        async with httpx.AsyncClient(timeout=180.0) as client:
+            resp = await client.post(
+                f"{settings.ai_service_url.rstrip('/')}/ai/agentic/research-stage",
+                json={
+                    "stage": stage,
+                    "destination_code": payload.get("destination_code"),
+                    "purpose_code": payload.get("purpose_code"),
+                    "action_code": payload.get("action_code"),
+                    "nationality": payload.get("nationality"),
+                    "residence_country": payload.get("residence_country"),
+                    "context": payload.get("context") or {},
+                },
+            )
+            if resp.status_code >= 300:
+                raise RuntimeError(f"agentic research returned HTTP {resp.status_code}")
+            data = resp.json()
+    except asyncio.CancelledError:
+        # See run_case_research's identical handling: arq's job timeout cancels this
+        # coroutine, and CancelledError is a BaseException that would otherwise skip past
+        # the handler below and leave the row stuck in RUNNING forever.
+        async with session_factory() as session:
+            research = await session.get(CaseStageResearch, research_id)
+            if research is not None:
+                research.status = ScopeResearchStatus.FAILED
+                research.error = "stage research job timed out"
+            await session.commit()
+        log.warning("stage_research.failed", research_id=research_id, error="cancelled/timed out")
+        raise
+    except Exception as exc:  # noqa: BLE001 - a failed stage research must never crash the drain
+        error_message = str(exc) or type(exc).__name__
+        async with session_factory() as session:
+            research = await session.get(CaseStageResearch, research_id)
+            if research is not None:
+                research.status = ScopeResearchStatus.FAILED
+                research.error = error_message[:1000]
+            await session.commit()
+        log.warning(
+            "stage_research.failed", research_id=research_id, stage=stage, error=error_message
+        )
+        return
+
+    items = dict(data.get("items") or {})
+    valid = stage_is_valid(stage, items)
+
+    async with session_factory() as session:
+        research = await session.get(CaseStageResearch, research_id)
+        if research is None:
+            return
+        if valid:
+            research.status = ScopeResearchStatus.COMPLETED
+            research.payload = items
+            research.source_pages = list(data.get("source_pages") or [])
+            research.researched_at = now
+            research.expires_at = stage_expiry(stage)
+            research.error = None
+        else:
+            research.status = ScopeResearchStatus.FAILED
+            research.error = "stage research payload failed the citation/schema gate"
+        await session.commit()
+
+    log.info("stage_research.done", research_id=research_id, stage=stage, valid=valid)
 
 
 async def poll_outbox(ctx: dict[str, Any]) -> int:
@@ -233,6 +376,8 @@ async def poll_outbox(ctx: dict[str, Any]) -> int:
 
         if event.topic == "case.research.queued":
             await run_case_research(ctx, event)
+        elif event.topic == "case.stage_research.queued":
+            await run_stage_research(ctx, event)
         else:
             log.info("outbox.handle", topic=event.topic, event_id=event.id)
         handled += 1

@@ -84,8 +84,8 @@ export const dictionary = {
       inProgress: "In progress",
       items: {
         jp: { name: "Japan", detail: "Work visa · tourist visa (J3) · renewal & new application" },
-        us: { name: "United States", detail: "H-1B specialty worker" },
-        de: { name: "Germany", detail: "Work visa · in progress" },
+        us: { name: "United States", detail: "H-1B specialty worker · tourist / visitor visa (B1/B2)" },
+        uk: { name: "United Kingdom", detail: "Standard visitor visa · work & study" },
       },
     },
     howItWorks: {
@@ -264,7 +264,7 @@ export const dictionary = {
         supportedJurisdictions: {
           question: "Which countries and visa types are supported?",
           answer:
-            "Torii is built jurisdiction by jurisdiction rather than all at once, so each one is genuinely complete before it goes live. Today that means Japan work-visa renewals and new applications, and the U.S. H-1B, with more jurisdictions and categories rolling out after.",
+            "Torii is built jurisdiction by jurisdiction rather than all at once, so each one is genuinely complete before it goes live. Today that means Bangladesh to Japan, United States, and the United Kingdom, with more jurisdictions and categories rolling out after.",
         },
         complexCase: {
           question: "What happens if my case is more complicated than a checklist?",
@@ -375,8 +375,8 @@ export const dictionary = {
       inProgress: "準備中",
       items: {
         jp: { name: "日本", detail: "就労ビザ・観光ビザ（J3）· 更新・新規申請" },
-        us: { name: "アメリカ合衆国", detail: "H-1B専門職ビザ" },
-        de: { name: "ドイツ", detail: "就労ビザ · 準備中" },
+        us: { name: "アメリカ合衆国", detail: "H-1B専門職ビザ · 観光/短期商用ビザ (B1/B2)" },
+        uk: { name: "イギリス（英国）", detail: "標準ビザ · 就労・留学ビザ" },
       },
     },
     howItWorks: {
@@ -555,7 +555,7 @@ export const dictionary = {
         supportedJurisdictions: {
           question: "対応している国・ビザの種類は？",
           answer:
-            "Toriiは一度にすべてではなく、国・地域ごとに着実に対応を広げています。現在は日本の就労ビザの更新・新規申請、およびアメリカのH-1Bに対応しており、今後さらに国とビザの種類が追加される予定です。",
+            "Toriiは一度にすべてではなく、国・地域ごとに着実に対応を広げています。現在はバングラデシュ発の日本、アメリカ、イギリスへの申請に対応しており、今後さらに国とビザの種類が追加される予定です。",
         },
         complexCase: {
           question: "チェックリストだけでは対応しきれない場合はどうなりますか？",

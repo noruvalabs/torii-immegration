@@ -7,9 +7,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 
-async def _register_and_login(
-    client: AsyncClient, email: str
-) -> str:
+async def _register_and_login(client: AsyncClient, email: str) -> str:
     """Register a user and return their JWT token."""
     await client.post(
         "/v1/auth/register",
@@ -50,9 +48,7 @@ async def test_list_users_requires_auth(client: AsyncClient) -> None:
     assert resp.status_code == 401
 
 
-async def test_admin_can_list_users(
-    client: AsyncClient, engine: AsyncEngine
-) -> None:
+async def test_admin_can_list_users(client: AsyncClient, engine: AsyncEngine) -> None:
     await _seed_admin(engine)
     login = await client.post(
         "/v1/auth/login",
@@ -72,9 +68,7 @@ async def test_admin_can_list_users(
     assert any(u["email"] == "real-admin@example.com" for u in users)
 
 
-async def test_admin_can_filter_by_role(
-    client: AsyncClient, engine: AsyncEngine
-) -> None:
+async def test_admin_can_filter_by_role(client: AsyncClient, engine: AsyncEngine) -> None:
     await _seed_admin(engine)
     # Create an applicant
     await client.post(
@@ -99,9 +93,7 @@ async def test_admin_can_filter_by_role(
     assert all(u["role"] == "applicant" for u in users)
 
 
-async def test_admin_can_get_user_by_id(
-    client: AsyncClient, engine: AsyncEngine
-) -> None:
+async def test_admin_can_get_user_by_id(client: AsyncClient, engine: AsyncEngine) -> None:
     await _seed_admin(engine)
     # Create another user
     reg = await client.post(
@@ -126,9 +118,7 @@ async def test_admin_can_get_user_by_id(
     assert resp.json()["email"] == "target@example.com"
 
 
-async def test_admin_can_change_user_role(
-    client: AsyncClient, engine: AsyncEngine
-) -> None:
+async def test_admin_can_change_user_role(client: AsyncClient, engine: AsyncEngine) -> None:
     await _seed_admin(engine)
     reg = await client.post(
         "/v1/auth/register",
@@ -153,9 +143,7 @@ async def test_admin_can_change_user_role(
     assert resp.json()["role"] == "ops"
 
 
-async def test_admin_cannot_change_own_role(
-    client: AsyncClient, engine: AsyncEngine
-) -> None:
+async def test_admin_cannot_change_own_role(client: AsyncClient, engine: AsyncEngine) -> None:
     await _seed_admin(engine)
     login = await client.post(
         "/v1/auth/login",
@@ -174,9 +162,7 @@ async def test_admin_cannot_change_own_role(
     assert resp.status_code == 400
 
 
-async def test_admin_can_deactivate_user(
-    client: AsyncClient, engine: AsyncEngine
-) -> None:
+async def test_admin_can_deactivate_user(client: AsyncClient, engine: AsyncEngine) -> None:
     await _seed_admin(engine)
     reg = await client.post(
         "/v1/auth/register",
@@ -211,9 +197,7 @@ async def test_admin_can_deactivate_user(
     assert login2.status_code == 403
 
 
-async def test_admin_cannot_deactivate_self(
-    client: AsyncClient, engine: AsyncEngine
-) -> None:
+async def test_admin_cannot_deactivate_self(client: AsyncClient, engine: AsyncEngine) -> None:
     await _seed_admin(engine)
     login = await client.post(
         "/v1/auth/login",
@@ -232,9 +216,7 @@ async def test_admin_cannot_deactivate_self(
     assert resp.status_code == 400
 
 
-async def test_admin_user_count(
-    client: AsyncClient, engine: AsyncEngine
-) -> None:
+async def test_admin_user_count(client: AsyncClient, engine: AsyncEngine) -> None:
     await _seed_admin(engine)
     await client.post(
         "/v1/auth/register",

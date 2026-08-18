@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import date
 from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,6 +16,7 @@ from torii_api.auth.deps import CurrentUserDep
 from torii_api.config import get_settings
 from torii_api.db.models import (
     Case,
+    CaseAction,
     CaseChecklistItem,
     CaseDocument,
     CaseEscalation,
@@ -27,7 +28,10 @@ from torii_api.db.models import (
 )
 from torii_api.db.session import get_session
 from torii_api.services.checklist import ChecklistStatus, update_status, visible_requirement_items
-from torii_api.services.eligibility import EligibilityResult, evaluate_eligibility
+from torii_api.services.eligibility import (
+    EligibilityResult,
+    evaluate_eligibility_with_ai,
+)
 from torii_api.services.forms import fill_form
 from torii_api.services.guidance import next_status_for_phase
 from torii_api.services.i18n import localized
@@ -149,73 +153,80 @@ async def _research_is_usable_for(session: AsyncSession, case: Case) -> bool:
     return research is not None and research_is_usable(research)
 
 
+async def _resolve_action_ids(
+    session: AsyncSession, jurisdiction_id: int, action_id: int | None
+) -> list[int]:
+    if action_id is None:
+        return []
+    action_ids = [action_id]
+    case_act = await session.get(CaseAction, action_id)
+    if case_act is not None:
+        alt_code = (
+            "new_application"
+            if case_act.code == "new"
+            else ("new" if case_act.code == "new_application" else None)
+        )
+        if alt_code:
+            alt_act = await session.scalar(
+                select(CaseAction).where(
+                    CaseAction.jurisdiction_id == jurisdiction_id,
+                    CaseAction.code == alt_code,
+                )
+            )
+            if alt_act is not None:
+                action_ids.append(alt_act.id)
+    return action_ids
+
+
 async def _effective_rules(session: AsyncSession, case: Case) -> list[dict[str, Any]]:
-    """Eligibility rules for the case: live definition, else the research snapshot."""
+    """Eligibility rules for the case: research snapshot, else live definition fallback."""
+    research = await _research_for_case(session, case)
+    if research is not None and research_is_usable(research):
+        rules = research_rules(research.payload)
+        if rules:
+            return rules
     if case.visa_category_id is not None and case.case_action_id is not None:
+        action_ids = await _resolve_action_ids(session, case.jurisdiction_id, case.case_action_id)
         definition = await session.scalar(
             select(EligibilityRuleSet).where(
                 EligibilityRuleSet.jurisdiction_id == case.jurisdiction_id,
                 EligibilityRuleSet.visa_category_id == case.visa_category_id,
-                EligibilityRuleSet.case_action_id == case.case_action_id,
+                EligibilityRuleSet.case_action_id.in_(action_ids),
                 EligibilityRuleSet.is_live.is_(True),
             )
         )
         if definition is not None:
             return list(definition.rules or [])
-    research = await _research_for_case(session, case)
-    if research is not None and research_is_usable(research):
-        return research_rules(research.payload)
     return []
 
 
 async def _effective_documents(session: AsyncSession, case: Case) -> list[dict[str, Any]]:
-    """Document requirements for the case: live definition, else the research snapshot."""
+    """Document requirements for the case: research snapshot, else live definition fallback."""
+    research = await _research_for_case(session, case)
+    if research is not None and research_is_usable(research):
+        docs = research_documents(research.payload)
+        if docs:
+            return docs
     if case.visa_category_id is not None and case.case_action_id is not None:
+        action_ids = await _resolve_action_ids(session, case.jurisdiction_id, case.case_action_id)
         definition = await session.scalar(
             select(DocumentRequirementSet).where(
                 DocumentRequirementSet.jurisdiction_id == case.jurisdiction_id,
                 DocumentRequirementSet.visa_category_id == case.visa_category_id,
-                DocumentRequirementSet.case_action_id == case.case_action_id,
+                DocumentRequirementSet.case_action_id.in_(action_ids),
                 DocumentRequirementSet.is_live.is_(True),
             )
         )
         if definition is not None:
             return list(definition.items or [])
-    research = await _research_for_case(session, case)
-    if research is not None and research_is_usable(research):
-        return research_documents(research.payload)
     return []
 
 
 async def _effective_templates(session: AsyncSession, case: Case) -> list[_FormDescriptor]:
-    """Forms for the case: live FormTemplates, else the research snapshot's templates."""
-    if case.visa_category_id is not None and case.case_action_id is not None:
-        result = await session.execute(
-            select(FormTemplate)
-            .where(
-                FormTemplate.jurisdiction_id == case.jurisdiction_id,
-                FormTemplate.visa_category_id == case.visa_category_id,
-                FormTemplate.case_action_id == case.case_action_id,
-                FormTemplate.is_live.is_(True),
-            )
-            .order_by(FormTemplate.code)
-        )
-        live = list(result.scalars().all())
-        if live:
-            return [
-                _FormDescriptor(
-                    code=t.code,
-                    version=t.version,
-                    official_title=t.official_title,
-                    citation=dict(t.citation or {}),
-                    field_mappings=list(t.field_mappings or []),
-                    template_id=t.id,
-                )
-                for t in live
-            ]
+    """Forms for the case: research snapshot's templates, else live FormTemplates fallback."""
     research = await _research_for_case(session, case)
     if research is not None and research_is_usable(research):
-        return [
+        forms = [
             _FormDescriptor(
                 code=str(form.get("code") or "form"),
                 version=str(form.get("version") or ""),
@@ -227,6 +238,39 @@ async def _effective_templates(session: AsyncSession, case: Case) -> list[_FormD
             for form in research_forms(research.payload)
             if isinstance(form, dict)
         ]
+        if forms:
+            return forms
+    if case.visa_category_id is not None and case.case_action_id is not None:
+        action_ids = await _resolve_action_ids(session, case.jurisdiction_id, case.case_action_id)
+        result = await session.execute(
+            select(FormTemplate)
+            .where(
+                FormTemplate.jurisdiction_id == case.jurisdiction_id,
+                FormTemplate.visa_category_id == case.visa_category_id,
+                FormTemplate.case_action_id.in_(action_ids),
+                FormTemplate.is_live.is_(True),
+            )
+            .order_by(FormTemplate.code)
+        )
+        live = list(result.scalars().all())
+        if live:
+            seen_codes: set[str] = set()
+            unique_live: list[FormTemplate] = []
+            for t in live:
+                if t.code not in seen_codes:
+                    seen_codes.add(t.code)
+                    unique_live.append(t)
+            return [
+                _FormDescriptor(
+                    code=t.code,
+                    version=t.version,
+                    official_title=t.official_title,
+                    citation=dict(t.citation or {}),
+                    field_mappings=list(t.field_mappings or []),
+                    template_id=t.id,
+                )
+                for t in unique_live
+            ]
     return []
 
 
@@ -307,7 +351,21 @@ async def evaluate_case_eligibility(
     }
     if case.prior_application:
         context.update(case.prior_application)
-    result = evaluate_eligibility(dict(case.intake_answers or {}), rules, as_of=as_of, context=context)
+    j_code, v_code, a_code, _ = await _scope_label(session, case)
+    answers = dict(case.intake_answers or {})
+    result = await evaluate_eligibility_with_ai(
+        answers,
+        rules,
+        destination_code=j_code or "JP",
+        purpose_code=v_code or "tourist",
+        action_code=a_code or "new_application",
+        nationality=case.origin_country
+        or str(answers.get("visitor_nationality") or answers.get("nationality") or ""),
+        residence_country=case.residence_country
+        or str(answers.get("current_residence_country") or answers.get("residence_country") or ""),
+        as_of=as_of,
+        context=context,
+    )
     case.eligibility_snapshot = result.model_dump(mode="json")
     new_status = next_status_for_phase("checklist", case.status)
     if new_status is not None:
@@ -357,15 +415,22 @@ async def refresh_checklist(
     new_items: list[CaseChecklistItem] = []
     for item in visible_requirement_items(items, dict(case.intake_answers or {})):
         old = old_items.get(item.code)
+        doc_name = localized(item.name, case.locale) or item.code or "Document"
+        how = localized(item.how_to_obtain, case.locale) if item.how_to_obtain else ""
+        if not how:
+            how = f"Obtain official {doc_name} from the issuing authority or institution."
+        why = localized(item.why_required, case.locale) if item.why_required else ""
+        if not why:
+            why = "Required supporting document for your visa application dossier."
         created = CaseChecklistItem(
             case_id=case.id,
             code=item.code,
-            name=localized(item.name, case.locale),
-            how_to_obtain=localized(item.how_to_obtain, case.locale),
-            why_required=localized(item.why_required, case.locale),
+            name=doc_name,
+            how_to_obtain=how,
+            why_required=why,
             is_required=item.is_required,
             status=old.status if old else "needed",
-            citation=item.citation,
+            citation=item.citation or {},
             document_id=old.document_id if old else None,
         )
         session.add(created)
@@ -483,10 +548,7 @@ async def generate_forms(
                 status_code=400,
                 detail="no form templates available and intake answers are empty",
             )
-        mappings = [
-            {"form_field": key, "answer_key": key, "required": False}
-            for key in answers
-        ]
+        mappings = [{"form_field": key, "answer_key": key, "required": False} for key in answers]
         templates = [
             _FormDescriptor(
                 code="application_summary",
@@ -598,6 +660,98 @@ async def get_packet(case_id: int, session: SessionDep, user: CurrentUserDep) ->
                 detail="packet download requires a completed payment entitlement",
             )
     return case.packet_snapshot
+
+
+@router.get("/{case_id}/pdf/application-form")
+async def download_application_form_pdf(
+    case_id: int, session: SessionDep, user: CurrentUserDep
+) -> Response:
+    from torii_api.services.pdf_generator import generate_japan_work_renewal_pdf
+
+    case = await _owned_case(session, case_id, user)
+    answers = dict(case.intake_answers or {})
+    _, _, _, scope_label = await _scope_label(session, case)
+    pdf_bytes = generate_japan_work_renewal_pdf(
+        case.reference or f"CASE-{case.id}",
+        answers,
+        destination_label=scope_label or "Japan",
+    )
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="{case.reference or case_id}_Application_Form.pdf"',
+            "Content-Length": str(len(pdf_bytes)),
+        },
+    )
+
+
+@router.get("/{case_id}/pdf/cover-letter")
+async def download_cover_letter_pdf(
+    case_id: int, session: SessionDep, user: CurrentUserDep
+) -> Response:
+    from torii_api.services.pdf_generator import generate_cover_letter_pdf
+
+    case = await _owned_case(session, case_id, user)
+    answers = dict(case.intake_answers or {})
+    checklist = [
+        ChecklistItemOut.model_validate(item).model_dump(mode="json")
+        for item in await _checklist(session, case.id)
+    ]
+    _, _, _, scope_label = await _scope_label(session, case)
+    pdf_bytes = generate_cover_letter_pdf(
+        case.reference or f"CASE-{case.id}",
+        answers,
+        checklist,
+        scope_label=scope_label or "Visa Submission Dossier",
+    )
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="{case.reference or case_id}_Cover_Letter.pdf"',
+            "Content-Length": str(len(pdf_bytes)),
+        },
+    )
+
+
+@router.get("/{case_id}/pdf/dossier-packet")
+async def download_dossier_packet_pdf(
+    case_id: int, session: SessionDep, user: CurrentUserDep
+) -> Response:
+    from torii_api.services.packet import resolve_jurisdiction_submission_kit
+    from torii_api.services.pdf_generator import generate_dossier_packet_pdf
+
+    case = await _owned_case(session, case_id, user)
+    answers = dict(case.intake_answers or {})
+    forms = [
+        GeneratedFormOut.model_validate(item).model_dump(mode="json")
+        for item in await _forms(session, case.id)
+    ]
+    checklist = [
+        ChecklistItemOut.model_validate(item).model_dump(mode="json")
+        for item in await _checklist(session, case.id)
+    ]
+    j_code, _, _, scope_label = await _scope_label(session, case)
+    submission_kit = resolve_jurisdiction_submission_kit(
+        jurisdiction_code=j_code, scope_label=scope_label
+    )
+    pdf_bytes = generate_dossier_packet_pdf(
+        case.reference or f"CASE-{case.id}",
+        answers,
+        forms,
+        checklist,
+        submission_kit=submission_kit,
+        scope_label=scope_label or "Immigration Filing Dossier",
+    )
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="{case.reference or case_id}_Complete_Dossier_Packet.pdf"',
+            "Content-Length": str(len(pdf_bytes)),
+        },
+    )
 
 
 @router.post("/{case_id}/submit")

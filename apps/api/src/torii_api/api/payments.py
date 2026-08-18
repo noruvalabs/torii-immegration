@@ -114,9 +114,7 @@ async def get_case_payment(
     case_id: int,
 ) -> PaymentOut:
     """Get payment for a specific case."""
-    payment = await get_payment_by_case(
-        db=session, case_id=case_id, user_id=current_user.id
-    )
+    payment = await get_payment_by_case(db=session, case_id=case_id, user_id=current_user.id)
 
     if not payment:
         raise HTTPException(status_code=404, detail="No payment found for this case")

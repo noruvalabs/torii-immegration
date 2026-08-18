@@ -41,24 +41,18 @@ docs/         product specs (docs/specs) + architecture decisions (docs/decision
 
 ```bash
 cp .env.example .env   # one file for apps/api, apps/ai, and apps/web — fill in secrets
-pnpm install    # once — installs the web deps and registers apps/api with turbo
-pnpm dev        # runs the API (uv) and the web app (next dev) together, prefixed logs
+pnpm install    # once — installs the web deps and registers apps/api and apps/ai with turbo
+pnpm dev        # runs the API (8000), AI service (8001), and web app (3000) together, prefixed logs
 # → http://localhost:3000            applicant landing
 # → http://localhost:3000/admin      back office (talks live to the API)
 # → http://localhost:8000/health · /docs   ·   http://localhost:8000/v1/jurisdictions
+# → http://localhost:8001/health · /docs   (AI assistant & agentic research)
 ```
 
 `pnpm dev` is `turbo run dev`, which runs each app's own `dev` script in parallel: `apps/web`
-runs `next dev`; `apps/api`'s wraps `uv run alembic upgrade head && uv run uvicorn --reload`
-(Alembic auto-applies on every start — safe to re-run, so the schema is always current). `uv`
-manages its own `.venv` on first run, so no separate Python install step is needed.
+runs `next dev`; `apps/api` runs FastAPI on port 8000; `apps/ai` runs the AI/research engine on port 8001.
 
-Run just one side with `pnpm --filter web dev` or `pnpm --filter api dev`.
-
-`apps/ai` isn't part of the pnpm workspace (no `package.json`, standalone `uv` project like
-`apps/api`) and neither it nor the arq worker/Redis are started by `pnpm dev` — start them
-separately for anything that needs live research or the assistant (see `apps/ai/README.md`
-and "Background worker" in `apps/api/README.md`), or they'll silently never run.
+Run just one service with `pnpm --filter web dev`, `pnpm --filter api dev`, or `pnpm --filter ai dev`.
 
 ### Everything, together (Postgres + Redis + nginx)
 

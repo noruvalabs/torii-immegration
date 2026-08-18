@@ -25,9 +25,7 @@ def upgrade() -> None:
         sa.Column("id", sa.Integer(), primary_key=True),
         sa.Column("case_id", sa.Integer(), sa.ForeignKey("cases.id"), nullable=False),
         sa.Column("user_id", sa.Integer(), sa.ForeignKey("users.id"), nullable=False),
-        sa.Column(
-            "transaction_id", sa.String(length=64), unique=True, nullable=False, index=True
-        ),
+        sa.Column("transaction_id", sa.String(length=64), unique=True, nullable=False, index=True),
         sa.Column("visa_fee", sa.Float(), nullable=False, server_default="0.0"),
         sa.Column("service_fee", sa.Float(), nullable=False, server_default="0.0"),
         sa.Column("total_amount", sa.Float(), nullable=False, server_default="0.0"),

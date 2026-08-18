@@ -3,27 +3,34 @@ scope:
   visa_category: tourist
   action: new_application
   is_live: true
-  name: Japan short-stay — resident guarantor pack (family visit)
+  name: Japan Short-Stay Tourist & Family Visit Visa (短期滞在・観光・知人訪問)
 
 stages:
   - sequence: 1
-    code: sponsor_petition
-    actor: applicant
-  - sequence: 2
     code: applicant_filing
-    actor: sponsor
+    actor: applicant
 
 intake:
   questions:
+    # --- Section 1: Personal & Identity ---
     - key: full_name
-      prompt: What is your full name as it appears on your residence card?
+      section: Personal & Identity
+      prompt: What is your full name as it appears on your passport?
       type: string
       min_length: 2
       max_length: 200
+      required: true
+      citation:
+        authority: Ministry of Foreign Affairs (MOFA) / Immigration Services Agency (MOJ)
+        title: Guide to Japanese Visas - Temporary Visitor (Tourism & Visits)
+        url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
+
     - key: nationality
-      prompt: What is your nationality (as on your residence card)?
+      section: Personal & Identity
+      prompt: What is your nationality (passport country)?
       type: enum
       options:
+        - BD
         - US
         - GB
         - CA
@@ -34,333 +41,297 @@ intake:
         - KR
         - IN
         - CN
-        - BD
         - PH
         - VN
         - ID
         - TH
         - MY
         - other
-    - key: residence_card_number
-      prompt: What is your residence card number (在留カード番号)?
+      required: true
+      citation:
+        authority: Immigration Services Agency of Japan (MOJ)
+        title: Visa Requirement Guidelines by Country
+        url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
+
+    - key: date_of_birth
+      section: Personal & Identity
+      prompt: What is your date of birth (YYYY-MM-DD)?
+      type: date
+      required: true
+      citation:
+        authority: Immigration Services Agency of Japan (MOJ)
+        title: Official Visa Application Form Item 3
+        url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
+
+    - key: passport_number
+      section: Personal & Identity
+      prompt: What is your passport number?
       type: string
       min_length: 5
       max_length: 32
-    - key: relationship_to_visitor
-      prompt: What is your relationship to the person visiting Japan?
-      type: enum
-      options:
-        - spouse
-        - parent
-        - child
-        - sibling
-        - other
-    - key: visitor_full_name
-      prompt: What is the visitor's full name as it appears on their passport?
-      type: string
-      min_length: 2
-      max_length: 200
-    - key: visitor_nationality
-      prompt: What is the visitor's nationality (ISO passport country code)?
-      type: enum
-      options:
-        - AU
-        - BR
-        - CA
-        - KH
-        - SA
-        - ZA
-        - TW
-        - GB
-        - US
-        - HK
-        - IN
-        - ID
-        - MO
-        - MN
-        - KR
-        - SG
-        - AE
-        - PH
-        - VN
-        - BD
-        - CN
-        - other
-    - key: visitor_passport_number
-      prompt: What is the visitor's passport number?
-      type: string
-      min_length: 5
-      max_length: 32
+      required: true
+      citation:
+        authority: Immigration Services Agency of Japan (MOJ)
+        title: Official Visa Application Form Item 5
+        url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
+
+    - key: passport_expiry_date
+      section: Personal & Identity
+      prompt: What is your passport expiry date (YYYY-MM-DD)?
+      type: date
+      required: true
+      citation:
+        authority: Immigration Services Agency of Japan (MOJ)
+        title: Passport Validity Standards (Must be valid during entire stay)
+        url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
+
+    # --- Section 2: Travel & Itinerary ---
     - key: purpose_of_visit
-      prompt: What is the main purpose of the visitor's trip to Japan?
+      section: Travel & Itinerary
+      prompt: What is the primary purpose of your trip to Japan?
       type: enum
       options:
         - tourism
         - visiting_family
-        - other
+        - visiting_friends
+        - commercial_business
+      required: true
+      citation:
+        authority: Ministry of Foreign Affairs (MOFA)
+        title: Criteria for Issuance of Temporary Visitor Visa
+        url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
+
+    - key: planned_arrival_date
+      section: Travel & Itinerary
+      prompt: What is your planned date of arrival in Japan (YYYY-MM-DD)?
+      type: date
+      required: true
+      citation:
+        authority: Immigration Services Agency of Japan (MOJ)
+        title: Schedule of Stay (滞在予定表) Requirements
+        url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
+
     - key: intended_length_of_stay_days
-      prompt: How many days does the visitor plan to stay in Japan?
+      section: Travel & Itinerary
+      prompt: How many days do you plan to stay in Japan (e.g. 15, 30, 90)?
       type: integer
       min_value: 1
       max_value: 90
-    - key: visitor_has_sufficient_funds
-      prompt: >
-        Will the visitor show proof of their own funds, or are you covering
-        their expenses?
+      required: true
+      citation:
+        authority: Immigration Services Agency of Japan (MOJ)
+        title: Maximum Permitted Period of Stay for Temporary Visitors
+        url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
+
+    - key: accommodation_name
+      section: Travel & Itinerary
+      prompt: What is the name of your planned hotel or host accommodation in Japan?
+      type: string
+      min_length: 2
+      max_length: 200
+      required: true
+      citation:
+        authority: Immigration Services Agency of Japan (MOJ)
+        title: Accommodation Verification Notice
+        url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
+
+    - key: accommodation_address
+      section: Travel & Itinerary
+      prompt: What is the address and telephone number of your accommodation in Japan?
+      type: string
+      min_length: 5
+      max_length: 300
+      required: true
+      citation:
+        authority: Immigration Services Agency of Japan (MOJ)
+        title: Daily Contact & Lodging Disclosures
+        url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
+
+    # --- Section 3: Financial Solvency & Funding ---
+    - key: trip_payer
+      section: Financial Solvency & Funding
+      prompt: Who is paying for your travel and living expenses in Japan?
       type: enum
       options:
-        - visitor_own_funds
-        - guarantor_covers
+        - self_funded
+        - guarantor_in_japan
+        - employer_sponsor
         - both
+      required: true
+      citation:
+        authority: Ministry of Foreign Affairs (MOFA)
+        title: Proof of Sufficient Funds / Letter of Guarantee (身元保証書)
+        url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
+
+    - key: estimated_savings_available
+      section: Financial Solvency & Funding
+      prompt: What is your estimated available liquid balance for this trip (in USD or BDT equivalent)?
+      type: string
+      min_length: 1
+      max_length: 50
+      required: true
+      citation:
+        authority: Embassy of Japan Consular Section
+        title: Bank Balance Certificate Requirements
+        url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
+
+    - key: occupation
+      section: Financial Solvency & Funding
+      prompt: What is your current profession or employment status in your home country?
+      type: string
+      min_length: 2
+      max_length: 100
+      required: true
+      citation:
+        authority: Ministry of Foreign Affairs (MOFA)
+        title: Proof of Social & Economic Status in Home Country
+        url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
+
+    # --- Section 4: Security & Disclosures ---
+    - key: criminal_record
+      section: Security & Disclosures
+      prompt: Have you ever been convicted of any crime in any country?
+      type: boolean
+      required: true
+      citation:
+        authority: Immigration Services Agency of Japan (MOJ)
+        title: Immigration Control Act Article 5 (Denial of Landing Criteria)
+        url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
+
+    - key: prior_deportation
+      section: Security & Disclosures
+      prompt: Have you ever been deported or refused entry to Japan or any other country?
+      type: boolean
+      required: true
+      citation:
+        authority: Immigration Services Agency of Japan (MOJ)
+        title: Entry Prohibition Periods (Act Article 5 Item 9)
+        url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
 
 eligibility:
   rules:
     - key: visitor_nationality
       operator: nationality_in
       value:
-        - AU
-        - BR
-        - CA
-        - KH
-        - SA
-        - ZA
-        - TW
-        - GB
         - US
-        - HK
-        - IN
-        - ID
-        - MO
-        - MN
-        - KR
+        - CA
+        - GB
+        - AU
         - SG
-        - AE
+        - KR
+        - DE
+        - FR
       failure_status: at_risk
-      message: >
-        The visitor's nationality may not be eligible for Japan eVISA.
-        They may need to apply through an accredited agency or on paper.
+      message: Non-visa-waiver passport holders (e.g. Bangladesh) require advance consular visa filing before departure.
       citation:
-        authority: Immigration Services Agency of Japan
-        title: Visa for Temporary Visitors (Tourism)
-        url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
-        source_version: "2026-04"
+        authority: Ministry of Foreign Affairs of Japan (MOFA)
+        title: Exemption of Visa (Short-Term Stay)
+        url: https://www.mofa.go.jp/j_info/visit/visa/short/novisa.html
+
     - key: intended_length_of_stay_days
       operator: max
       value: 90
       failure_status: at_risk
-      message: >
-        Short-term visitor visas are typically issued for stays of up to
-        90 days. Longer stays may require a different visa category.
+      message: Temporary visitor status cannot exceed 90 days for a single entry.
       citation:
-        authority: Immigration Services Agency of Japan
-        title: Visa for Temporary Visitors (Tourism)
+        authority: Immigration Services Agency of Japan (MOJ)
+        title: Maximum Temporary Visitor Duration
         url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
-        source_version: "2026-04"
-    - key: visitor_has_sufficient_funds
+
+    - key: criminal_record
       operator: equals
-      value: visitor_own_funds
-      failure_status: at_risk
-      message: >
-        The visitor should demonstrate their own funds, or the guarantor
-        should prepare a financial sponsorship statement.
+      value: false
+      failure_status: fail
+      message: Prior criminal convictions may result in denial of landing under Immigration Control Act Article 5.
       citation:
-        authority: Immigration Services Agency of Japan
-        title: Visa for Temporary Visitors (Tourism)
+        authority: Immigration Services Agency of Japan (MOJ)
+        title: Denial of Landing Criteria (Article 5)
         url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
-        source_version: "2026-04"
+
+    - key: prior_deportation
+      operator: equals
+      value: false
+      failure_status: fail
+      message: Past deportation orders require statutory landing permission review under Article 5.
+      citation:
+        authority: Immigration Services Agency of Japan (MOJ)
+        title: Entry Ban & Deportation History Verification
+        url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
 
 documents:
-  items:
-    - code: visitor_passport_copy
-      name:
-        en: Copy of visitor's passport
-        ja: パスポートのコピー
-      how_to_obtain:
-        en: >
-          Ask the visitor to send a clear copy of the biographic page of their
-          passport.
-        ja: 訪問者にパスポートの顔写真ページのコピーを送ってもらってください。
-      why_required:
-        en: Confirms the visitor's identity and travel document details.
-        ja: 訪問者の本人確認および渡航書類の詳細を確認するため。
+  requirements:
+    - code: passport_original
+      name: Original Valid Passport (with at least 2 blank visa pages)
       is_required: true
       citation:
-        authority: Immigration Services Agency of Japan
-        title: Application for Extension of Period of Stay
-        url: https://www.moj.go.jp/isa/applications/procedures/16-3.html
-        source_version: "2026-04"
-    - code: shomei_riyusho
-      name:
-        en: Invitation reason statement (招へい理由書)
-        ja: 招へい理由書
-      how_to_obtain:
-        en: >
-          Download the official form from the Ministry of Foreign Affairs
-          website and fill it out explaining why you are inviting the visitor.
-        ja: 外務省の公式フォームをダウンロードし、訪問者を招待する理由を記入してください。
-      why_required:
-        en: >
-          Required to explain the purpose and background of the invitation to
-          Japanese immigration.
-        ja: 日本の入管に招待の目的と経緯を説明するため。
+        authority: Ministry of Foreign Affairs (MOFA)
+        title: Standard Visa Submission Dossier
+        url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
+
+    - code: visa_application_form
+      name: Official Japan Visa Application Form with 45x35mm Photo
       is_required: true
       citation:
-        authority: Ministry of Foreign Affairs of Japan
-        title: Guarantee and Invitation Documents
-        url: https://www.mofa.go.jp/j_info/visit/visa/pdfs/guarantee.pdf
-        source_version: "2026-04"
-    - code: mimoto_hoshosho
-      name:
-        en: Guarantor statement (身元保証書)
-        ja: 身元保証書
-      how_to_obtain:
-        en: >
-          Download the official guarantor form from the Ministry of Foreign
-          Affairs website. As the guarantor in Japan, you sign this to confirm
-          you will support the visitor financially and ensure they depart on time.
-        ja: 外務省の公式保証書フォームをダウンロードし、訪問者の費用負担と期内出国を保証する内容に記入してください。
-      why_required:
-        en: >
-          Required when a Japanese resident is acting as the financial guarantor
-          for the visitor.
-        ja: 日本にいる身元保証人が訪問者の費用を保証する場合に必要。
+        authority: Ministry of Foreign Affairs (MOFA)
+        title: Visa Application Form Format
+        url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
+
+    - code: schedule_of_stay
+      name: Day-by-Day Schedule of Stay (滞在予定表)
       is_required: true
       citation:
-        authority: Ministry of Foreign Affairs of Japan
-        title: Guarantee and Invitation Documents
-        url: https://www.mofa.go.jp/j_info/visit/visa/pdfs/guarantee.pdf
-        source_version: "2026-04"
-    - code: takuzaei_yoteihyo
-      name:
-        en: Planned stay schedule (滞在予定表)
-        ja: 滞在予定表
-      how_to_obtain:
-        en: >
-          Prepare a day-by-day itinerary of the visitor's planned activities in
-          Japan, including accommodation locations and transport plans.
-        ja: 訪問者の日本滞在中の日別スケジュール、宿泊先、交通手段を記載した計画表を作成してください。
-      why_required:
-        en: >
-          Shows the planned activities and confirms the visitor intends to leave
-          Japan by the stated date.
-        ja: 訪問者の予定と出国予定を確認するため。
+        authority: Ministry of Foreign Affairs (MOFA)
+        title: Schedule of Stay Official Template
+        url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
+
+    - code: bank_solvency_certificate
+      name: Bank Solvency Certificate & Last 6 Months Bank Statement
       is_required: true
       citation:
-        authority: Ministry of Foreign Affairs of Japan
-        title: Guarantee and Invitation Documents
-        url: https://www.mofa.go.jp/j_info/visit/visa/pdfs/guarantee.pdf
-        source_version: "2026-04"
-    - code: juuminhyo
-      name:
-        en: Resident record (住民票)
-        ja: 住民票
-      how_to_obtain:
-        en: >
-          Obtain a copy of your 住民票 from your local city/ward office. This
-          confirms your registered address in Japan.
-        ja: 市区町村の窓口で住民票の写しを取得してください。
-      why_required:
-        en: Confirms the guarantor's registered residence in Japan.
-        ja: 保証人の日本における住居地を確認するため。
+        authority: Embassy of Japan Consular Section
+        title: Proof of Sufficient Funds for Travel
+        url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
+
+    - code: employment_certificate
+      name: Certificate of Employment / Leave Approval Letter
       is_required: true
       citation:
-        authority: Immigration Services Agency of Japan
-        title: Application for Extension of Period of Stay
-        url: https://www.moj.go.jp/isa/applications/procedures/16-3.html
-        source_version: "2026-04"
-    - code: kazei_shomeisho
-      name:
-        en: Tax certificate (課税証明書)
-        ja: 課税証明書
-      how_to_obtain:
-        en: >
-          Obtain a 課税証明書 from your local city/ward office. This shows your
-          income and tax status, demonstrating ability to guarantee the visitor's
-          expenses.
-        ja: 市区町村の窓口で課税証明書を取得してください。所得と納税状況を示し、訪問者の費用を負担する能力を証明します。
-      why_required:
-        en: >
-          Demonstrates the guarantor's financial capacity to support the
-          visitor's stay.
-        ja: 保証人の訪問者費用負担能力を証明するため。
+        authority: Embassy of Japan Consular Section
+        title: Proof of Employment and Social Ties
+        url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
+
+    - code: flight_hotel_reservations
+      name: Flight Itinerary & Hotel Booking Confirmations
       is_required: true
       citation:
-        authority: Immigration Services Agency of Japan
-        title: Application for Extension of Period of Stay
-        url: https://www.moj.go.jp/isa/applications/procedures/16-3.html
-        source_version: "2026-04"
+        authority: Ministry of Foreign Affairs (MOFA)
+        title: Travel Proof Document Requirements
+        url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
 
 forms:
-  - code: guarantor_pack
+  - code: japan_visa_app_form
     version: "2026-04"
-    official_title: Guarantor Pack for Short-Term Visitor Visa (招へい・身元保証一式)
+    official_title: Visa Application Form to Enter Japan (日本国査証申請書)
     citation:
-      authority: Ministry of Foreign Affairs of Japan
-      title: Guarantee and Invitation Documents
-      url: https://www.mofa.go.jp/j_info/visit/visa/pdfs/guarantee.pdf
-      source_version: "2026-04"
+      authority: Ministry of Foreign Affairs (MOFA)
+      title: Official Visa Application Form Format
+      url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
     field_mappings:
-      - form_field: guarantor.full_name
+      - form_field: applicant_name
         answer_key: full_name
         required: true
-      - form_field: guarantor.residence_card_number
-        answer_key: residence_card_number
+      - form_field: nationality
+        answer_key: nationality
         required: true
-      - form_field: visitor.full_name
-        answer_key: visitor_full_name
+      - form_field: date_of_birth
+        answer_key: date_of_birth
         required: true
-      - form_field: visitor.nationality
-        answer_key: visitor_nationality
+      - form_field: passport_no
+        answer_key: passport_number
         required: true
-      - form_field: visitor.passport_number
-        answer_key: visitor_passport_number
-        required: true
-      - form_field: relationship
-        answer_key: relationship_to_visitor
-        required: true
-      - form_field: visit.purpose
+      - form_field: purpose_of_visit
         answer_key: purpose_of_visit
         required: true
-      - form_field: visit.length_of_stay_days
+      - form_field: stay_days
         answer_key: intended_length_of_stay_days
         required: true
-      - form_field: financial.support_type
-        answer_key: visitor_has_sufficient_funds
-        required: true
-
-fees:
-  # Temporary visitor (short-stay) single-entry visa fee in force since 1 July 2026.
-  - code: visitor_single_entry
-    amount: 15000
-    currency: JPY
-    channel: embassy
-    published: true
-    effective_from: "2026-07-01"
-    note: >-
-      Single-entry temporary visitor visa fee collected by Japanese Embassy/Consulate
-      abroad. Raised to ¥15,000 effective 1 July 2026 (previously ¥3,000).
-    citation:
-      authority: Ministry of Foreign Affairs of Japan
-      title: Visa Fees
-      url: https://www.mofa.go.jp/j_info/visit/visa/index.html
-      retrieved: "2026-08-01"
-
-  # Historical record of the previous fee, for filings before 1 July 2026.
-  - code: visitor_single_entry_legacy
-    amount: 3000
-    currency: JPY
-    channel: embassy
-    published: false
-    effective_from: "2024-04-01"
-    effective_until: "2026-06-30"
-    note: Previous visitor visa fee superseded by the ¥15,000 fee on 1 July 2026. Kept for historical reference.
-    citation:
-      authority: Ministry of Foreign Affairs of Japan
-      title: Visa Fees
-      url: https://www.mofa.go.jp/j_info/visit/visa/index.html
-      retrieved: "2026-08-01"
-
-sources:
-  - title: Guarantee and Invitation Documents
-    url: https://www.mofa.go.jp/j_info/visit/visa/pdfs/guarantee.pdf
-    retrieved: "2026-07-30"

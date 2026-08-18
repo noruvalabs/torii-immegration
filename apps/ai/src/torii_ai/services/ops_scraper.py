@@ -10,7 +10,6 @@ changes, and flags them for human review before anything goes live (NF-9).
 
 from __future__ import annotations
 
-import hashlib
 import json
 import re
 from dataclasses import dataclass, field
@@ -22,6 +21,7 @@ import structlog
 
 from torii_ai.config import Settings
 from torii_ai.llm.groq import ChatClient
+from torii_ai.services.web_fetch import fetch_govuk_text, scrape_pages
 from torii_ai.tools.tavily import SearchClient
 
 log = structlog.get_logger()
@@ -49,6 +49,35 @@ OFFICIAL_DOMAINS: dict[str, list[str]] = {
     "ID": ["imigrasi.go.id"],
 }
 
+# Diplomatic-mission domain patterns, keyed by destination country. ``{cc}`` is filled with
+# the applicant's nationality's lowercase ISO-2 code, so a Bangladeshi applicant to Japan
+# reaches ``bd.emb-japan.go.jp`` — the page that actually states the origin-country filing
+# channel, document list, and fee, which the destination-only domains above never surface.
+MISSION_DOMAIN_PATTERNS: dict[str, list[str]] = {
+    "JP": ["{cc}.emb-japan.go.jp"],
+    "US": ["{cc}.usembassy.gov"],
+    "UK": ["gov.uk"],
+    "GB": ["gov.uk"],
+    "CA": ["international.gc.ca"],
+    "AU": ["{cc}.embassy.gov.au"],
+}
+
+
+def mission_domains_for(destination: str, nationality: str | None) -> list[str]:
+    """Mission-in-origin-country domains for a destination + applicant nationality.
+
+    Empty when the destination has no known mission-domain pattern or no nationality was
+    given — callers union this with :func:`official_domains_for`'s destination domains.
+    """
+    if not nationality:
+        return []
+    patterns = MISSION_DOMAIN_PATTERNS.get(destination.upper())
+    if not patterns:
+        return []
+    cc = nationality.lower()
+    return [pattern.format(cc=cc) for pattern in patterns]
+
+
 _COUNTRY_NAMES: dict[str, str] = {
     "JP": "Japan",
     "US": "United States",
@@ -71,7 +100,7 @@ _COUNTRY_NAMES: dict[str, str] = {
 }
 
 
-def _country_label(code: str | None) -> str:
+def country_label(code: str | None) -> str:
     if not code:
         return ""
     return _COUNTRY_NAMES.get(code.upper(), code.upper())
@@ -90,11 +119,11 @@ def build_queries(
     Every query names the destination country and the visa purpose so the retrieved pages
     belong to this case even before the domain allowlist is applied.
     """
-    dest = _country_label(destination)
+    dest = country_label(destination)
     vc = visa_category.lower().replace("_", " ")
     act = action.lower().replace("_", " ")
-    origin = _country_label(origin_country)
-    residence = _country_label(residence_country) if residence_country else ""
+    origin = country_label(origin_country)
+    residence = country_label(residence_country) if residence_country else ""
 
     queries = [
         f"{dest} {vc} visa {act} requirements official government",
@@ -107,16 +136,26 @@ def build_queries(
     if origin:
         queries.append(f"{dest} {vc} visa {act} for {origin} citizens official")
     if residence and residence != dest:
-        queries.append(
-            f"{vc} visa applying from {residence} proof of residence documents"
-        )
+        queries.append(f"{vc} visa applying from {residence} proof of residence documents")
         queries.append(f"{dest} visa {act} from {residence} foreign resident official")
     return queries
 
 
-def official_domains_for(destination: str) -> list[str] | None:
-    """Official-domain allowlist for a destination, or None to use settings base."""
-    return OFFICIAL_DOMAINS.get(destination.upper())
+def official_domains_for(destination: str, nationality: str | None = None) -> list[str] | None:
+    """Official-domain allowlist for a destination, unioned with mission-in-origin domains
+    for ``nationality`` when known. ``None`` (only when nothing at all matches) tells the
+    caller to fall back to the settings-level base allowlist.
+    """
+    dest_domains = OFFICIAL_DOMAINS.get(destination.upper())
+    mission = mission_domains_for(destination, nationality)
+    if not dest_domains and not mission:
+        return None
+    combined = list(dest_domains or [])
+    for domain in mission:
+        if domain not in combined:
+            combined.append(domain)
+    return combined
+
 
 EXTRACT_SYSTEM = """You are an immigration data extractor. Given scraped government page content,
 extract structured immigration data for a specific jurisdiction and visa category.
@@ -145,10 +184,13 @@ Return JSON only, no markdown fences:
   ],
   "intake_questions": [
     {
-      "key": "unique_key",
+      "key": "unique_snake_case_key",
       "prompt": "Plain language question for the applicant",
-      "type": "string|boolean|integer|enum",
-      "options": ["opt1", "opt2"] // only for enum type
+      "type": "string|boolean|integer|enum|date",
+      "options": ["opt1", "opt2"], // only for enum type
+      "required": true,
+      "section": "1. Personal Information | 2. Trip & Purpose | 3. Accommodation | 4. Financial & Sponsor | 5. Employment & Study | 6. Travel History | 7. Local Connections | 8. Document Readiness",
+      "show_when": {"key": "parent_key", "equals": "matching_value"} // optional branching
     }
   ],
   "form_templates": [
@@ -168,16 +210,45 @@ Return JSON only, no markdown fences:
 }
 
 Rules:
-- Only extract data that is explicitly stated in the provided content.
-- Do NOT invent rules, requirements, or forms not present in the source material.
+- Only extract data that is explicitly stated or required for the destination jurisdiction and visa category.
+- DYNAMIC COUNTRY & TOUR-TYPE TAILORING:
+  The questionnaire and modules must dynamically reflect the destination country (e.g. Japan, UK, US) and the specific type of tour/visit:
+  1. Personal Information: full_name, date_of_birth, nationality, current_residence_country, passport_number, passport_issue_date, passport_expiry_date, marital_status.
+  2. Trip & Tour Type:
+     - planned_arrival_date, stay_duration_days, main_purpose
+     - tour_type (enum: independent_tourism, package_tour_via_agency, visiting_relatives_or_acquaintances, short_term_business)
+     - when tour_type == "package_tour_via_agency": tour_agency_name, package_booking_reference, receiving_agency_in_destination
+     - when tour_type == "visiting_relatives_or_acquaintances": host_full_name, host_relationship, host_residency_status, host_address, is_host_guaranteeing_expenses
+     - when tour_type == "independent_tourism": cities_to_visit, schedule_of_stay_ready
+     - when tour_type == "short_term_business": inviting_company_name, business_meeting_purpose, inviting_contact_person
+  3. Accommodation (country-specific):
+     - accommodation_type (hotel, airbnb, relative_or_friend_home, company_dormitory, other)
+     - accommodation_booked (boolean)
+     - accommodation_address (string)
+  4. Financial & Sponsor (country-specific):
+     - trip_payer (enum: myself, parent, spouse, employer, host_sponsor, other_sponsor)
+     - when trip_payer != "myself": sponsor_name, sponsor_relationship, sponsor_occupation, sponsor_financial_proof_available
+     - estimated_savings_available, bank_statement_available (6 months)
+  5. Employment & Occupation (use show_when branching):
+     - occupation (enum: employed, student, business_owner, freelancer, unemployed, retired)
+     - when occupation == "employed": employer_name, job_title, monthly_salary, employment_start_date, approved_leave_secured
+     - when occupation == "student": educational_institution, student_course, current_semester, student_leave_approved
+     - when occupation == "business_owner": business_name, trade_license_number, annual_revenue
+     - when occupation == "unemployed": financial_support_source
+  6. Travel History & Compliance:
+     - traveled_internationally_before (boolean)
+     - when traveled_internationally_before == "true": countries_visited (string)
+     - visited_destination_before (boolean)
+     - prior_visa_refusal_any_country (boolean)
+     - prior_overstay_history (boolean)
+  7. Country-Specific Requirements (e.g. for Japan: Japanese guarantor / Invitation details; for UK: TB screening if applicable; for US: 214(b) home ties):
+     - relatives_or_friends_in_destination (boolean)
+     - when relatives_or_friends_in_destination == "true": connection_details (string)
+- Branching: Do NOT ask every question upfront. Use "show_when" with {"key": "parent_key", "equals": "expected_value"} so that package tour fields only appear for package tours, sponsor fields only appear when sponsored, student fields only for students, and host/guarantor fields only when visiting hosts.
 - Every item MUST have a citation pointing to the official source URL.
-- Use plain language for messages — bureaucratic jargon is not acceptable.
-- source_version should be the page's date or "YYYY-MM" format.
-- If the content is insufficient for a category, return an empty list for that category.
-- When the request states an origin country and/or residence country, tailor the extracted
-  documents, questions, and rules to that applicant profile (e.g. a citizen of the origin
-  country residing in the residence country must submit proof of lawful residence there).
-  Only do this when supported by the source content — never invent requirements.
+- Group related questions under clear, intuitive "section" titles matching the destination flow.
+- Use plain language for prompts — avoid unnecessary bureaucratic jargon.
+- When the request states an origin country and/or residence country (e.g. Bangladesh -> Japan), tailor the questions, required documents (e.g. Schedule of Stay, VFS/Embassy Dhaka format, 45x35mm photo), and eligibility rules directly to that corridor.
 """
 
 
@@ -259,7 +330,7 @@ class OpsScraper:
         Used for streaming research UIs: each event is a dict with ``type`` of
         ``progress`` or ``complete``. Progress events include key/label/detail.
         """
-        dest_label = _country_label(jurisdiction_code) or jurisdiction_code
+        dest_label = country_label(jurisdiction_code) or jurisdiction_code
         yield {
             "type": "progress",
             "key": "prepare",
@@ -274,13 +345,16 @@ class OpsScraper:
             origin_country=origin_country,
             residence_country=residence_country,
         )
-        domains = official_domains_for(jurisdiction_code)
+        domains = official_domains_for(jurisdiction_code, origin_country)
+        domains_label = (
+            ", ".join(domains[:3]) if domains else "the configured official-source allowlist"
+        )
 
         yield {
             "type": "progress",
             "key": "search",
             "label": "Searching official government sources",
-            "detail": f"{len(queries)} targeted queries on {', '.join(domains[:3])}",
+            "detail": f"{len(queries)} targeted queries on {domains_label}",
         }
 
         # Phase 1: Discover sources via Tavily (restricted to official destination domains)
@@ -383,84 +457,19 @@ class OpsScraper:
     async def _scrape_pages(self, urls: list[str]) -> list[dict[str, str]]:
         """Fetch page content from URLs with timeout and error handling.
 
-        JS-rendered government sites (gov.uk serves a static shell to plain fetches) are read
-        through their official content API instead, so the article body is actually scraped.
-        Identical bodies (e.g. the same gov.uk guide returned for many sub-paths) are
-        deduplicated by content hash to keep the extraction prompt small.
+        Delegates to :mod:`torii_ai.services.web_fetch`, shared with the per-stage agentic
+        research engine so both scrape identically (gov.uk content-API handling, dedup by
+        content hash).
         """
-        content: list[dict[str, str]] = []
-        seen: set[str] = set()
-        async with httpx.AsyncClient(
-            timeout=self._settings.tavily_timeout_seconds,
-            follow_redirects=True,
-            headers={"User-Agent": "Torii-OPS-Worker/1.0"},
-        ) as client:
-            for url in urls:
-                text = await self._fetch_page_text(client, url)
-                if not text:
-                    continue
-                digest = hashlib.sha256(text.encode("utf-8", "ignore")).hexdigest()
-                if digest in seen:
-                    log.info("scraper.page_duplicate", url=url)
-                    continue
-                seen.add(digest)
-                content.append({"url": url, "text": text[: self._settings.scrape_page_chars]})
-                log.info("scraper.page_scraped", url=url, chars=len(text))
-        return content
-
-    async def _fetch_page_text(self, client: httpx.AsyncClient, url: str) -> str:
-        """Return readable page text for one URL ('' on failure)."""
-        try:
-            if _is_govuk(url):
-                text = await self._scrape_govuk(client, url)
-                if text:
-                    return text
-            resp = await client.get(url)
-            if resp.status_code != 200:
-                return ""
-            ctype = resp.headers.get("content-type", "")
-            if ctype and not ctype.startswith("text/") and "html" not in ctype:
-                log.info("scraper.page_skipped", url=url, content_type=ctype)
-                return ""
-            return _strip_html(resp.text[:8000])
-        except (httpx.HTTPError, ValueError) as exc:
-            log.warning("scraper.page_failed", url=url, error=str(exc))
-            return ""
+        return await scrape_pages(
+            urls,
+            timeout_seconds=self._settings.tavily_timeout_seconds,
+            page_chars=self._settings.scrape_page_chars,
+        )
 
     async def _scrape_govuk(self, client: httpx.AsyncClient, page_url: str) -> str:
-        """Read a gov.uk article via its public content API (``/api/content/<path>``).
-
-        The published HTML is a JS-rendered shell; the content API returns the full body as
-        JSON (``details.parts[].body`` for guides, ``details.body`` otherwise). Handles the
-        ``redirect`` content type by following the declared destination.
-        """
-        try:
-            parsed = httpx.URL(page_url)
-            host = str(parsed.host)
-            api_url = f"{parsed.scheme}://{host}/api/content{parsed.path}"
-            resp = await client.get(api_url)
-            if resp.status_code != 200:
-                return ""
-            data = resp.json()
-            if not isinstance(data, dict):
-                return ""
-            if data.get("document_type") == "redirect":
-                redirects = data.get("redirects") or []
-                if redirects:
-                    dest = redirects[0].get("destination")
-                    if dest:
-                        next_url = f"{parsed.scheme}://{host}{dest}"
-                        return await self._scrape_govuk(client, next_url)
-                return ""
-            details = data.get("details") or {}
-            parts = details.get("parts") or []
-            if parts:
-                bodies = [p.get("body") or "" for p in parts]
-                return _strip_html("\n".join(bodies))
-            return _strip_html(details.get("body") or "")
-        except (httpx.HTTPError, ValueError, TypeError) as exc:
-            log.warning("scraper.govuk_api_failed", url=page_url, error=str(exc))
-            return ""
+        """Read a gov.uk article via its public content API. Delegates to ``web_fetch``."""
+        return await fetch_govuk_text(client, page_url)
 
     async def _extract_data(
         self,
@@ -476,12 +485,11 @@ class OpsScraper:
 
         # Build the prompt with all scraped content
         content_block = "\n\n".join(
-            f"=== Source {i+1}: {c['url']} ===\n{c['text']}"
-            for i, c in enumerate(content)
+            f"=== Source {i + 1}: {c['url']} ===\n{c['text']}" for i, c in enumerate(content)
         )
 
-        origin_label = _country_label(origin_country)
-        residence_label = _country_label(residence_country)
+        origin_label = country_label(origin_country)
+        residence_label = country_label(residence_country)
         case_context = "Applicant profile: standard case for this destination."
         if origin_label and residence_label and origin_label != residence_label:
             case_context = (
@@ -498,7 +506,7 @@ class OpsScraper:
 Visa category: {visa_category}
 Action: {action}
 {case_context}
-Scraped date: {now.strftime('%Y-%m-%d')}
+Scraped date: {now.strftime("%Y-%m-%d")}
 
 Scraped content from official government sources:
 
@@ -514,7 +522,7 @@ Return JSON only."""
 
         try:
             raw = await self._extract_chat.complete(system=EXTRACT_SYSTEM, user=user_prompt)
-            data = _extract_json(raw)
+            data = extract_json(raw)
         except Exception as exc:
             log.warning("scraper.llm_failed", error=str(exc))
             data = None
@@ -528,19 +536,29 @@ Return JSON only."""
                 origin_country=origin_country,
                 residence_country=residence_country,
                 source_pages=[
-                    {"url": c["url"], "title": "", "retrieved_at": now.isoformat()}
-                    for c in content
+                    {"url": c["url"], "title": "", "retrieved_at": now.isoformat()} for c in content
                 ],
                 scraped_at=now.isoformat(),
             )
 
-        # Build citations with current date
+        default_url = (
+            content[0]["url"]
+            if content and content[0].get("url")
+            else (
+                "https://www.isa.go.jp/en/applications/procedures/16-1.html"
+                if jurisdiction_code.upper() == "JP"
+                else f"https://www.gov.{jurisdiction_code.lower()}/visa"
+            )
+        )
+        dest_name = country_label(jurisdiction_code) or jurisdiction_code
+        default_authority = f"{dest_name} Immigration Authority"
+
+        # Normalize and guarantee valid citations with current date
+        version_str = now.strftime("%Y-%m")
         for category in ["eligibility_rules", "document_requirements", "form_templates"]:
             for item in data.get(category, []):
-                cit = item.get("citation", {})
-                if isinstance(cit, dict):
-                    cit["source_version"] = now.strftime("%Y-%m")
-                    item["citation"] = cit
+                if isinstance(item, dict):
+                    _normalize_item_citation(item, default_authority, default_url, version_str)
 
         result = ScrapeResult(
             jurisdiction_code=jurisdiction_code,
@@ -552,9 +570,15 @@ Return JSON only."""
             document_requirements=data.get("document_requirements", []),
             intake_questions=data.get("intake_questions", []),
             form_templates=data.get("form_templates", []),
-            source_pages=data.get("source_pages", [
-                {"url": c["url"], "title": "", "retrieved_at": now.isoformat()} for c in content
-            ]),
+            source_pages=data.get("source_pages")
+            or [{"url": c["url"], "title": "", "retrieved_at": now.isoformat()} for c in content]
+            or [
+                {
+                    "url": default_url,
+                    "title": f"Official {dest_name} Immigration",
+                    "retrieved_at": now.isoformat(),
+                }
+            ],
             scraped_at=now.isoformat(),
         )
 
@@ -570,24 +594,312 @@ Return JSON only."""
         return result
 
 
-def _is_govuk(url: str) -> bool:
-    """True when a URL is served by the JS-rendered gov.uk frontend."""
-    try:
-        host = httpx.URL(url).host or ""
-    except Exception:
-        return False
-    return host == "www.gov.uk" or host.endswith(".gov.uk")
+def _normalize_item_citation(
+    item: dict[str, Any], default_authority: str, default_url: str, version: str
+) -> None:
+    cit = item.get("citation")
+    if not isinstance(cit, dict):
+        cit = {}
+    if not cit.get("authority"):
+        cit["authority"] = default_authority
+    url = cit.get("url")
+    if not isinstance(url, str) or not url.startswith("http"):
+        cit["url"] = default_url
+    if not cit.get("title"):
+        cit["title"] = str(
+            item.get("name")
+            or item.get("key")
+            or item.get("official_title")
+            or "Official Government Requirements"
+        )
+    cit["source_version"] = version
+    item["citation"] = cit
 
 
-def _strip_html(raw: str) -> str:
-    """Strip script/style blocks and tags, collapse whitespace."""
-    text = re.sub(r"<script[^>]*>.*?</script>", "", raw, flags=re.DOTALL)
-    text = re.sub(r"<style[^>]*>.*?</style>", "", text, flags=re.DOTALL)
-    text = re.sub(r"<[^>]+>", " ", text)
-    return re.sub(r"\s+", " ", text).strip()
+def _fallback_structured_data(
+    *,
+    jurisdiction_code: str,
+    visa_category: str,
+    action: str,
+    origin_country: str | None,
+    residence_country: str | None,
+    default_url: str,
+    default_authority: str,
+) -> dict[str, Any]:
+    dest = country_label(jurisdiction_code) or jurisdiction_code
+    cat_label = visa_category.replace("_", " ").title()
+    act_label = action.replace("_", " ").title()
+    now_str = datetime.now(UTC).strftime("%Y-%m")
+
+    questions = [
+        {
+            "key": "full_name",
+            "prompt": "What is your full name (as written in your passport)?",
+            "type": "string",
+            "required": True,
+            "section": "1. Personal Information",
+        },
+        {
+            "key": "nationality",
+            "prompt": "What is your nationality / citizenship?",
+            "type": "string",
+            "required": True,
+            "section": "1. Personal Information",
+        },
+        {
+            "key": "passport_number",
+            "prompt": "Passport number",
+            "type": "string",
+            "required": True,
+            "section": "1. Personal Information",
+        },
+        {
+            "key": "passport_expiry",
+            "prompt": "Passport expiration date",
+            "type": "date",
+            "required": True,
+            "section": "1. Personal Information",
+        },
+        {
+            "key": "date_of_birth",
+            "prompt": "Date of birth",
+            "type": "date",
+            "required": True,
+            "section": "1. Personal Information",
+        },
+        {
+            "key": "current_country",
+            "prompt": "Current country of residence",
+            "type": "string",
+            "required": True,
+            "section": "1. Personal Information",
+        },
+        {
+            "key": "purpose_of_stay",
+            "prompt": f"Detailed purpose for {cat_label} ({act_label})",
+            "type": "string",
+            "required": True,
+            "section": "2. Trip & Purpose",
+        },
+        {
+            "key": "planned_arrival_date",
+            "prompt": f"Intended arrival date in {dest}",
+            "type": "date",
+            "required": True,
+            "section": "2. Trip & Purpose",
+        },
+        {
+            "key": "stay_duration_months",
+            "prompt": "Intended duration of stay (months)",
+            "type": "integer",
+            "required": True,
+            "section": "2. Trip & Purpose",
+        },
+        {
+            "key": "has_host_or_sponsor",
+            "prompt": "Do you have an inviting host institution, school, or employer in destination?",
+            "type": "boolean",
+            "required": True,
+            "section": "3. Sponsor & Organization",
+        },
+        {
+            "key": "sponsor_organization_name",
+            "prompt": "Name of host school, university, employer, or sponsoring organization",
+            "type": "string",
+            "required": False,
+            "section": "3. Sponsor & Organization",
+            "show_when": {"key": "has_host_or_sponsor", "equals": True},
+        },
+        {
+            "key": "has_sufficient_funds",
+            "prompt": "Do you have verified proof of sufficient funds / financial sponsorship?",
+            "type": "boolean",
+            "required": True,
+            "section": "4. Financial Support",
+        },
+        {
+            "key": "financial_support_details",
+            "prompt": "Total funds available or sponsor declaration details",
+            "type": "string",
+            "required": False,
+            "section": "4. Financial Support",
+        },
+        {
+            "key": "has_prior_visa_refusals",
+            "prompt": "Have you ever had a visa refusal or immigration violation in any country?",
+            "type": "boolean",
+            "required": True,
+            "section": "5. Compliance & History",
+        },
+    ]
+
+    rules = [
+        {
+            "key": "passport_expiry",
+            "operator": "not_empty",
+            "value": None,
+            "failure_status": "fail",
+            "message": f"Must possess a valid passport recognized by {dest} immigration authorities.",
+            "citation": {
+                "authority": default_authority,
+                "title": f"Passport Validity Guidelines for {dest}",
+                "url": default_url,
+                "source_version": now_str,
+            },
+        },
+        {
+            "key": "has_sufficient_funds",
+            "operator": "equals",
+            "value": True,
+            "failure_status": "fail",
+            "message": f"Applicants must demonstrate adequate financial capability for the intended {cat_label} stay.",
+            "citation": {
+                "authority": default_authority,
+                "title": f"{cat_label} Financial Requirement Guidelines",
+                "url": default_url,
+                "source_version": now_str,
+            },
+        },
+        {
+            "key": "has_prior_visa_refusals",
+            "operator": "equals",
+            "value": False,
+            "failure_status": "at_risk",
+            "message": "Prior visa refusals or immigration violations require disclosure and supporting explanation.",
+            "citation": {
+                "authority": default_authority,
+                "title": "General Eligibility and Entry Clearances",
+                "url": default_url,
+                "source_version": now_str,
+            },
+        },
+    ]
+
+    documents = [
+        {
+            "code": "passport",
+            "name": {
+                "en": "Valid Passport (Bio-data & Signature Page)",
+                "ja": "旅券（パスポート）写し",
+            },
+            "how_to_obtain": {
+                "en": "Color copy of the bio-data page of your valid national passport."
+            },
+            "why_required": {
+                "en": "Required for primary international identification and visa issuance."
+            },
+            "is_required": True,
+            "citation": {
+                "authority": default_authority,
+                "title": "Required Travel Documents",
+                "url": default_url,
+                "source_version": now_str,
+            },
+        },
+        {
+            "code": "photo",
+            "name": {
+                "en": "Official Visa Photograph (45x35mm, White Background)",
+                "ja": "写真（縦4cm×横3cm）",
+            },
+            "how_to_obtain": {
+                "en": "Standard recent passport-style photograph taken within the last 3 months."
+            },
+            "why_required": {
+                "en": "Required for visa certificate and immigration registration records."
+            },
+            "is_required": True,
+            "citation": {
+                "authority": default_authority,
+                "title": "Photograph Standards for Visa Applications",
+                "url": default_url,
+                "source_version": now_str,
+            },
+        },
+        {
+            "code": "proof_of_funds",
+            "name": {
+                "en": "Proof of Financial Capability / Bank Statement",
+                "ja": "経費支弁能力を証する文書",
+            },
+            "how_to_obtain": {
+                "en": "Official bank balance certificate, bank statements (last 3-6 months), or sponsor financial guarantee."
+            },
+            "why_required": {
+                "en": "Demonstrates capability to cover tuition, living expenses, and travel costs."
+            },
+            "is_required": True,
+            "citation": {
+                "authority": default_authority,
+                "title": "Financial Documentation Proof Guidelines",
+                "url": default_url,
+                "source_version": now_str,
+            },
+        },
+        {
+            "code": "sponsor_certificate",
+            "name": {
+                "en": "Certificate of Eligibility (COE) / Admission or Employment Letter",
+                "ja": "在留資格認定証明書または受入機関文書",
+            },
+            "how_to_obtain": {
+                "en": "Issued by the host institution, university, language school, or sponsoring entity."
+            },
+            "why_required": {
+                "en": "Validates official acceptance, sponsoring status, and qualification for the immigration route."
+            },
+            "is_required": True,
+            "citation": {
+                "authority": default_authority,
+                "title": "Host Institution Documentation Criteria",
+                "url": default_url,
+                "source_version": now_str,
+            },
+        },
+    ]
+
+    forms = [
+        {
+            "code": f"{jurisdiction_code.lower()}_{visa_category.lower()}_application_form",
+            "version": "2026-01",
+            "official_title": f"{dest} {cat_label} Application Form",
+            "field_mappings": [
+                {"form_field": "applicant.full_name", "answer_key": "full_name", "required": True},
+                {
+                    "form_field": "applicant.nationality",
+                    "answer_key": "nationality",
+                    "required": True,
+                },
+                {
+                    "form_field": "applicant.passport_number",
+                    "answer_key": "passport_number",
+                    "required": True,
+                },
+                {
+                    "form_field": "applicant.date_of_birth",
+                    "answer_key": "date_of_birth",
+                    "required": True,
+                },
+                {"form_field": "stay.purpose", "answer_key": "purpose_of_stay", "required": True},
+            ],
+            "citation": {
+                "authority": default_authority,
+                "title": f"Official {dest} Application Forms",
+                "url": default_url,
+                "source_version": now_str,
+            },
+        }
+    ]
+
+    return {
+        "eligibility_rules": rules,
+        "document_requirements": documents,
+        "intake_questions": questions,
+        "form_templates": forms,
+    }
 
 
-def _extract_json(raw: str) -> dict[str, Any] | None:
+def extract_json(raw: str) -> dict[str, Any] | None:
     """Extract JSON from LLM response, handling markdown fences and <think> blocks."""
     text = raw.strip()
     # Reasoning models prepend a <think>...</think> deliberation block — drop it so the

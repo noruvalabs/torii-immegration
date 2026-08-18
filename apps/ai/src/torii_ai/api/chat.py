@@ -11,10 +11,11 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from torii_ai.config import Settings, get_settings
+from torii_ai.llm.groq import FakeChatClient, GroqChatClient
 from torii_ai.llm.nvidia import NvidiaChatClient
 from torii_ai.services.assistant import AssistantService
 from torii_ai.services.sessions import ChatMessage, session_store, utcnow
-from torii_ai.tools.tavily import TavilyClient
+from torii_ai.tools.tavily import FakeSearchClient, TavilyClient
 
 router = APIRouter(prefix="/ai/chat", tags=["chat"])
 
@@ -35,12 +36,26 @@ class SessionOut(BaseModel):
 class MessageIn(BaseModel):
     message: str = Field(min_length=1, max_length=4000)
     case_id: str | None = None
+    jurisdiction_code: str | None = None
+    visa_category_code: str | None = None
+    action_code: str | None = None
+    origin_country: str | None = None
+    residence_country: str | None = None
+    intake_answers: dict[str, Any] | None = None
+    eligibility_findings: list[dict[str, Any]] | None = None
     locale: str = Field(default="en", max_length=16)
 
 
 def get_assistant(settings: Annotated[Settings, Depends(get_settings)]) -> AssistantService:
     """Default wired assistant; tests override via ``app.dependency_overrides``."""
-    return AssistantService(chat=NvidiaChatClient(settings), search=TavilyClient(settings))
+    search = TavilyClient(settings) if settings.tavily_api_key else FakeSearchClient()
+    if settings.groq_api_key:
+        chat = GroqChatClient(settings, model=settings.groq_extract_model or settings.groq_model)
+    elif settings.nvidia_api_key:
+        chat = NvidiaChatClient(settings)
+    else:
+        chat = FakeChatClient()
+    return AssistantService(chat=chat, search=search)
 
 
 AssistantDep = Annotated[AssistantService, Depends(get_assistant)]
@@ -86,7 +101,17 @@ async def post_message(
         ChatMessage(role="user", content=payload.message, created_at=utcnow()),
     )
 
-    reply = await assistant.reply(message=payload.message, locale=payload.locale or convo.locale)
+    reply = await assistant.reply(
+        message=payload.message,
+        locale=payload.locale or convo.locale,
+        jurisdiction_code=payload.jurisdiction_code,
+        visa_category_code=payload.visa_category_code,
+        action_code=payload.action_code,
+        origin_country=payload.origin_country,
+        residence_country=payload.residence_country,
+        intake_answers=payload.intake_answers,
+        eligibility_findings=payload.eligibility_findings,
+    )
 
     async def event_stream() -> AsyncIterator[bytes]:
         assistant_parts: list[str] = []

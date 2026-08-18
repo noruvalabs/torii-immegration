@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -14,6 +15,7 @@ from torii_api.api.admin_ops import router as admin_ops_router
 from torii_api.api.auth import router as auth_router
 from torii_api.api.case_workflow import router as case_workflow_router
 from torii_api.api.cases import router as cases_router
+from torii_api.api.corridors import router as corridors_router
 from torii_api.api.docs import build_docs_router
 from torii_api.api.geolocation import router as geo_router
 from torii_api.api.health import router as health_router
@@ -72,9 +74,39 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
             app.state.arq_pool = await build_pool(settings.redis_url)
 
+        drainer_task = None
+        is_test = (
+            getattr(app.state, "testing", False)
+            or getattr(app.state, "disable_drainer", False)
+            or (":memory:" in settings.database_url)
+            or (settings.database_url == "sqlite+aiosqlite://")
+        )
+        if not is_test:
+            from torii_api.worker.scheduler import poll_outbox
+
+            async def _in_process_outbox_drainer() -> None:
+                ctx = {"session_factory": app.state.session_factory}
+                while True:
+                    try:
+                        await poll_outbox(ctx)
+                    except asyncio.CancelledError:
+                        break
+                    except Exception as exc:  # noqa: BLE001
+                        log.warning("outbox.in_process_drain_error", error=str(exc))
+                    await asyncio.sleep(2)
+
+            drainer_task = asyncio.create_task(_in_process_outbox_drainer())
+            log.info("api.in_process_outbox_drainer_started")
+
         yield
 
         log.info("api.shutdown", service=settings.service_name)
+        if drainer_task is not None:
+            drainer_task.cancel()
+            try:
+                await drainer_task
+            except asyncio.CancelledError:
+                pass
         pool = getattr(app.state, "arq_pool", None)
         if pool is not None:
             await pool.close()
@@ -94,6 +126,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     if settings.docs_enabled:
         app.include_router(build_docs_router(title=APP_TITLE))
     app.include_router(jurisdictions_router)
+    app.include_router(corridors_router)
     app.include_router(cases_router)
     app.include_router(case_workflow_router)
     app.include_router(payments_router)

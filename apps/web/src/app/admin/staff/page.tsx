@@ -1,9 +1,18 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { Shield } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Shield, Search } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { PaginationBar } from "@/components/ui/pagination";
 import { useAuth } from "@/lib/auth-context";
 
 type User = {
@@ -26,6 +35,9 @@ export default function StaffPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [filterRole, setFilterRole] = useState<string>("");
+  const [search, setSearch] = useState<string>("");
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(10);
 
   const headers = useCallback(
     (): Record<string, string> => {
@@ -58,6 +70,28 @@ export default function StaffPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Reset pagination to page 1 on filter or search change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filterRole, search]);
+
+  const filteredUsers = useMemo(() => {
+    return users.filter((u) => {
+      if (!search) return true;
+      const q = search.toLowerCase();
+      return (
+        u.email.toLowerCase().includes(q) ||
+        (u.username && u.username.toLowerCase().includes(q))
+      );
+    });
+  }, [users, search]);
+
+  const totalPages = Math.ceil(filteredUsers.length / pageSize) || 1;
+  const paginatedUsers = useMemo(() => {
+    const startIndex = (currentPage - 1) * pageSize;
+    return filteredUsers.slice(startIndex, startIndex + pageSize);
+  }, [filteredUsers, currentPage, pageSize]);
 
   async function changeRole(userId: number, role: string) {
     setError(null);
@@ -124,7 +158,7 @@ export default function StaffPage() {
             onClick={() => setFilterRole(filterRole === r ? "" : r)}
             className={`rounded-[var(--radius)] border p-3 text-left transition-colors ${
               filterRole === r
-                ? "border-primary bg-primary/5"
+                ? "border-primary bg-primary/5 shadow-xs"
                 : "bg-card hover:bg-accent"
             }`}
           >
@@ -136,41 +170,60 @@ export default function StaffPage() {
         ))}
       </div>
 
-      <Card>
-        <CardContent className="p-0">
-          {loading ? (
-            <p className="p-5 text-sm text-muted-foreground">Loading…</p>
-          ) : users.length === 0 ? (
-            <p className="p-5 text-sm text-muted-foreground">
-              {filterRole
-                ? `No ${filterRole} users found.`
-                : "No users yet."}
-            </p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b text-left text-xs uppercase tracking-wider text-muted-foreground">
-                    <th className="px-5 py-3 font-medium">User</th>
-                    <th className="px-5 py-3 font-medium">Role</th>
-                    <th className="px-5 py-3 font-medium">Status</th>
-                    <th className="px-5 py-3 font-medium text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {users.map((u) => (
-                    <tr key={u.id} className="border-b last:border-0">
-                      <td className="px-5 py-3">
+      {/* Search and filter bar */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="relative flex-1 sm:max-w-xs">
+          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search by email or username…"
+            className="h-9 w-full rounded-[var(--radius)] border bg-background pl-9 pr-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          />
+        </div>
+        {filterRole && (
+          <Badge tone="default" className="text-xs">
+            Role: {filterRole}
+          </Badge>
+        )}
+      </div>
+
+      <div className="space-y-4">
+        <Card>
+          <CardContent className="p-0">
+            {loading ? (
+              <p className="p-5 text-sm text-muted-foreground">Loading…</p>
+            ) : filteredUsers.length === 0 ? (
+              <p className="p-5 text-sm text-muted-foreground">
+                {filterRole || search
+                  ? "No matching users found."
+                  : "No users yet."}
+              </p>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="px-5">User</TableHead>
+                    <TableHead className="px-5">Role</TableHead>
+                    <TableHead className="px-5">Status</TableHead>
+                    <TableHead className="px-5 text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {paginatedUsers.map((u) => (
+                    <TableRow key={u.id}>
+                      <TableCell className="px-5">
                         <div>
-                          <p className="font-medium">{u.email}</p>
+                          <p className="font-medium text-foreground">{u.email}</p>
                           {u.username && (
                             <p className="text-xs text-muted-foreground">
                               @{u.username}
                             </p>
                           )}
                         </div>
-                      </td>
-                      <td className="px-5 py-3">
+                      </TableCell>
+                      <TableCell className="px-5">
                         <select
                           value={u.role}
                           disabled={u.id === currentUser?.id}
@@ -183,8 +236,8 @@ export default function StaffPage() {
                             </option>
                           ))}
                         </select>
-                      </td>
-                      <td className="px-5 py-3">
+                      </TableCell>
+                      <TableCell className="px-5">
                         <Badge tone={u.is_active ? "success" : "danger"}>
                           {u.is_active ? "active" : "inactive"}
                         </Badge>
@@ -193,8 +246,8 @@ export default function StaffPage() {
                             verified
                           </Badge>
                         )}
-                      </td>
-                      <td className="px-5 py-3 text-right">
+                      </TableCell>
+                      <TableCell className="px-5 text-right">
                         {u.id !== currentUser?.id && (
                           <button
                             onClick={() => toggleActive(u.id, !u.is_active)}
@@ -203,15 +256,29 @@ export default function StaffPage() {
                             {u.is_active ? "Deactivate" : "Activate"}
                           </button>
                         )}
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
+
+        <PaginationBar
+          currentPage={currentPage}
+          totalPages={totalPages}
+          totalItems={filteredUsers.length}
+          pageSize={pageSize}
+          onPageChange={setCurrentPage}
+          onPageSizeChange={(size) => {
+            setPageSize(size);
+            setCurrentPage(1);
+          }}
+          itemName="users"
+        />
+      </div>
     </div>
   );
 }
+

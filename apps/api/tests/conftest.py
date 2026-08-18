@@ -40,6 +40,7 @@ async def client(engine: AsyncEngine) -> AsyncIterator[AsyncClient]:
     app.state.engine = engine
     app.state.session_factory = create_session_factory(engine)
     app.state.arq_pool = None  # never connect to Redis in tests
+    app.state.testing = True
 
     transport = ASGITransport(app=app)
     async with app.router.lifespan_context(app):

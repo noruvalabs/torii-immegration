@@ -17,7 +17,7 @@ export function Sidebar() {
   })).filter((group) => group.items.length > 0);
 
   return (
-    <aside className="hidden w-64 shrink-0 flex-col border-r bg-card md:flex">
+    <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r bg-card md:flex">
       <div className="flex h-16 items-center gap-2 border-b px-6">
         <span className="text-xl" aria-hidden>
           ⛩️

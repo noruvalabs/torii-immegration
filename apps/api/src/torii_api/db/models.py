@@ -23,7 +23,7 @@ from enum import StrEnum
 from typing import Any
 
 from sqlalchemy import JSON as SAJSON
-from sqlalchemy import Boolean, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, Float, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from torii_api.db.base import Base, TimestampMixin, UTCDateTime
@@ -58,9 +58,7 @@ class User(TimestampMixin, Base):
     password_reset_token: Mapped[str | None] = mapped_column(
         String(128), unique=True, index=True, nullable=True
     )
-    password_reset_expires: Mapped[datetime | None] = mapped_column(
-        UTCDateTime, nullable=True
-    )
+    password_reset_expires: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
 
     # ── Profile fields (auto-fill for intake) ──────────────────────────────
     full_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
@@ -200,9 +198,7 @@ class DocumentRequirementSet(TimestampMixin, Base):
     is_live: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
 
     jurisdiction: Mapped[Jurisdiction] = relationship(back_populates="document_requirement_sets")
-    visa_category: Mapped[VisaCategory] = relationship(
-        back_populates="document_requirement_sets"
-    )
+    visa_category: Mapped[VisaCategory] = relationship(back_populates="document_requirement_sets")
     case_action: Mapped[CaseAction] = relationship(back_populates="document_requirement_sets")
 
 
@@ -225,9 +221,7 @@ class FormTemplate(TimestampMixin, Base):
     jurisdiction: Mapped[Jurisdiction] = relationship(back_populates="form_templates")
     visa_category: Mapped[VisaCategory] = relationship(back_populates="form_templates")
     case_action: Mapped[CaseAction] = relationship(back_populates="form_templates")
-    generated_forms: Mapped[list[CaseGeneratedForm]] = relationship(
-        back_populates="form_template"
-    )
+    generated_forms: Mapped[list[CaseGeneratedForm]] = relationship(back_populates="form_template")
 
 
 class ScopeResearchStatus(StrEnum):
@@ -273,6 +267,42 @@ class ScopeResearch(TimestampMixin, Base):
     jurisdiction: Mapped[Jurisdiction] = relationship()
     visa_category: Mapped[VisaCategory] = relationship()
     case_action: Mapped[CaseAction] = relationship()
+
+
+class CaseStageResearch(TimestampMixin, Base):
+    """Cached, citation-gated agentic research for one pipeline stage (docs/plan/03).
+
+    Replaces pack/DB-first content resolution: ``admissibility``, ``intake``, ``eligibility``,
+    ``documents``, and ``forms`` are each researched live (search + LLM extraction) rather than
+    read from seeded definition tables, for every scope. ``admissibility`` may run **before** a
+    case exists — keyed by ``scope_key`` (destination+purpose+action+nationality+residence) and
+    shared across applicants on the same corridor. The other four stages are per-case only
+    (keyed by ``case_id`` + ``stage``), because their queries are seeded with this applicant's
+    own answers and prior stage results, not just the scope.
+    """
+
+    __tablename__ = "case_stage_research"
+    __table_args__ = (
+        UniqueConstraint("case_id", "stage", name="uq_case_stage_research_case"),
+        UniqueConstraint("scope_key", "stage", name="uq_case_stage_research_scope"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    case_id: Mapped[int | None] = mapped_column(ForeignKey("cases.id"), nullable=True, index=True)
+    stage: Mapped[str] = mapped_column(String(16), index=True)
+    # NULL for per-case stages (case_id is the dedup key there); set only for the pre-case
+    # "admissibility" stage, e.g. "JP|tourist|new_application|BD|BD".
+    scope_key: Mapped[str | None] = mapped_column(String(160), nullable=True, index=True)
+    status: Mapped[str] = mapped_column(
+        String(16), default=ScopeResearchStatus.QUEUED, server_default=ScopeResearchStatus.QUEUED
+    )
+    payload: Mapped[dict[str, Any]] = mapped_column(SAJSON, default=dict)
+    source_pages: Mapped[list[dict[str, Any]]] = mapped_column(SAJSON, default=list)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    researched_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+    expires_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+
+    case: Mapped[Case | None] = relationship(back_populates="stage_research")
 
 
 class Case(TimestampMixin, Base):
@@ -339,6 +369,9 @@ class Case(TimestampMixin, Base):
         back_populates="case", cascade="all, delete-orphan"
     )
     escalations: Mapped[list[CaseEscalation]] = relationship(
+        back_populates="case", cascade="all, delete-orphan"
+    )
+    stage_research: Mapped[list[CaseStageResearch]] = relationship(
         back_populates="case", cascade="all, delete-orphan"
     )
     payments: Mapped[list[Payment]] = relationship(back_populates="case")
@@ -437,9 +470,7 @@ class OutboxEvent(TimestampMixin, Base):
     # JSON on Postgres, JSON-as-text on SQLite — portable across both engines.
     payload: Mapped[dict] = mapped_column(SAJSON, default=dict)
     # NULL while pending; stamped when the worker has handled it (at-least-once).
-    processed_at: Mapped[datetime | None] = mapped_column(
-        UTCDateTime, nullable=True, index=True
-    )
+    processed_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True, index=True)
 
 
 class PaymentStatus(StrEnum):
@@ -508,9 +539,7 @@ class DocumentWalletItem(TimestampMixin, Base):
     issued_date: Mapped[str | None] = mapped_column(String(16), nullable=True)
     expiry_date: Mapped[str | None] = mapped_column(String(16), nullable=True)
     # Status
-    status: Mapped[str] = mapped_column(
-        String(16), default="active", server_default="active"
-    )
+    status: Mapped[str] = mapped_column(String(16), default="active", server_default="active")
     # active, expired, revoked
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
@@ -526,9 +555,7 @@ class DocumentWalletItemVersion(TimestampMixin, Base):
     __tablename__ = "document_wallet_item_versions"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    document_id: Mapped[int] = mapped_column(
-        ForeignKey("document_wallet_items.id"), index=True
-    )
+    document_id: Mapped[int] = mapped_column(ForeignKey("document_wallet_items.id"), index=True)
     version: Mapped[int] = mapped_column(Integer)
     storage_key: Mapped[str] = mapped_column(String(512))
     filename: Mapped[str] = mapped_column(String(256))

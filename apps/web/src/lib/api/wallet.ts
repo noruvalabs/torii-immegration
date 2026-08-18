@@ -90,8 +90,12 @@ export function getDocumentTypes(token?: string | null) {
   return request<DocumentTypesResponse>("/document-types", { method: "GET" }, token);
 }
 
-export function getWallet(token?: string | null) {
-  return request<WalletDocument[]>("/", { method: "GET" }, token);
+export async function getWallet(token?: string | null) {
+  try {
+    return await request<WalletDocument[]>("/", { method: "GET" }, token);
+  } catch {
+    return await request<WalletDocument[]>("", { method: "GET" }, token);
+  }
 }
 
 export function getWalletSummary(token?: string | null) {
@@ -159,3 +163,16 @@ export function deleteDocument(documentId: number, token?: string | null) {
     }
   });
 }
+
+export function patchWalletDocument(
+  documentId: number,
+  data: { name?: string; issued_date?: string; expiry_date?: string; notes?: string },
+  token?: string | null
+) {
+  return request<WalletDocument>(`/${documentId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  }, token);
+}
+

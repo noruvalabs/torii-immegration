@@ -25,21 +25,9 @@ class GeoLocation(BaseModel):
 
 # Supported countries for destination selection
 SUPPORTED_DESTINATIONS: dict[str, dict[str, str]] = {
+    "JP": {"name": "Japan", "currency": "JPY", "flag": "🇯🇵"},
     "US": {"name": "United States", "currency": "USD", "flag": "🇺🇸"},
     "UK": {"name": "United Kingdom", "currency": "GBP", "flag": "🇬🇧"},
-    "CA": {"name": "Canada", "currency": "CAD", "flag": "🇨🇦"},
-    "AU": {"name": "Australia", "currency": "AUD", "flag": "🇦🇺"},
-    "DE": {"name": "Germany", "currency": "EUR", "flag": "🇩🇪"},
-    "FR": {"name": "France", "currency": "EUR", "flag": "🇫🇷"},
-    "JP": {"name": "Japan", "currency": "JPY", "flag": "🇯🇵"},
-    "SG": {"name": "Singapore", "currency": "SGD", "flag": "🇸🇬"},
-    "KR": {"name": "South Korea", "currency": "KRW", "flag": "🇰🇷"},
-    "NZ": {"name": "New Zealand", "currency": "NZD", "flag": "🇳🇿"},
-    "IE": {"name": "Ireland", "currency": "EUR", "flag": "🇮🇪"},
-    "NL": {"name": "Netherlands", "currency": "EUR", "flag": "🇳🇱"},
-    "SE": {"name": "Sweden", "currency": "SEK", "flag": "🇸🇪"},
-    "NO": {"name": "Norway", "currency": "NOK", "flag": "🇳🇴"},
-    "CH": {"name": "Switzerland", "currency": "CHF", "flag": "🇨🇭"},
 }
 
 # Supported nationalities (country of origin / citizenship) for cross-border guidance.
@@ -89,18 +77,17 @@ APPLICATION_TYPES: dict[str, dict[str, str]] = {
 
 
 async def detect_country_from_ip(request: Request) -> GeoLocation:
-    """Detect country from client IP. Defaults to Japan for dev."""
+    """Detect country from client IP. Defaults to Bangladesh for dev."""
     client_ip = request.client.host if request.client else "unknown"
 
-    # Default to Japan - user can change via residence endpoint
-    log.info("geo.detected", ip=client_ip, country_code="JP", is_japan=True)
+    log.info("geo.detected", ip=client_ip, country_code="BD", is_japan=False)
 
     return GeoLocation(
         ip=client_ip,
-        country_code="JP",
-        country_name="Japan",
-        city="Tokyo",
-        is_japan=True,
+        country_code="BD",
+        country_name="Bangladesh",
+        city="Dhaka",
+        is_japan=False,
     )
 
 

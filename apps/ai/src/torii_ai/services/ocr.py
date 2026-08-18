@@ -9,7 +9,9 @@ from pydantic import BaseModel
 
 from torii_ai.config import get_settings
 
-DocumentType = Literal["passport", "residence_card", "employment_contract", "proof_of_funds", "travel_itinerary"]
+DocumentType = Literal[
+    "passport", "residence_card", "employment_contract", "proof_of_funds", "travel_itinerary"
+]
 
 
 class ExtractedValue(BaseModel):
@@ -30,7 +32,7 @@ DOC_TYPE_PROMPTS: dict[DocumentType, str] = {
         "- nationality: Country of citizenship\n"
         "- date_of_birth: Date of birth (YYYY-MM-DD)\n"
         "- expiry_date: Passport expiry date (YYYY-MM-DD)\n"
-        "Return as JSON with field names as keys and {\"value\": \"...\", \"confidence\": 0.0-1.0} objects."
+        'Return as JSON with field names as keys and {"value": "...", "confidence": 0.0-1.0} objects.'
     ),
     "residence_card": (
         "Extract the following fields from this residence card document:\n"
@@ -38,7 +40,7 @@ DOC_TYPE_PROMPTS: dict[DocumentType, str] = {
         "- residence_card_number: The card number\n"
         "- status: Residence status type\n"
         "- expiry_date: Card expiry date (YYYY-MM-DD)\n"
-        "Return as JSON with field names as keys and {\"value\": \"...\", \"confidence\": 0.0-1.0} objects."
+        'Return as JSON with field names as keys and {"value": "...", "confidence": 0.0-1.0} objects.'
     ),
     "employment_contract": (
         "Extract the following fields from this employment contract:\n"
@@ -46,7 +48,7 @@ DOC_TYPE_PROMPTS: dict[DocumentType, str] = {
         "- employee_name: Employee name\n"
         "- position: Job title/position\n"
         "- start_date: Employment start date (YYYY-MM-DD)\n"
-        "Return as JSON with field names as keys and {\"value\": \"...\", \"confidence\": 0.0-1.0} objects."
+        'Return as JSON with field names as keys and {"value": "...", "confidence": 0.0-1.0} objects.'
     ),
     "proof_of_funds": (
         "Extract the following fields from this financial document (bank statement, "
@@ -56,7 +58,7 @@ DOC_TYPE_PROMPTS: dict[DocumentType, str] = {
         "- balance: Account balance or available amount (include currency)\n"
         "- statement_date: Date of the statement (YYYY-MM-DD)\n"
         "- account_number: Last 4 digits of account number if visible\n"
-        "Return as JSON with field names as keys and {\"value\": \"...\", \"confidence\": 0.0-1.0} objects."
+        'Return as JSON with field names as keys and {"value": "...", "confidence": 0.0-1.0} objects.'
     ),
     "travel_itinerary": (
         "Extract the following fields from this travel itinerary or booking document:\n"
@@ -66,7 +68,7 @@ DOC_TYPE_PROMPTS: dict[DocumentType, str] = {
         "- destination: Destination city/country\n"
         "- airline_or_hotel: Airline name or hotel name\n"
         "- booking_reference: Booking/reference number\n"
-        "Return as JSON with field names as keys and {\"value\": \"...\", \"confidence\": 0.0-1.0} objects."
+        'Return as JSON with field names as keys and {"value": "...", "confidence": 0.0-1.0} objects.'
     ),
 }
 
@@ -115,7 +117,10 @@ def extract_document_fields(
         response = client.chat.completions.create(
             model=model,
             messages=[
-                {"role": "system", "content": "You are a document OCR assistant. Extract fields from document images and return valid JSON only."},
+                {
+                    "role": "system",
+                    "content": "You are a document OCR assistant. Extract fields from document images and return valid JSON only.",
+                },
                 {"role": "user", "content": prompt},
             ],
             temperature=0.1,
@@ -144,9 +149,7 @@ def extract_document_fields(
     return _fallback_extract(doc_type, filename, hint_text)
 
 
-def _fallback_extract(
-    doc_type: DocumentType, filename: str, hint_text: str | None
-) -> OCRResult:
+def _fallback_extract(doc_type: DocumentType, filename: str, hint_text: str | None) -> OCRResult:
     """Fallback regex extraction when vision model is unavailable."""
     import re
 
@@ -179,8 +182,6 @@ def _fallback_extract(
     else:
         match = re.search(r"(?:employer|company)\s*[:=]\s*([^\n,;]+)", text, re.IGNORECASE)
         if match:
-            fields["employer_name"] = ExtractedValue(
-                value=match.group(1).strip(), confidence=0.88
-            )
+            fields["employer_name"] = ExtractedValue(value=match.group(1).strip(), confidence=0.88)
 
     return OCRResult(fields=fields, needs_recapture=not fields)

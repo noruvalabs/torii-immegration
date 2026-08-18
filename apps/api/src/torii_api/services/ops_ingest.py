@@ -24,7 +24,7 @@ from torii_api.db.models import (
     OutboxEvent,
     VisaCategory,
 )
-from torii_api.services.content_packs import effective_window, is_effective_on
+from torii_api.services.content_packs import effective_window
 from torii_api.services.intake import parse_questions
 
 log = structlog.get_logger()
@@ -36,7 +36,7 @@ BEACHHEAD_SCOPES: list[tuple[str, str, str]] = [
 ]
 
 
-def _has_citation(item: dict[str, Any]) -> bool:
+def has_citation(item: dict[str, Any]) -> bool:
     citation = item.get("citation")
     if not isinstance(citation, dict):
         return False
@@ -68,9 +68,9 @@ def validated_for_promote(
     """True when scraped payload is complete enough to go live without manual OPS."""
     if not rules or not documents or not questions:
         return False
-    if not all(_has_citation(rule) for rule in rules):
+    if not all(has_citation(rule) for rule in rules):
         return False
-    if not all(_has_citation(doc) for doc in documents):
+    if not all(has_citation(doc) for doc in documents):
         return False
     if not all(_has_valid_effective_window(item) for item in rules + documents):
         return False
@@ -215,7 +215,7 @@ async def ingest_scrape_result(
                 FormTemplate.code == code,
             )
         )
-        form_live = promote and _has_citation(form)
+        form_live = promote and has_citation(form)
         values = {
             "version": str(form.get("version") or datetime.now(UTC).strftime("%Y-%m")),
             "official_title": str(form.get("official_title") or code),

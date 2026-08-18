@@ -53,40 +53,8 @@ def generate_transaction_id() -> str:
     return f"TXN-{uuid.uuid4().hex[:12].upper()}"
 
 
-def _pack_published_fee(jurisdiction_code: str, visa_type: str, as_of: date) -> float | None:
-    """Resolve a published, date-effective fee from a content pack, if any.
-
-    Only ``published`` fees are eligible (NF-2: no unconfirmed numbers reach a user).
-    Prefers the most recently effective fee for the given date; falls back to None so the
-    caller keeps the mock map for destinations without pack content.
-    """
-    try:
-        from torii_api.services.content_packs import load_all_packs, resolve_fee
-    except ImportError:
-        return None
-    best: float | None = None
-    for scope_id, pack in load_all_packs().items():
-        if pack.scope.jurisdiction.upper() != jurisdiction_code.upper():
-            continue
-        if pack.scope.visa_category.lower() != visa_type.lower():
-            continue
-        fee = resolve_fee(pack.fees, as_of=as_of)
-        if fee is not None and fee.amount is not None:
-            best = fee.amount
-    return best
-
-
 def get_visa_fee(destination_code: str, visa_type: str, *, as_of: date | None = None) -> float:
-    """Get visa fee for a destination country and visa type.
-
-    Pack-authored published fees win; the static map is the fallback for destinations
-    without pack content. ``as_of`` selects the fee in force on that date (the fee applying
-    is the one in force when the application is received).
-    """
-    as_of = as_of or datetime.now(UTC).date()
-    pack_fee = _pack_published_fee(destination_code, visa_type, as_of)
-    if pack_fee is not None:
-        return pack_fee
+    """Get visa fee for a destination country and visa type."""
     country_fees = VISA_FEES.get(destination_code, {})
     return country_fees.get(visa_type.lower(), 99.99)  # Default fee
 

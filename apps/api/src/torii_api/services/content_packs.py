@@ -175,7 +175,7 @@ class ContentPack(BaseModel):
 
     @property
     def document_items(self) -> list[dict[str, Any]]:
-        raw = self.documents.get("items")
+        raw = self.documents.get("items") or self.documents.get("requirements")
         if not isinstance(raw, list):
             raise ValueError(f"{self.scope_id}: documents.items must be a list")
         return [dict(item) for item in raw]
@@ -364,7 +364,7 @@ def resolve_fee(
             candidates = by_channel
     if not candidates:
         return None
-    best = sorted(candidates, key=lambda f: (f.effective_from or "0000-00-00"), reverse=True)[0]
+    best = sorted(candidates, key=lambda f: f.effective_from or "0000-00-00", reverse=True)[0]
     if period and best.tiers:
         for tier in best.tiers:
             if tier.get("period") == period:

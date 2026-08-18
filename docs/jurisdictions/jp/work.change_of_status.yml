@@ -1,0 +1,243 @@
+scope:
+  jurisdiction: JP
+  visa_category: work
+  action: change_of_status
+  is_live: true
+  name: Japan Work Visa — Change of Status to Work (在留資格変更許可申請・就労)
+
+stages:
+  - sequence: 1
+    code: applicant_filing
+    actor: applicant
+
+intake:
+  questions:
+    # --- Section 1: Identity & Current Residence Status ---
+    - key: full_name
+      section: Identity & Current Status
+      prompt: What is your full name as it appears on your passport and residence card?
+      type: string
+      min_length: 2
+      max_length: 200
+      required: true
+      citation:
+        authority: Immigration Services Agency of Japan (MOJ)
+        title: Application for Change of Status of Residence (Procedure 16-2)
+        url: https://www.moj.go.jp/isa/applications/procedures/16-2.html
+
+    - key: nationality
+      section: Identity & Current Status
+      prompt: What is your nationality (passport country)?
+      type: enum
+      options:
+        - BD
+        - US
+        - GB
+        - CA
+        - AU
+        - DE
+        - FR
+        - SG
+        - KR
+        - IN
+        - CN
+        - PH
+        - VN
+        - ID
+        - TH
+        - MY
+        - other
+      required: true
+      citation:
+        authority: Immigration Services Agency of Japan (MOJ)
+        title: Nationality Verification
+        url: https://www.moj.go.jp/isa/applications/procedures/16-2.html
+
+    - key: residence_card_number
+      section: Identity & Current Status
+      prompt: What is your current residence card number (在留カード番号)?
+      type: string
+      min_length: 5
+      max_length: 32
+      required: true
+      citation:
+        authority: Immigration Services Agency of Japan (MOJ)
+        title: Residence Card Presentation Rules
+        url: https://www.moj.go.jp/isa/applications/procedures/16-2.html
+
+    - key: current_status_of_residence
+      section: Identity & Current Status
+      prompt: What is your current status of residence in Japan?
+      type: enum
+      options:
+        - student
+        - dependent
+        - designated_activities
+        - technical_intern_training
+        - other
+      required: true
+      citation:
+        authority: Immigration Services Agency of Japan (MOJ)
+        title: Prior Status of Residence Verification
+        url: https://www.moj.go.jp/isa/applications/procedures/16-2.html
+
+    # --- Section 2: New Employer & Employment Terms ---
+    - key: employer_name
+      section: Sponsoring Employer
+      prompt: What is the registered name of your hiring employer in Japan?
+      type: string
+      min_length: 2
+      max_length: 200
+      required: true
+      citation:
+        authority: Immigration Services Agency of Japan (MOJ)
+        title: Sponsoring Organization Details
+        url: https://www.moj.go.jp/isa/applications/procedures/16-2.html
+
+    - key: corporate_number
+      section: Sponsoring Employer
+      prompt: What is the 13-digit Corporate Number (法人番号) of the employer?
+      type: string
+      min_length: 13
+      max_length: 13
+      required: true
+      citation:
+        authority: National Tax Agency of Japan (NTA)
+        title: Corporate Number Search
+        url: https://www.moj.go.jp/isa/applications/procedures/16-2.html
+
+    - key: monthly_salary
+      section: Sponsoring Employer
+      prompt: What is your gross monthly salary under the new employment contract (in JPY)?
+      type: integer
+      min_value: 150000
+      max_value: 5000000
+      required: true
+      citation:
+        authority: Immigration Services Agency of Japan (MOJ)
+        title: Equal Remuneration Requirement
+        url: https://www.moj.go.jp/isa/applications/procedures/16-2.html
+
+    - key: job_description
+      section: Sponsoring Employer
+      prompt: What are your primary job duties under this position?
+      type: string
+      min_length: 5
+      max_length: 500
+      required: true
+      citation:
+        authority: Immigration Services Agency of Japan (MOJ)
+        title: Job Duties & Visa Scope Match
+        url: https://www.moj.go.jp/isa/applications/procedures/16-2.html
+
+    # --- Section 3: Academic Background & Degree Match ---
+    - key: highest_degree_earned
+      section: Academic Credentials
+      prompt: What is your highest degree completed or to be completed before starting employment?
+      type: enum
+      options:
+        - bachelor_degree
+        - master_degree
+        - doctorate_phd
+        - vocational_college_japan
+        - high_school_or_none
+      required: true
+      citation:
+        authority: Immigration Services Agency of Japan (MOJ)
+        title: Academic Degree Prerequisite
+        url: https://www.moj.go.jp/isa/applications/procedures/16-2.html
+
+    - key: graduation_date
+      section: Academic Credentials
+      prompt: What is your graduation date or expected graduation date (YYYY-MM-DD)?
+      type: date
+      required: true
+      citation:
+        authority: Immigration Services Agency of Japan (MOJ)
+        title: Certificate of Graduation / Expected Graduation
+        url: https://www.moj.go.jp/isa/applications/procedures/16-2.html
+
+eligibility:
+  rules:
+    - key: highest_degree_earned
+      operator: in
+      value:
+        - bachelor_degree
+        - master_degree
+        - doctorate_phd
+        - vocational_college_japan
+      failure_status: at_risk
+      message: Bachelor degree or Japanese senmon-shi diploma is required to change to Work status.
+      citation:
+        authority: Immigration Services Agency of Japan (MOJ)
+        title: Work Visa Criteria Ordinance
+        url: https://www.moj.go.jp/isa/applications/procedures/16-2.html
+
+    - key: monthly_salary
+      operator: min
+      value: 200000
+      failure_status: at_risk
+      message: Monthly salary must meet or exceed ¥200,000 to satisfy ISA remuneration criteria.
+      citation:
+        authority: Immigration Services Agency of Japan (MOJ)
+        title: Minimum Remuneration Standards
+        url: https://www.moj.go.jp/isa/applications/procedures/16-2.html
+
+documents:
+  requirements:
+    - code: change_of_status_app_form
+      name: Application for Change of Status of Residence (在留資格変更許可申請書)
+      is_required: true
+      citation:
+        authority: Immigration Services Agency of Japan (MOJ)
+        title: Official Procedure 16-2
+        url: https://www.moj.go.jp/isa/applications/procedures/16-2.html
+
+    - code: employment_contract
+      name: Employment Contract or Offer Letter (雇用契約書 / 採用内定通知書)
+      is_required: true
+      citation:
+        authority: Immigration Services Agency of Japan (MOJ)
+        title: Proof of Employment Terms
+        url: https://www.moj.go.jp/isa/applications/procedures/16-2.html
+
+    - code: graduation_certificate
+      name: Certificate of Graduation or Expected Graduation (卒業証明書 / 卒業見込証明書)
+      is_required: true
+      citation:
+        authority: Immigration Services Agency of Japan (MOJ)
+        title: Academic Degree Verification
+        url: https://www.moj.go.jp/isa/applications/procedures/16-2.html
+
+    - code: company_statutory_table
+      name: Sponsoring Company Category Documentation (法定調書合計表 / 登記簿謄本)
+      is_required: true
+      citation:
+        authority: Immigration Services Agency of Japan (MOJ)
+        title: Employer Category Documentation
+        url: https://www.moj.go.jp/isa/applications/procedures/16-2.html
+
+forms:
+  - code: moj_change_to_work
+    version: "2026-04"
+    official_title: Application for Change of Status of Residence (在留資格変更許可申請書)
+    citation:
+      authority: Immigration Services Agency of Japan (MOJ)
+      title: Official Procedure 16-2
+      url: https://www.moj.go.jp/isa/applications/procedures/16-2.html
+    field_mappings:
+      - form_field: applicant_name
+        answer_key: full_name
+        required: true
+      - form_field: nationality
+        answer_key: nationality
+        required: true
+      - form_field: card_no
+        answer_key: residence_card_number
+        required: true
+      - form_field: employer
+        answer_key: employer_name
+        required: true
+      - form_field: salary
+        answer_key: monthly_salary
+        required: true

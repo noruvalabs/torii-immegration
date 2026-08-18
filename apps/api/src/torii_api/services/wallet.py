@@ -338,17 +338,19 @@ async def get_wallet_summary(db: AsyncSession, user_id: int) -> dict[str, Any]:
         category = doc_info.get("category", "other")
         if category not in by_category:
             by_category[category] = []
-        by_category[category].append({
-            "id": doc.id,
-            "doc_type": doc.doc_type,
-            "name": doc.name,
-            "version": doc.version,
-            "filename": doc.filename,
-            "issued_date": doc.issued_date,
-            "expiry_date": doc.expiry_date,
-            "status": doc.status,
-            "created_at": doc.created_at.isoformat() if doc.created_at else None,
-        })
+        by_category[category].append(
+            {
+                "id": doc.id,
+                "doc_type": doc.doc_type,
+                "name": doc.name,
+                "version": doc.version,
+                "filename": doc.filename,
+                "issued_date": doc.issued_date,
+                "expiry_date": doc.expiry_date,
+                "status": doc.status,
+                "created_at": doc.created_at.isoformat() if doc.created_at else None,
+            }
+        )
 
     return {
         "total_documents": len(wallet),

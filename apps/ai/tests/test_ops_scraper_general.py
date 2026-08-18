@@ -167,7 +167,6 @@ async def test_scrape_jurisdiction_bad_llm_json_keeps_source_pages() -> None:
 async def test_scrape_govuk_via_content_api() -> None:
     """gov.uk JS shell is read via its content API, not the empty HTML wrapper."""
 
-
     settings = Settings()
     scraper = OpsScraper(search=FakeSearchClient(), chat=FakeChatClient(), settings=settings)
     captured: list[str] = []
@@ -184,8 +183,13 @@ async def test_scrape_govuk_via_content_api() -> None:
         async def get(self, url: str):
             captured.append(url)
             if url == "https://www.gov.uk/api/content/standard-visitor":
-                return _FakeResp(200, {"document_type": "guide", "details": {
-                    "parts": [{"body": "<p>You must be a genuine visitor.</p>"}]}})
+                return _FakeResp(
+                    200,
+                    {
+                        "document_type": "guide",
+                        "details": {"parts": [{"body": "<p>You must be a genuine visitor.</p>"}]},
+                    },
+                )
             return _FakeResp(404, {})
 
     client = _FakeClient()
@@ -196,7 +200,6 @@ async def test_scrape_govuk_via_content_api() -> None:
 
 @pytest.mark.asyncio
 async def test_scrape_govuk_follows_redirects() -> None:
-
 
     settings = Settings()
     scraper = OpsScraper(search=FakeSearchClient(), chat=FakeChatClient(), settings=settings)
@@ -214,10 +217,18 @@ async def test_scrape_govuk_follows_redirects() -> None:
         async def get(self, url: str):
             captured.append(url)
             if url == "https://www.gov.uk/api/content/standard-visitor-visa":
-                return _FakeResp({"document_type": "redirect",
-                    "redirects": [{"destination": "/standard-visitor"}]})
-            return _FakeResp({"document_type": "guide", "details": {
-                "body": "<h2>What you need to do</h2><p>Apply online.</p>"}})
+                return _FakeResp(
+                    {
+                        "document_type": "redirect",
+                        "redirects": [{"destination": "/standard-visitor"}],
+                    }
+                )
+            return _FakeResp(
+                {
+                    "document_type": "guide",
+                    "details": {"body": "<h2>What you need to do</h2><p>Apply online.</p>"},
+                }
+            )
 
     client = _FakeClient()
     text = await scraper._scrape_govuk(client, "https://www.gov.uk/standard-visitor-visa")

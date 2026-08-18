@@ -80,12 +80,8 @@ def upgrade() -> None:
 
     # Cross-border case fields + link to the research snapshot.
     with op.batch_alter_table("cases", schema=None) as batch_op:
-        batch_op.add_column(
-            sa.Column("origin_country", sa.String(length=8), nullable=True)
-        )
-        batch_op.add_column(
-            sa.Column("residence_country", sa.String(length=8), nullable=True)
-        )
+        batch_op.add_column(sa.Column("origin_country", sa.String(length=8), nullable=True))
+        batch_op.add_column(sa.Column("residence_country", sa.String(length=8), nullable=True))
         batch_op.add_column(sa.Column("research_id", sa.Integer(), nullable=True))
         batch_op.create_index(
             batch_op.f("ix_cases_origin_country"), ["origin_country"], unique=False
@@ -93,9 +89,7 @@ def upgrade() -> None:
         batch_op.create_index(
             batch_op.f("ix_cases_residence_country"), ["residence_country"], unique=False
         )
-        batch_op.create_index(
-            batch_op.f("ix_cases_research_id"), ["research_id"], unique=False
-        )
+        batch_op.create_index(batch_op.f("ix_cases_research_id"), ["research_id"], unique=False)
         batch_op.create_foreign_key(
             batch_op.f("fk_cases_research_id_scope_research"),
             "scope_research",

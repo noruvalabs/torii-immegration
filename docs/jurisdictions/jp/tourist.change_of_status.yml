@@ -1,0 +1,239 @@
+scope:
+  jurisdiction: JP
+  visa_category: tourist
+  action: change_of_status
+  is_live: true
+  name: Japan Change of Status to Temporary Visitor for Departure Preparation (在留資格変更許可申請・出国準備)
+
+stages:
+  - sequence: 1
+    code: applicant_filing
+    actor: applicant
+
+intake:
+  questions:
+    # --- Section 1: Current Resident Identity ---
+    - key: full_name
+      section: Current Status & Identity
+      prompt: What is your full name as it appears on your residence card?
+      type: string
+      min_length: 2
+      max_length: 200
+      required: true
+      citation:
+        authority: Immigration Services Agency of Japan (MOJ)
+        title: Application for Change of Status of Residence (Procedure 16-2)
+        url: https://www.moj.go.jp/isa/applications/procedures/16-2.html
+
+    - key: nationality
+      section: Current Status & Identity
+      prompt: What is your nationality (passport country)?
+      type: enum
+      options:
+        - BD
+        - US
+        - GB
+        - CA
+        - AU
+        - DE
+        - FR
+        - SG
+        - KR
+        - IN
+        - CN
+        - PH
+        - VN
+        - ID
+        - TH
+        - MY
+        - other
+      required: true
+      citation:
+        authority: Immigration Services Agency of Japan (MOJ)
+        title: Statutory Identification Requirements
+        url: https://www.moj.go.jp/isa/applications/procedures/16-2.html
+
+    - key: residence_card_number
+      section: Current Status & Identity
+      prompt: What is your current residence card number (在留カード番号)?
+      type: string
+      min_length: 5
+      max_length: 32
+      required: true
+      citation:
+        authority: Immigration Services Agency of Japan (MOJ)
+        title: Residence Card Presentation Rules (Act Article 19-3)
+        url: https://www.moj.go.jp/isa/applications/procedures/16-2.html
+
+    - key: current_visa_status
+      section: Current Status & Identity
+      prompt: What is your current status of residence (e.g. Student, Engineer/Specialist in Humanities, Dependent)?
+      type: enum
+      options:
+        - student
+        - engineer_specialist_in_humanities
+        - dependent
+        - technical_intern_training
+        - other
+      required: true
+      citation:
+        authority: Immigration Services Agency of Japan (MOJ)
+        title: Prior Residence Status Verification
+        url: https://www.moj.go.jp/isa/applications/procedures/16-2.html
+
+    - key: current_status_expiry_date
+      section: Current Status & Identity
+      prompt: When does your current residence status expire (YYYY-MM-DD)?
+      type: date
+      required: true
+      citation:
+        authority: Immigration Services Agency of Japan (MOJ)
+        title: Filing Deadline (Must apply prior to current status expiry)
+        url: https://www.moj.go.jp/isa/applications/procedures/16-2.html
+
+    # --- Section 2: Reason for Change to Temporary Visitor ---
+    - key: change_reason
+      section: Reason for Change
+      prompt: What is your primary reason for changing to Temporary Visitor status?
+      type: enum
+      options:
+        - graduation_departure_preparation
+        - employment_resignation_departure_preparation
+        - sightseeing_prior_to_permanent_departure
+        - personal_affairs_wrapping_up
+      required: true
+      citation:
+        authority: Immigration Services Agency of Japan (MOJ)
+        title: Permissible Grounds for Change to Temporary Visitor (30/90 Days)
+        url: https://www.moj.go.jp/isa/applications/procedures/16-2.html
+
+    - key: school_or_company_completion_date
+      section: Reason for Change
+      prompt: What was your official graduation or employment end date (YYYY-MM-DD)?
+      type: date
+      required: true
+      citation:
+        authority: Immigration Services Agency of Japan (MOJ)
+        title: Certificate of Graduation / Resignation Notice
+        url: https://www.moj.go.jp/isa/applications/procedures/16-2.html
+
+    # --- Section 3: Transition Living Funds & Accommodation ---
+    - key: remaining_living_funds
+      section: Transition Living Funds
+      prompt: What is your remaining bank balance in Japan to cover expenses until departure (in JPY)?
+      type: string
+      min_length: 1
+      max_length: 50
+      required: true
+      citation:
+        authority: Immigration Services Agency of Japan (MOJ)
+        title: Proof of Self-Sufficiency During Departure Preparation
+        url: https://www.moj.go.jp/isa/applications/procedures/16-2.html
+
+    - key: current_japan_address
+      section: Transition Living Funds
+      prompt: What is your current residential address in Japan?
+      type: string
+      min_length: 5
+      max_length: 300
+      required: true
+      citation:
+        authority: Immigration Services Agency of Japan (MOJ)
+        title: Residential Address Disclosure
+        url: https://www.moj.go.jp/isa/applications/procedures/16-2.html
+
+    # --- Section 4: Confirmed Outbound Flight ---
+    - key: final_departure_flight_date
+      section: Outbound Flight
+      prompt: What is your confirmed departure date from Japan (YYYY-MM-DD)?
+      type: date
+      required: true
+      citation:
+        authority: Immigration Services Agency of Japan (MOJ)
+        title: Mandatory Outbound Ticket Proof for Departure Prep Visa
+        url: https://www.moj.go.jp/isa/applications/procedures/16-2.html
+
+    - key: departure_airline_flight_no
+      section: Outbound Flight
+      prompt: What is your airline and flight number leaving Japan?
+      type: string
+      min_length: 2
+      max_length: 50
+      required: true
+      citation:
+        authority: Immigration Services Agency of Japan (MOJ)
+        title: Flight Reservation Verification
+        url: https://www.moj.go.jp/isa/applications/procedures/16-2.html
+
+eligibility:
+  rules:
+    - key: current_visa_status
+      operator: equals_any
+      value:
+        - student
+        - engineer_specialist_in_humanities
+        - dependent
+        - technical_intern_training
+        - other
+      failure_status: at_risk
+      message: Applicant must hold a valid midterm/longterm status of residence to apply for change of status.
+      citation:
+        authority: Immigration Services Agency of Japan (MOJ)
+        title: Eligibility for Change of Status (Immigration Control Act Article 20)
+        url: https://www.moj.go.jp/isa/applications/procedures/16-2.html
+
+documents:
+  requirements:
+    - code: change_of_status_form
+      name: Official Application for Change of Status of Residence (在留資格変更許可申請書)
+      is_required: true
+      citation:
+        authority: Immigration Services Agency of Japan (MOJ)
+        title: Procedure 16-2 Official Template
+        url: https://www.moj.go.jp/isa/applications/procedures/16-2.html
+
+    - code: graduation_or_resignation_proof
+      name: Certificate of Graduation / Resignation Proof from School or Employer
+      is_required: true
+      citation:
+        authority: Immigration Services Agency of Japan (MOJ)
+        title: Proof of Completion of Prior Activity
+        url: https://www.moj.go.jp/isa/applications/procedures/16-2.html
+
+    - code: departure_flight_ticket
+      name: Confirmed Outbound Flight Ticket from Japan
+      is_required: true
+      citation:
+        authority: Immigration Services Agency of Japan (MOJ)
+        title: Proof of Departure Intent
+        url: https://www.moj.go.jp/isa/applications/procedures/16-2.html
+
+    - code: bank_balance_copy
+      name: Japanese Bank Passbook / Balance Certificate (Showing Sufficient Living Funds)
+      is_required: true
+      citation:
+        authority: Immigration Services Agency of Japan (MOJ)
+        title: Financial Independence Proof
+        url: https://www.moj.go.jp/isa/applications/procedures/16-2.html
+
+forms:
+  - code: moj_change_to_tourist
+    version: "2026-04"
+    official_title: Application for Change of Status of Residence (在留資格変更許可申請書)
+    citation:
+      authority: Immigration Services Agency of Japan (MOJ)
+      title: Official Procedure 16-2
+      url: https://www.moj.go.jp/isa/applications/procedures/16-2.html
+    field_mappings:
+      - form_field: applicant_name
+        answer_key: full_name
+        required: true
+      - form_field: nationality
+        answer_key: nationality
+        required: true
+      - form_field: card_no
+        answer_key: residence_card_number
+        required: true
+      - form_field: reason
+        answer_key: change_reason
+        required: true

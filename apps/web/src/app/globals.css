@@ -9,6 +9,8 @@
   --color-muted-foreground: oklch(0.5 0.02 265);
   --color-card: oklch(1 0 0);
   --color-card-foreground: oklch(0.22 0.02 265);
+  --color-popover: oklch(1 0 0);
+  --color-popover-foreground: oklch(0.22 0.02 265);
   --color-border: oklch(0.92 0.006 265);
   --color-input: oklch(0.92 0.006 265);
   --color-primary: oklch(0.52 0.13 250);
@@ -46,6 +48,8 @@
   --color-muted-foreground: oklch(0.68 0.02 265);
   --color-card: oklch(0.23 0.02 265);
   --color-card-foreground: oklch(0.95 0.005 250);
+  --color-popover: oklch(0.23 0.02 265);
+  --color-popover-foreground: oklch(0.95 0.005 250);
   --color-border: oklch(0.32 0.02 265);
   --color-input: oklch(0.32 0.02 265);
   --color-primary: oklch(0.7 0.13 250);

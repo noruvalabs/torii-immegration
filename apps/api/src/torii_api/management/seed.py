@@ -74,21 +74,8 @@ SEED_USERS = [
     },
 ]
 
-# Extra markets without full content packs (scope browsing only).
-SEED_EXTRA_JURISDICTIONS = [
-    {"code": "CA", "name": "Canada", "is_live": True},
-    {"code": "AU", "name": "Australia", "is_live": True},
-    {"code": "DE", "name": "Germany", "is_live": True},
-    {"code": "FR", "name": "France", "is_live": True},
-    {"code": "SG", "name": "Singapore", "is_live": True},
-    {"code": "KR", "name": "South Korea", "is_live": True},
-    {"code": "NZ", "name": "New Zealand", "is_live": True},
-    {"code": "IE", "name": "Ireland", "is_live": True},
-    {"code": "NL", "name": "Netherlands", "is_live": True},
-    {"code": "SE", "name": "Sweden", "is_live": True},
-    {"code": "NO", "name": "Norway", "is_live": True},
-    {"code": "CH", "name": "Switzerland", "is_live": True},
-]
+# Extra markets without full content packs (empty for now — only JP, US, UK live).
+SEED_EXTRA_JURISDICTIONS: list[dict[str, Any]] = []
 
 SEED_EXTRA_CATEGORIES = [
     {"code": "tourist", "name": "Tourist / Visitor", "is_live": True},
@@ -256,7 +243,8 @@ async def _seed_workflow(
     questions: list[dict[str, Any]],
     rules: list[dict[str, Any]],
     documents: list[dict[str, Any]],
-    form: dict[str, Any],
+    form: dict[str, Any] | None = None,
+    forms: list[dict[str, Any]] | None = None,
 ) -> int:
     created = 0
     existing_intake = await session.scalar(
@@ -308,29 +296,31 @@ async def _seed_workflow(
                 setattr(existing, key, value)
             existing.is_live = True
 
-    existing_form = await session.scalar(
-        select(FormTemplate).where(
-            FormTemplate.jurisdiction_id == jurisdiction_id,
-            FormTemplate.visa_category_id == visa_category_id,
-            FormTemplate.case_action_id == case_action_id,
-            FormTemplate.code == form["code"],
-        )
-    )
-    if existing_form is None:
-        session.add(
-            FormTemplate(
-                jurisdiction_id=jurisdiction_id,
-                visa_category_id=visa_category_id,
-                case_action_id=case_action_id,
-                is_live=True,
-                **form,
+    all_forms: list[dict[str, Any]] = forms if forms is not None else ([form] if form else [])
+    for f in all_forms:
+        existing_form = await session.scalar(
+            select(FormTemplate).where(
+                FormTemplate.jurisdiction_id == jurisdiction_id,
+                FormTemplate.visa_category_id == visa_category_id,
+                FormTemplate.case_action_id == case_action_id,
+                FormTemplate.code == f["code"],
             )
         )
-        created += 1
-    else:
-        for key, value in form.items():
-            setattr(existing_form, key, value)
-        existing_form.is_live = True
+        if existing_form is None:
+            session.add(
+                FormTemplate(
+                    jurisdiction_id=jurisdiction_id,
+                    visa_category_id=visa_category_id,
+                    case_action_id=case_action_id,
+                    is_live=True,
+                    **f,
+                )
+            )
+            created += 1
+        else:
+            for key, value in f.items():
+                setattr(existing_form, key, value)
+            existing_form.is_live = True
 
     return created
 
@@ -482,7 +472,7 @@ async def seed() -> None:
                     code=str(cat["code"]).lower(),
                     name=str(cat["name"]),
                     is_live=bool(cat.get("is_live", True)),
-                    research_enabled=bool(cat.get("research_enabled", False)),
+                    research_enabled=True,
                     category_ids=category_ids,
                 )
             for action in meta.actions:
@@ -493,7 +483,7 @@ async def seed() -> None:
                     code=str(action["code"]).lower(),
                     name=str(action["name"]),
                     is_live=bool(action.get("is_live", True)),
-                    research_enabled=bool(action.get("research_enabled", False)),
+                    research_enabled=True,
                     action_ids=action_ids,
                 )
 
@@ -514,6 +504,7 @@ async def seed() -> None:
                     code=cat["code"],
                     name=cat["name"],
                     is_live=bool(cat["is_live"]),
+                    research_enabled=True,
                     category_ids=category_ids,
                 )
             for action in SEED_EXTRA_ACTIONS:
@@ -524,69 +515,40 @@ async def seed() -> None:
                     code=action["code"],
                     name=action["name"],
                     is_live=bool(action["is_live"]),
+                    research_enabled=True,
                     action_ids=action_ids,
                 )
 
         created_workflow_definitions = 0
-        for workflow in workflow_rows_from_packs(packs):
-            jid = jurisdiction_ids.get(workflow["jurisdiction"])
-            vid = category_ids.get((workflow["jurisdiction"], workflow["visa_category"]))
-            aid = action_ids.get((workflow["jurisdiction"], workflow["action"]))
-            if jid is None or vid is None or aid is None:
-                continue
-            created_workflow_definitions += await _seed_workflow(
-                session,
-                jurisdiction_id=jid,
-                visa_category_id=vid,
-                case_action_id=aid,
-                questions=workflow["questions"],
-                rules=workflow["rules"],
-                documents=workflow["documents"],
-                form=workflow["form"],
-            )
+        workflow_rows = workflow_rows_from_packs(packs)
+        for row in workflow_rows:
+            j_code = row["jurisdiction"]
+            cat_code = row["visa_category"]
+            act_code = row["action"]
+            jid = jurisdiction_ids.get(j_code)
+            cid = category_ids.get((j_code, cat_code))
 
-        # Generic fallback for live category/action combos without a content pack.
-        # Research-enabled scopes are skipped: they are served by the live-research pipeline.
-        research_category_ids = {
-            row[0]
-            for row in await session.execute(
-                select(VisaCategory.id).where(VisaCategory.research_enabled.is_(True))
-            )
-        }
-        research_action_ids = {
-            row[0]
-            for row in await session.execute(
-                select(CaseAction.id).where(CaseAction.research_enabled.is_(True))
-            )
-        }
-        for (j_code, _v_code), vid in category_ids.items():
-            for (a_j_code, _a_code), aid in action_ids.items():
-                if j_code != a_j_code:
-                    continue
-                jid = jurisdiction_ids.get(j_code)
-                if jid is None:
-                    continue
-                if vid in research_category_ids or aid in research_action_ids:
-                    continue
-                existing = await session.scalar(
-                    select(IntakeDefinition).where(
-                        IntakeDefinition.jurisdiction_id == jid,
-                        IntakeDefinition.visa_category_id == vid,
-                        IntakeDefinition.case_action_id == aid,
+            # Match action and aliases (e.g. "new" vs "new_application")
+            target_actions = [act_code]
+            if act_code == "new_application":
+                target_actions.append("new")
+            elif act_code == "new":
+                target_actions.append("new_application")
+
+            for target_act in target_actions:
+                aid = action_ids.get((j_code, target_act))
+                if jid and cid and aid:
+                    created_workflow_definitions += await _seed_workflow(
+                        session,
+                        jurisdiction_id=jid,
+                        visa_category_id=cid,
+                        case_action_id=aid,
+                        questions=row["questions"],
+                        rules=row["rules"],
+                        documents=row["documents"],
+                        form=row.get("form"),
+                        forms=row.get("forms"),
                     )
-                )
-                if existing is not None:
-                    continue
-                created_workflow_definitions += await _seed_workflow(
-                    session,
-                    jurisdiction_id=jid,
-                    visa_category_id=vid,
-                    case_action_id=aid,
-                    questions=GENERIC_QUESTIONS,
-                    rules=GENERIC_RULES,
-                    documents=GENERIC_DOCUMENTS,
-                    form=GENERIC_FORM,
-                )
 
         await session.commit()
 

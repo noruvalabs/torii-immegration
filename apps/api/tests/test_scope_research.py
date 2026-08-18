@@ -72,9 +72,7 @@ def _payload() -> dict[str, Any]:
 
 
 async def _register(client: AsyncClient, email: str) -> dict[str, str]:
-    resp = await client.post(
-        "/v1/auth/register", json={"email": email, "password": "secure-pass"}
-    )
+    resp = await client.post("/v1/auth/register", json={"email": email, "password": "secure-pass"})
     assert resp.status_code == 201, resp.text
     return {"Authorization": f"Bearer {resp.json()['access_token']}"}
 
@@ -124,9 +122,7 @@ async def _seed_research_scope(
         ).scalar_one()
         ca_id = (
             await conn.execute(
-                text(
-                    "SELECT id FROM case_actions WHERE jurisdiction_id = :j AND code = 'apply'"
-                ),
+                text("SELECT id FROM case_actions WHERE jurisdiction_id = :j AND code = 'apply'"),
                 {"j": jid},
             )
         ).scalar_one()
@@ -167,6 +163,7 @@ async def _insert_research(
             },
         )
         return row.lastrowid
+
 
 async def _outbox_topics(engine: AsyncEngine) -> list[str]:
     async with engine.begin() as conn:
@@ -320,9 +317,7 @@ async def test_scope_research_failed_leads_to_human_help_guidance(
     assert guidance.json()["blocked_reason"] == "research_failed"
 
 
-async def test_re_research_resets_stale_snapshot(
-    client: AsyncClient, engine: AsyncEngine
-) -> None:
+async def test_re_research_resets_stale_snapshot(client: AsyncClient, engine: AsyncEngine) -> None:
     jid, vc_id, ca_id = await _seed_research_scope(engine)
     headers = await _register(client, "research5@example.com")
 
