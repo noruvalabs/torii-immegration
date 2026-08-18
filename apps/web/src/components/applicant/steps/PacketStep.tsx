@@ -355,42 +355,148 @@ export function PacketStep({ packet, caseData, loading, onBuild, onSubmit }: Pac
     }
   }
 
+  const scopeLower = (caseData.scope_label || "").toLowerCase();
+  const isJapan = scopeLower.includes("japan") || caseData.locale === "jp";
+  const isUSA = scopeLower.includes("united states") || scopeLower.includes("usa") || scopeLower.includes("us ") || scopeLower.includes("b1/b2") || scopeLower.includes("f-1") || scopeLower.includes("h-1b");
+  const isUK = scopeLower.includes("united kingdom") || scopeLower.includes("uk") || scopeLower.includes("great britain");
+  const isSchengen = scopeLower.includes("schengen") || scopeLower.includes("france") || scopeLower.includes("germany") || scopeLower.includes("italy") || scopeLower.includes("spain");
+
+  const isWork = scopeLower.includes("work") || scopeLower.includes("h-1b") || scopeLower.includes("employment");
+  const isStudent = scopeLower.includes("student") || scopeLower.includes("f-1") || scopeLower.includes("study");
+
+  function getDocLabels() {
+    if (isJapan) {
+      if (isWork) {
+        return {
+          cover: "📄 Bureau Cover Letter",
+          schedule: "💼 Job Duties Specification (職務内容説明書)",
+          reason: "✍️ Statement of Reason (採用理由書)",
+          financial: "💰 Tax & Income Proof (納税・所得証明)",
+          form: "📋 ISA Form Data Sheet",
+          full: "📦 Complete Japan Work Kit",
+        };
+      }
+      if (isStudent) {
+        return {
+          cover: "📄 Consular / School Cover Letter",
+          schedule: "🎓 Study & Academic Plan (就学計画書)",
+          reason: "✍️ Statement of Study Intent (就学理由書)",
+          financial: "💰 Sponsor Guarantee (経費支弁書)",
+          form: "📋 Student Form Data Sheet",
+          full: "📦 Complete Japan Student Kit",
+        };
+      }
+      return {
+        cover: "📄 Embassy Cover Letter",
+        schedule: "🗓️ Schedule of Stay (滞在予定表)",
+        reason: "✍️ Reason for Visit (理由書)",
+        financial: "💰 Financial Guarantee (身元保証書)",
+        form: "📋 Full Form Data Sheet",
+        full: "📦 Complete Dossier Kit",
+      };
+    }
+
+    if (isUSA) {
+      if (isWork) {
+        return {
+          cover: "📄 USCIS / Consular Cover Letter",
+          schedule: "💼 LCA & Job Position Specification",
+          reason: "✍️ Form I-129 Employer Petition Letter",
+          financial: "💰 Prevailing Wage & Salary Proof",
+          form: "📋 DS-160 & I-129 Data Sheet",
+          full: "📦 Complete U.S. Work Visa Kit",
+        };
+      }
+      if (isStudent) {
+        return {
+          cover: "📄 U.S. Embassy Consular Cover Letter",
+          schedule: "🎓 SEVIS Academic Study Plan",
+          reason: "✍️ Statement of Intent & Nonimmigrant Ties",
+          financial: "💰 Sponsor Affidavit of Support (Form I-134)",
+          form: "📋 Form DS-160 & I-901 SEVIS Guide",
+          full: "📦 Complete U.S. Student Kit",
+        };
+      }
+      return {
+        cover: "📄 U.S. Consular Cover Letter",
+        schedule: "🗓️ Day-by-Day Travel Itinerary",
+        reason: "✍️ Statement of Purpose (B-1/B-2)",
+        financial: "💰 Affidavit of Support (Form I-134)",
+        form: "📋 Form DS-160 Data Guide",
+        full: "📦 Complete U.S. Submission Kit",
+      };
+    }
+
+    if (isUK) {
+      return {
+        cover: "📄 UKVI / High Commission Cover Letter",
+        schedule: isWork ? "💼 UK Job Specification & CoS" : isStudent ? "🎓 CAS Study & Course Plan" : "🗓️ UK Travel Itinerary & Lodging",
+        reason: "✍️ Statement of Purpose & Genuine Ties",
+        financial: "💰 Proof of Financial Solvency & Maintenance",
+        form: "📋 GOV.UK Visa Field Guide",
+        full: "📦 Complete UK Submission Kit",
+      };
+    }
+
+    if (isSchengen) {
+      return {
+        cover: "📄 Schengen Consular Cover Letter",
+        schedule: "🗓️ Schengen Travel Itinerary & Bookings",
+        reason: "✍️ Statement of Purpose & Travel Intent",
+        financial: "💰 Proof of Means & Travel Insurance",
+        form: "📋 Harmonised Schengen Form Data",
+        full: "📦 Complete Schengen Dossier",
+      };
+    }
+
+    return {
+      cover: "📄 Visa Submission Cover Letter",
+      schedule: isWork ? "💼 Job Position & Duties Overview" : isStudent ? "🎓 Study Plan & Curriculum Overview" : "🗓️ Travel Itinerary & Accommodation",
+      reason: "✍️ Statement of Purpose",
+      financial: "💰 Financial Guarantee & Solvency Proof",
+      form: "📋 Application Form Data Guide",
+      full: "📦 Complete Filing Dossier",
+    };
+  }
+
+  const docLabels = getDocLabels();
+
   function getActiveDocText(): { title: string; filename: string; text: string } {
     switch (activeDoc) {
       case "schedule":
         return {
-          title: "Schedule of Stay / Itinerary (滞在予定表)",
+          title: docLabels.schedule.replace(/^[^\w]+/, ""),
           filename: `${caseData.reference}-schedule-of-stay.txt`,
           text: generateScheduleOfStay(caseData, packet),
         };
       case "reason":
         return {
-          title: "Reason for Visit / Statement of Purpose (理由書)",
+          title: docLabels.reason.replace(/^[^\w]+/, ""),
           filename: `${caseData.reference}-reason-for-visit.txt`,
           text: generateReasonForVisit(caseData, packet),
         };
       case "financial":
         return {
-          title: "Financial Guarantee & Sponsorship (身元保証書)",
+          title: docLabels.financial.replace(/^[^\w]+/, ""),
           filename: `${caseData.reference}-financial-guarantee.txt`,
           text: generateFinancialGuarantee(caseData, packet),
         };
       case "form":
         return {
-          title: "Official Application Form Data Sheet",
+          title: docLabels.form.replace(/^[^\w]+/, ""),
           filename: `${caseData.reference}-official-form-data.txt`,
           text: generateCompleteOfficialForm(caseData, packet),
         };
       case "full":
         return {
-          title: "Complete Filing Dossier Package",
+          title: docLabels.full.replace(/^[^\w]+/, ""),
           filename: `${caseData.reference}-complete-filing-kit.txt`,
           text: generateCompleteFilingKitText(packet || {}, caseData),
         };
       case "cover":
       default:
         return {
-          title: "Official Embassy Cover Letter",
+          title: docLabels.cover.replace(/^[^\w]+/, ""),
           filename: `${caseData.reference}-embassy-cover-letter.txt`,
           text: generateCoverLetter(caseData, packet),
         };
@@ -569,12 +675,12 @@ export function PacketStep({ packet, caseData, loading, onBuild, onSubmit }: Pac
               {/* Document Selector Navigation Tabs */}
               <div className="flex flex-wrap gap-1.5 border-b pb-3">
                 {[
-                  { id: "cover" as DocType, label: "📄 Embassy Cover Letter", badge: "Mandatory" },
-                  { id: "schedule" as DocType, label: "🗓️ Schedule of Stay (滞在予定表)", badge: "Official Table" },
-                  { id: "reason" as DocType, label: "✍️ Reason for Visit (理由書)", badge: "Personal Statement" },
-                  { id: "financial" as DocType, label: "💰 Financial Guarantee (身元保証書)", badge: "Expense Proof" },
-                  { id: "form" as DocType, label: "📋 Full Form Data Sheet", badge: "Auto-Filled" },
-                  { id: "full" as DocType, label: "📦 Complete Dossier Kit", badge: "All-in-One" },
+                  { id: "cover" as DocType, label: docLabels.cover },
+                  { id: "schedule" as DocType, label: docLabels.schedule },
+                  { id: "reason" as DocType, label: docLabels.reason },
+                  { id: "financial" as DocType, label: docLabels.financial },
+                  { id: "form" as DocType, label: docLabels.form },
+                  { id: "full" as DocType, label: docLabels.full },
                 ].map((tab) => (
                   <button
                     key={tab.id}
