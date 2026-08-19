@@ -20,7 +20,17 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth-context";
-import { answerIntake, evaluateEligibility, getCase, type Case } from "@/lib/api/cases";
+import {
+  answerIntake,
+  evaluateEligibility,
+  getEligibility,
+  getCase,
+  refreshChecklist,
+  type Case,
+  type EligibilityResult,
+  type ChecklistItem,
+} from "@/lib/api/cases";
+import { getProfile, type User } from "@/lib/api/auth";
 
 type ChatRole = "user" | "assistant";
 type ChatMessage = { role: ChatRole; text: string };
@@ -33,29 +43,29 @@ type IntakeAction = {
 
 const CATEGORY_PROMPTS: Record<string, string[]> = {
   student: [
+    "How do I fix my eligibility warnings?",
+    "What is my current progress and next step?",
     "What documents are required for COE / Student Visa?",
-    "How much bank balance / sponsor income is needed?",
     "What are the rules for part-time work (28 hrs/week)?",
-    "How do I fix eligibility warnings?",
   ],
   work: [
+    "How do I fix my eligibility warnings?",
+    "What is my current progress and next step?",
     "What documents are required for Work Visa (技人国)?",
-    "How do employer categories (1-4) affect documents?",
     "What are the Resident Tax and Pension renewal rules?",
-    "How do I fix eligibility warnings?",
   ],
   tourist: [
+    "How do I fix my eligibility warnings?",
+    "What is my current progress and next step?",
     "What documents do I need for a Temporary Visitor visa?",
-    "How do I prove financial solvency for tourism?",
     "What should be included in the itinerary (滞在予定表)?",
-    "How do I fix eligibility warnings?",
   ],
 };
 
 const DEFAULT_PROMPTS = [
+  "How do I fix my eligibility warnings?",
+  "What is my current progress and next step?",
   "Which documents do I need to gather?",
-  "How do I fix eligibility warnings?",
-  "What are the official processing times?",
   "Can you review my intake answers?",
 ];
 
@@ -86,27 +96,41 @@ export function FloatingAssistant() {
   const [applyingAction, setApplyingAction] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [activeCase, setActiveCase] = useState<Case | null>(null);
+  const [activeEligibility, setActiveEligibility] = useState<EligibilityResult | null>(null);
+  const [activeChecklist, setActiveChecklist] = useState<ChecklistItem[]>([]);
+  const [activeProfile, setActiveProfile] = useState<User | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Extract case ID if currently on a case page
   const caseMatch = pathname?.match(/\/cases\/(\d+)/);
   const caseId = caseMatch ? Number(caseMatch[1]) : null;
 
-  // Fetch active case context
+  // Fetch complete real-time case context (Case, Eligibility findings, Checklist, Profile)
   useEffect(() => {
     if (!token || !caseId) {
       setActiveCase(null);
+      setActiveEligibility(null);
+      setActiveChecklist([]);
+      setActiveProfile(null);
       return;
     }
     void (async () => {
       try {
-        const c = await getCase(token, caseId);
+        const [c, elig, chk, prof] = await Promise.all([
+          getCase(token, caseId),
+          getEligibility(token, caseId).catch(() => evaluateEligibility(token, caseId).catch(() => null)),
+          refreshChecklist(token, caseId).catch(() => []),
+          getProfile(token).catch(() => null),
+        ]);
         setActiveCase(c);
+        if (elig) setActiveEligibility(elig);
+        if (chk) setActiveChecklist(chk);
+        if (prof) setActiveProfile(prof);
       } catch {
         // Fallback gracefully
       }
     })();
-  }, [token, caseId]);
+  }, [token, caseId, isOpen]);
 
   const visaCategory = (activeCase?.visa_category_code || "").toLowerCase();
   const jurisdictionCode = activeCase?.jurisdiction_code || "JP";
@@ -226,10 +250,17 @@ export function FloatingAssistant() {
         body: JSON.stringify({
           message: text,
           case_id: caseId ? String(caseId) : null,
+          case_reference: activeCase?.reference || (caseId ? `Case #${caseId}` : null),
+          scope_label: activeCase?.scope_label || null,
+          case_status: activeCase?.status || null,
+          current_step: activeCase?.status || null,
           jurisdiction_code: jurisdictionCode,
           visa_category_code: visaCategory || null,
           action_code: actionCode || null,
           intake_answers: activeCase?.intake_answers || null,
+          eligibility_findings: activeEligibility?.findings || null,
+          checklist: activeChecklist || null,
+          user_profile: activeProfile || null,
           locale: "en",
         }),
       });
@@ -264,9 +295,10 @@ export function FloatingAssistant() {
 
           try {
             const data = JSON.parse(payload) as { text?: string };
-            const chunk = data.text ?? "";
-            if (!chunk) continue;
-            assistantText += (assistantText ? "\n\n" : "") + chunk;
+            const newText = data.text ?? "";
+            if (!newText) continue;
+
+            assistantText += (assistantText ? "\n\n" : "") + newText;
             setMessages((prev) => {
               const next = [...prev];
               const last = next[next.length - 1];
@@ -289,6 +321,14 @@ export function FloatingAssistant() {
     }
   }
 
+  const disqualifiedFindings = (activeEligibility?.findings || []).filter(
+    (f) =>
+      (f.status as string) === "disqualified" ||
+      f.status === "fail" ||
+      f.status === "at_risk" ||
+      (f.status as string) === "incomplete",
+  );
+
   return (
     <>
       {/* Floating Trigger Button */}
@@ -305,27 +345,29 @@ export function FloatingAssistant() {
               <span className="relative inline-flex size-2.5 rounded-full bg-emerald-500"></span>
             </span>
           </div>
-          <span className="font-medium">Need Help? Ask AI</span>
+          <span className="font-medium">
+            {disqualifiedFindings.length > 0 ? `AI Helper (${disqualifiedFindings.length} issues)` : "Need Help? Ask AI"}
+          </span>
         </button>
       )}
 
       {/* Floating Chat Drawer / Window */}
       {isOpen && (
-        <div className="fixed bottom-4 right-4 z-50 flex h-[600px] w-[390px] sm:w-[440px] flex-col overflow-hidden rounded-2xl border bg-card shadow-2xl transition-all duration-300 animate-in fade-in slide-in-from-bottom-5">
+        <div className="fixed bottom-4 right-4 z-50 flex h-[620px] w-[390px] sm:w-[450px] flex-col overflow-hidden rounded-2xl border bg-card shadow-2xl transition-all duration-300 animate-in fade-in slide-in-from-bottom-5">
           {/* Header */}
           <div className="flex items-center justify-between border-b bg-muted/40 px-4 py-3">
             <div className="flex items-center gap-2.5">
               <div className="flex size-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
                 <Bot className="size-5" />
               </div>
-              <div>
+              <div className="min-w-0 max-w-[260px]">
                 <div className="flex items-center gap-1.5">
-                  <h3 className="text-sm font-semibold text-foreground">AI Visa Assistant</h3>
+                  <h3 className="text-sm font-semibold text-foreground truncate">AI Visa Assistant</h3>
                   <Badge tone="success" className="text-[9px] px-1.5 py-0">Online</Badge>
                 </div>
-                <p className="text-[11px] text-muted-foreground">
+                <p className="text-[11px] text-muted-foreground truncate">
                   {caseId
-                    ? `Case #${caseId} · ${jurisdictionCode} ${visaCategory ? visaCategory.toUpperCase() : "VISA"} (${actionCode})`
+                    ? `${activeCase?.reference || `Case #${caseId}`} · ${activeCase?.scope_label || `${jurisdictionCode} ${visaCategory ? visaCategory.toUpperCase() : "VISA"}`}`
                     : "Official immigration guidance"}
                 </p>
               </div>
@@ -334,20 +376,35 @@ export function FloatingAssistant() {
             <div className="flex items-center gap-1">
               <button
                 onClick={() => setMessages([])}
-                title="Clear chat"
-                className="rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
+                className="rounded-lg p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+                title="Clear chat history"
               >
                 <RefreshCw className="size-3.5" />
               </button>
               <button
                 onClick={() => setIsOpen(false)}
-                title="Close chat"
-                className="rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
+                className="rounded-lg p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+                title="Close assistant"
               >
                 <X className="size-4" />
               </button>
             </div>
           </div>
+
+          {/* Live Issue Banner if case has disqualified findings */}
+          {disqualifiedFindings.length > 0 && (
+            <div className="bg-amber-500/10 border-b border-amber-500/20 px-3.5 py-2 flex items-center justify-between gap-2 text-[11px]">
+              <span className="text-amber-800 dark:text-amber-300 font-medium">
+                ⚠️ {disqualifiedFindings.length} eligibility warning(s) detected
+              </span>
+              <button
+                onClick={() => handleSend("how to fix this")}
+                className="text-primary hover:underline font-semibold text-[11px] shrink-0"
+              >
+                Fix with AI &rarr;
+              </button>
+            </div>
+          )}
 
           {/* Chat Messages */}
           <div className="flex-1 overflow-y-auto p-4 space-y-3.5 text-xs">

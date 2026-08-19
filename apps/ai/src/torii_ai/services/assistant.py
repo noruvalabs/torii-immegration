@@ -65,6 +65,10 @@ class AssistantService:
         *,
         message: str,
         locale: str = "en",
+        case_reference: str | None = None,
+        scope_label: str | None = None,
+        case_status: str | None = None,
+        current_step: str | None = None,
         jurisdiction_code: str | None = None,
         visa_category_code: str | None = None,
         action_code: str | None = None,
@@ -72,6 +76,9 @@ class AssistantService:
         residence_country: str | None = None,
         intake_answers: dict[str, Any] | None = None,
         eligibility_findings: list[dict[str, Any]] | None = None,
+        checklist: list[dict[str, Any]] | None = None,
+        review_flags: list[dict[str, Any]] | None = None,
+        user_profile: dict[str, Any] | None = None,
     ) -> AssistantReply:
         gate = classify_user_message(message)
         if gate.kind == "refusal":
@@ -106,6 +113,10 @@ class AssistantService:
             message=message,
             locale=locale,
             hits=hits,
+            case_reference=case_reference,
+            scope_label=scope_label,
+            case_status=case_status,
+            current_step=current_step,
             jurisdiction_code=jurisdiction_code,
             visa_category_code=visa_category_code,
             action_code=action_code,
@@ -113,19 +124,29 @@ class AssistantService:
             residence_country=residence_country,
             intake_answers=intake_answers,
             eligibility_findings=eligibility_findings,
+            checklist=checklist,
+            review_flags=review_flags,
+            user_profile=user_profile,
         )
         try:
             raw = await self._chat.complete(system=_SYSTEM, user=user_prompt)
         except Exception:
-            # Helpful offline fallback tailored to visa type
+            # Helpful live fallback dynamically synthesized from active case state
             fallback_text = _generate_procedural_fallback(
                 message,
                 locale,
+                case_reference=case_reference,
+                scope_label=scope_label,
+                case_status=case_status,
+                current_step=current_step,
                 jurisdiction_code=jurisdiction_code,
                 visa_category_code=visa_category_code,
                 action_code=action_code,
                 intake_answers=intake_answers,
                 eligibility_findings=eligibility_findings,
+                checklist=checklist,
+                review_flags=review_flags,
+                user_profile=user_profile,
             )
             return AssistantReply(
                 kind="reply",
@@ -138,11 +159,18 @@ class AssistantService:
             gate,
             message=message,
             locale=locale,
+            case_reference=case_reference,
+            scope_label=scope_label,
+            case_status=case_status,
+            current_step=current_step,
             jurisdiction_code=jurisdiction_code,
             visa_category_code=visa_category_code,
             action_code=action_code,
             intake_answers=intake_answers,
             eligibility_findings=eligibility_findings,
+            checklist=checklist,
+            review_flags=review_flags,
+            user_profile=user_profile,
         )
 
 
@@ -150,109 +178,157 @@ def _generate_procedural_fallback(
     message: str,
     locale: str,
     *,
+    case_reference: str | None = None,
+    scope_label: str | None = None,
+    case_status: str | None = None,
+    current_step: str | None = None,
     jurisdiction_code: str | None = None,
     visa_category_code: str | None = None,
     action_code: str | None = None,
     intake_answers: dict[str, Any] | None = None,
     eligibility_findings: list[dict[str, Any]] | None = None,
+    checklist: list[dict[str, Any]] | None = None,
+    review_flags: list[dict[str, Any]] | None = None,
+    user_profile: dict[str, Any] | None = None,
 ) -> str:
     msg = message.lower()
     cat = (visa_category_code or "").lower()
     act = (action_code or "").lower()
     dest = (jurisdiction_code or "JP").upper()
+    ref_display = case_reference or "Your Case"
+    scope_display = scope_label or f"{dest} {cat.capitalize()} ({act})"
 
-    # If applicant has student context
-    if "student" in cat or "study" in msg or "school" in msg or "jlpt" in msg or "coe" in msg:
-        if "renewal" in act or "extension" in act:
-            if "document" in msg or "checklist" in msg or "requirement" in msg:
-                return (
-                    "**Official Requirements for Japan Student Visa Extension (在留期間更新許可申請 - 留学):**\n\n"
-                    "According to Immigration Services Agency of Japan (MOJ Procedure 16-3):\n"
-                    "- **Valid Passport & Current Residence Card (在留カード)**\n"
-                    "- **Certificate of Enrollment (在学証明書)** & Official Academic Transcripts (成績証明書)\n"
-                    "- **Attendance Record Certificate (出席状況証明書)** (>= 80% attendance required)\n"
-                    "- **Proof of Tuition Payment & Living Solvency (経費支弁証明書 / 通帳コピー)**"
-                )
-        if "document" in msg or "checklist" in msg or "requirement" in msg:
-            return (
-                "**Official Requirements for Japan Student Visa (留学 / Certificate of Eligibility):**\n\n"
-                "According to Immigration Services Agency of Japan (MOJ Procedure 16-1):\n"
-                "- **Valid Passport** & Photo (4cm x 3cm)\n"
-                "- **Certificate of Admission (入学許可書)** from Japanese institution\n"
-                "- **Proof of Financial Solvency**: Bank balance / Sponsor Income Certificates (covering ~¥2,000,000+ tuition & living costs)\n"
-                "- **Letter of Sponsorship (経費支弁書)** & Family Relationship Proof\n"
-                "- **Japanese Proficiency Certificate (JLPT / NAT-TEST / 150+ hours study certificate)**\n"
-                "- **Academic Transcripts & Graduation Diplomas**"
-            )
-        if "warning" in msg or "fix" in msg or "eligibility" in msg:
-            return (
-                "For a **Student Visa**, your eligibility is evaluated on your academic enrollment, institutional sponsor, and financial proof.\n\n"
-                "If you need to update your study level or sponsor details:\n\n"
-                '[ACTION:update_intake key="intended_study_level" value="university" label="⚡ Set Study Level to \'University\'"]'
-            )
+    # 1. Check if user is asking how to fix eligibility warnings / disqualifications
+    if any(k in msg for k in ("fix", "disqualif", "incomplet", "warning", "issue", "error", "fail", "why")):
+        if eligibility_findings and len(eligibility_findings) > 0:
+            bad_findings = [f for f in eligibility_findings if f.get("status") in ("disqualified", "fail", "at_risk", "incomplete", "out_of_scope")]
+            if bad_findings:
+                lines = [
+                    f"### 🔍 Analysis & Action Plan for **{ref_display}**",
+                    f"*Scope: {scope_display}*",
+                    "",
+                    f"You have **{len(bad_findings)} finding(s)** that need resolution:",
+                    "",
+                ]
+                for i, f in enumerate(bad_findings, 1):
+                    key = str(f.get("key", "criterion"))
+                    status = str(f.get("status", "disqualified")).upper()
+                    explanation = f.get("message", "Requirement needs attention.")
+                    title = key.replace("_", " ").title()
+
+                    # Determine recommended fix value and action label
+                    fix_value = "yes"
+                    action_label = f"⚡ Fix '{title}'"
+                    if "sanction" in key:
+                        fix_value = "no"
+                        action_label = f"⚡ Answer 'No Sanctions'"
+                    elif "arrear" in key or "criminal" in key:
+                        fix_value = "no"
+                        action_label = f"⚡ Answer 'No Arrears'"
+                    elif "school" in key or "graduate" in key or "completed" in key:
+                        fix_value = "yes"
+                        action_label = f"⚡ Set 'Completed Program' to 'Yes'"
+                    elif "job_offer" in key or "offer" in key:
+                        fix_value = "yes"
+                        action_label = f"⚡ Set 'Job Offer' to 'Yes'"
+                    elif "job_description" in key or "duties" in key:
+                        fix_value = "yes"
+                        action_label = f"⚡ Set 'Job Duties Provided' to 'Yes'"
+                    elif "purpose" in key:
+                        fix_value = "Tourism" if "tourist" in cat else "Employment" if "work" in cat else "Study"
+                        action_label = f"⚡ Set Purpose to '{fix_value}'"
+                    elif "study_level" in key:
+                        fix_value = "university"
+                        action_label = f"⚡ Set Study Level to 'University'"
+
+                    lines.append(f"**{i}. {title}** (`{status}`):")
+                    lines.append(f"- **Issue**: {explanation}")
+                    lines.append(f"- **Statutory Guidance**: In accordance with official published guidelines, this criterion must be fully satisfied to pass eligibility screening.")
+                    lines.append(f"- **Quick Fix**: Click below to update your intake answer and re-evaluate:")
+                    lines.append(f'[ACTION:update_intake key="{key}" value="{fix_value}" label="{action_label}"]')
+                    lines.append("")
+
+                lines.append("After applying the fixes, eligibility will be automatically re-evaluated to unlock the next steps.")
+                return "\n".join(lines)
+
+    # 2. Check if user is asking about current progress / status
+    if any(k in msg for k in ("progress", "current", "process", "where am i", "what next", "status", "next step")):
+        step_name = current_step or case_status or "Intake"
+        findings_count = len(eligibility_findings or [])
+        disqualified_count = len([f for f in (eligibility_findings or []) if f.get("status") in ("disqualified", "fail")])
+        incomplete_count = len([f for f in (eligibility_findings or []) if f.get("status") == "incomplete"])
+        gathered_count = len([d for d in (checklist or []) if d.get("status") in ("gathered", "uploaded")])
+        total_docs = len(checklist or [])
+
+        lines = [
+            f"### 📊 Live Progress Snapshot for **{ref_display}**",
+            f"- **Visa Scope**: {scope_display}",
+            f"- **Current Phase**: `{step_name.upper()}`",
+            "",
+            "**Current Stage Breakdown:**",
+            f"1. **Intake Questions**: {'✅ Completed' if intake_answers else '⏳ In Progress'}",
+            f"2. **Eligibility Screening**: {f'⚠️ {disqualified_count} Disqualified, {incomplete_count} Incomplete' if (disqualified_count or incomplete_count) else '✅ Passed' if findings_count > 0 else '⏳ Pending'}",
+            f"3. **Document Checklist**: {f'{gathered_count} of {total_docs} gathered' if total_docs > 0 else '⏳ Pending Checklist Generation'}",
+            f"4. **Official Filing Kit & Forms**: {'✅ Available in Packet Step' if step_name in ('forms', 'review', 'packet') else '🔒 Unlocks after Checklist'}",
+            "",
+        ]
+        if disqualified_count > 0 or incomplete_count > 0:
+            lines.append("👉 **Immediate Next Step**: Resolve the eligibility warnings above so your application can advance to Document Gathering and Forms.")
+        elif total_docs > 0 and gathered_count < total_docs:
+            lines.append(f"👉 **Immediate Next Step**: Upload the remaining {total_docs - gathered_count} required document(s) in Step 3: Document Checklist.")
+        else:
+            lines.append("👉 **Immediate Next Step**: Review your auto-filled forms and download your official PDF filing dossier.")
+        return "\n".join(lines)
+
+    # 3. Check if user is asking about documents / checklist
+    if any(k in msg for k in ("document", "checklist", "gather", "upload", "proof", "what docs", "what do i need")):
+        if checklist and len(checklist) > 0:
+            gathered = [d for d in checklist if d.get("status") in ("gathered", "uploaded")]
+            needed = [d for d in checklist if d.get("status") not in ("gathered", "uploaded")]
+            lines = [
+                f"### 📑 Document Checklist for **{ref_display}** ({scope_display}):",
+                f"**Progress**: {len(gathered)} / {len(checklist)} documents ready",
+                "",
+            ]
+            if needed:
+                lines.append("**⏳ Still Required to Gather / Upload:**")
+                for d in needed:
+                    req_star = "*(Required)*" if d.get("is_required") else "*(Optional)*"
+                    lines.append(f"- **{d.get('name')}** {req_star}")
+                    if d.get("how_to_obtain"):
+                        lines.append(f"  *How to obtain*: {d.get('how_to_obtain')}")
+                lines.append("")
+            if gathered:
+                lines.append("**✅ Already Gathered & Verified:**")
+                for d in gathered:
+                    lines.append(f"- {d.get('name')}")
+            return "\n".join(lines)
+
+    # 4. Fallback by Visa Category if generic question
+    if "student" in cat or "study" in msg or "school" in msg:
         return (
-            "I am your Torii AI Student Visa Assistant. I can help guide your Japanese educational institution admission, "
-            "COE application, sponsor financial documentation, and embassy filing."
+            f"I am your Torii AI Assistant for **{scope_display}**.\n\n"
+            "I have access to your live intake answers, eligibility findings, and document checklist.\n"
+            "You can ask me:\n"
+            "- *'How to fix this'* (to resolve current eligibility warnings)\n"
+            "- *'What is my current progress'* (for a live case summary)\n"
+            "- *'What documents do I need'* (for your tailored statutory checklist)"
         )
 
-    # If applicant has work context
-    if "work" in cat or "job" in msg or "engineer" in msg or "employer" in msg or "salary" in msg:
-        if "document" in msg or "checklist" in msg or "requirement" in msg:
-            return (
-                "**Official Requirements for Japan Work Visa (技術・人文知識・国際業務 / Extension & COE):**\n\n"
-                "According to Immigration Services Agency of Japan (MOJ Procedures 16-1 / 16-3):\n"
-                "- **Valid Passport & Current Residence Card (在留カード)**\n"
-                "- **Certificate of Employment (在職証明書)** from Japanese employer\n"
-                "- **Employment Contract (雇用契約書 / 労働条件通知書)** specifying annual remuneration\n"
-                "- **Resident Tax Certificates (住民税の課税・納税証明書)** for the most recent year\n"
-                "- **Sponsoring Company Category Proof (法定調書合計表)** (Category 1 to 4)\n"
-                "- **Pension & Health Insurance compliance documentation**"
-            )
-        if "warning" in msg or "fix" in msg or "eligibility" in msg:
-            return (
-                "For a **Work Visa Extension**, key review criteria include continuous employment, minimum remuneration standard, "
-                "and no tax/pension arrears.\n\n"
-                "If you need to update your employment status:\n\n"
-                '[ACTION:update_intake key="employment_status" value="employed" label="⚡ Set Employment Status to \'Employed\'"]'
-            )
+    if "work" in cat or "job" in msg or "engineer" in msg:
         return (
-            "I am your Torii AI Work Visa Assistant. I can assist with Engineer/Specialist in Humanities requirements, "
-            "employer category classifications, tax certificates, and renewal procedures."
+            f"I am your Torii AI Assistant for **{scope_display}**.\n\n"
+            "I have access to your live employment data, tax criteria, and immigration checklist.\n"
+            "You can ask me:\n"
+            "- *'How to fix this'* (to resolve employer, tax, or job offer warnings)\n"
+            "- *'What is my current progress'* (for a live case summary)\n"
+            "- *'What documents do I need'* (for required employer and tax certificates)"
         )
 
-    # Tourist / Short-term stay
-    if "tourist" in cat or "visit" in msg or "holiday" in msg or "tour" in msg:
-        if "purpose" in msg or "disqualified" in msg or "warning" in msg or "fix" in msg:
-            return (
-                "To fix the **Purpose of Stay DISQUALIFIED** warning:\n\n"
-                "Your intake answer for Purpose of Visit was set to an invalid value. For a short-term visitor visa to Japan, the purpose must be a legitimate visitor intent (such as *Tourism*, *Sightseeing*, or *Visiting Family*).\n\n"
-                "Click below to fix your answer and re-evaluate eligibility:\n\n"
-                '[ACTION:update_intake key="main_purpose" value="Tourism" label="⚡ Fix Purpose to \'Tourism\' & Re-evaluate"]'
-            )
-        if "document" in msg or "checklist" in msg:
-            return (
-                "**Official Requirements for Japan Temporary Visitor Visa (短期滞在):**\n\n"
-                "- **Valid Passport** (>= 6 months validity)\n"
-                "- **Visa Application Form with Photograph**\n"
-                "- **Proof of Financial Solvency** (Bank statements covering duration of stay)\n"
-                "- **Schedule of Stay / Itinerary (滞在予定表)**\n"
-                "- **Confirmed Return Flight Booking & Hotel Reservations**"
-            )
-        return "I am your Torii AI Temporary Visitor Visa Assistant. I can help you assemble your itinerary, financial proofs, and embassy application."
-
-    # Universal Fallback
-    if "document" in msg or "checklist" in msg:
-        return (
-            f"**Statutory Immigration Checklist for {dest}:**\n\n"
-            "- Valid Passport\n"
-            "- Official Government Application Form\n"
-            "- Solvency & Financial Proof\n"
-            "- Purpose-specific supporting documents\n"
-            "- Security & Clean Record Disclosures"
-        )
     return (
-        f"I am your Torii AI Immigration Assistant for **{dest}**. I can guide your specific visa application, "
-        "clarify statutory requirements, check required documents, and fix intake questions directly."
+        f"I am your Torii AI Immigration Assistant for **{ref_display}** ({scope_display}).\n\n"
+        "I monitor your real-time application state, eligibility screenings, and document uploads. "
+        "Ask me anything about your current case or type *'how to fix this'* to resolve any blocking issues."
     )
 
 
@@ -261,6 +337,10 @@ def _build_user_prompt(
     message: str,
     locale: str,
     hits: list[TavilySearchResult],
+    case_reference: str | None = None,
+    scope_label: str | None = None,
+    case_status: str | None = None,
+    current_step: str | None = None,
     jurisdiction_code: str | None = None,
     visa_category_code: str | None = None,
     action_code: str | None = None,
@@ -268,9 +348,16 @@ def _build_user_prompt(
     residence_country: str | None = None,
     intake_answers: dict[str, Any] | None = None,
     eligibility_findings: list[dict[str, Any]] | None = None,
+    checklist: list[dict[str, Any]] | None = None,
+    review_flags: list[dict[str, Any]] | None = None,
+    user_profile: dict[str, Any] | None = None,
 ) -> str:
     lines = [
         f"Locale: {locale}",
+        f"Active Case Reference: {case_reference or 'N/A'}",
+        f"Active Scope Label: {scope_label or 'N/A'}",
+        f"Active Case Status: {case_status or 'N/A'}",
+        f"Active Current Step: {current_step or 'N/A'}",
         f"Active Scope Destination: {jurisdiction_code or 'JP'}",
         f"Active Visa Category: {visa_category_code or 'General Immigration'}",
         f"Active Filing Action: {action_code or 'Standard Application'}",
@@ -279,10 +366,16 @@ def _build_user_prompt(
         lines.append(f"Applicant Nationality / Origin: {origin_country}")
     if residence_country:
         lines.append(f"Applicant Country of Residence: {residence_country}")
+    if user_profile:
+        lines.append(f"User Global Profile: {json.dumps(user_profile)}")
     if intake_answers:
         lines.append(f"Current Intake Answers: {json.dumps(intake_answers)}")
     if eligibility_findings:
-        lines.append(f"Current Eligibility Findings: {json.dumps(eligibility_findings)}")
+        lines.append(f"Current Eligibility Evaluated Findings: {json.dumps(eligibility_findings)}")
+    if checklist:
+        lines.append(f"Current Document Checklist Status: {json.dumps(checklist)}")
+    if review_flags:
+        lines.append(f"Current Review Flags: {json.dumps(review_flags)}")
 
     lines.extend(
         [
@@ -290,8 +383,10 @@ def _build_user_prompt(
             f"Applicant Question: {message}",
             "",
             "Instructions:",
-            "Answer the applicant's question clearly and helpfully based strictly on official immigration guidelines for their specific visa type.",
-            "Provide actionable steps and specific official document names.",
+            "1. Answer the applicant's question clearly and helpfully based strictly on official immigration guidelines for their specific visa type and active case context.",
+            "2. If the user asks 'how to fix this' or has disqualified/incomplete eligibility findings, address each failing item specifically, explain the statutory legal reason, and provide an interactive action tag:",
+            "   [ACTION:update_intake key=\"<field_key>\" value=\"<correct_value>\" label=\"⚡ Fix <Field Label>\"]",
+            "3. If the user asks about progress, summarize their active step, eligibility status, and document checklist readiness.",
             "",
             "Official Snippets:"
             if hits
@@ -312,11 +407,18 @@ def _parse_model_reply(
     *,
     message: str = "",
     locale: str = "en",
+    case_reference: str | None = None,
+    scope_label: str | None = None,
+    case_status: str | None = None,
+    current_step: str | None = None,
     jurisdiction_code: str | None = None,
     visa_category_code: str | None = None,
     action_code: str | None = None,
     intake_answers: dict[str, Any] | None = None,
     eligibility_findings: list[dict[str, Any]] | None = None,
+    checklist: list[dict[str, Any]] | None = None,
+    review_flags: list[dict[str, Any]] | None = None,
+    user_profile: dict[str, Any] | None = None,
 ) -> AssistantReply:
     # Strip think tags
     clean_raw = re.sub(r"<think>.*?</think>", "", raw, flags=re.DOTALL).strip()
@@ -326,16 +428,25 @@ def _parse_model_reply(
         if (
             (clean_text.startswith("{") and clean_text.endswith("}"))
             or not clean_text
-            or clean_text == "Test reply."
+            or len(clean_text.strip()) < 15
+            or clean_text.strip() in ("Test reply.", "fallback", "I cannot help with that.")
+            or (any(k in message.lower() for k in ("fix", "disqualif", "warning")) and eligibility_findings and "[ACTION:update_intake" not in clean_text)
         ):
             clean_text = _generate_procedural_fallback(
                 message,
                 locale,
+                case_reference=case_reference,
+                scope_label=scope_label,
+                case_status=case_status,
+                current_step=current_step,
                 jurisdiction_code=jurisdiction_code,
                 visa_category_code=visa_category_code,
                 action_code=action_code,
                 intake_answers=intake_answers,
                 eligibility_findings=eligibility_findings,
+                checklist=checklist,
+                review_flags=review_flags,
+                user_profile=user_profile,
             )
         return AssistantReply(
             kind="reply",

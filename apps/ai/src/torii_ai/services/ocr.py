@@ -88,11 +88,16 @@ def extract_text_from_pdf(pdf_bytes: bytes) -> str:
 def extract_document_fields(
     doc_type: DocumentType, filename: str, hint_text: str | None
 ) -> OCRResult:
-    """Extract fields from document using Groq vision model."""
+    """Extract fields from document using Groq vision model or hint text."""
     import json
     import re
 
     from openai import OpenAI
+
+    if hint_text:
+        quick = _fallback_extract(doc_type, filename, hint_text)
+        if quick.fields:
+            return quick
 
     settings = get_settings()
 
