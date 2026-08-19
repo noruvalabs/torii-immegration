@@ -30,7 +30,7 @@ import {
 export default function CaseDetailPage() {
   const params = useParams();
   const caseId = Number(params.id);
-  const { token } = useAuth();
+  const { token, user } = useAuth();
 
   const [caseData, setCaseData] = useState<Case | null>(null);
   const [guidance, setGuidance] = useState<CaseGuidance | null>(null);
@@ -46,7 +46,7 @@ export default function CaseDetailPage() {
   const [packet, setPacket] = useState<Record<string, unknown> | null>(null);
   const [stepError, setStepError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [profile, setProfile] = useState<User | null>(null);
+  const [profile, setProfile] = useState<User | null>(user);
   const stepInitializedRef = useRef(false);
 
   const loadCase = useCallback(async () => {
@@ -169,8 +169,14 @@ export default function CaseDetailPage() {
     setSubmitting(true);
     setError(null);
     try {
-      const items = await refreshChecklist(token, caseId);
+      const [items, c, prof] = await Promise.all([
+        refreshChecklist(token, caseId),
+        getCase(token, caseId),
+        getProfile(token).catch(() => null),
+      ]);
       setChecklist(items);
+      setCaseData(c);
+      if (prof) setProfile(prof);
       await refreshGuidance();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to refresh checklist");
@@ -444,7 +450,7 @@ export default function CaseDetailPage() {
             />
           )}
           {!stepError && activeStep === "intake" && intake && (
-            <IntakeStep state={intake} profile={profile} onAnswer={handleAnswer} />
+            <IntakeStep state={intake} profile={profile || user} onAnswer={handleAnswer} />
           )}
           {!stepError && activeStep === "eligibility" && (
             <EligibilityStep

@@ -112,10 +112,18 @@ export function getProfile(token: string) {
 }
 
 export function updateProfile(token: string, profile: ProfileUpdate) {
+  const cleaned: Record<string, string | null> = {};
+  for (const [k, v] of Object.entries(profile)) {
+    if (typeof v === "string") {
+      cleaned[k] = v.trim() || null;
+    } else {
+      cleaned[k] = v ?? null;
+    }
+  }
   return request<User>("/profile", {
     method: "PUT",
     headers: { Authorization: `Bearer ${token}` },
-    body: JSON.stringify(profile),
+    body: JSON.stringify(cleaned),
   });
 }
 

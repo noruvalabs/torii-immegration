@@ -150,3 +150,43 @@ async def test_resend_verification_never_leaks_info(client: AsyncClient) -> None
     )
     assert resp.status_code == 200
     assert "If that email is registered" in resp.json()["detail"]
+
+
+async def test_profile_update_and_get(client: AsyncClient) -> None:
+    register = await client.post(
+        "/v1/auth/register",
+        json={"email": "profileuser@example.com", "password": "secure-pass"},
+    )
+    assert register.status_code == 201
+    token = register.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # Update profile with all fields including date_of_birth and passport_expiry
+    put_resp = await client.put(
+        "/v1/auth/profile",
+        headers=headers,
+        json={
+            "full_name": "Tanaka Taro",
+            "nationality": "Japan",
+            "passport_number": "TK12345678",
+            "passport_expiry": "2030-12-31",
+            "date_of_birth": "1995-05-15",
+            "current_country": "Japan",
+        },
+    )
+    assert put_resp.status_code == 200
+    body = put_resp.json()
+    assert body["full_name"] == "Tanaka Taro"
+    assert body["nationality"] == "Japan"
+    assert body["passport_number"] == "TK12345678"
+    assert body["passport_expiry"] == "2030-12-31"
+    assert body["date_of_birth"] == "1995-05-15"
+    assert body["current_country"] == "Japan"
+    assert body["profile_complete"] is True
+
+    # Check /v1/auth/me reflects saved fields
+    me_resp = await client.get("/v1/auth/me", headers=headers)
+    assert me_resp.status_code == 200
+    me_body = me_resp.json()
+    assert me_body["date_of_birth"] == "1995-05-15"
+    assert me_body["passport_expiry"] == "2030-12-31"

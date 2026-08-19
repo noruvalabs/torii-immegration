@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { useAuth } from "@/lib/auth-context";
+import { draftDocument } from "@/lib/api/ai";
 import type { Case } from "./types";
 
 type PacketStepProps = {
@@ -319,12 +320,60 @@ export function PacketStep({ packet, caseData, loading, onBuild, onSubmit }: Pac
   const [activeDoc, setActiveDoc] = useState<DocType>("cover");
   const [copiedDoc, setCopiedDoc] = useState(false);
   const [downloadingPdf, setDownloadingPdf] = useState<string | null>(null);
+  const [aiDrafts, setAiDrafts] = useState<Partial<Record<DocType, string>>>({});
+  const [aiDrafting, setAiDrafting] = useState<DocType | null>(null);
+  const [customInstructions, setCustomInstructions] = useState("");
+  const [showPromptInput, setShowPromptInput] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
   const [trackedSteps, setTrackedSteps] = useState({
     filledOnline: false,
     paidFee: false,
     bookedAppointment: false,
     submittedDossier: caseData.status === "submitted",
   });
+
+  async function handleGenerateAIDraft(targetDoc?: DocType) {
+    const doc = targetDoc || activeDoc;
+    setAiDrafting(doc);
+    setAiError(null);
+    try {
+      const docTypeMapping: Record<DocType, string> = {
+        cover: "cover_letter",
+        reason: "statement_of_reason",
+        schedule: "schedule_of_stay",
+        financial: "financial_solvency",
+        form: "official_form_data",
+        full: "complete_filing_kit",
+      };
+      const res = await draftDocument({
+        doc_type: docTypeMapping[doc] || doc,
+        jurisdiction_code: caseData.reference ? caseData.reference.split("-")[0] : "JP",
+        scope_label: caseData.scope_label || caseData.locale.toUpperCase(),
+        case_reference: caseData.reference || `CASE-${caseData.id}`,
+        intake_answers: caseData.intake_answers || {},
+        checklist: Array.isArray(packet?.checklist) ? (packet.checklist as Record<string, unknown>[]) : [],
+        custom_instructions: customInstructions || undefined,
+      });
+      setAiDrafts((prev) => ({ ...prev, [doc]: res.content }));
+      setShowPromptInput(false);
+    } catch (err) {
+      setAiError(err instanceof Error ? err.message : "AI drafting failed");
+    } finally {
+      setAiDrafting(null);
+    }
+  }
+
+  function handleResetToTemplate() {
+    setAiDrafts((prev) => {
+      const next = { ...prev };
+      delete next[activeDoc];
+      return next;
+    });
+  }
+
+  function handleTextEdit(val: string) {
+    setAiDrafts((prev) => ({ ...prev, [activeDoc]: val }));
+  }
 
   async function downloadPdf(
     endpoint: "application-form" | "cover-letter" | "dossier-packet",
@@ -343,16 +392,17 @@ export function PacketStep({ packet, caseData, loading, onBuild, onSubmit }: Pac
         alert(`Failed to download PDF (${res.status}): ${errDetail || res.statusText}`);
         return;
       }
-      const buffer = await res.arrayBuffer();
-      const blob = new Blob([buffer], { type: "application/pdf" });
+      const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
       link.download = defaultFilename;
       document.body.appendChild(link);
       link.click();
-      link.remove();
-      URL.revokeObjectURL(url);
+      setTimeout(() => {
+        link.remove();
+        URL.revokeObjectURL(url);
+      }, 10000);
     } catch (err) {
       console.error("PDF download error:", err);
     } finally {
@@ -378,134 +428,126 @@ export function PacketStep({ packet, caseData, loading, onBuild, onSubmit }: Pac
           reason: "✍️ Statement of Reason (採用理由書)",
           financial: "💰 Tax & Income Proof (納税・所得証明)",
           form: "📋 ISA Form Data Sheet",
-          full: "📦 Complete Japan Work Kit",
+          full: "📦 Complete Dossier Kit",
         };
       }
       if (isStudent) {
         return {
-          cover: "📄 Consular / School Cover Letter",
-          schedule: "🎓 Study & Academic Plan (就学計画書)",
-          reason: "✍️ Statement of Study Intent (就学理由書)",
-          financial: "💰 Sponsor Guarantee (経費支弁書)",
-          form: "📋 Student Form Data Sheet",
-          full: "📦 Complete Japan Student Kit",
+          cover: "📄 Embassy Cover Letter",
+          schedule: "🎓 Study & Activity Plan",
+          reason: "✍️ Statement of Purpose (志望理由書)",
+          financial: "💰 Sponsor & Solvency Affidavit",
+          form: "📋 Student Visa Form Data",
+          full: "📦 Complete Student Dossier",
         };
       }
       return {
         cover: "📄 Embassy Cover Letter",
         schedule: "🗓️ Schedule of Stay (滞在予定表)",
-        reason: "✍️ Reason for Visit (理由書)",
+        reason: "✍️ Reason for Visit (招へい理由書)",
         financial: "💰 Financial Guarantee (身元保証書)",
-        form: "📋 Full Form Data Sheet",
-        full: "📦 Complete Dossier Kit",
+        form: "📋 Visa Form Data Sheet",
+        full: "📦 Complete Tourist Pack",
       };
     }
 
     if (isUSA) {
-      if (isWork) {
-        return {
-          cover: "📄 USCIS / Consular Cover Letter",
-          schedule: "💼 LCA & Job Position Specification",
-          reason: "✍️ Form I-129 Employer Petition Letter",
-          financial: "💰 Prevailing Wage & Salary Proof",
-          form: "📋 DS-160 & I-129 Data Sheet",
-          full: "📦 Complete U.S. Work Visa Kit",
-        };
-      }
-      if (isStudent) {
-        return {
-          cover: "📄 U.S. Embassy Consular Cover Letter",
-          schedule: "🎓 SEVIS Academic Study Plan",
-          reason: "✍️ Statement of Intent & Nonimmigrant Ties",
-          financial: "💰 Sponsor Affidavit of Support (Form I-134)",
-          form: "📋 Form DS-160 & I-901 SEVIS Guide",
-          full: "📦 Complete U.S. Student Kit",
-        };
-      }
       return {
-        cover: "📄 U.S. Consular Cover Letter",
-        schedule: "🗓️ Day-by-Day Travel Itinerary",
-        reason: "✍️ Statement of Purpose (B-1/B-2)",
-        financial: "💰 Affidavit of Support (Form I-134)",
-        form: "📋 Form DS-160 Data Guide",
-        full: "📦 Complete U.S. Submission Kit",
+        cover: "📄 Consular Cover Letter",
+        schedule: "🗓️ Travel Itinerary & Flight Plan",
+        reason: "✍️ Statement of Purpose",
+        financial: "💰 Financial Solvency Affidavit",
+        form: "📋 DS-160 Filing Summary",
+        full: "📦 Complete US Visa Packet",
       };
     }
 
     if (isUK) {
       return {
-        cover: "📄 UKVI / High Commission Cover Letter",
-        schedule: isWork ? "💼 UK Job Specification & CoS" : isStudent ? "🎓 CAS Study & Course Plan" : "🗓️ UK Travel Itinerary & Lodging",
-        reason: "✍️ Statement of Purpose & Genuine Ties",
-        financial: "💰 Proof of Financial Solvency & Maintenance",
-        form: "📋 GOV.UK Visa Field Guide",
-        full: "📦 Complete UK Submission Kit",
+        cover: "📄 UKVI Cover Letter",
+        schedule: "🗓️ UK Travel & Stay Itinerary",
+        reason: "✍️ Purpose of Visit Statement",
+        financial: "💰 Maintenance & Solvency Proof",
+        form: "📋 UKVI Application Data",
+        full: "📦 Complete UK Visa Kit",
       };
     }
 
     if (isSchengen) {
       return {
-        cover: "📄 Schengen Consular Cover Letter",
-        schedule: "🗓️ Schengen Travel Itinerary & Bookings",
-        reason: "✍️ Statement of Purpose & Travel Intent",
-        financial: "💰 Proof of Means & Travel Insurance",
-        form: "📋 Harmonised Schengen Form Data",
+        cover: "📄 Schengen Cover Letter",
+        schedule: "🗓️ Multi-City Schengen Itinerary",
+        reason: "✍️ Travel Intent Declaration",
+        financial: "💰 Proof of Means of Subsistence",
+        form: "📋 Uniform Schengen Form Data",
         full: "📦 Complete Schengen Dossier",
       };
     }
 
     return {
-      cover: "📄 Visa Submission Cover Letter",
-      schedule: isWork ? "💼 Job Position & Duties Overview" : isStudent ? "🎓 Study Plan & Curriculum Overview" : "🗓️ Travel Itinerary & Accommodation",
+      cover: "📄 Formal Cover Letter",
+      schedule: "🗓️ Schedule of Stay",
       reason: "✍️ Statement of Purpose",
-      financial: "💰 Financial Guarantee & Solvency Proof",
-      form: "📋 Application Form Data Guide",
+      financial: "💰 Financial Declaration",
+      form: "📋 Application Form Summary",
       full: "📦 Complete Filing Dossier",
     };
   }
 
   const docLabels = getDocLabels();
 
-  function getActiveDocText(): { title: string; filename: string; text: string } {
+  function getActiveDocText(): { title: string; filename: string; text: string; isAi: boolean } {
+    let base = { title: "", filename: "", text: "" };
     switch (activeDoc) {
       case "schedule":
-        return {
+        base = {
           title: docLabels.schedule.replace(/^[^\w]+/, ""),
           filename: `${caseData.reference}-schedule-of-stay.txt`,
           text: generateScheduleOfStay(caseData, packet),
         };
+        break;
       case "reason":
-        return {
+        base = {
           title: docLabels.reason.replace(/^[^\w]+/, ""),
           filename: `${caseData.reference}-reason-for-visit.txt`,
           text: generateReasonForVisit(caseData, packet),
         };
+        break;
       case "financial":
-        return {
+        base = {
           title: docLabels.financial.replace(/^[^\w]+/, ""),
           filename: `${caseData.reference}-financial-guarantee.txt`,
           text: generateFinancialGuarantee(caseData, packet),
         };
+        break;
       case "form":
-        return {
+        base = {
           title: docLabels.form.replace(/^[^\w]+/, ""),
           filename: `${caseData.reference}-official-form-data.txt`,
           text: generateCompleteOfficialForm(caseData, packet),
         };
+        break;
       case "full":
-        return {
+        base = {
           title: docLabels.full.replace(/^[^\w]+/, ""),
           filename: `${caseData.reference}-complete-filing-kit.txt`,
           text: generateCompleteFilingKitText(packet || {}, caseData),
         };
+        break;
       case "cover":
       default:
-        return {
+        base = {
           title: docLabels.cover.replace(/^[^\w]+/, ""),
           filename: `${caseData.reference}-embassy-cover-letter.txt`,
           text: generateCoverLetter(caseData, packet),
         };
+        break;
     }
+
+    if (aiDrafts[activeDoc]) {
+      return { ...base, text: aiDrafts[activeDoc]!, isAi: true };
+    }
+    return { ...base, isAi: false };
   }
 
   function handleCopyActiveDoc() {
@@ -524,8 +566,10 @@ export function PacketStep({ packet, caseData, loading, onBuild, onSubmit }: Pac
     link.download = filename;
     document.body.appendChild(link);
     link.click();
-    link.remove();
-    URL.revokeObjectURL(url);
+    setTimeout(() => {
+      link.remove();
+      URL.revokeObjectURL(url);
+    }, 10000);
   }
 
   function downloadFullFilingKit() {
@@ -540,8 +584,10 @@ export function PacketStep({ packet, caseData, loading, onBuild, onSubmit }: Pac
     link.download = filename;
     document.body.appendChild(link);
     link.click();
-    link.remove();
-    URL.revokeObjectURL(url);
+    setTimeout(() => {
+      link.remove();
+      URL.revokeObjectURL(url);
+    }, 10000);
   }
 
 
@@ -660,6 +706,38 @@ export function PacketStep({ packet, caseData, loading, onBuild, onSubmit }: Pac
                   </div>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    onClick={() => handleGenerateAIDraft()}
+                    disabled={aiDrafting !== null}
+                    className="px-3 py-1 text-xs font-semibold bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary text-primary-foreground shadow"
+                  >
+                    {aiDrafting === activeDoc ? (
+                      <Loader2 className="mr-1.5 size-3.5 animate-spin" />
+                    ) : (
+                      <Sparkles className="mr-1.5 size-3.5" />
+                    )}
+                    {getActiveDocText().isAi ? "Regenerate with AI" : "✨ Draft with AI"}
+                  </Button>
+
+                  {getActiveDocText().isAi && (
+                    <Button
+                      variant="ghost"
+                      onClick={handleResetToTemplate}
+                      className="px-2 py-1 text-xs text-muted-foreground hover:text-foreground"
+                    >
+                      Reset to Template
+                    </Button>
+                  )}
+
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowPromptInput((prev) => !prev)}
+                    className="px-2.5 py-1 text-xs"
+                    title="Customize AI prompt instructions"
+                  >
+                    Custom Prompt
+                  </Button>
+
                   <Button variant="outline" onClick={handleCopyActiveDoc} className="px-2.5 py-1 text-xs">
                     {copiedDoc ? (
                       <>
@@ -667,7 +745,7 @@ export function PacketStep({ packet, caseData, loading, onBuild, onSubmit }: Pac
                       </>
                     ) : (
                       <>
-                        <Copy className="mr-1.5 size-3.5" /> Copy Document
+                        <Copy className="mr-1.5 size-3.5" /> Copy
                       </>
                     )}
                   </Button>
@@ -676,6 +754,41 @@ export function PacketStep({ packet, caseData, loading, onBuild, onSubmit }: Pac
                   </Button>
                 </div>
               </div>
+
+              {/* Optional Custom Instructions Input */}
+              {showPromptInput && (
+                <div className="rounded-lg border bg-muted/20 p-3 space-y-2 animate-in fade-in">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                      <Sparkles className="size-3 text-primary" />
+                      Custom AI Drafting Instructions (Optional)
+                    </label>
+                    <span className="text-[10px] text-muted-foreground">e.g. emphasize work background, specific salary or itinerary</span>
+                  </div>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={customInstructions}
+                      onChange={(e) => setCustomInstructions(e.target.value)}
+                      placeholder="e.g. Focus on my 5 years in Tokyo as a software engineer and Japanese proficiency..."
+                      className="flex-1 rounded-md border bg-background px-3 py-1.5 text-xs outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    />
+                    <Button
+                      onClick={() => handleGenerateAIDraft()}
+                      disabled={aiDrafting !== null}
+                      className="text-xs px-3 py-1.5 font-medium shrink-0"
+                    >
+                      {aiDrafting === activeDoc ? <Loader2 className="size-3.5 animate-spin" /> : "Generate"}
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {aiError && (
+                <div className="rounded-md border border-[var(--color-danger)]/30 bg-[var(--color-danger)]/10 p-2.5 text-xs text-[var(--color-danger)]">
+                  {aiError}
+                </div>
+              )}
 
               {/* Document Selector Navigation Tabs */}
               <div className="flex flex-wrap gap-1.5 border-b pb-3">
@@ -697,23 +810,45 @@ export function PacketStep({ packet, caseData, loading, onBuild, onSubmit }: Pac
                     }`}
                   >
                     <span>{tab.label}</span>
+                    {aiDrafts[tab.id] && (
+                      <span className="size-1.5 rounded-full bg-emerald-400" />
+                    )}
                   </button>
                 ))}
               </div>
 
               {/* Active Document Header & Preview */}
               <div className="flex items-center justify-between pt-1">
-                <span className="text-xs font-semibold text-foreground">
-                  {getActiveDocText().title}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-semibold text-foreground">
+                    {getActiveDocText().title}
+                  </span>
+                  {getActiveDocText().isAi && (
+                    <Badge tone="success">✨ AI Personalized</Badge>
+                  )}
+                </div>
                 <span className="text-[10px] text-muted-foreground font-mono">
                   {getActiveDocText().filename}
                 </span>
               </div>
 
-              <div className="rounded-md border bg-muted/40 p-4 font-mono text-xs text-foreground/90 whitespace-pre-wrap leading-relaxed max-h-96 overflow-y-auto shadow-inner">
-                {getActiveDocText().text}
-              </div>
+              {aiDrafting === activeDoc ? (
+                <div className="rounded-md border bg-muted/20 p-8 flex flex-col items-center justify-center gap-3 text-center">
+                  <Loader2 className="size-6 text-primary animate-spin" />
+                  <div className="space-y-1">
+                    <p className="text-xs font-semibold text-foreground">Drafting official document with AI...</p>
+                    <p className="text-[11px] text-muted-foreground">Synthesizing your verified documents, case scope, and background details</p>
+                  </div>
+                </div>
+              ) : (
+                <textarea
+                  value={getActiveDocText().text}
+                  onChange={(e) => handleTextEdit(e.target.value)}
+                  rows={14}
+                  className="w-full rounded-md border bg-muted/30 p-4 font-mono text-xs text-foreground/90 whitespace-pre leading-relaxed shadow-inner outline-none focus-visible:ring-1 focus-visible:ring-ring resize-y"
+                  placeholder="Official document text..."
+                />
+              )}
             </CardContent>
           </Card>
 

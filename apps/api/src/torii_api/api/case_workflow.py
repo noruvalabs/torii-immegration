@@ -25,6 +25,7 @@ from torii_api.db.models import (
     EligibilityRuleSet,
     FormTemplate,
     Jurisdiction,
+    User,
 )
 from torii_api.db.session import get_session
 from torii_api.services.checklist import ChecklistStatus, update_status, visible_requirement_items
@@ -483,6 +484,58 @@ async def patch_checklist_item(
     return item
 
 
+def _apply_extracted_fields_to_case_and_user(
+    case: Case, user: User, extracted_fields: dict[str, Any]
+) -> None:
+    if not extracted_fields:
+        return
+    answers = dict(case.intake_answers or {})
+    for key, raw_val in extracted_fields.items():
+        val = raw_val.get("value") if isinstance(raw_val, dict) else raw_val
+        if val is None:
+            continue
+        val_str = str(val).strip()
+        if not val_str:
+            continue
+
+        answers[key] = val_str
+        norm_key = key.lower().strip()
+
+        # Update User global profile and intake aliases
+        if norm_key in ("full_name", "applicant_name", "name", "legal_name", "holder_name", "employee_name"):
+            user.full_name = val_str
+            answers["full_name"] = val_str
+        elif norm_key in ("nationality", "citizenship", "country_of_citizenship"):
+            user.nationality = val_str
+            answers["nationality"] = val_str
+        elif norm_key in ("passport_number", "passport_no", "passport_num"):
+            user.passport_number = val_str
+            answers["passport_number"] = val_str
+        elif norm_key in ("passport_expiry", "passport_expiry_date", "expiry_date", "passport_expiration_date"):
+            user.passport_expiry = val_str
+            answers["passport_expiry"] = val_str
+        elif norm_key in ("date_of_birth", "dob", "birth_date", "applicant_dob"):
+            user.date_of_birth = val_str
+            answers["date_of_birth"] = val_str
+        elif norm_key in ("current_country", "current_residence_country", "residence_country"):
+            user.current_country = val_str
+            answers["current_country"] = val_str
+        elif norm_key in ("employer_name", "company_name", "sponsor_name"):
+            answers["employer_name"] = val_str
+            answers["company_name"] = val_str
+            answers["sponsor_name"] = val_str
+        elif norm_key in ("monthly_salary", "remuneration", "salary"):
+            answers["monthly_salary"] = val_str
+        elif norm_key in ("residence_card_number", "card_number"):
+            answers["residence_card_number"] = val_str
+
+    case.intake_answers = answers
+    case.review_flags_acknowledged = False
+    user.profile_complete = bool(
+        user.full_name and user.nationality and user.passport_number and user.current_country
+    )
+
+
 @router.post(
     "/{case_id}/documents", response_model=DocumentOut, status_code=status.HTTP_201_CREATED
 )
@@ -490,7 +543,8 @@ async def register_document(
     case_id: int, payload: DocumentIn, session: SessionDep, user: CurrentUserDep
 ) -> CaseDocument:
     case = await _owned_case(session, case_id, user)
-    document = CaseDocument(case_id=case.id, confirmed=False, **payload.model_dump())
+    has_extracted = bool(payload.extracted_fields)
+    document = CaseDocument(case_id=case.id, confirmed=has_extracted, **payload.model_dump())
     session.add(document)
     await session.flush()
     checklist_item = await session.scalar(
@@ -501,6 +555,10 @@ async def register_document(
     if checklist_item is not None:
         checklist_item.document_id = document.id
         checklist_item.status = "uploaded"
+
+    if payload.extracted_fields:
+        _apply_extracted_fields_to_case_and_user(case, user, payload.extracted_fields)
+
     await session.flush()
     return document
 
@@ -515,11 +573,10 @@ async def confirm_document(
     )
     if document is None:
         raise HTTPException(status_code=404, detail=f"document {doc_id} not found")
-    confirmed_fields: dict[str, Any] = {}
-    for key, raw_value in dict(document.extracted_fields or {}).items():
-        confirmed_fields[key] = raw_value.get("value") if isinstance(raw_value, dict) else raw_value
-    case.intake_answers = {**dict(case.intake_answers or {}), **confirmed_fields}
-    case.review_flags_acknowledged = False
+
+    if document.extracted_fields:
+        _apply_extracted_fields_to_case_and_user(case, user, dict(document.extracted_fields))
+
     document.confirmed = True
     await session.flush()
     return document

@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, HTTPException, Query, UploadFile, status
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 
@@ -81,12 +81,19 @@ class MessageOut(BaseModel):
 
 
 class ProfileUpdateIn(BaseModel):
-    full_name: str | None = Field(default=None, min_length=2, max_length=200)
-    nationality: str | None = Field(default=None, min_length=2, max_length=100)
-    passport_number: str | None = Field(default=None, min_length=5, max_length=32)
-    passport_expiry: str | None = Field(default=None, max_length=16)
-    date_of_birth: str | None = Field(default=None, max_length=16)
-    current_country: str | None = Field(default=None, min_length=2, max_length=100)
+    full_name: str | None = Field(default=None, max_length=200)
+    nationality: str | None = Field(default=None, max_length=100)
+    passport_number: str | None = Field(default=None, max_length=32)
+    passport_expiry: str | None = Field(default=None, max_length=32)
+    date_of_birth: str | None = Field(default=None, max_length=32)
+    current_country: str | None = Field(default=None, max_length=100)
+
+    @field_validator("*", mode="before")
+    @classmethod
+    def empty_str_to_none(cls, v: object) -> object:
+        if isinstance(v, str) and not v.strip():
+            return None
+        return v
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -198,11 +205,13 @@ async def update_profile(
     """Update the signed-in user's profile fields."""
     update_data = payload.model_dump(exclude_unset=True)
     for key, value in update_data.items():
+        if isinstance(value, str):
+            value = value.strip() or None
         setattr(user, key, value)
 
     # Auto-mark profile as complete when required fields are filled
     required_fields = ["full_name", "nationality", "passport_number", "current_country"]
-    user.profile_complete = all(getattr(user, f) for f in required_fields)
+    user.profile_complete = all(bool(getattr(user, f, None)) for f in required_fields)
 
     await session.flush()
     return user

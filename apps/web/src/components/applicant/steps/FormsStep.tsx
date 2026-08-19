@@ -124,16 +124,17 @@ export function FormsStep({
         alert(`Failed to download form PDF: ${errDetail || res.statusText}`);
         return;
       }
-      const buffer = await res.arrayBuffer();
-      const blob = new Blob([buffer], { type: "application/pdf" });
+      const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
       link.download = `${reference || `Case-${caseId}`}_Application_Form.pdf`;
       document.body.appendChild(link);
       link.click();
-      link.remove();
-      URL.revokeObjectURL(url);
+      setTimeout(() => {
+        link.remove();
+        URL.revokeObjectURL(url);
+      }, 10000);
     } catch (err) {
       console.error("PDF download error:", err);
     } finally {

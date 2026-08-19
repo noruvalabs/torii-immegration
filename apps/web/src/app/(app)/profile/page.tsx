@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import {
-  User,
+  User as UserIcon,
   Loader2,
   Check,
   Camera,
@@ -18,7 +18,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth-context";
-import { updateProfile, uploadAvatar, type ProfileUpdate } from "@/lib/api/auth";
+import { getProfile, updateProfile, uploadAvatar, type ProfileUpdate } from "@/lib/api/auth";
 import { CountrySelector } from "@/components/ui/country-selector";
 
 export default function ProfilePage() {
@@ -38,6 +38,31 @@ export default function ProfilePage() {
     date_of_birth: user?.date_of_birth ?? "",
     current_country: user?.current_country ?? "",
   });
+
+  // Sync form whenever user state is loaded or updated in auth context
+  useEffect(() => {
+    if (user) {
+      setForm({
+        full_name: user.full_name ?? "",
+        nationality: user.nationality ?? "",
+        passport_number: user.passport_number ?? "",
+        passport_expiry: user.passport_expiry ?? "",
+        date_of_birth: user.date_of_birth ?? "",
+        current_country: user.current_country ?? "",
+      });
+      setAvatar(user.avatar_url ?? null);
+    }
+  }, [user]);
+
+  // Always fetch the freshest profile on mount
+  useEffect(() => {
+    if (!token) return;
+    getProfile(token)
+      .then((fresh) => {
+        setAuth(token, fresh);
+      })
+      .catch(() => {});
+  }, [token, setAuth]);
 
   function update(key: keyof ProfileUpdate, value: string) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -76,7 +101,7 @@ export default function ProfilePage() {
     try {
       const updated = await updateProfile(token, form);
       setAuth(token, updated);
-      setSuccessMsg("Profile details saved successfully. All future cases will auto-populate with these details.");
+      setSuccessMsg("Profile details saved successfully. All future cases and questionnaires will auto-fill with these details.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save profile");
     } finally {
@@ -156,7 +181,7 @@ export default function ProfilePage() {
                     />
                   ) : (
                     <div className="flex flex-col items-center justify-center size-full rounded-full bg-primary/10 text-primary">
-                      <User className="size-8" />
+                      <UserIcon className="size-8" />
                     </div>
                   )}
                   <button

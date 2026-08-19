@@ -187,3 +187,61 @@ async def test_cannot_answer_hidden_question(client: AsyncClient, engine: AsyncE
     )
     assert resp.status_code == 400
     assert "not applicable" in resp.json()["detail"]
+
+
+async def test_intake_global_profile_sync_and_prefill(
+    client: AsyncClient, engine: AsyncEngine
+) -> None:
+    await _seed_jp_work_renewal_with_intake(engine)
+    register = await client.post(
+        "/v1/auth/register",
+        json={"email": "globalsync@example.com", "password": "secure-pass"},
+    )
+    assert register.status_code == 201
+    token = register.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # Step 1: Set user profile
+    await client.put(
+        "/v1/auth/profile",
+        headers=headers,
+        json={
+            "full_name": "Kenji Sato",
+            "nationality": "Japan",
+            "passport_number": "P12345678",
+            "passport_expiry": "2032-01-01",
+            "date_of_birth": "1990-08-20",
+            "current_country": "Japan",
+        },
+    )
+
+    # Step 2: Scope a case -> should prefill from profile
+    scoped = await client.post(
+        "/v1/cases/scope",
+        json={
+            "jurisdiction_code": "JP",
+            "visa_category_code": "work",
+            "action_code": "renewal",
+        },
+        headers=headers,
+    )
+    assert scoped.status_code == 201
+    case_id = scoped.json()["id"]
+
+    intake_resp = await client.get(f"/v1/cases/{case_id}/intake", headers=headers)
+    assert intake_resp.status_code == 200
+    answers = intake_resp.json()["answers"]
+    assert answers.get("full_name") == "Kenji Sato"
+    assert answers.get("passport_number") == "P12345678"
+
+    # Step 3: Answering a profile-mapped question in intake updates global profile
+    await client.put(
+        f"/v1/cases/{case_id}/intake/answer",
+        json={"key": "passport_number", "value": "NEWPASS999"},
+        headers=headers,
+    )
+
+    me_resp = await client.get("/v1/auth/me", headers=headers)
+    assert me_resp.status_code == 200
+    assert me_resp.json()["passport_number"] == "NEWPASS999"
+
