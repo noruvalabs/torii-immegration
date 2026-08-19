@@ -240,6 +240,9 @@ def _generate_procedural_fallback(
                     elif "study_level" in key:
                         fix_value = "university"
                         action_label = f"⚡ Set Study Level to 'University'"
+                    elif "attendance" in key or "attendance_rate" in key:
+                        fix_value = "95"
+                        action_label = f"⚡ Set Attendance Rate to '95%'"
 
                     lines.append(f"**{i}. {title}** (`{status}`):")
                     lines.append(f"- **Issue**: {explanation}")
@@ -250,6 +253,18 @@ def _generate_procedural_fallback(
 
                 lines.append("After applying the fixes, eligibility will be automatically re-evaluated to unlock the next steps.")
                 return "\n".join(lines)
+
+    # 1.5 Check if user specifically asks about missing fields or attendance rate
+    if "attendance" in msg:
+        return (
+            f"### 🏫 Missing Required Form Field: Attendance Rate (`school.attendance_rate`)\n\n"
+            f"**Why this is required by Japanese Immigration (MOJ ISA 16-1 / 16-3):**\n"
+            f"- For a Student Visa (留学) or renewal/extension in Japan, immigration authorities strictly require your academic attendance record.\n"
+            f"- **Statutory Standard**: An attendance rate of **80% or higher** (ideally 90%+) is required to be approved for visa extension.\n\n"
+            f"**How to fix this:**\n"
+            f"Click below to set your attendance rate percentage from your school certificate:\n\n"
+            f'[ACTION:update_intake key="attendance_rate" value="95" label="⚡ Set Attendance Rate to \'95%\'"]'
+        )
 
     # 2. Check if user is asking about current progress / status
     if any(k in msg for k in ("progress", "current", "process", "where am i", "what next", "status", "next step")):
