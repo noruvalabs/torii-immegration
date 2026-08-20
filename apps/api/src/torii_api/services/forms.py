@@ -51,6 +51,12 @@ FORM_ANSWER_KEY_ALIASES: dict[str, list[str]] = {
     "residence_country": ["current_residence_country", "current_location_country", "country_of_residence"],
     "residence_card_number": ["japan_residence_card", "zairyu_card_number"],
     "residence_card_expiry": ["japan_residence_expiry", "zairyu_card_expiry"],
+    "salary": ["monthly_salary", "salary_monthly", "annual_salary_jpy", "income_monthly"],
+    "monthly_salary": ["salary", "salary_monthly", "annual_salary_jpy", "income_monthly"],
+    "employer": ["employer_name", "company_name", "sponsoring_organization", "host_company_name"],
+    "employer_name": ["employer", "company_name", "sponsoring_organization", "host_company_name"],
+    "corporate_number": ["employer_corporate_number", "company_number", "organization_number"],
+    "employer_corporate_number": ["corporate_number", "company_number", "organization_number"],
 }
 
 
