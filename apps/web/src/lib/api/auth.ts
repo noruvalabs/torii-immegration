@@ -63,6 +63,13 @@ export function login(emailOrUsername: string, password: string) {
   });
 }
 
+export function googleLogin(payload: { token?: string; email?: string; name?: string; avatar_url?: string }) {
+  return request<AuthResponse>("/google", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
 export function getMe(token: string) {
   return request<User>("/me", {
     headers: { Authorization: `Bearer ${token}` },
