@@ -892,16 +892,44 @@ def generate_official_japan_visa_form_pdf(
         )
         corp_no = str(answers.get("employer_corporate_number") or answers.get("corporate_number") or "")
 
+        sex_val = str(answers.get("sex") or answers.get("gender") or "male").lower()
+        sex_radio = "/1" if "fem" in sex_val else "/0"
+
+        marital_val = str(answers.get("marital_status") or "single").lower()
+        if "marr" in marital_val:
+            marital_radio = "/1"
+        elif "wido" in marital_val:
+            marital_radio = "/2"
+        elif "divo" in marital_val:
+            marital_radio = "/3"
+        else:
+            marital_radio = "/0"
+
+        passport_type = str(answers.get("passport_type") or "ordinary").lower()
+        if "diplo" in passport_type:
+            passport_radio = "/0"
+        elif "offi" in passport_type:
+            passport_radio = "/1"
+        elif "other" in passport_type:
+            passport_radio = "/3"
+        else:
+            passport_radio = "/2"
+
         field_values: dict[str, str] = {
             # Page 1: Personal Identification & Passport Details
             "topmostSubform[0].Page1[0].T2[0]": surname,
             "topmostSubform[0].Page1[0].T7[0]": given_names,
             "topmostSubform[0].Page1[0].#area[4].T14[0]": dob,
-            "topmostSubform[0].Page1[0].#area[4].T16[0]": nationality,
+            "topmostSubform[0].Page1[0].#area[4].T16[0]": str(answers.get("place_of_birth") or nationality),
             "topmostSubform[0].Page1[0].T50[0]": nationality,
             "topmostSubform[0].Page1[0].T49[0]": passport_no,
             "topmostSubform[0].Page1[0].#area[0].T59[0]": passport_expiry,
             "topmostSubform[0].Page1[0].#area[0].T57[0]": passport_authority,
+            "topmostSubform[0].Page1[0].#area[9].T53[0]": str(answers.get("passport_issue_date") or ""),
+            "topmostSubform[0].Page1[0].#area[9].T57[1]": str(answers.get("passport_issue_place") or nationality),
+            "topmostSubform[0].Page1[0].#area[1].#area[2].RB3[0]": passport_radio,
+            "topmostSubform[0].Page1[0].#area[5].#area[6].#area[7].RB1[0]": sex_radio,
+            "topmostSubform[0].Page1[0].#area[8].RB2[0]": marital_radio,
             "topmostSubform[0].Page1[0].T68[2]": purpose,
             "topmostSubform[0].Page1[0].T68[3]": stay_days,
             "topmostSubform[0].Page1[0].T66[0]": str(answers.get("planned_arrival_date") or answers.get("arrival_date") or ""),
@@ -924,12 +952,18 @@ def generate_official_japan_visa_form_pdf(
             "topmostSubform[0].Page2[0].#area[0].guarantor_tel[0]": employer_tel,
             "topmostSubform[0].Page2[0].guarantor_adr[0]": employer_address,
             "topmostSubform[0].Page2[0].T25[0]": "Sponsoring Employer / Host Organization",
-            "topmostSubform[0].Page2[0].T5[0]": "Corporation / Organization",
+            "topmostSubform[0].Page2[0].T5[0]": "Corporation / IT Enterprise",
             "topmostSubform[0].Page2[0].T5[1]": f"Japan (Corporate No. {corp_no})" if corp_no else "Japan",
             "topmostSubform[0].Page2[0].#area[2].T19[0]": employer_name,
             "topmostSubform[0].Page2[0].#area[2].T10[0]": employer_tel,
             "topmostSubform[0].Page2[0].T23[0]": employer_address,
             "topmostSubform[0].Page2[0].T25[1]": "Sponsoring Employer",
+            "topmostSubform[0].Page2[0].#area[4].RB5[0]": "/1",  # No
+            "topmostSubform[0].Page2[0].#area[5].RB5[1]": "/1",  # No
+            "topmostSubform[0].Page2[0].#area[6].RB5[2]": "/1",  # No
+            "topmostSubform[0].Page2[0].#area[7].#area[8].RB5[3]": "/1",  # No
+            "topmostSubform[0].Page2[0].#area[9].RB5[4]": "/1",  # No
+            "topmostSubform[0].Page2[0].RB5[5]": "/1",  # No
             "topmostSubform[0].Page2[0].T150[0]": datetime.now(UTC).strftime("%Y-%m-%d"),
         }
 
