@@ -53,6 +53,7 @@ export type Case = {
   origin_country?: string | null;
   residence_country?: string | null;
   research_id?: number | null;
+  is_entitled?: boolean;
 };
 
 export type IntakeQuestion = {
