@@ -843,6 +843,24 @@ async def get_intake(
     return _intake_state(case, questions)
 
 
+INTAKE_KEY_ALIASES: dict[str, list[str]] = {
+    "corporate_number": ["employer_corporate_number", "company_number", "organization_number"],
+    "employer_corporate_number": ["corporate_number", "company_number", "organization_number"],
+    "employer_name": ["company_name", "sponsoring_organization", "host_company_name"],
+    "company_name": ["employer_name", "sponsoring_organization"],
+    "monthly_salary": ["salary_monthly", "income_monthly", "salary"],
+    "salary_monthly": ["monthly_salary", "income_monthly", "salary"],
+    "purpose_of_visit": ["main_purpose", "purpose", "visit_purpose"],
+    "main_purpose": ["purpose_of_visit", "purpose", "visit_purpose"],
+    "intended_length_of_stay_days": ["stay_duration_days", "length_of_stay_days", "stay_days"],
+    "stay_duration_days": ["intended_length_of_stay_days", "length_of_stay_days", "stay_days"],
+    "passport_number": ["passport_no", "passport"],
+    "passport_no": ["passport_number", "passport"],
+    "birth_date": ["date_of_birth", "dob"],
+    "date_of_birth": ["birth_date", "dob"],
+}
+
+
 @router.put("/{case_id}/intake/answer", response_model=IntakeStateOut)
 async def answer_intake(
     case_id: int,
@@ -854,7 +872,17 @@ async def answer_intake(
     case = await _owned_case(session, case_id, user)
     questions = parse_questions(await _intake_questions_for_case(session, case))
     by_key = {q.key: q for q in questions}
-    question = by_key.get(payload.key)
+
+    target_key = payload.key
+    question = by_key.get(target_key)
+    if question is None:
+        # Check aliases
+        for alias in INTAKE_KEY_ALIASES.get(target_key, []):
+            if alias in by_key:
+                target_key = alias
+                question = by_key[alias]
+                break
+
     if question is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -872,9 +900,9 @@ async def answer_intake(
     if error is not None:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=error)
 
-    merged = {**current, payload.key: payload.value}
+    merged = {**current, target_key: payload.value}
     case.intake_answers = prune_answers(questions, merged)
-    case.intake_step = payload.key
+    case.intake_step = target_key
     case.review_flags_acknowledged = False
     _sync_prior_application(case)
 

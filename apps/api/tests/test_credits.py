@@ -83,7 +83,7 @@ async def test_credits_top_up(client: AsyncClient) -> None:
     token = reg.json()["access_token"]
     headers = {"Authorization": f"Bearer {token}"}
 
-    # Top up standard case pass (200 credits)
+    # Top up standard bundle (3 passes)
     top_res = await client.post(
         "/v1/credits/top-up",
         json={"pack_id": "standard", "currency": "usd"},
@@ -91,13 +91,13 @@ async def test_credits_top_up(client: AsyncClient) -> None:
     )
     assert top_res.status_code == 200
     data = top_res.json()
-    assert data["credits_added"] == 200
-    assert data["credit_balance"] == 210  # 10 initial + 200
+    assert data["credits_added"] == 3
+    assert data["credit_balance"] == 13  # 10 initial + 3
 
     # Balance ledger check
     bal_res = await client.get("/v1/credits/balance", headers=headers)
     assert bal_res.status_code == 200
     txs = bal_res.json()["recent_transactions"]
     assert len(txs) >= 1
-    assert txs[0]["amount"] == 200
+    assert txs[0]["amount"] == 3
     assert txs[0]["feature"] == "top_up"
