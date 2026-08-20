@@ -152,8 +152,11 @@ export function FormsStep({
     if (!caseId || !activeToken) return;
     setDownloadingPdf(formCode);
     try {
-      const res = await fetch(`/backend/v1/cases/${caseId}/pdf/application-form`, {
-        headers: { Authorization: `Bearer ${activeToken}` },
+      const res = await fetch(`/backend/v1/cases/${caseId}/export/application-form?format=base64`, {
+        headers: {
+          Authorization: `Bearer ${activeToken}`,
+          Accept: "application/json",
+        },
       });
       if (!res.ok) {
         const errDetail = await res.text();
@@ -161,11 +164,26 @@ export function FormsStep({
         alert(`Failed to download PDF form (${res.status}): ${errDetail || res.statusText}`);
         return;
       }
-      const blob = await res.blob();
+      if (res.status === 204) {
+        throw new Error("Received empty response (204). Please check browser extension settings.");
+      }
+      const data = await res.json();
+      if (!data?.data_base64) {
+        throw new Error("Invalid server response: missing PDF data.");
+      }
+      const binaryString = atob(data.data_base64);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      const blob = new Blob([bytes], { type: "application/pdf" });
+      if (blob.size === 0) {
+        throw new Error("Generated PDF file is empty (0 bytes).");
+      }
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = `${reference || `Case-${caseId}`}_Application_Form.pdf`;
+      link.download = data.filename || `${reference || `Case-${caseId}`}_Application_Form.pdf`;
       document.body.appendChild(link);
       link.click();
       setTimeout(() => {
@@ -174,6 +192,7 @@ export function FormsStep({
       }, 10000);
     } catch (err) {
       console.error("PDF download error:", err);
+      alert(err instanceof Error ? err.message : "PDF download failed. Please try again.");
     } finally {
       setDownloadingPdf(null);
     }
