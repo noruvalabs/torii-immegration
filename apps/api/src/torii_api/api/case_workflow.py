@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import base64
 from dataclasses import dataclass
 from datetime import date
 from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -719,33 +721,56 @@ async def get_packet(case_id: int, session: SessionDep, user: CurrentUserDep) ->
     return case.packet_snapshot
 
 
+@router.get("/{case_id}/export/application-form")
 @router.get("/{case_id}/pdf/application-form")
 async def download_application_form_pdf(
-    case_id: int, session: SessionDep, user: CurrentUserDep
+    case_id: int,
+    session: SessionDep,
+    user: CurrentUserDep,
+    request: Request,
+    format: str | None = Query(default=None),
 ) -> Response:
     from torii_api.services.pdf_generator import generate_japan_work_renewal_pdf
 
     case = await _owned_case(session, case_id, user)
     answers = dict(case.intake_answers or {})
     _, _, _, scope_label = await _scope_label(session, case)
+    safe_ref = "".join(
+        c for c in (case.reference or f"CASE-{case.id}") if c.isalnum() or c in ("-", "_", ".")
+    )
+    filename = f"{safe_ref or f'Case-{case_id}'}_Application_Form.pdf"
     pdf_bytes = generate_japan_work_renewal_pdf(
         case.reference or f"CASE-{case.id}",
         answers,
         destination_label=scope_label or "Japan",
     )
+    if format in ("base64", "json") or "application/json" in request.headers.get("accept", ""):
+        return JSONResponse(
+            content={
+                "filename": filename,
+                "media_type": "application/pdf",
+                "data_base64": base64.b64encode(pdf_bytes).decode("ascii"),
+                "size_bytes": len(pdf_bytes),
+            }
+        )
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
         headers={
-            "Content-Disposition": f'attachment; filename="{case.reference or case_id}_Application_Form.pdf"',
+            "Content-Disposition": f'attachment; filename="{filename}"',
             "Content-Length": str(len(pdf_bytes)),
         },
     )
 
 
+@router.get("/{case_id}/export/cover-letter")
 @router.get("/{case_id}/pdf/cover-letter")
 async def download_cover_letter_pdf(
-    case_id: int, session: SessionDep, user: CurrentUserDep
+    case_id: int,
+    session: SessionDep,
+    user: CurrentUserDep,
+    request: Request,
+    format: str | None = Query(default=None),
 ) -> Response:
     from torii_api.services.pdf_generator import generate_cover_letter_pdf
 
@@ -756,25 +781,43 @@ async def download_cover_letter_pdf(
         for item in await _checklist(session, case.id)
     ]
     _, _, _, scope_label = await _scope_label(session, case)
+    safe_ref = "".join(
+        c for c in (case.reference or f"CASE-{case.id}") if c.isalnum() or c in ("-", "_", ".")
+    )
+    filename = f"{safe_ref or f'Case-{case_id}'}_Cover_Letter.pdf"
     pdf_bytes = generate_cover_letter_pdf(
         case.reference or f"CASE-{case.id}",
         answers,
         checklist,
         scope_label=scope_label or "Visa Submission Dossier",
     )
+    if format in ("base64", "json") or "application/json" in request.headers.get("accept", ""):
+        return JSONResponse(
+            content={
+                "filename": filename,
+                "media_type": "application/pdf",
+                "data_base64": base64.b64encode(pdf_bytes).decode("ascii"),
+                "size_bytes": len(pdf_bytes),
+            }
+        )
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
         headers={
-            "Content-Disposition": f'attachment; filename="{case.reference or case_id}_Cover_Letter.pdf"',
+            "Content-Disposition": f'attachment; filename="{filename}"',
             "Content-Length": str(len(pdf_bytes)),
         },
     )
 
 
+@router.get("/{case_id}/export/dossier-packet")
 @router.get("/{case_id}/pdf/dossier-packet")
 async def download_dossier_packet_pdf(
-    case_id: int, session: SessionDep, user: CurrentUserDep
+    case_id: int,
+    session: SessionDep,
+    user: CurrentUserDep,
+    request: Request,
+    format: str | None = Query(default=None),
 ) -> Response:
     from torii_api.services.packet import resolve_jurisdiction_submission_kit
     from torii_api.services.pdf_generator import generate_dossier_packet_pdf
@@ -793,6 +836,10 @@ async def download_dossier_packet_pdf(
     submission_kit = resolve_jurisdiction_submission_kit(
         jurisdiction_code=j_code, scope_label=scope_label
     )
+    safe_ref = "".join(
+        c for c in (case.reference or f"CASE-{case.id}") if c.isalnum() or c in ("-", "_", ".")
+    )
+    filename = f"{safe_ref or f'Case-{case_id}'}_Complete_Dossier_Packet.pdf"
     pdf_bytes = generate_dossier_packet_pdf(
         case.reference or f"CASE-{case.id}",
         answers,
@@ -801,11 +848,20 @@ async def download_dossier_packet_pdf(
         submission_kit=submission_kit,
         scope_label=scope_label or "Immigration Filing Dossier",
     )
+    if format in ("base64", "json") or "application/json" in request.headers.get("accept", ""):
+        return JSONResponse(
+            content={
+                "filename": filename,
+                "media_type": "application/pdf",
+                "data_base64": base64.b64encode(pdf_bytes).decode("ascii"),
+                "size_bytes": len(pdf_bytes),
+            }
+        )
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
         headers={
-            "Content-Disposition": f'attachment; filename="{case.reference or case_id}_Complete_Dossier_Packet.pdf"',
+            "Content-Disposition": f'attachment; filename="{filename}"',
             "Content-Length": str(len(pdf_bytes)),
         },
     )
