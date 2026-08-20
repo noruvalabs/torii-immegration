@@ -19,6 +19,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth-context";
 import { answerIntake } from "@/lib/api/cases";
+import { toast } from "@/components/ui/sonner";
 import type { GeneratedForm } from "./types";
 
 type FormsStepProps = {
@@ -133,15 +134,18 @@ export function FormsStep({
     if (!token || !caseId) return;
     const cleanKey = fieldKey.split(".").pop() || fieldKey;
     const val = missingFieldInputs[cleanKey] || missingFieldInputs[fieldKey];
-    if (!val) return;
+    if (!val) {
+      toast.error(`Please enter a value for ${cleanKey.replace(/_/g, " ")}`);
+      return;
+    }
     setSavingMissingField(cleanKey);
     try {
       await answerIntake(token, caseId, cleanKey, val);
-      setQuickSaveNotice(`✅ Saved ${cleanKey.replace(/_/g, " ")}! Refreshing form...`);
+      toast.success(`Saved ${cleanKey.replace(/_/g, " ")}! Form refreshed.`);
       onGenerate();
-      setTimeout(() => setQuickSaveNotice(null), 4000);
     } catch (e) {
-      console.error("Failed to save missing field:", e);
+      const errMsg = e instanceof Error ? e.message : "Failed to save missing field";
+      toast.error(errMsg);
     } finally {
       setSavingMissingField(null);
     }
@@ -161,7 +165,7 @@ export function FormsStep({
       if (!res.ok) {
         const errDetail = await res.text();
         console.error("PDF download failed:", res.status, errDetail);
-        alert(`Failed to download PDF form (${res.status}): ${errDetail || res.statusText}`);
+        toast.error(`Failed to download PDF form (${res.status}): ${errDetail || res.statusText}`);
         return;
       }
       if (res.status === 204) {
@@ -186,13 +190,14 @@ export function FormsStep({
       link.download = data.filename || `${reference || `Case-${caseId}`}_Application_Form.pdf`;
       document.body.appendChild(link);
       link.click();
+      toast.success("PDF downloaded successfully!");
       setTimeout(() => {
         link.remove();
         URL.revokeObjectURL(url);
       }, 10000);
     } catch (err) {
       console.error("PDF download error:", err);
-      alert(err instanceof Error ? err.message : "PDF download failed. Please try again.");
+      toast.error(err instanceof Error ? err.message : "PDF download failed. Please try again.");
     } finally {
       setDownloadingPdf(null);
     }

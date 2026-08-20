@@ -23,6 +23,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { useAuth } from "@/lib/auth-context";
 import { useCredits } from "@/lib/credits-context";
 import { draftDocument } from "@/lib/api/ai";
+import { toast } from "@/components/ui/sonner";
 import type { Case } from "./types";
 
 type PacketStepProps = {
@@ -407,7 +408,7 @@ export function PacketStep({ packet, caseData, loading, onBuild, onSubmit }: Pac
       if (!res.ok) {
         const errDetail = await res.text();
         console.error("PDF download failed:", res.status, errDetail);
-        alert(`Failed to download PDF (${res.status}): ${errDetail || res.statusText}`);
+        toast.error(`Failed to download PDF (${res.status}): ${errDetail || res.statusText}`);
         return;
       }
       if (res.status === 204) {
@@ -432,13 +433,14 @@ export function PacketStep({ packet, caseData, loading, onBuild, onSubmit }: Pac
       link.download = data.filename || defaultFilename;
       document.body.appendChild(link);
       link.click();
+      toast.success("PDF dossier downloaded successfully!");
       setTimeout(() => {
         link.remove();
         URL.revokeObjectURL(url);
       }, 10000);
     } catch (err) {
       console.error("PDF download error:", err);
-      alert(err instanceof Error ? err.message : "PDF download failed. Please try again.");
+      toast.error(err instanceof Error ? err.message : "PDF download failed. Please try again.");
     } finally {
       setDownloadingPdf(null);
     }

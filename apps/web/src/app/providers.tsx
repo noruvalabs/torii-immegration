@@ -6,6 +6,7 @@ import { AuthProvider } from "@/lib/auth-context";
 import { I18nProvider } from "@/lib/i18n";
 import { CreditsProvider } from "@/lib/credits-context";
 import { TopUpModal } from "@/components/credits/TopUpModal";
+import { Toaster } from "@/components/ui/sonner";
 
 export function Providers({ children }: { children: ReactNode }) {
   return (
@@ -15,6 +16,7 @@ export function Providers({ children }: { children: ReactNode }) {
           <CreditsProvider>
             {children}
             <TopUpModal />
+            <Toaster position="top-right" richColors />
           </CreditsProvider>
         </AuthProvider>
       </I18nProvider>
