@@ -69,8 +69,12 @@ class User(TimestampMixin, Base):
     current_country: Mapped[str | None] = mapped_column(String(100), nullable=True)
     avatar_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
     profile_complete: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    credit_balance: Mapped[int] = mapped_column(Integer, default=10, server_default="10")
 
     cases: Mapped[list[Case]] = relationship(back_populates="owner")
+    credit_transactions: Mapped[list[CreditTransaction]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
 
 
 class Jurisdiction(TimestampMixin, Base):
@@ -353,6 +357,8 @@ class Case(TimestampMixin, Base):
     # waiver) and "same institution since the last application" (JP student 確認書
     # waiver). Captured at intake, never inferred (NF-1).
     prior_application: Mapped[dict[str, Any] | None] = mapped_column(SAJSON, nullable=True)
+    # True when the case has been unlocked via credits or payment for official packet export.
+    is_entitled: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
 
     jurisdiction: Mapped[Jurisdiction] = relationship(back_populates="cases")
     visa_category: Mapped[VisaCategory | None] = relationship(back_populates="cases")
@@ -566,3 +572,22 @@ class DocumentWalletItemVersion(TimestampMixin, Base):
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     document: Mapped[DocumentWalletItem] = relationship(back_populates="versions")
+
+
+class CreditTransaction(TimestampMixin, Base):
+    """Credit ledger transaction recording purchases, bonuses, and consumption."""
+
+    __tablename__ = "credit_transactions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    amount: Mapped[int] = mapped_column(Integer)  # +50, +200 on top-up; -2 on OCR; -30 on case unlock
+    balance_after: Mapped[int] = mapped_column(Integer)
+    feature: Mapped[str] = mapped_column(String(64))  # "welcome_bonus", "top_up", "ocr_extraction", "ai_query", "case_unlock"
+    case_id: Mapped[int | None] = mapped_column(ForeignKey("cases.id"), nullable=True, index=True)
+    description: Mapped[str] = mapped_column(String(256))
+    reference_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+
+    user: Mapped[User] = relationship(back_populates="credit_transactions")
+    case: Mapped[Case | None] = relationship()
+
