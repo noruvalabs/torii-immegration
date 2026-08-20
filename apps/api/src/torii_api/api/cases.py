@@ -850,6 +850,10 @@ INTAKE_KEY_ALIASES: dict[str, list[str]] = {
     "company_name": ["employer_name", "sponsoring_organization"],
     "monthly_salary": ["salary_monthly", "income_monthly", "salary"],
     "salary_monthly": ["monthly_salary", "income_monthly", "salary"],
+    "salary": ["monthly_salary", "salary_monthly", "annual_salary_jpy", "income_monthly"],
+    "annual_salary_jpy": ["salary", "monthly_salary", "salary_monthly"],
+    "attendance_rate": ["attendance_percentage", "school_attendance_rate"],
+    "attendance_percentage": ["attendance_rate", "school_attendance_rate"],
     "purpose_of_visit": ["main_purpose", "purpose", "visit_purpose"],
     "main_purpose": ["purpose_of_visit", "purpose", "visit_purpose"],
     "intended_length_of_stay_days": ["stay_duration_days", "length_of_stay_days", "stay_days"],
@@ -889,6 +893,10 @@ async def answer_intake(
             detail=f"unknown question '{payload.key}'",
         )
 
+    val = payload.value
+    if question.type == "integer" and isinstance(val, str) and val.strip().isdigit():
+        val = int(val.strip())
+
     current = dict(case.intake_answers or {})
     if not is_visible(question, current):
         raise HTTPException(
@@ -896,11 +904,11 @@ async def answer_intake(
             detail=f"question '{payload.key}' is not applicable on the current branch",
         )
 
-    error = validate_answer(question, payload.value)
+    error = validate_answer(question, val)
     if error is not None:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=error)
 
-    merged = {**current, target_key: payload.value}
+    merged = {**current, target_key: val}
     case.intake_answers = prune_answers(questions, merged)
     case.intake_step = target_key
     case.review_flags_acknowledged = False
