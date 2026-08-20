@@ -54,6 +54,8 @@ export type Case = {
   residence_country?: string | null;
   research_id?: number | null;
   is_entitled?: boolean;
+  packet_snapshot?: Record<string, unknown> | null;
+  eligibility_snapshot?: Record<string, unknown> | null;
 };
 
 export type IntakeQuestion = {

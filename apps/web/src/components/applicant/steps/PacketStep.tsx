@@ -531,6 +531,10 @@ export function PacketStep({ packet, caseData, loading, onBuild, onSubmit }: Pac
   }
 
   const docLabels = getDocLabels();
+  const effectivePacket =
+    packet ||
+    (caseData.packet_snapshot as Record<string, unknown> | null) ||
+    (caseData.status === "packet_ready" ? { reference: caseData.reference } : null);
 
   function getActiveDocText(): { title: string; filename: string; text: string; isAi: boolean } {
     let base = { title: "", filename: "", text: "" };
@@ -539,35 +543,35 @@ export function PacketStep({ packet, caseData, loading, onBuild, onSubmit }: Pac
         base = {
           title: docLabels.schedule.replace(/^[^\w]+/, ""),
           filename: `${caseData.reference}-schedule-of-stay.txt`,
-          text: generateScheduleOfStay(caseData, packet),
+          text: generateScheduleOfStay(caseData, effectivePacket),
         };
         break;
       case "reason":
         base = {
           title: docLabels.reason.replace(/^[^\w]+/, ""),
           filename: `${caseData.reference}-reason-for-visit.txt`,
-          text: generateReasonForVisit(caseData, packet),
+          text: generateReasonForVisit(caseData, effectivePacket),
         };
         break;
       case "financial":
         base = {
           title: docLabels.financial.replace(/^[^\w]+/, ""),
           filename: `${caseData.reference}-financial-guarantee.txt`,
-          text: generateFinancialGuarantee(caseData, packet),
+          text: generateFinancialGuarantee(caseData, effectivePacket),
         };
         break;
       case "form":
         base = {
           title: docLabels.form.replace(/^[^\w]+/, ""),
           filename: `${caseData.reference}-official-form-data.txt`,
-          text: generateCompleteOfficialForm(caseData, packet),
+          text: generateCompleteOfficialForm(caseData, effectivePacket),
         };
         break;
       case "full":
         base = {
           title: docLabels.full.replace(/^[^\w]+/, ""),
           filename: `${caseData.reference}-complete-filing-kit.txt`,
-          text: generateCompleteFilingKitText(packet || {}, caseData),
+          text: generateCompleteFilingKitText(effectivePacket || {}, caseData),
         };
         break;
       case "cover":
@@ -575,7 +579,7 @@ export function PacketStep({ packet, caseData, loading, onBuild, onSubmit }: Pac
         base = {
           title: docLabels.cover.replace(/^[^\w]+/, ""),
           filename: `${caseData.reference}-embassy-cover-letter.txt`,
-          text: generateCoverLetter(caseData, packet),
+          text: generateCoverLetter(caseData, effectivePacket),
         };
         break;
     }
@@ -605,13 +609,13 @@ export function PacketStep({ packet, caseData, loading, onBuild, onSubmit }: Pac
     setTimeout(() => {
       link.remove();
       URL.revokeObjectURL(url);
-    }, 10000);
+    }, 5000);
   }
 
   function downloadFullFilingKit() {
-    if (!packet) return;
+    if (!effectivePacket) return;
     const filename = `${caseData.reference}-complete-filing-kit.txt`;
-    const blob = new Blob([generateCompleteFilingKitText(packet, caseData)], {
+    const blob = new Blob([generateCompleteFilingKitText(effectivePacket, caseData)], {
       type: "text/plain;charset=utf-8",
     });
     const url = URL.createObjectURL(blob);
@@ -641,7 +645,7 @@ export function PacketStep({ packet, caseData, loading, onBuild, onSubmit }: Pac
         </Badge>
       </div>
 
-      {!packet ? (
+      {!effectivePacket ? (
         <Card>
           <CardContent className="flex flex-col items-center py-10 text-center space-y-3">
             <Sparkles className="size-10 text-primary/50" />
@@ -894,8 +898,8 @@ export function PacketStep({ packet, caseData, loading, onBuild, onSubmit }: Pac
               <ArrowRight className="size-4 text-primary" /> Step-by-Step Submission Roadmap
             </h4>
             <div className="grid gap-3 sm:grid-cols-2">
-              {Array.isArray(packet.submission_steps) && packet.submission_steps.length > 0 ? (
-                (packet.submission_steps as { step?: number; title?: string; description?: string }[]).map((st, i) => (
+              {effectivePacket && Array.isArray(effectivePacket.submission_steps) && effectivePacket.submission_steps.length > 0 ? (
+                (effectivePacket.submission_steps as { step?: number; title?: string; description?: string }[]).map((st, i) => (
                   <div key={i} className="rounded-[var(--radius)] border bg-card p-4 space-y-1">
                     <div className="flex items-center justify-between">
                       <Badge tone="default">Step {st.step ?? i + 1}</Badge>
@@ -958,9 +962,9 @@ export function PacketStep({ packet, caseData, loading, onBuild, onSubmit }: Pac
               <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
                 Physical Dossier Stacking Order (For Embassy Interview / VAC Dropoff)
               </h4>
-              {Array.isArray(packet.dossier_order) && packet.dossier_order.length > 0 ? (
+              {effectivePacket && Array.isArray(effectivePacket.dossier_order) && effectivePacket.dossier_order.length > 0 ? (
                 <ol className="space-y-1.5 text-xs text-foreground">
-                  {(packet.dossier_order as string[]).map((item, idx) => (
+                  {(effectivePacket.dossier_order as string[]).map((item, idx) => (
                     <li key={idx} className="flex items-start gap-2">
                       <Badge tone="muted" className="text-[10px] shrink-0">{idx + 1}</Badge>
                       <span>{item.replace(/^\d+\.\s*/, "")}</span>

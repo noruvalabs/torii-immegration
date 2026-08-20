@@ -709,8 +709,6 @@ async def build_packet(case_id: int, session: SessionDep, user: CurrentUserDep) 
 @router.get("/{case_id}/packet")
 async def get_packet(case_id: int, session: SessionDep, user: CurrentUserDep) -> dict[str, Any]:
     case = await _owned_case(session, case_id, user)
-    if case.packet_snapshot is None:
-        raise HTTPException(status_code=404, detail="packet has not been assembled")
     if get_settings().require_packet_entitlement:
         entitled = await case_has_packet_entitlement(session, case.id, user.id)
         if not entitled:
@@ -718,6 +716,27 @@ async def get_packet(case_id: int, session: SessionDep, user: CurrentUserDep) ->
                 status_code=status.HTTP_402_PAYMENT_REQUIRED,
                 detail="packet download requires a completed payment entitlement",
             )
+    if case.packet_snapshot is None:
+        forms = [
+            GeneratedFormOut.model_validate(item).model_dump(mode="json")
+            for item in await _forms(session, case.id)
+        ]
+        checklist = [
+            ChecklistItemOut.model_validate(item).model_dump(mode="json")
+            for item in await _checklist(session, case.id)
+        ]
+        j_code, _, _, scope_label = await _scope_label(session, case)
+        snapshot = assemble_packet(
+            case.reference,
+            forms,
+            checklist,
+            case.submission_reference,
+            jurisdiction_code=j_code,
+            scope_label=scope_label,
+        )
+        case.packet_snapshot = snapshot
+        case.status = "packet_ready"
+        await session.flush()
     return case.packet_snapshot
 
 

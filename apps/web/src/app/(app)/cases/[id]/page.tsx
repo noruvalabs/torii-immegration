@@ -59,6 +59,9 @@ export default function CaseDetailPage() {
       ]);
       setCaseData(c);
       setGuidance(g);
+      if (c.packet_snapshot) {
+        setPacket(c.packet_snapshot as Record<string, unknown>);
+      }
       // Only jump to guidance phase on first load — never auto-advance mid-session.
       if (!stepInitializedRef.current) {
         setActiveStep(phaseToStep(g.phase));
@@ -90,9 +93,15 @@ export default function CaseDetailPage() {
     } else if (activeStep === "review") {
       setReview(null);
     } else if (activeStep === "packet") {
-      getPacket(token, caseId).then(setPacket).catch(() => { setPacket(null); });
+      getPacket(token, caseId)
+        .then(setPacket)
+        .catch(() => {
+          if (caseData?.packet_snapshot) {
+            setPacket(caseData.packet_snapshot as Record<string, unknown>);
+          }
+        });
     }
-  }, [token, caseId, activeStep, loading]);
+  }, [token, caseId, activeStep, loading, caseData?.packet_snapshot]);
 
   async function refreshGuidance() {
     if (!token) return;
