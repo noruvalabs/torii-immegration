@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth-context";
+import { useCredits } from "@/lib/credits-context";
 import { registerDocument } from "@/lib/api/cases";
 import { extractFromFile, type OCRResult, type DocumentType } from "@/lib/api/ocr";
 import { getWallet, uploadDocument, type WalletDocument } from "@/lib/api/wallet";
@@ -23,17 +24,6 @@ type ChecklistStepProps = {
 
 function mapDocType(checklistCode: string): DocumentType {
   const code = checklistCode.toLowerCase();
-  if (code.includes("passport") && !code.includes("photo")) return "passport";
-  if (code.includes("residence") || code.includes("card")) return "residence_card";
-  if (
-    code.includes("fund") ||
-    code.includes("bank") ||
-    code.includes("financial") ||
-    code.includes("finance") ||
-    code.includes("sponsor")
-  ) {
-    return "proof_of_funds";
-  }
   if (
     code.includes("itinerary") ||
     code.includes("travel") ||
