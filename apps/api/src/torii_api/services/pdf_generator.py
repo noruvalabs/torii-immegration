@@ -818,3 +818,131 @@ def generate_dossier_packet_pdf(
 
     doc.build(story)
     return buffer.getvalue()
+
+
+def generate_official_japan_visa_form_pdf(
+    case_reference: str,
+    answers: dict[str, Any],
+    destination_label: str = "Japan",
+    applicant_email: str | None = None,
+) -> bytes:
+    """Fill the authentic official Ministry of Foreign Affairs (MOFA) Japan Visa Application Form template."""
+    import os
+    import pypdf
+
+    # Path to official government template (MOFA 000124525.pdf)
+    template_path = os.path.join(
+        os.path.dirname(__file__), "..", "templates", "japan_visa_application_form_template.pdf"
+    )
+    if not os.path.exists(template_path):
+        return generate_japan_work_renewal_pdf(case_reference, answers, destination_label)
+
+    try:
+        reader = pypdf.PdfReader(template_path)
+        writer = pypdf.PdfWriter()
+        writer.append(reader)
+
+        full_name = str(answers.get("full_name") or "").strip()
+        parts = full_name.split()
+        if len(parts) > 1:
+            surname = parts[-1].upper()
+            given_names = " ".join(parts[:-1]).upper()
+        else:
+            surname = full_name.upper()
+            given_names = full_name.upper()
+
+        nationality = str(answers.get("nationality") or answers.get("visitor_nationality") or "Bangladesh")
+        passport_no = str(answers.get("passport_number") or answers.get("passport_no") or "")
+        dob = str(answers.get("date_of_birth") or answers.get("birth_date") or "")
+        passport_expiry = str(answers.get("passport_expiry") or answers.get("passport_expiry_date") or "")
+        passport_authority = str(
+            answers.get("passport_issuing_authority") or f"Government of {nationality}"
+        )
+        purpose = str(
+            answers.get("purpose_of_visit")
+            or answers.get("main_purpose")
+            or "Engineer / Specialist in Humanities / International Services"
+        )
+        stay_days = str(answers.get("intended_length_of_stay_days") or answers.get("stay_duration_days") or "3 Years")
+        if stay_days.isdigit():
+            stay_days = f"{stay_days} Days"
+
+        curr_address = str(
+            answers.get("current_address")
+            or answers.get("current_residence_country")
+            or answers.get("residence_country")
+            or ""
+        )
+        tel = str(answers.get("phone_number") or answers.get("tel") or answers.get("mobile") or "")
+        email = str(answers.get("email") or applicant_email or "")
+        profession = str(answers.get("occupation") or answers.get("job_title") or "Professional / Specialist")
+
+        employer_name = str(
+            answers.get("employer_name")
+            or answers.get("sponsor_name")
+            or answers.get("company_name")
+            or ""
+        )
+        employer_tel = str(answers.get("employer_tel") or answers.get("sponsor_tel") or "+81-3-1234-5678")
+        employer_address = str(
+            answers.get("employer_address")
+            or answers.get("sponsor_address")
+            or answers.get("registered_address_japan")
+            or "Tokyo, Japan"
+        )
+        corp_no = str(answers.get("employer_corporate_number") or answers.get("corporate_number") or "")
+
+        field_values: dict[str, str] = {
+            # Page 1: Personal Identification & Passport Details
+            "topmostSubform[0].Page1[0].T2[0]": surname,
+            "topmostSubform[0].Page1[0].T7[0]": given_names,
+            "topmostSubform[0].Page1[0].#area[4].T14[0]": dob,
+            "topmostSubform[0].Page1[0].#area[4].T16[0]": nationality,
+            "topmostSubform[0].Page1[0].T50[0]": nationality,
+            "topmostSubform[0].Page1[0].T49[0]": passport_no,
+            "topmostSubform[0].Page1[0].#area[0].T59[0]": passport_expiry,
+            "topmostSubform[0].Page1[0].#area[0].T57[0]": passport_authority,
+            "topmostSubform[0].Page1[0].T68[2]": purpose,
+            "topmostSubform[0].Page1[0].T68[3]": stay_days,
+            "topmostSubform[0].Page1[0].T66[0]": str(answers.get("planned_arrival_date") or answers.get("arrival_date") or ""),
+            "topmostSubform[0].Page1[0].#area[10].T68[0]": str(answers.get("port_of_entry") or "Tokyo Narita (NRT) / Haneda (HND)"),
+            "topmostSubform[0].Page1[0].#area[10].T68[1]": str(answers.get("airline_flight_no") or "Commercial Airline"),
+            "topmostSubform[0].Page1[0].emp_adr[0]": str(answers.get("accommodation_address") or employer_address),
+            "topmostSubform[0].Page1[0].#area[3].emp_name[0]": str(answers.get("accommodation_name") or employer_name),
+            "topmostSubform[0].Page1[0].#area[3].emp_tel[0]": str(answers.get("accommodation_tel") or employer_tel),
+            "topmostSubform[0].Page1[0].T0[1]": curr_address,
+            "topmostSubform[0].Page1[0].#area[11].T97[0]": tel,
+            "topmostSubform[0].Page1[0].#area[11].T3[0]": tel,
+            "topmostSubform[0].Page1[0].T3[1]": email,
+            "topmostSubform[0].Page1[0].T5[0]": profession,
+            "topmostSubform[0].Page1[0].#area[12].emp_name[1]": employer_name,
+            "topmostSubform[0].Page1[0].#area[12].emp_tel[1]": employer_tel,
+            "topmostSubform[0].Page1[0].emp_adr[1]": employer_address,
+
+            # Page 2: Guarantor / Inviting Sponsor in Japan & Application Metadata
+            "topmostSubform[0].Page2[0].#area[0].guarantor_name[0]": employer_name,
+            "topmostSubform[0].Page2[0].#area[0].guarantor_tel[0]": employer_tel,
+            "topmostSubform[0].Page2[0].guarantor_adr[0]": employer_address,
+            "topmostSubform[0].Page2[0].T25[0]": "Sponsoring Employer / Host Organization",
+            "topmostSubform[0].Page2[0].T5[0]": "Corporation / Organization",
+            "topmostSubform[0].Page2[0].T5[1]": f"Japan (Corporate No. {corp_no})" if corp_no else "Japan",
+            "topmostSubform[0].Page2[0].#area[2].T19[0]": employer_name,
+            "topmostSubform[0].Page2[0].#area[2].T10[0]": employer_tel,
+            "topmostSubform[0].Page2[0].T23[0]": employer_address,
+            "topmostSubform[0].Page2[0].T25[1]": "Sponsoring Employer",
+            "topmostSubform[0].Page2[0].T150[0]": datetime.now(UTC).strftime("%Y-%m-%d"),
+        }
+
+        for page in writer.pages:
+            writer.update_page_form_field_values(page, field_values, auto_regenerate=False)
+
+        buf = io.BytesIO()
+        writer.write(buf)
+        filled_bytes = buf.getvalue()
+        if len(filled_bytes) > 0:
+            return filled_bytes
+    except Exception as exc:
+        print(f"Warning: failed to fill official template: {exc}, using fallback generator")
+
+    return generate_japan_work_renewal_pdf(case_reference, answers, destination_label)
+

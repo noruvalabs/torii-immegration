@@ -28,6 +28,7 @@ dependencies = [
     "python-multipart>=0.0.18",
     "pyyaml>=6.0.3",
     "reportlab>=5.0.0",
+    "pypdf>=6.0.0",
 ]
 
 [project.scripts]

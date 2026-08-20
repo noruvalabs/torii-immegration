@@ -749,7 +749,10 @@ async def download_application_form_pdf(
     request: Request,
     format: str | None = Query(default=None),
 ) -> Response:
-    from torii_api.services.pdf_generator import generate_japan_work_renewal_pdf
+    from torii_api.services.pdf_generator import (
+        generate_japan_work_renewal_pdf,
+        generate_official_japan_visa_form_pdf,
+    )
 
     case = await _owned_case(session, case_id, user)
     answers = dict(case.intake_answers or {})
@@ -758,10 +761,11 @@ async def download_application_form_pdf(
         c for c in (case.reference or f"CASE-{case.id}") if c.isalnum() or c in ("-", "_", ".")
     )
     filename = f"{safe_ref or f'Case-{case_id}'}_Application_Form.pdf"
-    pdf_bytes = generate_japan_work_renewal_pdf(
+    pdf_bytes = generate_official_japan_visa_form_pdf(
         case.reference or f"CASE-{case.id}",
         answers,
         destination_label=scope_label or "Japan",
+        applicant_email=case.applicant_email or user.email,
     )
     if format in ("base64", "json") or "application/json" in request.headers.get("accept", ""):
         return JSONResponse(
