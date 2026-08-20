@@ -190,3 +190,29 @@ async def test_profile_update_and_get(client: AsyncClient) -> None:
     me_body = me_resp.json()
     assert me_body["date_of_birth"] == "1995-05-15"
     assert me_body["passport_expiry"] == "2030-12-31"
+
+
+async def test_google_social_login(client: AsyncClient) -> None:
+    resp = await client.post(
+        "/v1/auth/google",
+        json={
+            "email": "googleuser@example.com",
+            "name": "Google Tester",
+            "avatar_url": "https://lh3.googleusercontent.com/a/default-user",
+        },
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "access_token" in data
+    assert data["user"]["email"] == "googleuser@example.com"
+    assert data["user"]["role"] == "applicant"
+    assert data["user"]["email_verified"] is True
+    assert data["user"]["full_name"] == "Google Tester"
+
+    # Repeat login with existing user
+    resp2 = await client.post(
+        "/v1/auth/google",
+        json={"email": "googleuser@example.com"},
+    )
+    assert resp2.status_code == 200
+    assert resp2.json()["user"]["email"] == "googleuser@example.com"
