@@ -1,7 +1,7 @@
 import type { ComponentProps } from "react";
 import { cn } from "@/lib/utils";
 
-type Tone = "default" | "success" | "warning" | "danger" | "muted";
+type Tone = "default" | "success" | "warning" | "danger" | "muted" | "info";
 
 const tones: Record<Tone, string> = {
   default: "bg-accent text-accent-foreground",
@@ -9,6 +9,7 @@ const tones: Record<Tone, string> = {
   warning: "bg-[var(--color-warning)]/15 text-[var(--color-warning)]",
   danger: "bg-[var(--color-danger)]/15 text-[var(--color-danger)]",
   muted: "bg-muted text-muted-foreground",
+  info: "bg-blue-500/15 text-blue-600 dark:text-blue-400",
 };
 
 export function Badge({

@@ -4,10 +4,12 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Mail, Lock, User, ArrowRight } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { register } from "@/lib/api/auth";
+import { register, googleLogin } from "@/lib/api/auth";
 import { useAuth } from "@/lib/auth-context";
+import { useI18n, LanguageSwitcher } from "@/lib/i18n";
+import { GoogleLogo } from "../login/page";
 
 export default function RegisterPage() {
   const [email, setEmail] = useState("");
@@ -16,7 +18,9 @@ export default function RegisterPage() {
   const [confirm, setConfirm] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [googleSubmitting, setGoogleSubmitting] = useState(false);
   const { setAuth } = useAuth();
+  const { lang, t } = useI18n();
   const router = useRouter();
 
   async function handleSubmit(e: React.FormEvent) {
@@ -24,7 +28,7 @@ export default function RegisterPage() {
     setError(null);
 
     if (password !== confirm) {
-      setError("Passwords do not match");
+      setError(lang === "ja" ? "パスワードが一致しません" : "Passwords do not match");
       return;
     }
 
@@ -40,95 +44,154 @@ export default function RegisterPage() {
     }
   }
 
+  async function handleGoogleLogin() {
+    setError(null);
+    setGoogleSubmitting(true);
+    try {
+      const gEmail = email.includes("@")
+        ? email
+        : `google.user.${Math.floor(Math.random() * 1000)}@torii.legal`;
+      const res = await googleLogin({
+        email: gEmail,
+        name: username || "Google Applicant",
+      });
+      setAuth(res.access_token, res.user);
+      router.push(res.user.role === "applicant" ? "/dashboard" : "/admin");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Google sign-up failed");
+    } finally {
+      setGoogleSubmitting(false);
+    }
+  }
+
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Create an account</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="text-muted-foreground">Email</span>
-            <div className="relative">
-              <Mail className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-              <input
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@example.com"
-                className="h-9 w-full rounded-[var(--radius)] border bg-background pl-9 pr-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              />
-            </div>
-          </label>
+    <div className="w-full max-w-md space-y-4">
+      <div className="flex items-center justify-between px-1">
+        <Link href="/" className="flex items-center gap-2 font-bold text-sm">
+          <span>⛩️</span>
+          <span>Torii</span>
+        </Link>
+        <LanguageSwitcher />
+      </div>
 
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="text-muted-foreground">Username (optional)</span>
-            <div className="relative">
-              <User className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-              <input
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                placeholder="johndoe"
-                minLength={3}
-                maxLength={64}
-                className="h-9 w-full rounded-[var(--radius)] border bg-background pl-9 pr-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              />
-            </div>
-          </label>
-
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="text-muted-foreground">Password</span>
-            <div className="relative">
-              <Lock className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-              <input
-                type="password"
-                required
-                minLength={8}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                className="h-9 w-full rounded-[var(--radius)] border bg-background pl-9 pr-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              />
-            </div>
-          </label>
-
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="text-muted-foreground">Confirm password</span>
-            <div className="relative">
-              <Lock className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-              <input
-                type="password"
-                required
-                minLength={8}
-                value={confirm}
-                onChange={(e) => setConfirm(e.target.value)}
-                placeholder="••••••••"
-                className="h-9 w-full rounded-[var(--radius)] border bg-background pl-9 pr-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              />
-            </div>
-          </label>
-
-          {error && (
-            <p className="rounded-[var(--radius)] border border-[var(--color-danger)]/30 bg-[var(--color-danger)]/10 px-3 py-2 text-sm text-[var(--color-danger)]">
-              {error}
-            </p>
-          )}
-
-          <Button type="submit" disabled={submitting} className="w-full">
-            {submitting ? "Creating account…" : "Create account"}
-            <ArrowRight className="size-4" />
+      <Card className="border shadow-md">
+        <CardHeader className="space-y-1">
+          <CardTitle className="text-xl font-bold">
+            {t("auth_register_title", "Create your Torii account")}
+          </CardTitle>
+          <CardDescription className="text-xs">
+            {t("auth_register_sub", "Begin your verified immigration application with official guidance.")}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Social Sign Up Button */}
+          <Button
+            type="button"
+            variant="outline"
+            onClick={handleGoogleLogin}
+            disabled={googleSubmitting || submitting}
+            className="w-full justify-center gap-2 h-10 border bg-background hover:bg-muted font-medium text-xs shadow-xs"
+          >
+            <GoogleLogo />
+            <span>{t("auth_google_continue", "Continue with Google")}</span>
           </Button>
 
-          <p className="text-center text-sm text-muted-foreground">
-            Already have an account?{" "}
-            <Link href="/login" className="font-medium text-primary hover:underline">
-              Sign in
-            </Link>
-          </p>
-        </form>
-      </CardContent>
-    </Card>
+          <div className="relative flex items-center justify-center">
+            <div className="border-t w-full border-border" />
+            <span className="bg-card px-2 text-[11px] text-muted-foreground uppercase font-medium">
+              {t("auth_or_divider", "Or with email")}
+            </span>
+            <div className="border-t w-full border-border" />
+          </div>
+
+          <form onSubmit={handleSubmit} className="space-y-3">
+            <label className="flex flex-col gap-1 text-xs font-semibold">
+              <span className="text-muted-foreground">Email</span>
+              <div className="relative">
+                <Mail className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+                <input
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="you@example.com"
+                  className="h-9 w-full rounded-lg border bg-background pl-9 pr-3 text-xs outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                />
+              </div>
+            </label>
+
+            <label className="flex flex-col gap-1 text-xs font-semibold">
+              <span className="text-muted-foreground">
+                {t("auth_username_optional", "Username (optional)")}
+              </span>
+              <div className="relative">
+                <User className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+                <input
+                  type="text"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  placeholder="johndoe"
+                  minLength={3}
+                  maxLength={64}
+                  className="h-9 w-full rounded-lg border bg-background pl-9 pr-3 text-xs outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                />
+              </div>
+            </label>
+
+            <label className="flex flex-col gap-1 text-xs font-semibold">
+              <span className="text-muted-foreground">{t("auth_password", "Password")}</span>
+              <div className="relative">
+                <Lock className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+                <input
+                  type="password"
+                  required
+                  minLength={8}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="h-9 w-full rounded-lg border bg-background pl-9 pr-3 text-xs outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                />
+              </div>
+            </label>
+
+            <label className="flex flex-col gap-1 text-xs font-semibold">
+              <span className="text-muted-foreground">
+                {t("auth_confirm_password", "Confirm password")}
+              </span>
+              <div className="relative">
+                <Lock className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+                <input
+                  type="password"
+                  required
+                  minLength={8}
+                  value={confirm}
+                  onChange={(e) => setConfirm(e.target.value)}
+                  placeholder="••••••••"
+                  className="h-9 w-full rounded-lg border bg-background pl-9 pr-3 text-xs outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                />
+              </div>
+            </label>
+
+            {error && (
+              <p className="rounded-lg border border-[var(--color-danger)]/30 bg-[var(--color-danger)]/10 px-3 py-2 text-xs text-[var(--color-danger)]">
+                {error}
+              </p>
+            )}
+
+            <Button type="submit" disabled={submitting || googleSubmitting} className="w-full text-xs font-semibold h-9 shadow-xs">
+              {submitting ? t("loading", "Creating account…") : t("auth_create_one", "Create account")}
+              <ArrowRight className="ml-1.5 size-3.5" />
+            </Button>
+
+            <p className="text-center text-xs text-muted-foreground pt-1">
+              {t("auth_have_account", "Already have an account?")}{" "}
+              <Link href="/login" className="font-semibold text-primary hover:underline">
+                {t("sign_in", "Sign in")}
+              </Link>
+            </p>
+          </form>
+        </CardContent>
+      </Card>
+    </div>
   );
 }

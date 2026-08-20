@@ -88,11 +88,16 @@ def extract_text_from_pdf(pdf_bytes: bytes) -> str:
 def extract_document_fields(
     doc_type: DocumentType, filename: str, hint_text: str | None
 ) -> OCRResult:
-    """Extract fields from document using Groq vision model."""
+    """Extract fields from document using Groq vision model or hint text."""
     import json
     import re
 
     from openai import OpenAI
+
+    if hint_text:
+        quick = _fallback_extract(doc_type, filename, hint_text)
+        if quick.fields:
+            return quick
 
     settings = get_settings()
 
@@ -107,6 +112,7 @@ def extract_document_fields(
         client = OpenAI(
             api_key=api_key,
             base_url=base_url,
+            timeout=5.0,
         )
 
         prompt = DOC_TYPE_PROMPTS.get(doc_type, DOC_TYPE_PROMPTS["passport"])
@@ -156,32 +162,45 @@ def _fallback_extract(doc_type: DocumentType, filename: str, hint_text: str | No
     text = hint_text or Path(filename).stem.replace("_", " ").replace("-", " ")
     fields: dict[str, ExtractedValue] = {}
 
-    if name_match := re.search(r"(?:name|holder)\s*[:=]\s*([^\n,;]+)", text, re.IGNORECASE):
+    # Extract Full Name
+    if name_match := re.search(r"(?:full[ _]?name|holder|applicant[ _]?name|name)\s*[:=]\s*([^\n,;]+)", text, re.IGNORECASE):
         fields["full_name"] = ExtractedValue(value=name_match.group(1).strip(), confidence=0.9)
 
+    # Extract Date of Birth
+    if dob_match := re.search(r"(?:date[ _]?of[ _]?birth|dob|birth[ _]?date)\s*[:=]?\s*(\d{4}[-/]\d{2}[-/]\d{2})", text, re.IGNORECASE):
+        fields["date_of_birth"] = ExtractedValue(value=dob_match.group(1).replace("/", "-"), confidence=0.9)
+
+    # Extract Expiry Date / Passport Expiry
+    if exp_match := re.search(r"(?:passport[ _]?expiry|expiry[ _]?date|expiration[ _]?date|valid[ _]?until)\s*[:=]?\s*(\d{4}[-/]\d{2}[-/]\d{2})", text, re.IGNORECASE):
+        fields["passport_expiry"] = ExtractedValue(value=exp_match.group(1).replace("/", "-"), confidence=0.9)
+
+    # Extract Nationality
+    if nat_match := re.search(r"(?:nationality|citizenship|country[ _]?of[ _]?citizenship)\s*[:=]\s*([A-Za-z\s]+)", text, re.IGNORECASE):
+        fields["nationality"] = ExtractedValue(value=nat_match.group(1).strip(), confidence=0.88)
+
     if doc_type == "passport":
-        match = re.search(
+        if match := re.search(
             r"(?:passport(?:\s*(?:number|no))?\s*[:=#]?\s*)([A-Z0-9]{5,12})",
             text,
             re.IGNORECASE,
-        )
-        if match:
+        ):
             fields["passport_number"] = ExtractedValue(
                 value=match.group(1).upper(), confidence=0.92
             )
     elif doc_type == "residence_card":
-        match = re.search(
+        if match := re.search(
             r"(?:residence(?:\s*card)?(?:\s*(?:number|no))?\s*[:=#]?\s*)([A-Z0-9]{6,16})",
             text,
             re.IGNORECASE,
-        )
-        if match:
+        ):
             fields["residence_card_number"] = ExtractedValue(
                 value=match.group(1).upper(), confidence=0.9
             )
+    elif doc_type == "proof_of_funds":
+        if bal_match := re.search(r"(?:balance|amount|funds)\s*[:=]?\s*([$¥€£A-Z0-9,.]+)", text, re.IGNORECASE):
+            fields["balance"] = ExtractedValue(value=bal_match.group(1).strip(), confidence=0.85)
     else:
-        match = re.search(r"(?:employer|company)\s*[:=]\s*([^\n,;]+)", text, re.IGNORECASE)
-        if match:
+        if match := re.search(r"(?:employer|company|sponsor)\s*[:=]\s*([^\n,;]+)", text, re.IGNORECASE):
             fields["employer_name"] = ExtractedValue(value=match.group(1).strip(), confidence=0.88)
 
     return OCRResult(fields=fields, needs_recapture=not fields)

@@ -65,15 +65,51 @@ SessionDep = Annotated[AsyncSession, Depends(get_session)]
 
 # Maps User profile fields to one or more intake question keys.
 PROFILE_TO_INTAKE_MAP: dict[str, list[str]] = {
-    "full_name": ["full_name"],
-    "nationality": ["nationality"],
-    "passport_number": ["passport_number"],
-    "passport_expiry": ["passport_expiry"],
+    "full_name": [
+        "full_name",
+        "applicant_name",
+        "name",
+        "legal_name",
+        "full_legal_name",
+    ],
+    "nationality": [
+        "nationality",
+        "citizenship",
+        "country_of_citizenship",
+        "country_of_nationality",
+    ],
+    "passport_number": [
+        "passport_number",
+        "passport_no",
+        "passport_num",
+        "travel_document_number",
+    ],
+    "passport_expiry": [
+        "passport_expiry",
+        "passport_expiry_date",
+        "passport_expiration_date",
+        "passport_valid_until",
+    ],
+    "date_of_birth": [
+        "date_of_birth",
+        "dob",
+        "birth_date",
+        "applicant_dob",
+        "applicant_date_of_birth",
+    ],
     "current_country": [
+        "current_country",
         "current_location_country",
         "current_residence_country",
         "residence_country",
+        "country_of_residence",
     ],
+}
+
+INTAKE_TO_PROFILE_MAP: dict[str, str] = {
+    intake_key: profile_field
+    for profile_field, intake_keys in PROFILE_TO_INTAKE_MAP.items()
+    for intake_key in intake_keys
 }
 
 
@@ -790,7 +826,43 @@ async def get_intake(
     """Return visible intake questions, answers, and progress for a case (US-02)."""
     case = await _owned_case(session, case_id, user)
     questions = await _intake_questions_for_case(session, case)
+
+    # Pre-fill any missing answers from the user's global profile
+    profile_prefill = _prefill_from_profile(user)
+    current_answers = dict(case.intake_answers or {})
+    needs_flush = False
+    for k, v in profile_prefill.items():
+        if (k not in current_answers or current_answers[k] is None or current_answers[k] == "") and v:
+            current_answers[k] = v
+            needs_flush = True
+    if needs_flush:
+        parsed_q = parse_questions(questions)
+        case.intake_answers = prune_answers(parsed_q, current_answers)
+        await session.flush()
+
     return _intake_state(case, questions)
+
+
+INTAKE_KEY_ALIASES: dict[str, list[str]] = {
+    "corporate_number": ["employer_corporate_number", "company_number", "organization_number"],
+    "employer_corporate_number": ["corporate_number", "company_number", "organization_number"],
+    "employer_name": ["company_name", "sponsoring_organization", "host_company_name"],
+    "company_name": ["employer_name", "sponsoring_organization"],
+    "monthly_salary": ["salary_monthly", "income_monthly", "salary"],
+    "salary_monthly": ["monthly_salary", "income_monthly", "salary"],
+    "salary": ["monthly_salary", "salary_monthly", "annual_salary_jpy", "income_monthly"],
+    "annual_salary_jpy": ["salary", "monthly_salary", "salary_monthly"],
+    "attendance_rate": ["attendance_percentage", "school_attendance_rate"],
+    "attendance_percentage": ["attendance_rate", "school_attendance_rate"],
+    "purpose_of_visit": ["main_purpose", "purpose", "visit_purpose"],
+    "main_purpose": ["purpose_of_visit", "purpose", "visit_purpose"],
+    "intended_length_of_stay_days": ["stay_duration_days", "length_of_stay_days", "stay_days"],
+    "stay_duration_days": ["intended_length_of_stay_days", "length_of_stay_days", "stay_days"],
+    "passport_number": ["passport_no", "passport"],
+    "passport_no": ["passport_number", "passport"],
+    "birth_date": ["date_of_birth", "dob"],
+    "date_of_birth": ["birth_date", "dob"],
+}
 
 
 @router.put("/{case_id}/intake/answer", response_model=IntakeStateOut)
@@ -804,12 +876,26 @@ async def answer_intake(
     case = await _owned_case(session, case_id, user)
     questions = parse_questions(await _intake_questions_for_case(session, case))
     by_key = {q.key: q for q in questions}
-    question = by_key.get(payload.key)
+
+    target_key = payload.key
+    question = by_key.get(target_key)
+    if question is None:
+        # Check aliases
+        for alias in INTAKE_KEY_ALIASES.get(target_key, []):
+            if alias in by_key:
+                target_key = alias
+                question = by_key[alias]
+                break
+
     if question is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"unknown question '{payload.key}'",
         )
+
+    val = payload.value
+    if question.type == "integer" and isinstance(val, str) and val.strip().isdigit():
+        val = int(val.strip())
 
     current = dict(case.intake_answers or {})
     if not is_visible(question, current):
@@ -818,15 +904,25 @@ async def answer_intake(
             detail=f"question '{payload.key}' is not applicable on the current branch",
         )
 
-    error = validate_answer(question, payload.value)
+    error = validate_answer(question, val)
     if error is not None:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=error)
 
-    merged = {**current, payload.key: payload.value}
+    merged = {**current, target_key: val}
     case.intake_answers = prune_answers(questions, merged)
-    case.intake_step = payload.key
+    case.intake_step = target_key
     case.review_flags_acknowledged = False
     _sync_prior_application(case)
+
+    # Auto-sync answer to user global profile if it maps to a profile field
+    profile_field = INTAKE_TO_PROFILE_MAP.get(payload.key)
+    if profile_field and payload.value and isinstance(payload.value, str):
+        val = payload.value.strip()
+        if val:
+            setattr(user, profile_field, val)
+            required_fields = ["full_name", "nationality", "passport_number", "current_country"]
+            user.profile_complete = all(bool(getattr(user, f, None)) for f in required_fields)
+
     state = _intake_state(case, [q.model_dump() for q in questions])
     if state.progress.complete:
         new_status = next_status_for_phase("eligibility", case.status)

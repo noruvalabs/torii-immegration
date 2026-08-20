@@ -119,3 +119,43 @@ async def test_refusal_path(client: AsyncClient) -> None:
     assert resp.status_code == 200
     assert "event: done" in resp.text
     assert '"kind": "refusal"' in resp.text
+
+
+@pytest.mark.asyncio
+async def test_case_context_and_fix_actions() -> None:
+    assistant = AssistantService(chat=FakeChatClient(reply="fallback"), search=FakeSearchClient())
+    reply = await assistant.reply(
+        message="how to fix this",
+        case_reference="Case #44 - JP-2026-000044",
+        scope_label="Japan · Student (renewal)",
+        case_status="eligibility",
+        jurisdiction_code="JP",
+        visa_category_code="student",
+        action_code="renewal",
+        eligibility_findings=[
+            {
+                "key": "school_completed",
+                "status": "disqualified",
+                "message": "A change of status requires completion of your program at a Japanese educational institution.",
+            },
+            {
+                "key": "has_job_offer",
+                "status": "disqualified",
+                "message": "A formal job offer is required.",
+            },
+            {
+                "key": "employer_sanctioned",
+                "status": "incomplete",
+                "message": "Missing answer in intake.",
+            },
+        ],
+    )
+    assert reply.kind == "reply"
+    text = reply.bubbles[0].text
+    assert "School Completed" in text
+    assert "Has Job Offer" in text
+    assert "Employer Sanctioned" in text
+    assert "[ACTION:update_intake" in text
+    assert 'key="school_completed"' in text
+    assert 'key="has_job_offer"' in text
+    assert 'key="employer_sanctioned"' in text

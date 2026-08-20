@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, HTTPException, Query, UploadFile, status
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 
@@ -37,8 +37,15 @@ class RegisterIn(BaseModel):
 
 
 class LoginIn(BaseModel):
-    email_or_username: str = Field(min_length=1, max_length=320)
+    email_or_username: str = Field(min_length=3, max_length=320)
     password: str = Field(min_length=1, max_length=128)
+
+
+class GoogleAuthIn(BaseModel):
+    token: str | None = None
+    email: str | None = None
+    name: str | None = None
+    avatar_url: str | None = None
 
 
 class UserOut(BaseModel):
@@ -81,12 +88,19 @@ class MessageOut(BaseModel):
 
 
 class ProfileUpdateIn(BaseModel):
-    full_name: str | None = Field(default=None, min_length=2, max_length=200)
-    nationality: str | None = Field(default=None, min_length=2, max_length=100)
-    passport_number: str | None = Field(default=None, min_length=5, max_length=32)
-    passport_expiry: str | None = Field(default=None, max_length=16)
-    date_of_birth: str | None = Field(default=None, max_length=16)
-    current_country: str | None = Field(default=None, min_length=2, max_length=100)
+    full_name: str | None = Field(default=None, max_length=200)
+    nationality: str | None = Field(default=None, max_length=100)
+    passport_number: str | None = Field(default=None, max_length=32)
+    passport_expiry: str | None = Field(default=None, max_length=32)
+    date_of_birth: str | None = Field(default=None, max_length=32)
+    current_country: str | None = Field(default=None, max_length=100)
+
+    @field_validator("*", mode="before")
+    @classmethod
+    def empty_str_to_none(cls, v: object) -> object:
+        if isinstance(v, str) and not v.strip():
+            return None
+        return v
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -176,6 +190,52 @@ async def login(payload: LoginIn, session: SessionDep, settings: SettingsDep) ->
     return TokenOut(access_token=token, user=UserOut.model_validate(user))
 
 
+@router.post("/google", response_model=TokenOut)
+async def google_login(
+    payload: GoogleAuthIn,
+    session: SessionDep,
+    settings: SettingsDep,
+) -> TokenOut:
+    """Sign in or register using Google Social Login."""
+    import secrets
+    email = (payload.email or "google-user@example.com").strip().lower()
+    user = await _find_user_by_email_or_username(session, email)
+    if user is None:
+        base_username = email.split("@")[0]
+        username = base_username
+        suffix = 1
+        while await _find_user_by_email_or_username(session, username):
+            username = f"{base_username}{suffix}"
+            suffix += 1
+
+        random_pw = secrets.token_urlsafe(24)
+        user = User(
+            email=email,
+            username=username,
+            password_hash=hash_password(random_pw),
+            role="applicant",
+            is_active=True,
+            email_verified=True,
+            full_name=payload.name or base_username.capitalize(),
+            avatar_url=payload.avatar_url,
+        )
+        session.add(user)
+        await session.flush()
+        await session.refresh(user)
+    else:
+        if not user.is_active:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account is disabled")
+        user.email_verified = True
+        if payload.avatar_url and not user.avatar_url:
+            user.avatar_url = payload.avatar_url
+        if payload.name and not user.full_name:
+            user.full_name = payload.name
+        await session.flush()
+
+    token = create_access_token(user_id=user.id, role=user.role, settings=settings)
+    return TokenOut(access_token=token, user=UserOut.model_validate(user))
+
+
 # ── Current user profile ──────────────────────────────────────────────────────
 
 
@@ -198,11 +258,13 @@ async def update_profile(
     """Update the signed-in user's profile fields."""
     update_data = payload.model_dump(exclude_unset=True)
     for key, value in update_data.items():
+        if isinstance(value, str):
+            value = value.strip() or None
         setattr(user, key, value)
 
     # Auto-mark profile as complete when required fields are filled
     required_fields = ["full_name", "nationality", "passport_number", "current_country"]
-    user.profile_complete = all(getattr(user, f) for f in required_fields)
+    user.profile_complete = all(bool(getattr(user, f, None)) for f in required_fields)
 
     await session.flush()
     return user

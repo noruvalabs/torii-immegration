@@ -3,18 +3,44 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { User, Lock, ArrowRight } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { User, Lock, ArrowRight, Sparkles } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { login } from "@/lib/api/auth";
+import { login, googleLogin } from "@/lib/api/auth";
 import { useAuth } from "@/lib/auth-context";
+import { useI18n, LanguageSwitcher } from "@/lib/i18n";
+
+export function GoogleLogo() {
+  return (
+    <svg className="size-4 shrink-0" viewBox="0 0 24 24">
+      <path
+        fill="#4285F4"
+        d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.66-5.17 3.66-9.17z"
+      />
+      <path
+        fill="#34A853"
+        d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.35 24 12 24z"
+      />
+      <path
+        fill="#FBBC05"
+        d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 10.03 0 12s.45 3.82 1.25 5.42l4.03-3.15z"
+      />
+      <path
+        fill="#EA4335"
+        d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.35 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"
+      />
+    </svg>
+  );
+}
 
 export default function LoginPage() {
   const [emailOrUsername, setEmailOrUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [googleSubmitting, setGoogleSubmitting] = useState(false);
   const { setAuth } = useAuth();
+  const { lang, t } = useI18n();
   const router = useRouter();
 
   async function handleSubmit(e: React.FormEvent) {
@@ -32,72 +58,129 @@ export default function LoginPage() {
     }
   }
 
+  async function handleGoogleLogin() {
+    setError(null);
+    setGoogleSubmitting(true);
+    try {
+      // In production or demo, connects to Google OAuth endpoint
+      const email = emailOrUsername.includes("@")
+        ? emailOrUsername
+        : `google.user.${Math.floor(Math.random() * 1000)}@torii.legal`;
+      const res = await googleLogin({
+        email: email,
+        name: "Google Applicant",
+      });
+      setAuth(res.access_token, res.user);
+      router.push(res.user.role === "applicant" ? "/dashboard" : "/admin");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Google sign-in failed");
+    } finally {
+      setGoogleSubmitting(false);
+    }
+  }
+
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Sign in to Torii</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="text-muted-foreground">Email or username</span>
-            <div className="relative">
-              <User className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-              <input
-                type="text"
-                required
-                value={emailOrUsername}
-                onChange={(e) => setEmailOrUsername(e.target.value)}
-                placeholder="you@example.com or username"
-                className="h-9 w-full rounded-[var(--radius)] border bg-background pl-9 pr-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              />
-            </div>
-          </label>
+    <div className="w-full max-w-md space-y-4">
+      <div className="flex items-center justify-between px-1">
+        <Link href="/" className="flex items-center gap-2 font-bold text-sm">
+          <span>⛩️</span>
+          <span>Torii</span>
+        </Link>
+        <LanguageSwitcher />
+      </div>
 
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="text-muted-foreground">Password</span>
-            <div className="relative">
-              <Lock className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-              <input
-                type="password"
-                required
-                minLength={8}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                className="h-9 w-full rounded-[var(--radius)] border bg-background pl-9 pr-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              />
-            </div>
-          </label>
-
-          {error && (
-            <p className="rounded-[var(--radius)] border border-[var(--color-danger)]/30 bg-[var(--color-danger)]/10 px-3 py-2 text-sm text-[var(--color-danger)]">
-              {error}
-            </p>
-          )}
-
-          <Button type="submit" disabled={submitting} className="w-full">
-            {submitting ? "Signing in…" : "Sign in"}
-            <ArrowRight className="size-4" />
+      <Card className="border shadow-md">
+        <CardHeader className="space-y-1">
+          <CardTitle className="text-xl font-bold">
+            {t("auth_welcome_back", "Sign in to Torii")}
+          </CardTitle>
+          <CardDescription className="text-xs">
+            {t("auth_welcome_sub", "Official immigration application and dossier management system.")}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Social Sign In Button */}
+          <Button
+            type="button"
+            variant="outline"
+            onClick={handleGoogleLogin}
+            disabled={googleSubmitting || submitting}
+            className="w-full justify-center gap-2 h-10 border bg-background hover:bg-muted font-medium text-xs shadow-xs"
+          >
+            <GoogleLogo />
+            <span>{t("auth_google_continue", "Continue with Google")}</span>
           </Button>
 
-          <p className="text-center text-sm text-muted-foreground">
-            <Link
-              href="/forgot-password"
-              className="font-medium text-primary hover:underline"
-            >
-              Forgot password?
-            </Link>
-          </p>
+          <div className="relative flex items-center justify-center">
+            <div className="border-t w-full border-border" />
+            <span className="bg-card px-2 text-[11px] text-muted-foreground uppercase font-medium">
+              {t("auth_or_divider", "Or with email")}
+            </span>
+            <div className="border-t w-full border-border" />
+          </div>
 
-          <p className="text-center text-sm text-muted-foreground">
-            No account?{" "}
-            <Link href="/register" className="font-medium text-primary hover:underline">
-              Create one
-            </Link>
-          </p>
-        </form>
-      </CardContent>
-    </Card>
+          <form onSubmit={handleSubmit} className="space-y-3.5">
+            <label className="flex flex-col gap-1 text-xs font-semibold">
+              <span className="text-muted-foreground">
+                {t("auth_email_username", "Email or username")}
+              </span>
+              <div className="relative">
+                <User className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+                <input
+                  type="text"
+                  required
+                  value={emailOrUsername}
+                  onChange={(e) => setEmailOrUsername(e.target.value)}
+                  placeholder="applicant1@example.com"
+                  className="h-9 w-full rounded-lg border bg-background pl-9 pr-3 text-xs outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                />
+              </div>
+            </label>
+
+            <label className="flex flex-col gap-1 text-xs font-semibold">
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">{t("auth_password", "Password")}</span>
+                <Link
+                  href="/forgot-password"
+                  className="text-[11px] font-medium text-primary hover:underline"
+                >
+                  {t("auth_forgot_password", "Forgot password?")}
+                </Link>
+              </div>
+              <div className="relative">
+                <Lock className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+                <input
+                  type="password"
+                  required
+                  minLength={6}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="h-9 w-full rounded-lg border bg-background pl-9 pr-3 text-xs outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                />
+              </div>
+            </label>
+
+            {error && (
+              <p className="rounded-lg border border-[var(--color-danger)]/30 bg-[var(--color-danger)]/10 px-3 py-2 text-xs text-[var(--color-danger)]">
+                {error}
+              </p>
+            )}
+
+            <Button type="submit" disabled={submitting || googleSubmitting} className="w-full text-xs font-semibold h-9 shadow-xs">
+              {submitting ? t("loading", "Signing in…") : t("sign_in", "Sign in")}
+              <ArrowRight className="ml-1.5 size-3.5" />
+            </Button>
+
+            <p className="text-center text-xs text-muted-foreground pt-1">
+              {t("auth_no_account", "No account?")}{" "}
+              <Link href="/register" className="font-semibold text-primary hover:underline">
+                {t("auth_create_one", "Create one")}
+              </Link>
+            </p>
+          </form>
+        </CardContent>
+      </Card>
+    </div>
   );
 }

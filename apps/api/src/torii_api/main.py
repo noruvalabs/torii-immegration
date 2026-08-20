@@ -16,6 +16,7 @@ from torii_api.api.auth import router as auth_router
 from torii_api.api.case_workflow import router as case_workflow_router
 from torii_api.api.cases import router as cases_router
 from torii_api.api.corridors import router as corridors_router
+from torii_api.api.credits import router as credits_router
 from torii_api.api.docs import build_docs_router
 from torii_api.api.geolocation import router as geo_router
 from torii_api.api.health import router as health_router
@@ -132,6 +133,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(payments_router)
     app.include_router(geo_router)
     app.include_router(wallet_router)
+    app.include_router(credits_router)
     app.include_router(admin_router)
     app.include_router(admin_ops_router)
     app.include_router(auth_router)

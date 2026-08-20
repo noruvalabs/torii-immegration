@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import base64
 from dataclasses import dataclass
 from datetime import date
 from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -25,6 +27,7 @@ from torii_api.db.models import (
     EligibilityRuleSet,
     FormTemplate,
     Jurisdiction,
+    User,
 )
 from torii_api.db.session import get_session
 from torii_api.services.checklist import ChecklistStatus, update_status, visible_requirement_items
@@ -483,6 +486,58 @@ async def patch_checklist_item(
     return item
 
 
+def _apply_extracted_fields_to_case_and_user(
+    case: Case, user: User, extracted_fields: dict[str, Any]
+) -> None:
+    if not extracted_fields:
+        return
+    answers = dict(case.intake_answers or {})
+    for key, raw_val in extracted_fields.items():
+        val = raw_val.get("value") if isinstance(raw_val, dict) else raw_val
+        if val is None:
+            continue
+        val_str = str(val).strip()
+        if not val_str:
+            continue
+
+        answers[key] = val_str
+        norm_key = key.lower().strip()
+
+        # Update User global profile and intake aliases
+        if norm_key in ("full_name", "applicant_name", "name", "legal_name", "holder_name", "employee_name"):
+            user.full_name = val_str
+            answers["full_name"] = val_str
+        elif norm_key in ("nationality", "citizenship", "country_of_citizenship"):
+            user.nationality = val_str
+            answers["nationality"] = val_str
+        elif norm_key in ("passport_number", "passport_no", "passport_num"):
+            user.passport_number = val_str
+            answers["passport_number"] = val_str
+        elif norm_key in ("passport_expiry", "passport_expiry_date", "expiry_date", "passport_expiration_date"):
+            user.passport_expiry = val_str
+            answers["passport_expiry"] = val_str
+        elif norm_key in ("date_of_birth", "dob", "birth_date", "applicant_dob"):
+            user.date_of_birth = val_str
+            answers["date_of_birth"] = val_str
+        elif norm_key in ("current_country", "current_residence_country", "residence_country"):
+            user.current_country = val_str
+            answers["current_country"] = val_str
+        elif norm_key in ("employer_name", "company_name", "sponsor_name"):
+            answers["employer_name"] = val_str
+            answers["company_name"] = val_str
+            answers["sponsor_name"] = val_str
+        elif norm_key in ("monthly_salary", "remuneration", "salary"):
+            answers["monthly_salary"] = val_str
+        elif norm_key in ("residence_card_number", "card_number"):
+            answers["residence_card_number"] = val_str
+
+    case.intake_answers = answers
+    case.review_flags_acknowledged = False
+    user.profile_complete = bool(
+        user.full_name and user.nationality and user.passport_number and user.current_country
+    )
+
+
 @router.post(
     "/{case_id}/documents", response_model=DocumentOut, status_code=status.HTTP_201_CREATED
 )
@@ -490,7 +545,8 @@ async def register_document(
     case_id: int, payload: DocumentIn, session: SessionDep, user: CurrentUserDep
 ) -> CaseDocument:
     case = await _owned_case(session, case_id, user)
-    document = CaseDocument(case_id=case.id, confirmed=False, **payload.model_dump())
+    has_extracted = bool(payload.extracted_fields)
+    document = CaseDocument(case_id=case.id, confirmed=has_extracted, **payload.model_dump())
     session.add(document)
     await session.flush()
     checklist_item = await session.scalar(
@@ -501,6 +557,10 @@ async def register_document(
     if checklist_item is not None:
         checklist_item.document_id = document.id
         checklist_item.status = "uploaded"
+
+    if payload.extracted_fields:
+        _apply_extracted_fields_to_case_and_user(case, user, payload.extracted_fields)
+
     await session.flush()
     return document
 
@@ -515,11 +575,10 @@ async def confirm_document(
     )
     if document is None:
         raise HTTPException(status_code=404, detail=f"document {doc_id} not found")
-    confirmed_fields: dict[str, Any] = {}
-    for key, raw_value in dict(document.extracted_fields or {}).items():
-        confirmed_fields[key] = raw_value.get("value") if isinstance(raw_value, dict) else raw_value
-    case.intake_answers = {**dict(case.intake_answers or {}), **confirmed_fields}
-    case.review_flags_acknowledged = False
+
+    if document.extracted_fields:
+        _apply_extracted_fields_to_case_and_user(case, user, dict(document.extracted_fields))
+
     document.confirmed = True
     await session.flush()
     return document
@@ -662,33 +721,56 @@ async def get_packet(case_id: int, session: SessionDep, user: CurrentUserDep) ->
     return case.packet_snapshot
 
 
+@router.get("/{case_id}/export/application-form")
 @router.get("/{case_id}/pdf/application-form")
 async def download_application_form_pdf(
-    case_id: int, session: SessionDep, user: CurrentUserDep
+    case_id: int,
+    session: SessionDep,
+    user: CurrentUserDep,
+    request: Request,
+    format: str | None = Query(default=None),
 ) -> Response:
     from torii_api.services.pdf_generator import generate_japan_work_renewal_pdf
 
     case = await _owned_case(session, case_id, user)
     answers = dict(case.intake_answers or {})
     _, _, _, scope_label = await _scope_label(session, case)
+    safe_ref = "".join(
+        c for c in (case.reference or f"CASE-{case.id}") if c.isalnum() or c in ("-", "_", ".")
+    )
+    filename = f"{safe_ref or f'Case-{case_id}'}_Application_Form.pdf"
     pdf_bytes = generate_japan_work_renewal_pdf(
         case.reference or f"CASE-{case.id}",
         answers,
         destination_label=scope_label or "Japan",
     )
+    if format in ("base64", "json") or "application/json" in request.headers.get("accept", ""):
+        return JSONResponse(
+            content={
+                "filename": filename,
+                "media_type": "application/pdf",
+                "data_base64": base64.b64encode(pdf_bytes).decode("ascii"),
+                "size_bytes": len(pdf_bytes),
+            }
+        )
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
         headers={
-            "Content-Disposition": f'attachment; filename="{case.reference or case_id}_Application_Form.pdf"',
+            "Content-Disposition": f'attachment; filename="{filename}"',
             "Content-Length": str(len(pdf_bytes)),
         },
     )
 
 
+@router.get("/{case_id}/export/cover-letter")
 @router.get("/{case_id}/pdf/cover-letter")
 async def download_cover_letter_pdf(
-    case_id: int, session: SessionDep, user: CurrentUserDep
+    case_id: int,
+    session: SessionDep,
+    user: CurrentUserDep,
+    request: Request,
+    format: str | None = Query(default=None),
 ) -> Response:
     from torii_api.services.pdf_generator import generate_cover_letter_pdf
 
@@ -699,25 +781,43 @@ async def download_cover_letter_pdf(
         for item in await _checklist(session, case.id)
     ]
     _, _, _, scope_label = await _scope_label(session, case)
+    safe_ref = "".join(
+        c for c in (case.reference or f"CASE-{case.id}") if c.isalnum() or c in ("-", "_", ".")
+    )
+    filename = f"{safe_ref or f'Case-{case_id}'}_Cover_Letter.pdf"
     pdf_bytes = generate_cover_letter_pdf(
         case.reference or f"CASE-{case.id}",
         answers,
         checklist,
         scope_label=scope_label or "Visa Submission Dossier",
     )
+    if format in ("base64", "json") or "application/json" in request.headers.get("accept", ""):
+        return JSONResponse(
+            content={
+                "filename": filename,
+                "media_type": "application/pdf",
+                "data_base64": base64.b64encode(pdf_bytes).decode("ascii"),
+                "size_bytes": len(pdf_bytes),
+            }
+        )
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
         headers={
-            "Content-Disposition": f'attachment; filename="{case.reference or case_id}_Cover_Letter.pdf"',
+            "Content-Disposition": f'attachment; filename="{filename}"',
             "Content-Length": str(len(pdf_bytes)),
         },
     )
 
 
+@router.get("/{case_id}/export/dossier-packet")
 @router.get("/{case_id}/pdf/dossier-packet")
 async def download_dossier_packet_pdf(
-    case_id: int, session: SessionDep, user: CurrentUserDep
+    case_id: int,
+    session: SessionDep,
+    user: CurrentUserDep,
+    request: Request,
+    format: str | None = Query(default=None),
 ) -> Response:
     from torii_api.services.packet import resolve_jurisdiction_submission_kit
     from torii_api.services.pdf_generator import generate_dossier_packet_pdf
@@ -736,6 +836,10 @@ async def download_dossier_packet_pdf(
     submission_kit = resolve_jurisdiction_submission_kit(
         jurisdiction_code=j_code, scope_label=scope_label
     )
+    safe_ref = "".join(
+        c for c in (case.reference or f"CASE-{case.id}") if c.isalnum() or c in ("-", "_", ".")
+    )
+    filename = f"{safe_ref or f'Case-{case_id}'}_Complete_Dossier_Packet.pdf"
     pdf_bytes = generate_dossier_packet_pdf(
         case.reference or f"CASE-{case.id}",
         answers,
@@ -744,11 +848,20 @@ async def download_dossier_packet_pdf(
         submission_kit=submission_kit,
         scope_label=scope_label or "Immigration Filing Dossier",
     )
+    if format in ("base64", "json") or "application/json" in request.headers.get("accept", ""):
+        return JSONResponse(
+            content={
+                "filename": filename,
+                "media_type": "application/pdf",
+                "data_base64": base64.b64encode(pdf_bytes).decode("ascii"),
+                "size_bytes": len(pdf_bytes),
+            }
+        )
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
         headers={
-            "Content-Disposition": f'attachment; filename="{case.reference or case_id}_Complete_Dossier_Packet.pdf"',
+            "Content-Disposition": f'attachment; filename="{filename}"',
             "Content-Length": str(len(pdf_bytes)),
         },
     )

@@ -59,6 +59,10 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     jwt_access_token_expire_minutes: int = 60 * 24 * 7  # 7 days
 
+    # --- Google Social Auth (OAuth 2.0 Client ID & Secret) --------------------
+    google_client_id: str = ""
+    google_client_secret: str = ""
+
     # --- Email verification / password-reset tokens ---------------------------
     email_verification_token_expire_minutes: int = 60 * 24  # 24 hours
     password_reset_token_expire_minutes: int = 60  # 1 hour

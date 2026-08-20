@@ -50,6 +50,104 @@ function matchEnumOption(value: string, options: string[]): string | null {
   return null;
 }
 
+const PROFILE_ALIASES: Record<string, keyof User> = {
+  full_name: "full_name",
+  applicant_name: "full_name",
+  name: "full_name",
+  legal_name: "full_name",
+  full_legal_name: "full_name",
+
+  nationality: "nationality",
+  citizenship: "nationality",
+  country_of_citizenship: "nationality",
+  country_of_nationality: "nationality",
+
+  passport_number: "passport_number",
+  passport_no: "passport_number",
+  passport_num: "passport_number",
+  travel_document_number: "passport_number",
+
+  passport_expiry: "passport_expiry",
+  passport_expiry_date: "passport_expiry",
+  passport_expiration_date: "passport_expiry",
+  passport_valid_until: "passport_expiry",
+
+  date_of_birth: "date_of_birth",
+  dob: "date_of_birth",
+  birth_date: "date_of_birth",
+  applicant_dob: "date_of_birth",
+  applicant_date_of_birth: "date_of_birth",
+
+  current_country: "current_country",
+  current_residence_country: "current_country",
+  current_location_country: "current_country",
+  residence_country: "current_country",
+  country_of_residence: "current_country",
+};
+
+function getProfileValueForQuestion(key: string, prompt: string, profile: User): string | null {
+  const normKey = key.toLowerCase();
+  const normPrompt = prompt.toLowerCase();
+
+  // Direct alias check
+  const mappedField = PROFILE_ALIASES[normKey];
+  if (mappedField) {
+    const val = profile[mappedField];
+    if (val && typeof val === "string" && val.trim()) return val.trim();
+  }
+
+  // Fuzzy match on key and prompt
+  if (
+    normKey.includes("date_of_birth") ||
+    normKey === "dob" ||
+    normKey.includes("birth_date") ||
+    (normPrompt.includes("date of birth") && !normPrompt.includes("father") && !normPrompt.includes("mother") && !normPrompt.includes("spouse") && !normPrompt.includes("child"))
+  ) {
+    if (profile.date_of_birth?.trim()) return profile.date_of_birth.trim();
+  }
+
+  if (
+    (normKey.includes("passport") && (normKey.includes("expiry") || normKey.includes("expiration"))) ||
+    (normPrompt.includes("passport") && (normPrompt.includes("expiry") || normPrompt.includes("expiration")))
+  ) {
+    if (profile.passport_expiry?.trim()) return profile.passport_expiry.trim();
+  }
+
+  if (
+    (normKey.includes("passport") && (normKey.includes("number") || normKey.includes("no") || normKey.includes("num"))) ||
+    normKey === "passport_number" ||
+    (normPrompt.includes("passport number") || normPrompt.includes("passport no"))
+  ) {
+    if (profile.passport_number?.trim()) return profile.passport_number.trim();
+  }
+
+  if (
+    normKey === "full_name" ||
+    normKey === "applicant_name" ||
+    (normPrompt.includes("full name") && !normPrompt.includes("father") && !normPrompt.includes("mother") && !normPrompt.includes("spouse") && !normPrompt.includes("employer"))
+  ) {
+    if (profile.full_name?.trim()) return profile.full_name.trim();
+  }
+
+  if (
+    normKey === "nationality" ||
+    normKey === "citizenship" ||
+    (normPrompt.includes("nationality") && !normPrompt.includes("spouse") && !normPrompt.includes("father"))
+  ) {
+    if (profile.nationality?.trim()) return profile.nationality.trim();
+  }
+
+  if (
+    normKey.includes("residence_country") ||
+    normKey.includes("current_country") ||
+    normKey.includes("location_country")
+  ) {
+    if (profile.current_country?.trim()) return profile.current_country.trim();
+  }
+
+  return null;
+}
+
 export function IntakeStep({ state, profile, onAnswer }: IntakeStepProps) {
   const [drafts, setDrafts] = useState<Record<string, unknown>>({});
   const [activeSection, setActiveSection] = useState<string | null>(null);
@@ -61,19 +159,10 @@ export function IntakeStep({ state, profile, onAnswer }: IntakeStepProps) {
 
   useEffect(() => {
     if (!profile) return;
-    const profileMap: Record<string, string | null> = {
-      full_name: profile.full_name,
-      nationality: profile.nationality,
-      passport_number: profile.passport_number,
-      passport_expiry: profile.passport_expiry,
-      current_residence_country: profile.current_country,
-      current_location_country: profile.current_country,
-      residence_country: profile.current_country,
-    };
     const toAutoFill: Record<string, unknown> = {};
     for (const q of state.questions) {
       if (state.answers[q.key] !== undefined || autoSubmittedRef.current.has(q.key)) continue;
-      let val = profileMap[q.key] ?? null;
+      let val = getProfileValueForQuestion(q.key, q.prompt, profile);
       if (val && q.type === "enum" && q.options?.length) {
         val = matchEnumOption(val, q.options);
       }
@@ -242,10 +331,15 @@ export function IntakeStep({ state, profile, onAnswer }: IntakeStepProps) {
                 : q.options || [];
 
               const isDateInput =
+                q.type === "date" ||
                 q.key.includes("date") ||
                 q.key.includes("expiry") ||
+                q.key.includes("expiration") ||
                 q.key.includes("dob") ||
-                q.prompt.includes("YYYY-MM-DD");
+                q.key.includes("birth") ||
+                q.prompt.toLowerCase().includes("yyyy-mm-dd") ||
+                q.prompt.toLowerCase().includes("date of birth") ||
+                q.prompt.toLowerCase().includes("expiry date");
 
               const isFullWidth = hasOptions && optionsCount > 8;
 

@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth-context";
+import { useCredits } from "@/lib/credits-context";
 import { registerDocument } from "@/lib/api/cases";
 import { extractFromFile, type OCRResult, type DocumentType } from "@/lib/api/ocr";
 import { getWallet, uploadDocument, type WalletDocument } from "@/lib/api/wallet";
@@ -23,17 +24,6 @@ type ChecklistStepProps = {
 
 function mapDocType(checklistCode: string): DocumentType {
   const code = checklistCode.toLowerCase();
-  if (code.includes("passport") && !code.includes("photo")) return "passport";
-  if (code.includes("residence") || code.includes("card")) return "residence_card";
-  if (
-    code.includes("fund") ||
-    code.includes("bank") ||
-    code.includes("financial") ||
-    code.includes("finance") ||
-    code.includes("sponsor")
-  ) {
-    return "proof_of_funds";
-  }
   if (
     code.includes("itinerary") ||
     code.includes("travel") ||
@@ -151,6 +141,7 @@ export function ChecklistStep({
   const [ocrResult, setOcrResult] = useState<OCRResult | null>(null);
   const [ocrLoading, setOcrLoading] = useState(false);
   const [ocrError, setOcrError] = useState<string | null>(null);
+  const [successNotice, setSuccessNotice] = useState<string | null>(null);
   const [autoAttached, setAutoAttached] = useState(false);
   const [mode, setMode] = useState<"upload" | "scan" | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -262,34 +253,49 @@ export function ChecklistStep({
 
     setUploading(item.id);
     setOcrError(null);
+    setSuccessNotice(null);
 
     try {
-      if (mode === "upload") {
-        // Direct upload: store in case + wallet without requiring OCR success.
-        await registerDocument(token, caseId, {
-          doc_type: mapDocType(item.code),
-          filename: file.name,
-          storage_key: `upload/${item.id}/${file.name}`,
-          extracted_fields: {},
-          content_type: file.type || "application/octet-stream",
-        });
-        try {
-          await uploadDocument(token, file, mapDocType(item.code), item.name);
-          const refreshed = await getWallet(token);
-          setWalletDocs(refreshed);
-        } catch {
-          // Wallet is optional
-        }
-        await onStatusChange(item.id, "gathered");
-      } else {
-        // Scan path: OCR then confirm extracted fields.
-        setOcrLoading(true);
-        const docType = mapDocType(item.code);
+      const docType = mapDocType(item.code);
+      setOcrLoading(true);
+
+      // Run AI OCR on all uploaded files to extract and auto-fill intake answers
+      let extracted: Record<string, { value: string; confidence: number }> = {};
+      try {
         const result = await extractFromFile(file, docType);
-        setOcrResult(result);
-        if (result.needs_recapture) {
-          setOcrError("Could not extract fields. Try a clearer image, use Upload, or mark gathered.");
+        if (result && result.fields && Object.keys(result.fields).length > 0) {
+          extracted = result.fields;
+          setOcrResult(result);
         }
+      } catch (ocrErr) {
+        console.warn("OCR extraction notice:", ocrErr);
+      }
+
+      await registerDocument(token, caseId, {
+        doc_type: docType,
+        filename: file.name,
+        storage_key: `upload/${item.id}/${file.name}`,
+        extracted_fields: extracted,
+        content_type: file.type || "application/octet-stream",
+      });
+
+      try {
+        await uploadDocument(token, file, docType, item.name);
+        const refreshed = await getWallet(token);
+        setWalletDocs(refreshed);
+      } catch {
+        // Wallet is optional
+      }
+
+      await onStatusChange(item.id, "gathered");
+      onRefresh();
+
+      if (Object.keys(extracted).length > 0) {
+        const fieldLabels = Object.keys(extracted)
+          .map((k) => k.replaceAll("_", " ").toUpperCase())
+          .join(", ");
+        setSuccessNotice(`✨ AI successfully extracted and auto-filled data from ${file.name}: ${fieldLabels}`);
+        setTimeout(() => setSuccessNotice(null), 9000);
       }
     } catch (err) {
       setOcrError(err instanceof Error ? err.message : "Upload failed");
@@ -326,6 +332,7 @@ export function ChecklistStep({
 
       await onStatusChange(item.id, "gathered");
       setOcrResult(null);
+      onRefresh();
     } catch (err) {
       setOcrError(err instanceof Error ? err.message : "Registration failed");
     }
@@ -343,6 +350,13 @@ export function ChecklistStep({
         className="hidden"
         onChange={handleFileChange}
       />
+
+      {successNotice && (
+        <div className="rounded-[var(--radius)] border border-emerald-500/30 bg-emerald-500/10 p-3.5 flex items-center gap-2.5 text-xs text-emerald-800 dark:text-emerald-300 animate-in fade-in slide-in-from-top-1">
+          <Check className="size-4 shrink-0 text-emerald-500" />
+          <span className="font-medium">{successNotice}</span>
+        </div>
+      )}
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
