@@ -21,6 +21,10 @@ export function CardTitle({ className, ...props }: ComponentProps<"h3">) {
   return <h3 className={cn("text-sm font-medium text-muted-foreground", className)} {...props} />;
 }
 
+export function CardDescription({ className, ...props }: ComponentProps<"p">) {
+  return <p className={cn("text-xs text-muted-foreground", className)} {...props} />;
+}
+
 export function CardContent({ className, ...props }: ComponentProps<"div">) {
   return <div className={cn("p-5 pt-0", className)} {...props} />;
 }
