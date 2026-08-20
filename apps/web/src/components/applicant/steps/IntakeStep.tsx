@@ -1,7 +1,18 @@
 "use client";
 
 import { useEffect, useRef, useState, useMemo } from "react";
-import { Check, ExternalLink, ChevronLeft, ChevronRight, Search } from "lucide-react";
+import {
+  Check,
+  ExternalLink,
+  ChevronLeft,
+  ChevronRight,
+  Search,
+  ArrowRight,
+  CheckCircle2,
+  ListChecks,
+  LayoutGrid,
+  AlertCircle,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -11,6 +22,7 @@ type IntakeStepProps = {
   state: IntakeState;
   profile: User | null;
   onAnswer: (key: string, value: unknown) => void;
+  onProceedToEligibility?: () => void;
 };
 
 /** Map profile country names to common ISO codes used in intake enums. */
@@ -148,10 +160,11 @@ function getProfileValueForQuestion(key: string, prompt: string, profile: User):
   return null;
 }
 
-export function IntakeStep({ state, profile, onAnswer }: IntakeStepProps) {
+export function IntakeStep({ state, profile, onAnswer, onProceedToEligibility }: IntakeStepProps) {
   const [drafts, setDrafts] = useState<Record<string, unknown>>({});
   const [activeSection, setActiveSection] = useState<string | null>(null);
   const [enumSearch, setEnumSearch] = useState<Record<string, string>>({});
+  const [viewAll, setViewAll] = useState<boolean>(false);
 
   const onAnswerRef = useRef(onAnswer);
   onAnswerRef.current = onAnswer;
@@ -191,9 +204,20 @@ export function IntakeStep({ state, profile, onAnswer }: IntakeStepProps) {
   }, [state.questions]);
 
   const sectionKeys = useMemo(() => Array.from(sectionsMap.keys()), [sectionsMap]);
+
+  // Compute first incomplete section so users are automatically taken to unanswered fields
+  const firstIncompleteSection = useMemo(() => {
+    for (const sec of sectionKeys) {
+      const qs = sectionsMap.get(sec) || [];
+      const answered = qs.filter((q) => state.answers[q.key] !== undefined).length;
+      if (answered < qs.length) return sec;
+    }
+    return sectionKeys[0] ?? null;
+  }, [sectionKeys, sectionsMap, state.answers]);
+
   const currentSectionKey = activeSection && sectionKeys.includes(activeSection)
     ? activeSection
-    : (sectionKeys[0] ?? "General Details");
+    : (firstIncompleteSection ?? sectionKeys[0] ?? "General Details");
 
   const currentSectionIndex = sectionKeys.indexOf(currentSectionKey);
 
@@ -221,25 +245,203 @@ export function IntakeStep({ state, profile, onAnswer }: IntakeStepProps) {
     : 0;
 
   const currentQuestions = sectionsMap.get(currentSectionKey) || state.questions;
+  const currentAnsweredCount = currentQuestions.filter((q) => state.answers[q.key] !== undefined).length;
+  const isCurrentSectionComplete = currentQuestions.length > 0 && currentAnsweredCount === currentQuestions.length;
+  const remainingInCurrent = currentQuestions.length - currentAnsweredCount;
+
+  function renderQuestion(q: (typeof state.questions)[number]) {
+    const current = (state.answers[q.key] ?? drafts[q.key]) as string | number | boolean | undefined;
+    const citation = q.citation as { title?: string; url?: string } | null | undefined;
+    const hasOptions = q.type === "enum" && q.options && q.options.length > 0;
+    const optionsCount = q.options?.length ?? 0;
+    const isLongEnum = hasOptions && optionsCount > 5;
+    const searchVal = enumSearch[q.key] || "";
+    const filteredOptions = isLongEnum && searchVal
+      ? q.options!.filter((opt) => opt.toLowerCase().includes(searchVal.toLowerCase()))
+      : q.options || [];
+
+    const isDateInput =
+      q.type === "date" ||
+      q.key.includes("date") ||
+      q.key.includes("expiry") ||
+      q.key.includes("expiration") ||
+      q.key.includes("dob") ||
+      q.key.includes("birth") ||
+      q.prompt.toLowerCase().includes("yyyy-mm-dd") ||
+      q.prompt.toLowerCase().includes("date of birth") ||
+      q.prompt.toLowerCase().includes("expiry date");
+
+    const isFullWidth = hasOptions && optionsCount > 8;
+
+    return (
+      <Card
+        key={q.key}
+        className={`p-4 flex flex-col justify-between transition-all hover:border-primary/40 bg-card shadow-sm ${
+          isFullWidth ? "col-span-1 md:col-span-2" : "col-span-1"
+        } ${state.answers[q.key] === undefined ? "border-amber-500/30 ring-1 ring-amber-500/10" : ""}`}
+      >
+        <div className="space-y-2">
+          <div className="flex items-start justify-between gap-2">
+            <label className="text-xs font-semibold leading-snug text-foreground">
+              {q.prompt}
+              {q.required !== false && <span className="ml-1 text-[var(--color-danger)] font-bold">*</span>}
+            </label>
+
+            {citation?.url && (
+              <a
+                href={citation.url}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1 text-[10px] text-muted-foreground hover:text-primary transition-colors shrink-0"
+                title={citation.title || "Official Regulation Source"}
+              >
+                <span>Official Source</span>
+                <ExternalLink className="size-2.5" />
+              </a>
+            )}
+          </div>
+
+          {q.type === "enum" && q.options ? (
+            optionsCount <= 4 ? (
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                {q.options.map((opt) => (
+                  <button
+                    key={opt}
+                    type="button"
+                    onClick={() => onAnswer(q.key, opt)}
+                    className={`rounded-md border px-3 py-1.5 text-xs transition-all ${
+                      current === opt
+                        ? "border-primary bg-primary/10 text-primary font-semibold shadow-sm ring-1 ring-primary/40"
+                        : "hover:bg-accent text-muted-foreground bg-background"
+                    }`}
+                  >
+                    {opt.replaceAll("_", " ")}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="space-y-2 pt-1">
+                {isLongEnum && (
+                  <div className="relative">
+                    <Search className="absolute left-2.5 top-2.5 size-3.5 text-muted-foreground" />
+                    <input
+                      type="text"
+                      value={searchVal}
+                      onChange={(e) => setEnumSearch((prev) => ({ ...prev, [q.key]: e.target.value }))}
+                      placeholder={`Search ${optionsCount} options...`}
+                      className="h-8 w-full rounded-md border bg-background pl-8 pr-3 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring font-normal"
+                    />
+                  </div>
+                )}
+
+                <div className="flex flex-wrap gap-1.5 max-h-48 overflow-y-auto pr-1">
+                  {filteredOptions.map((opt) => (
+                    <button
+                      key={opt}
+                      type="button"
+                      onClick={() => onAnswer(q.key, opt)}
+                      className={`rounded-md border px-2.5 py-1 text-xs transition-all ${
+                        current === opt
+                          ? "border-primary bg-primary/10 text-primary font-semibold shadow-sm ring-1 ring-primary/40"
+                          : "hover:bg-accent text-muted-foreground bg-background"
+                      }`}
+                    >
+                      {opt.replaceAll("_", " ")}
+                    </button>
+                  ))}
+                  {filteredOptions.length === 0 && (
+                    <p className="text-[11px] text-muted-foreground py-1">No options match &quot;{searchVal}&quot;</p>
+                  )}
+                </div>
+              </div>
+            )
+          ) : q.type === "boolean" ? (
+            <div className="flex gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => onAnswer(q.key, true)}
+                className={`flex-1 rounded-md border py-2 text-xs font-medium transition-all ${
+                  current === true
+                    ? "border-emerald-500 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 font-bold shadow-sm ring-1 ring-emerald-500/40"
+                    : "hover:bg-accent text-muted-foreground bg-background"
+                }`}
+              >
+                Yes
+              </button>
+              <button
+                type="button"
+                onClick={() => onAnswer(q.key, false)}
+                className={`flex-1 rounded-md border py-2 text-xs font-medium transition-all ${
+                  current === false
+                    ? "border-rose-500 bg-rose-500/10 text-rose-700 dark:text-rose-300 font-bold shadow-sm ring-1 ring-rose-500/40"
+                    : "hover:bg-accent text-muted-foreground bg-background"
+                }`}
+              >
+                No
+              </button>
+            </div>
+          ) : (
+            <div className="flex gap-2 pt-1">
+              <input
+                type={q.type === "integer" ? "number" : isDateInput ? "date" : "text"}
+                value={String(current ?? "")}
+                onChange={(e) => handleChange(q.key, e.target.value)}
+                onBlur={() => handleSubmit(q.key)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    handleSubmit(q.key);
+                  }
+                }}
+                placeholder={`Enter ${q.key.replaceAll("_", " ")}...`}
+                className="h-9 flex-1 rounded-md border bg-background px-3 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring font-normal"
+              />
+              <Button onClick={() => handleSubmit(q.key)} className="text-xs h-9 px-3.5 font-medium shrink-0">
+                Save
+              </Button>
+            </div>
+          )}
+        </div>
+
+        {state.answers[q.key] !== undefined && (
+          <div className="flex items-center gap-1 text-[11px] text-emerald-500 dark:text-emerald-400 font-medium pt-2">
+            <Check className="size-3.5 shrink-0" />
+            <span>Answer Saved</span>
+          </div>
+        )}
+      </Card>
+    );
+  }
 
   return (
     <div className="space-y-6">
-      {/* Progress & Section Tabs */}
-      <div className="space-y-2">
+      {/* Progress & Section Tabs Header */}
+      <div className="space-y-3">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div>
-            <h3 className="text-sm font-semibold text-foreground">Intake Questionnaire & Screening</h3>
+            <h3 className="text-sm font-semibold text-foreground">Intake Questionnaire &amp; Screening</h3>
             <p className="mt-0.5 text-xs text-muted-foreground">
               {state.progress.answered} of {state.progress.total} total fields completed ({pct}%)
-              {state.progress.complete ? " · Ready for Section 214(b) Eligibility Evaluation" : ""}
+              {state.progress.complete ? " · Ready for Eligibility Evaluation" : ""}
             </p>
           </div>
 
-          {sectionKeys.length > 1 && (
-            <Badge tone={pct === 100 ? "success" : "default"} className="self-start text-xs font-medium">
-              {sectionKeys.length} Structured Modules
+          <div className="flex items-center gap-2 self-start sm:self-auto">
+            {sectionKeys.length > 1 && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setViewAll((prev) => !prev)}
+                className="h-7 text-xs gap-1 px-2.5 text-muted-foreground hover:text-foreground"
+              >
+                {viewAll ? <LayoutGrid className="size-3.5" /> : <ListChecks className="size-3.5" />}
+                {viewAll ? "Tabbed View" : "View All Questions"}
+              </Button>
+            )}
+            <Badge tone={pct === 100 ? "success" : "default"} className="text-xs font-medium">
+              {sectionKeys.length} Modules ({pct}% complete)
             </Badge>
-          )}
+          </div>
         </div>
 
         <div className="h-2 overflow-hidden rounded-full bg-muted">
@@ -247,9 +449,9 @@ export function IntakeStep({ state, profile, onAnswer }: IntakeStepProps) {
         </div>
       </div>
 
-      {/* Section Navigation Tabs */}
-      {sectionKeys.length > 1 && (
-        <div className="flex flex-wrap gap-1.5 border-b pb-3">
+      {/* Section Navigation Tabs (Tabbed Mode) */}
+      {!viewAll && sectionKeys.length > 1 && (
+        <div className="flex flex-wrap gap-2 border-b pb-3">
           {sectionKeys.map((secName) => {
             const secQuestions = sectionsMap.get(secName) || [];
             const answeredInSec = secQuestions.filter((q) => state.answers[q.key] !== undefined).length;
@@ -260,21 +462,21 @@ export function IntakeStep({ state, profile, onAnswer }: IntakeStepProps) {
               <button
                 key={secName}
                 onClick={() => setActiveSection(secName)}
-                className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-all ${
                   isActive
-                    ? "bg-primary text-primary-foreground shadow-sm font-semibold"
+                    ? "bg-primary text-primary-foreground shadow-sm font-semibold ring-2 ring-primary/30"
                     : isSecComplete
                       ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800"
-                      : "bg-muted/60 hover:bg-muted text-muted-foreground"
+                      : "bg-amber-50 dark:bg-amber-950/30 text-amber-900 dark:text-amber-200 border border-amber-200 dark:border-amber-800 hover:bg-amber-100/50"
                 }`}
               >
                 {isSecComplete ? (
                   <Check className="size-3 text-emerald-500 shrink-0" />
                 ) : (
-                  <span className="size-2 rounded-full bg-primary/40 shrink-0" />
+                  <AlertCircle className="size-3 text-amber-500 shrink-0" />
                 )}
                 <span>{secName}</span>
-                <span className="opacity-75 text-[10px]">
+                <span className={`text-[10px] font-semibold ${isSecComplete ? "opacity-80" : "text-amber-700 dark:text-amber-300"}`}>
                   ({answeredInSec}/{secQuestions.length})
                 </span>
               </button>
@@ -283,16 +485,57 @@ export function IntakeStep({ state, profile, onAnswer }: IntakeStepProps) {
         </div>
       )}
 
-      {/* Questions grid for active section */}
+      {/* Questions Rendering */}
       {state.questions.length === 0 ? (
         <p className="text-sm text-muted-foreground">No questions available for this scope.</p>
+      ) : viewAll ? (
+        /* View All Mode: Render all sections sequentially */
+        <div className="space-y-8">
+          {sectionKeys.map((secName) => {
+            const secQuestions = sectionsMap.get(secName) || [];
+            const secAnswered = secQuestions.filter((q) => state.answers[q.key] !== undefined).length;
+            const isComplete = secQuestions.length > 0 && secAnswered === secQuestions.length;
+
+            return (
+              <div key={secName} className="space-y-3">
+                <div className="flex items-center justify-between border-b pb-2">
+                  <h4 className="text-sm font-bold text-foreground flex items-center gap-2">
+                    <span>{secName}</span>
+                    <Badge tone={isComplete ? "success" : "warning"} className="text-[10px]">
+                      {secAnswered} / {secQuestions.length} completed
+                    </Badge>
+                  </h4>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-4">
+                  {secQuestions.map(renderQuestion)}
+                </div>
+              </div>
+            );
+          })}
+
+          {/* View All Bottom Completion Banner */}
+          <div className="rounded-[var(--radius)] border p-4 bg-muted/30 flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div className="text-xs text-muted-foreground">
+              {state.progress.complete
+                ? "All questions answered across all modules."
+                : `${state.progress.total - state.progress.answered} required question(s) remaining.`}
+            </div>
+            {state.progress.complete && onProceedToEligibility && (
+              <Button onClick={onProceedToEligibility} className="gap-2 text-xs bg-emerald-600 hover:bg-emerald-700 text-white">
+                <CheckCircle2 className="size-4" /> Proceed to Eligibility Screening <ArrowRight className="size-4" />
+              </Button>
+            )}
+          </div>
+        </div>
       ) : (
+        /* Tabbed Active Section Mode */
         <div className="space-y-4">
           <div className="flex items-center justify-between pb-1">
             <h4 className="text-sm font-semibold text-foreground flex items-center gap-2">
               <span>{currentSectionKey}</span>
-              <Badge tone="muted" className="text-[10px] font-normal">
-                {currentQuestions.filter((q) => state.answers[q.key] !== undefined).length} / {currentQuestions.length} completed
+              <Badge tone={isCurrentSectionComplete ? "success" : "warning"} className="text-[10px] font-normal">
+                {currentAnsweredCount} / {currentQuestions.length} completed
               </Badge>
             </h4>
 
@@ -319,183 +562,56 @@ export function IntakeStep({ state, profile, onAnswer }: IntakeStepProps) {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-4">
-            {currentQuestions.map((q) => {
-              const current = (state.answers[q.key] ?? drafts[q.key]) as string | number | boolean | undefined;
-              const citation = q.citation as { title?: string; url?: string } | null | undefined;
-              const hasOptions = q.type === "enum" && q.options && q.options.length > 0;
-              const optionsCount = q.options?.length ?? 0;
-              const isLongEnum = hasOptions && optionsCount > 5;
-              const searchVal = enumSearch[q.key] || "";
-              const filteredOptions = isLongEnum && searchVal
-                ? q.options!.filter((opt) => opt.toLowerCase().includes(searchVal.toLowerCase()))
-                : q.options || [];
-
-              const isDateInput =
-                q.type === "date" ||
-                q.key.includes("date") ||
-                q.key.includes("expiry") ||
-                q.key.includes("expiration") ||
-                q.key.includes("dob") ||
-                q.key.includes("birth") ||
-                q.prompt.toLowerCase().includes("yyyy-mm-dd") ||
-                q.prompt.toLowerCase().includes("date of birth") ||
-                q.prompt.toLowerCase().includes("expiry date");
-
-              const isFullWidth = hasOptions && optionsCount > 8;
-
-              return (
-                <Card
-                  key={q.key}
-                  className={`p-4 flex flex-col justify-between transition-all hover:border-primary/40 bg-card shadow-sm ${
-                    isFullWidth ? "col-span-1 md:col-span-2" : "col-span-1"
-                  }`}
-                >
-                  <div className="space-y-2">
-                    <div className="flex items-start justify-between gap-2">
-                      <label className="text-xs font-semibold leading-snug text-foreground">
-                        {q.prompt}
-                        {q.required !== false && <span className="ml-1 text-[var(--color-danger)] font-bold">*</span>}
-                      </label>
-
-                      {citation?.url && (
-                        <a
-                          href={citation.url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="inline-flex items-center gap-1 text-[10px] text-muted-foreground hover:text-primary transition-colors shrink-0"
-                          title={citation.title || "Official Regulation Source"}
-                        >
-                          <span>Official Source</span>
-                          <ExternalLink className="size-2.5" />
-                        </a>
-                      )}
-                    </div>
-
-                    {q.type === "enum" && q.options ? (
-                      optionsCount <= 4 ? (
-                        <div className="flex flex-wrap gap-1.5 pt-1">
-                          {q.options.map((opt) => (
-                            <button
-                              key={opt}
-                              type="button"
-                              onClick={() => onAnswer(q.key, opt)}
-                              className={`rounded-md border px-3 py-1.5 text-xs transition-all ${
-                                current === opt
-                                  ? "border-primary bg-primary/10 text-primary font-semibold shadow-sm ring-1 ring-primary/40"
-                                  : "hover:bg-accent text-muted-foreground bg-background"
-                              }`}
-                            >
-                              {opt.replaceAll("_", " ")}
-                            </button>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="space-y-2 pt-1">
-                          {isLongEnum && (
-                            <div className="relative">
-                              <Search className="absolute left-2.5 top-2.5 size-3.5 text-muted-foreground" />
-                              <input
-                                type="text"
-                                value={searchVal}
-                                onChange={(e) => setEnumSearch((prev) => ({ ...prev, [q.key]: e.target.value }))}
-                                placeholder="Filter options..."
-                                className="h-8 w-full rounded-md border bg-background pl-8 pr-3 text-xs outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                              />
-                            </div>
-                          )}
-                          <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto pr-1">
-                            {filteredOptions.map((opt) => (
-                              <button
-                                key={opt}
-                                type="button"
-                                onClick={() => onAnswer(q.key, opt)}
-                                className={`rounded-md border px-2.5 py-1 text-xs transition-all ${
-                                  current === opt
-                                    ? "border-primary bg-primary/10 text-primary font-semibold shadow-sm ring-1 ring-primary/40"
-                                    : "hover:bg-accent text-muted-foreground bg-background"
-                                }`}
-                              >
-                                {opt.replaceAll("_", " ")}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      )
-                    ) : q.type === "boolean" ? (
-                      <div className="grid grid-cols-2 gap-2 pt-1">
-                        {[true, false].map((v) => (
-                          <button
-                            key={String(v)}
-                            type="button"
-                            onClick={() => onAnswer(q.key, v)}
-                            className={`rounded-md border py-2 text-xs font-medium transition-all ${
-                              current === v
-                                ? "border-primary bg-primary/10 text-primary font-semibold shadow-sm ring-1 ring-primary/40"
-                                : "hover:bg-accent text-muted-foreground bg-background"
-                            }`}
-                          >
-                            {v ? "Yes" : "No"}
-                          </button>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="flex gap-2 pt-1">
-                        <input
-                          type={q.type === "integer" ? "number" : isDateInput ? "date" : "text"}
-                          value={String(current ?? "")}
-                          onChange={(e) => handleChange(q.key, e.target.value)}
-                          onBlur={() => handleSubmit(q.key)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") {
-                              e.preventDefault();
-                              handleSubmit(q.key);
-                            }
-                          }}
-                          placeholder={`Enter ${q.key.replaceAll("_", " ")}...`}
-                          className="h-9 flex-1 rounded-md border bg-background px-3 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring font-normal"
-                        />
-                        <Button onClick={() => handleSubmit(q.key)} className="text-xs h-9 px-3.5 font-medium shrink-0">
-                          Save
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-
-                  {state.answers[q.key] !== undefined && (
-                    <div className="flex items-center gap-1 text-[11px] text-emerald-500 dark:text-emerald-400 font-medium pt-2">
-                      <Check className="size-3.5 shrink-0" />
-                      <span>Answer Saved</span>
-                    </div>
-                  )}
-                </Card>
-              );
-            })}
+            {currentQuestions.map(renderQuestion)}
           </div>
 
-          {/* Section navigation footer */}
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 border-t pt-4 mt-6">
+          {/* Section Navigation Wizard Footer */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 border-t pt-5 mt-6">
             {currentSectionIndex > 0 ? (
               <Button
                 variant="outline"
                 onClick={() => setActiveSection(sectionKeys[currentSectionIndex - 1])}
-                className="h-8 text-xs gap-1.5 px-3 justify-center sm:justify-start"
+                className="h-9 text-xs gap-1.5 px-3 justify-center sm:justify-start"
               >
                 <ChevronLeft className="size-3.5" /> Previous: {sectionKeys[currentSectionIndex - 1]}
               </Button>
             ) : <div />}
 
-            {currentSectionIndex < sectionKeys.length - 1 ? (
-              <Button
-                onClick={() => setActiveSection(sectionKeys[currentSectionIndex + 1])}
-                className="h-8 text-xs gap-1.5 px-3 justify-center sm:justify-start"
-              >
-                Next: {sectionKeys[currentSectionIndex + 1]} <ChevronRight className="size-3.5" />
-              </Button>
-            ) : (
-              <Badge tone={state.progress.complete ? "success" : "default"} className="text-xs py-1 px-3 justify-center">
-                {state.progress.complete ? "All Sections Complete — Ready for Eligibility Step" : "Fill remaining required fields"}
-              </Badge>
-            )}
+            <div className="flex flex-col sm:flex-row items-center gap-2">
+              {!isCurrentSectionComplete && (
+                <span className="text-xs text-amber-600 dark:text-amber-400 font-medium">
+                  {remainingInCurrent} question(s) left in this module
+                </span>
+              )}
+
+              {currentSectionIndex < sectionKeys.length - 1 ? (
+                <Button
+                  onClick={() => setActiveSection(sectionKeys[currentSectionIndex + 1])}
+                  className="h-9 text-xs gap-1.5 px-4 font-semibold shadow-sm justify-center sm:justify-start"
+                >
+                  Continue to: {sectionKeys[currentSectionIndex + 1]} <ChevronRight className="size-3.5" />
+                </Button>
+              ) : state.progress.complete ? (
+                <Button
+                  onClick={onProceedToEligibility}
+                  className="h-9 text-xs gap-1.5 px-4 font-semibold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
+                >
+                  <CheckCircle2 className="size-4" /> All Sections Complete — Proceed to Eligibility <ArrowRight className="size-4" />
+                </Button>
+              ) : firstIncompleteSection && firstIncompleteSection !== currentSectionKey ? (
+                <Button
+                  variant="outline"
+                  onClick={() => setActiveSection(firstIncompleteSection)}
+                  className="h-9 text-xs gap-1.5 px-4 text-amber-700 border-amber-300 hover:bg-amber-50"
+                >
+                  Jump to Missing Fields in: {firstIncompleteSection} <ArrowRight className="size-3.5" />
+                </Button>
+              ) : (
+                <Badge tone="default" className="text-xs py-1.5 px-3">
+                  Please answer all required questions
+                </Badge>
+              )}
+            </div>
           </div>
         </div>
       )}

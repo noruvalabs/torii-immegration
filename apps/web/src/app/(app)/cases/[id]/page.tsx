@@ -459,7 +459,15 @@ export default function CaseDetailPage() {
             />
           )}
           {!stepError && activeStep === "intake" && intake && (
-            <IntakeStep state={intake} profile={profile || user} onAnswer={handleAnswer} />
+            <IntakeStep
+              state={intake}
+              profile={profile || user}
+              onAnswer={handleAnswer}
+              onProceedToEligibility={() => {
+                setError(null);
+                setActiveStep("eligibility");
+              }}
+            />
           )}
           {!stepError && activeStep === "eligibility" && (
             <EligibilityStep
@@ -467,6 +475,12 @@ export default function CaseDetailPage() {
               loading={submitting}
               onEvaluate={handleEvaluateEligibility}
               jurisdictionCode={caseData?.reference ? caseData.reference.split("-")[0] : "JP"}
+              jurisdictionName={caseData?.scope_label ? caseData.scope_label.split("·")[0]?.trim() : undefined}
+              visaCategoryName={caseData?.scope_label || caseData?.visa_category_code || ""}
+              onReturnToIntake={() => {
+                setError(null);
+                setActiveStep("intake");
+              }}
             />
           )}
           {!stepError && activeStep === "checklist" && (

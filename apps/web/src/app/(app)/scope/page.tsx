@@ -248,52 +248,78 @@ export default function ScopePage() {
       )}
 
       {/* Combined residence + nationality */}
+      {/* Combined residence + nationality in 2 columns */}
       {step === "identity" && (
         <div className="space-y-6">
-          <div className="space-y-3">
-            <h3 className="text-sm font-medium text-muted-foreground">
-              Country of residence
-            </h3>
-            {(user?.current_country || geoData?.detected_country) && (
-              <div className="rounded-[var(--radius)] border border-primary/20 bg-primary/5 px-4 py-3 text-sm">
-                <span className="font-medium">
-                  {user?.current_country ? "From profile / auto-detected:" : "Auto-detected:"}
-                </span>{" "}
-                <span className="text-muted-foreground">
-                  {residenceLabel} ({residenceCountry})
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+            {/* Column 1: Country of residence */}
+            <div className="space-y-3 rounded-xl border bg-card p-5 shadow-xs flex flex-col">
+              <div>
+                <h3 className="text-sm font-semibold text-foreground">
+                  Country of Residence
+                </h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Where you currently reside or have legal residency.
+                </p>
+              </div>
+
+              {(user?.current_country || geoData?.detected_country) && (
+                <div className="rounded-[var(--radius)] border border-primary/20 bg-primary/5 px-3 py-2 text-xs flex items-center justify-between">
+                  <span className="font-medium text-foreground">
+                    {user?.current_country ? "Profile / auto-detected:" : "Auto-detected:"}
+                  </span>
+                  <span className="font-semibold text-primary">
+                    {residenceLabel} ({residenceCountry})
+                  </span>
+                </div>
+              )}
+
+              <CountrySelector
+                mode="grid"
+                valueType="code"
+                value={residenceCountry}
+                onChange={(code) => setResidenceCountry(code)}
+                gridMaxHeightClass="max-h-72"
+                gridColsClass="grid-cols-1 sm:grid-cols-2"
+              />
+            </div>
+
+            {/* Column 2: Nationality */}
+            <div className="space-y-3 rounded-xl border bg-card p-5 shadow-xs flex flex-col">
+              <div>
+                <h3 className="text-sm font-semibold text-foreground">
+                  Nationality (Passport Country)
+                </h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Some visas differ by nationality. We use this to tailor official requirements.
+                </p>
+              </div>
+
+              <div className="rounded-[var(--radius)] border border-muted bg-muted/40 px-3 py-2 text-xs flex items-center justify-between">
+                <span className="font-medium text-muted-foreground">
+                  Selected Passport:
+                </span>
+                <span className="font-semibold text-foreground">
+                  {nationalityLabel} ({nationality})
                 </span>
               </div>
-            )}
-            <CountrySelector
-              mode="grid"
-              valueType="code"
-              value={residenceCountry}
-              onChange={(code) => setResidenceCountry(code)}
-              gridMaxHeightClass="max-h-56"
-            />
-          </div>
 
-          <div className="space-y-3">
-            <h3 className="text-sm font-medium text-muted-foreground">
-              Nationality (passport country)
-            </h3>
-            <p className="text-xs text-muted-foreground">
-              Some visas differ by nationality. We use this to tailor official requirements.
-            </p>
-            <CountrySelector
-              mode="grid"
-              valueType="code"
-              value={nationality}
-              onChange={(code) => setNationality(code)}
-              gridMaxHeightClass="max-h-56"
-            />
+              <CountrySelector
+                mode="grid"
+                valueType="code"
+                value={nationality}
+                onChange={(code) => setNationality(code)}
+                gridMaxHeightClass="max-h-72"
+                gridColsClass="grid-cols-1 sm:grid-cols-2"
+              />
+            </div>
           </div>
 
           <button
             type="button"
             onClick={() => void confirmIdentity()}
             disabled={!residenceCountry || !nationality || savingIdentity}
-            className="inline-flex w-full items-center justify-center gap-2 rounded-[var(--radius)] bg-primary px-4 py-3 text-sm font-medium text-primary-foreground transition-colors hover:opacity-90 disabled:pointer-events-none disabled:opacity-50"
+            className="inline-flex w-full items-center justify-center gap-2 rounded-[var(--radius)] bg-primary px-4 py-3.5 text-sm font-medium text-primary-foreground transition-colors hover:opacity-90 disabled:pointer-events-none disabled:opacity-50 shadow-sm"
           >
             {savingIdentity ? (
               <>

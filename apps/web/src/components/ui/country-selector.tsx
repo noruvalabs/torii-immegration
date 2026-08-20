@@ -14,6 +14,7 @@ export type CountrySelectorProps = {
   disabled?: boolean;
   className?: string;
   gridMaxHeightClass?: string;
+  gridColsClass?: string;
   id?: string;
   autoFocus?: boolean;
 };
@@ -27,6 +28,7 @@ export function CountrySelector({
   disabled = false,
   className,
   gridMaxHeightClass = "max-h-56",
+  gridColsClass = "sm:grid-cols-2",
   id,
 }: CountrySelectorProps) {
   const [search, setSearch] = useState("");
@@ -119,7 +121,8 @@ export function CountrySelector({
         ) : (
           <div
             className={cn(
-              "grid gap-2 overflow-y-auto pr-1 sm:grid-cols-2",
+              "grid gap-2 overflow-y-auto pr-1",
+              gridColsClass,
               gridMaxHeightClass,
             )}
           >

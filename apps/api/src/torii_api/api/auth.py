@@ -198,7 +198,42 @@ async def google_login(
 ) -> TokenOut:
     """Sign in or register using Google Social Login."""
     import secrets
-    email = (payload.email or "google-user@example.com").strip().lower()
+    import httpx
+
+    email = payload.email.strip().lower() if payload.email else None
+    name = payload.name
+    avatar_url = payload.avatar_url
+
+    if payload.token:
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as http_client:
+                res = await http_client.get(
+                    "https://www.googleapis.com/oauth2/v3/userinfo",
+                    headers={"Authorization": f"Bearer {payload.token}"},
+                )
+                if res.status_code == 200:
+                    g_data = res.json()
+                    email = (g_data.get("email") or email or "").strip().lower() or None
+                    name = g_data.get("name") or name
+                    avatar_url = g_data.get("picture") or avatar_url
+                else:
+                    res_id = await http_client.get(
+                        f"https://oauth2.googleapis.com/tokeninfo?id_token={payload.token}"
+                    )
+                    if res_id.status_code == 200:
+                        g_data = res_id.json()
+                        email = (g_data.get("email") or email or "").strip().lower() or None
+                        name = g_data.get("name") or name
+                        avatar_url = g_data.get("picture") or avatar_url
+        except Exception:
+            pass
+
+    if not email:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Google authentication failed: email address not received from provider.",
+        )
+
     user = await _find_user_by_email_or_username(session, email)
     if user is None:
         base_username = email.split("@")[0]
@@ -216,8 +251,8 @@ async def google_login(
             role="applicant",
             is_active=True,
             email_verified=True,
-            full_name=payload.name or base_username.capitalize(),
-            avatar_url=payload.avatar_url,
+            full_name=name or base_username.capitalize(),
+            avatar_url=avatar_url,
         )
         session.add(user)
         await session.flush()
@@ -226,10 +261,10 @@ async def google_login(
         if not user.is_active:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account is disabled")
         user.email_verified = True
-        if payload.avatar_url and not user.avatar_url:
-            user.avatar_url = payload.avatar_url
-        if payload.name and not user.full_name:
-            user.full_name = payload.name
+        if avatar_url and not user.avatar_url:
+            user.avatar_url = avatar_url
+        if name and not user.full_name:
+            user.full_name = name
         await session.flush()
 
     token = create_access_token(user_id=user.id, role=user.role, settings=settings)

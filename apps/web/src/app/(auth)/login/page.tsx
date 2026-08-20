@@ -58,25 +58,23 @@ export default function LoginPage() {
     }
   }
 
-  async function handleGoogleLogin() {
+  function handleGoogleLogin() {
     setError(null);
-    setGoogleSubmitting(true);
-    try {
-      // In production or demo, connects to Google OAuth endpoint
-      const email = emailOrUsername.includes("@")
-        ? emailOrUsername
-        : `google.user.${Math.floor(Math.random() * 1000)}@torii.legal`;
-      const res = await googleLogin({
-        email: email,
-        name: "Google Applicant",
-      });
-      setAuth(res.access_token, res.user);
-      router.push(res.user.role === "applicant" ? "/dashboard" : "/admin");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Google sign-in failed");
-    } finally {
-      setGoogleSubmitting(false);
+    const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+    if (!clientId) {
+      setError(
+        lang === "ja"
+          ? "Google ログインは現在設定されていません（NEXT_PUBLIC_GOOGLE_CLIENT_ID が未設定）。メールアドレスとパスワードでログインしてください。"
+          : "Google Social Sign-In is not configured yet (missing NEXT_PUBLIC_GOOGLE_CLIENT_ID in .env). Please sign in with your email and password.",
+      );
+      return;
     }
+    setGoogleSubmitting(true);
+    const redirectUri = `${window.location.origin}/callback/google`;
+    const scope = encodeURIComponent("openid email profile");
+    const state = encodeURIComponent(window.location.pathname);
+    const googleAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=token&scope=${scope}&state=${state}&prompt=select_account`;
+    window.location.href = googleAuthUrl;
   }
 
   return (

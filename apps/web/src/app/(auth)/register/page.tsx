@@ -44,24 +44,23 @@ export default function RegisterPage() {
     }
   }
 
-  async function handleGoogleLogin() {
+  function handleGoogleLogin() {
     setError(null);
-    setGoogleSubmitting(true);
-    try {
-      const gEmail = email.includes("@")
-        ? email
-        : `google.user.${Math.floor(Math.random() * 1000)}@torii.legal`;
-      const res = await googleLogin({
-        email: gEmail,
-        name: username || "Google Applicant",
-      });
-      setAuth(res.access_token, res.user);
-      router.push(res.user.role === "applicant" ? "/dashboard" : "/admin");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Google sign-up failed");
-    } finally {
-      setGoogleSubmitting(false);
+    const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+    if (!clientId) {
+      setError(
+        lang === "ja"
+          ? "Google 登録は現在設定されていません（NEXT_PUBLIC_GOOGLE_CLIENT_ID が未設定）。メールアドレスとパスワードで登録してください。"
+          : "Google Social Sign-In is not configured yet (missing NEXT_PUBLIC_GOOGLE_CLIENT_ID in .env). Please create your account with email and password.",
+      );
+      return;
     }
+    setGoogleSubmitting(true);
+    const redirectUri = `${window.location.origin}/callback/google`;
+    const scope = encodeURIComponent("openid email profile");
+    const state = encodeURIComponent(window.location.pathname);
+    const googleAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=token&scope=${scope}&state=${state}&prompt=select_account`;
+    window.location.href = googleAuthUrl;
   }
 
   return (
