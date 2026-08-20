@@ -14,11 +14,14 @@ import {
   Sparkles,
   Layers,
   ArrowRight,
+  Coins,
+  Zap,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { useAuth } from "@/lib/auth-context";
+import { useCredits } from "@/lib/credits-context";
 import { draftDocument } from "@/lib/api/ai";
 import type { Case } from "./types";
 
@@ -317,9 +320,12 @@ type DocType = "cover" | "schedule" | "reason" | "financial" | "form" | "full";
 
 export function PacketStep({ packet, caseData, loading, onBuild, onSubmit }: PacketStepProps) {
   const { token } = useAuth();
+  const { balance, unlockCase } = useCredits();
   const [activeDoc, setActiveDoc] = useState<DocType>("cover");
   const [copiedDoc, setCopiedDoc] = useState(false);
   const [downloadingPdf, setDownloadingPdf] = useState<string | null>(null);
+  const [isUnlocking, setIsUnlocking] = useState(false);
+  const [unlocked, setUnlocked] = useState(Boolean(caseData.is_entitled));
   const [aiDrafts, setAiDrafts] = useState<Partial<Record<DocType, string>>>({});
   const [aiDrafting, setAiDrafting] = useState<DocType | null>(null);
   const [customInstructions, setCustomInstructions] = useState("");
@@ -381,10 +387,22 @@ export function PacketStep({ packet, caseData, loading, onBuild, onSubmit }: Pac
   ) {
     const activeToken = token || (typeof window !== "undefined" ? localStorage.getItem("torii_token") : null);
     if (!activeToken) return;
+
+    if (endpoint === "dossier-packet" && !unlocked) {
+      setIsUnlocking(true);
+      const res = await unlockCase(caseData.id);
+      setIsUnlocking(false);
+      if (!res.success) return;
+      setUnlocked(true);
+    }
+
     setDownloadingPdf(endpoint);
     try {
-      const res = await fetch(`/backend/v1/cases/${caseData.id}/pdf/${endpoint}`, {
-        headers: { Authorization: `Bearer ${activeToken}` },
+      const res = await fetch(`/backend/v1/cases/${caseData.id}/export/${endpoint}?format=base64`, {
+        headers: {
+          Authorization: `Bearer ${activeToken}`,
+          Accept: "application/json",
+        },
       });
       if (!res.ok) {
         const errDetail = await res.text();
@@ -392,11 +410,26 @@ export function PacketStep({ packet, caseData, loading, onBuild, onSubmit }: Pac
         alert(`Failed to download PDF (${res.status}): ${errDetail || res.statusText}`);
         return;
       }
-      const blob = await res.blob();
+      if (res.status === 204) {
+        throw new Error("Received empty response (204). Please check browser extension settings.");
+      }
+      const data = await res.json();
+      if (!data?.data_base64) {
+        throw new Error("Invalid server response: missing PDF data.");
+      }
+      const binaryString = atob(data.data_base64);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      const blob = new Blob([bytes], { type: "application/pdf" });
+      if (blob.size === 0) {
+        throw new Error("Generated PDF file is empty (0 bytes).");
+      }
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = defaultFilename;
+      link.download = data.filename || defaultFilename;
       document.body.appendChild(link);
       link.click();
       setTimeout(() => {
@@ -405,6 +438,7 @@ export function PacketStep({ packet, caseData, loading, onBuild, onSubmit }: Pac
       }, 10000);
     } catch (err) {
       console.error("PDF download error:", err);
+      alert(err instanceof Error ? err.message : "PDF download failed. Please try again.");
     } finally {
       setDownloadingPdf(null);
     }
