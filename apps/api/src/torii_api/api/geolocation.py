@@ -5,7 +5,10 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
+from sqlalchemy import select
+
 from torii_api.auth.deps import CurrentUserDep, SessionDep
+from torii_api.db.models import CaseAction, Jurisdiction, VisaCategory
 from torii_api.services.geolocation import (
     detect_country_from_ip,
     get_application_types,
@@ -88,8 +91,42 @@ async def list_destinations(
 
 
 @router.get("/visa-types", response_model=list[VisaTypeOut])
-async def list_visa_types() -> list[VisaTypeOut]:
-    """List all supported visa types."""
+async def list_visa_types(
+    destination: str | None = None,
+    session: SessionDep = None,
+) -> list[VisaTypeOut]:
+    """List supported visa types, dynamically tailored if destination is given."""
+    if destination and session:
+        jurisdiction = await session.scalar(
+            select(Jurisdiction).where(Jurisdiction.code == destination.upper())
+        )
+        if jurisdiction:
+            categories = await session.scalars(
+                select(VisaCategory)
+                .where(VisaCategory.jurisdiction_id == jurisdiction.id)
+                .where(VisaCategory.is_live.is_(True) | VisaCategory.research_enabled.is_(True))
+                .order_by(VisaCategory.code)
+            )
+            cat_list = list(categories.all())
+            if cat_list:
+                result = []
+                seen_codes = set()
+                for c in cat_list:
+                    if c.code in seen_codes:
+                        continue
+                    seen_codes.add(c.code)
+                    desc = (
+                        "Employment or business activities"
+                        if c.code in ("work", "h1b")
+                        else "Study at an educational institution"
+                        if c.code in ("student", "f1")
+                        else "Short-term stay for tourism or visiting"
+                        if c.code in ("tourist", "b1b2")
+                        else c.name
+                    )
+                    result.append(VisaTypeOut(code=c.code, name=c.name, description=desc))
+                return result
+
     visa_types = get_visa_types()
     return [VisaTypeOut(**vt) for vt in visa_types]
 
@@ -102,8 +139,46 @@ async def list_nationalities() -> list[DestinationOut]:
 
 
 @router.get("/application-types", response_model=list[ApplicationTypeOut])
-async def list_application_types() -> list[ApplicationTypeOut]:
-    """List all application types (new/renewal)."""
+async def list_application_types(
+    destination: str | None = None,
+    session: SessionDep = None,
+) -> list[ApplicationTypeOut]:
+    """List application types, dynamically tailored if destination is given."""
+    if destination and session:
+        jurisdiction = await session.scalar(
+            select(Jurisdiction).where(Jurisdiction.code == destination.upper())
+        )
+        if jurisdiction:
+            actions = await session.scalars(
+                select(CaseAction)
+                .where(CaseAction.jurisdiction_id == jurisdiction.id)
+                .where(CaseAction.is_live.is_(True) | CaseAction.research_enabled.is_(True))
+                .order_by(CaseAction.code)
+            )
+            action_list = list(actions.all())
+            if action_list:
+                result = []
+                seen_codes = set()
+                # Deduplicate aliases: if 'new' is present, don't repeat 'new_application'
+                has_new = any(a.code == "new" for a in action_list)
+                for a in action_list:
+                    if a.code == "new_application" and has_new:
+                        continue
+                    if a.code in seen_codes:
+                        continue
+                    seen_codes.add(a.code)
+                    desc = (
+                        "First-time application"
+                        if a.code in ("new", "new_application")
+                        else "Extend or renew existing visa"
+                        if a.code == "renewal"
+                        else "Switch to a different status (e.g. student to work)"
+                        if a.code == "change_of_status"
+                        else a.name
+                    )
+                    result.append(ApplicationTypeOut(code=a.code, name=a.name, description=desc))
+                return result
+
     app_types = get_application_types()
     return [ApplicationTypeOut(**at) for at in app_types]
 

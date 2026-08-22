@@ -14,7 +14,7 @@ type EligibilityStepProps = {
   jurisdictionCode?: string;
   jurisdictionName?: string;
   visaCategoryName?: string;
-  onReturnToIntake?: () => void;
+  onReturnToIntake?: (targetKey?: string) => void;
 };
 
 export function EligibilityStep({
@@ -146,7 +146,7 @@ export function EligibilityStep({
                 <div className="pt-2">
                   <Button
                     size="sm"
-                    onClick={onReturnToIntake}
+                    onClick={() => onReturnToIntake()}
                     className="h-7 text-xs gap-1.5 bg-blue-600 hover:bg-blue-700 text-white font-medium"
                   >
                     Return to Intake to Answer Missing Fields <ArrowRight className="size-3.5" />
@@ -179,7 +179,7 @@ export function EligibilityStep({
             </div>
           </div>
 
-          {/* 4 Pillars Summary Cards (Dynamic by Category) */}
+          {/* 4 Pillars Summary Cards (Dynamic by Jurisdiction & Category) */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             <Card className="p-3.5 bg-card">
               <div className="flex items-start gap-2.5">
@@ -212,10 +212,26 @@ export function EligibilityStep({
                   </h5>
                   <p className="text-[11px] text-muted-foreground mt-0.5">
                     {isStudent
-                      ? "Unconditional offer, valid CAS statement, and licensed education sponsor credentials."
+                      ? code === "JP"
+                        ? "Admission certificate, COE, or enrollment verification from a recognized Japanese institution."
+                        : code === "US"
+                          ? "Form I-20 issued by SEVP-certified institution and valid SEVIS registration."
+                          : code === "GB" || code === "UK"
+                            ? "Unconditional offer, valid CAS statement, and licensed education sponsor credentials."
+                            : "Admission offer and verified educational sponsor credentials."
                       : isWork
-                        ? "Valid Certificate of Sponsorship (CoS), licensed employer details, and eligible role."
-                        : "Genuine sightseeing or visitor purpose with concrete schedule matching stay duration."}
+                        ? code === "JP"
+                          ? "Employment contract / job offer in Japan with authorized activities and remuneration."
+                          : code === "US"
+                            ? "Approved Form I-129 / LCA and qualifying specialty occupation employment offer."
+                            : code === "GB" || code === "UK"
+                              ? "Valid Certificate of Sponsorship (CoS), licensed employer details, and eligible role."
+                              : "Valid employment offer, sponsoring employer details, and qualifying role duties."
+                        : code === "JP"
+                          ? "Genuine sightseeing or visitor purpose with concrete itinerary matching stay duration."
+                          : code === "US"
+                            ? "Nonimmigrant visitor intent with strong home-country ties under INA Section 214(b)."
+                            : "Genuine sightseeing or visitor purpose with concrete schedule matching stay duration."}
                   </p>
                 </div>
               </div>
@@ -236,10 +252,26 @@ export function EligibilityStep({
                   </h5>
                   <p className="text-[11px] text-muted-foreground mt-0.5">
                     {isStudent
-                      ? "Bank statements demonstrating 28-day maintenance living costs (£1,334/mo London, £1,023 outside) plus tuition."
+                      ? code === "JP"
+                        ? "Financial proof (bank balance or sponsor income ~¥120,000/mo or ¥1.5M–¥2M/yr) plus tuition."
+                        : code === "US"
+                          ? "Proof of sufficient liquid funds ($ USD) or Form I-134 affidavit covering tuition and living costs."
+                          : code === "GB" || code === "UK"
+                            ? "Bank statements demonstrating 28-day maintenance living costs (£1,334/mo London, £1,023 outside) plus tuition."
+                            : "Bank statements or financial sponsorship covering tuition and living expenses."
                       : isWork
-                        ? "Verified salary meeting minimum threshold and required maintenance funds covering initial stay."
-                        : "Verified bank statements, stable employment, or official sponsor guarantee covering expenses."}
+                        ? code === "JP"
+                          ? "Remuneration meeting statutory standards (JPY) and resident tax / pension compliance."
+                          : code === "US"
+                            ? "Prevailing wage compliance and approved employer compensation package ($ USD)."
+                            : code === "GB" || code === "UK"
+                              ? "Verified salary meeting minimum threshold and required maintenance funds covering initial stay."
+                              : "Verified salary meeting minimum threshold and maintenance funds covering stay."
+                        : code === "JP"
+                          ? "Sufficient travel funds (JPY) covering intended stay and return travel tickets."
+                          : code === "US"
+                            ? "Demonstrated financial solvency to cover trip expenses without unauthorized employment."
+                            : "Verified bank statements, stable employment, or official sponsor guarantee covering expenses."}
                   </p>
                 </div>
               </div>
@@ -255,7 +287,11 @@ export function EligibilityStep({
                     Immigration Compliance
                   </h5>
                   <p className="text-[11px] text-muted-foreground mt-0.5">
-                    Clean compliance history with no active entry bans, overstays, or disqualifying grounds.
+                    {code === "JP"
+                      ? "Immigration Control Act compliance: clean record, no overstays or bans, tax/pension paid."
+                      : code === "US"
+                        ? "Statutory admissibility under INA 212(a): clean record, no overstays or unauthorized work."
+                        : "Clean compliance history with no active entry bans, overstays, or disqualifying grounds."}
                   </p>
                 </div>
               </div>
@@ -323,7 +359,7 @@ export function EligibilityStep({
                             <div className="pt-1">
                               <button
                                 type="button"
-                                onClick={onReturnToIntake}
+                                onClick={() => onReturnToIntake(finding.key)}
                                 className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-600 dark:text-blue-400 hover:underline"
                               >
                                 Answer in Intake <ArrowRight className="size-3" />

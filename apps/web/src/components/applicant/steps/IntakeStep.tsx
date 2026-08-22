@@ -23,6 +23,7 @@ type IntakeStepProps = {
   profile: User | null;
   onAnswer: (key: string, value: unknown) => void;
   onProceedToEligibility?: () => void;
+  targetKey?: string | null;
 };
 
 /** Map profile country names to common ISO codes used in intake enums. */
@@ -160,11 +161,12 @@ function getProfileValueForQuestion(key: string, prompt: string, profile: User):
   return null;
 }
 
-export function IntakeStep({ state, profile, onAnswer, onProceedToEligibility }: IntakeStepProps) {
+export function IntakeStep({ state, profile, onAnswer, onProceedToEligibility, targetKey }: IntakeStepProps) {
   const [drafts, setDrafts] = useState<Record<string, unknown>>({});
   const [activeSection, setActiveSection] = useState<string | null>(null);
   const [enumSearch, setEnumSearch] = useState<Record<string, string>>({});
   const [viewAll, setViewAll] = useState<boolean>(false);
+  const [highlightedKey, setHighlightedKey] = useState<string | null>(null);
 
   const onAnswerRef = useRef(onAnswer);
   onAnswerRef.current = onAnswer;
@@ -215,9 +217,23 @@ export function IntakeStep({ state, profile, onAnswer, onProceedToEligibility }:
     return sectionKeys[0] ?? null;
   }, [sectionKeys, sectionsMap, state.answers]);
 
-  const currentSectionKey = activeSection && sectionKeys.includes(activeSection)
-    ? activeSection
-    : (firstIncompleteSection ?? sectionKeys[0] ?? "General Details");
+  // Switch to targetKey section if requested
+  useEffect(() => {
+    if (targetKey) {
+      const q = state.questions.find((item) => item.key === targetKey);
+      if (q && q.section && sectionKeys.includes(q.section)) {
+        setActiveSection(q.section);
+        setHighlightedKey(targetKey);
+      }
+    }
+  }, [targetKey, state.questions, sectionKeys]);
+
+  const currentSectionKey = useMemo(() => {
+    if (activeSection && sectionKeys.includes(activeSection)) {
+      return activeSection;
+    }
+    return firstIncompleteSection ?? sectionKeys[0] ?? "General Details";
+  }, [activeSection, sectionKeys, firstIncompleteSection]);
 
   const currentSectionIndex = sectionKeys.indexOf(currentSectionKey);
 
@@ -251,7 +267,7 @@ export function IntakeStep({ state, profile, onAnswer, onProceedToEligibility }:
 
   function renderQuestion(q: (typeof state.questions)[number]) {
     const current = (state.answers[q.key] ?? drafts[q.key]) as string | number | boolean | undefined;
-    const citation = q.citation as { title?: string; url?: string } | null | undefined;
+    const citation = q.citation as { title?: string; url?: string; authority?: string } | null | undefined;
     const hasOptions = q.type === "enum" && q.options && q.options.length > 0;
     const optionsCount = q.options?.length ?? 0;
     const isLongEnum = hasOptions && optionsCount > 5;
@@ -273,12 +289,21 @@ export function IntakeStep({ state, profile, onAnswer, onProceedToEligibility }:
 
     const isFullWidth = hasOptions && optionsCount > 8;
 
+    const isHighlighted = q.key === highlightedKey;
+
     return (
       <Card
         key={q.key}
+        id={`question-${q.key}`}
         className={`p-4 flex flex-col justify-between transition-all hover:border-primary/40 bg-card shadow-sm ${
           isFullWidth ? "col-span-1 md:col-span-2" : "col-span-1"
-        } ${state.answers[q.key] === undefined ? "border-amber-500/30 ring-1 ring-amber-500/10" : ""}`}
+        } ${
+          isHighlighted
+            ? "ring-2 ring-blue-500 border-blue-500 bg-blue-500/5 shadow-md"
+            : state.answers[q.key] === undefined
+              ? "border-amber-500/30 ring-1 ring-amber-500/10"
+              : ""
+        }`}
       >
         <div className="space-y-2">
           <div className="flex items-start justify-between gap-2">
@@ -292,8 +317,8 @@ export function IntakeStep({ state, profile, onAnswer, onProceedToEligibility }:
                 href={citation.url}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex items-center gap-1 text-[10px] text-muted-foreground hover:text-primary transition-colors shrink-0"
-                title={citation.title || "Official Regulation Source"}
+                className="inline-flex items-center gap-1 text-[10px] font-medium text-primary bg-primary/5 hover:bg-primary/10 border border-primary/20 px-1.5 py-0.5 rounded transition-all shrink-0"
+                title={`${citation.title || "Official Statutory Standard"} (${citation.authority || "Official Government Authority"})`}
               >
                 <span>Official Source</span>
                 <ExternalLink className="size-2.5" />
@@ -560,6 +585,24 @@ export function IntakeStep({ state, profile, onAnswer, onProceedToEligibility }:
               )}
             </div>
           </div>
+
+          {isCurrentSectionComplete && !state.progress.complete && firstIncompleteSection && (
+            <div className="rounded-lg border border-blue-500/30 bg-blue-500/5 p-3.5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs text-blue-950 dark:text-blue-200">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="size-4 text-emerald-500 shrink-0" />
+                <span>
+                  <strong>{currentSectionKey}</strong> is complete ({currentAnsweredCount}/{currentQuestions.length}). There are {state.progress.total - state.progress.answered} remaining question(s) in other modules.
+                </span>
+              </div>
+              <Button
+                size="sm"
+                onClick={() => setActiveSection(firstIncompleteSection)}
+                className="h-7 text-xs gap-1 bg-blue-600 hover:bg-blue-700 text-white font-medium shrink-0"
+              >
+                Go to: {firstIncompleteSection} <ArrowRight className="size-3" />
+              </Button>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-4">
             {currentQuestions.map(renderQuestion)}

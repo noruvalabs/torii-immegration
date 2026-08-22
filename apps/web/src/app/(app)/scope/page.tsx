@@ -8,6 +8,8 @@ import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/lib/auth-context";
 import {
   getAllGeoData,
+  getVisaTypes,
+  getApplicationTypes,
   type GeoData,
   type Destination,
   type VisaType,
@@ -42,6 +44,9 @@ export default function ScopePage() {
 
   const [submitting, setSubmitting] = useState(false);
   const [createdCase, setCreatedCase] = useState<CaseResult | null>(null);
+  const [dynamicVisaTypes, setDynamicVisaTypes] = useState<VisaType[] | null>(null);
+  const [dynamicAppTypes, setDynamicAppTypes] = useState<ApplicationType[] | null>(null);
+  const [loadingOptions, setLoadingOptions] = useState(false);
 
   // Seed residence/nationality once from profile — never re-run after Continue saves profile.
   const seededFromProfileRef = useRef(false);
@@ -79,6 +84,34 @@ export default function ScopePage() {
       cancelled = true;
     };
   }, [token]);
+
+  useEffect(() => {
+    if (!selectedDestination) {
+      setDynamicVisaTypes(null);
+      setDynamicAppTypes(null);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        setLoadingOptions(true);
+        const [vTypes, aTypes] = await Promise.all([
+          getVisaTypes(selectedDestination.code),
+          getApplicationTypes(selectedDestination.code),
+        ]);
+        if (cancelled) return;
+        setDynamicVisaTypes(vTypes);
+        setDynamicAppTypes(aTypes);
+      } catch {
+        // Fallback to static geoData options
+      } finally {
+        if (!cancelled) setLoadingOptions(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedDestination]);
 
   function goBack() {
     setError(null);
@@ -197,8 +230,8 @@ export default function ScopePage() {
   }
 
   const destinations = geoData?.destinations ?? [];
-  const visaTypes = geoData?.visa_types ?? [];
-  const appTypes = geoData?.application_types ?? [];
+  const visaTypes = dynamicVisaTypes ?? geoData?.visa_types ?? [];
+  const appTypes = dynamicAppTypes ?? geoData?.application_types ?? [];
   const nationalities = geoData?.nationalities ?? [];
   const residenceLabel = matchCountry(residenceCountry).name;
   const nationalityLabel = matchCountry(nationality).name;
@@ -210,7 +243,7 @@ export default function ScopePage() {
           Start a new application
         </h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Apply for a visa from {geoData?.detected_country.country_name ?? "Bangladesh"} to Japan, United States, or United Kingdom.
+          Apply for a visa from {residenceLabel || geoData?.detected_country?.country_name || "your residence"} to Japan, United States, or United Kingdom.
         </p>
       </div>
 
@@ -374,9 +407,14 @@ export default function ScopePage() {
           <h3 className="text-sm font-medium text-muted-foreground">
             Visa type for <strong>{selectedDestination?.flag} {selectedDestination?.name}</strong>
           </h3>
-          {visaTypes.length === 0 ? (
+          {loadingOptions ? (
+            <div className="py-8 text-center">
+              <Loader2 className="mx-auto size-6 animate-spin text-muted-foreground" />
+              <p className="mt-2 text-xs text-muted-foreground">Loading available visa types…</p>
+            </div>
+          ) : visaTypes.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              No visa types available.
+              No visa types available for this destination.
             </p>
           ) : (
             visaTypes.map((v) => (
@@ -402,21 +440,32 @@ export default function ScopePage() {
             <ArrowLeft className="size-3.5" /> Back
           </button>
           <h3 className="text-sm font-medium text-muted-foreground">
-            Application type
+            Application type for <strong>{selectedDestination?.flag} {selectedDestination?.name}</strong>
           </h3>
-          {appTypes.map((a) => (
-            <button
-              key={a.code}
-              onClick={() => selectAppType(a)}
-              className="flex w-full items-center gap-4 rounded-[var(--radius)] border bg-card p-4 text-left transition-colors hover:bg-accent"
-            >
-              <div className="flex-1">
-                <p className="font-medium">{a.name}</p>
-                <p className="text-xs text-muted-foreground">{a.description}</p>
-              </div>
-              <ArrowRight className="size-4 text-muted-foreground" />
-            </button>
-          ))}
+          {loadingOptions ? (
+            <div className="py-8 text-center">
+              <Loader2 className="mx-auto size-6 animate-spin text-muted-foreground" />
+              <p className="mt-2 text-xs text-muted-foreground">Loading available application types…</p>
+            </div>
+          ) : appTypes.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              No application types available for this destination.
+            </p>
+          ) : (
+            appTypes.map((a) => (
+              <button
+                key={a.code}
+                onClick={() => selectAppType(a)}
+                className="flex w-full items-center gap-4 rounded-[var(--radius)] border bg-card p-4 text-left transition-colors hover:bg-accent"
+              >
+                <div className="flex-1">
+                  <p className="font-medium">{a.name}</p>
+                  <p className="text-xs text-muted-foreground">{a.description}</p>
+                </div>
+                <ArrowRight className="size-4 text-muted-foreground" />
+              </button>
+            ))
+          )}
         </div>
       )}
 

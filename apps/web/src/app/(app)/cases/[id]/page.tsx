@@ -47,6 +47,7 @@ export default function CaseDetailPage() {
   const [stepError, setStepError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [profile, setProfile] = useState<User | null>(user);
+  const [intakeTargetKey, setIntakeTargetKey] = useState<string | null>(null);
   const stepInitializedRef = useRef(false);
 
   const loadCase = useCallback(async () => {
@@ -85,7 +86,32 @@ export default function CaseDetailPage() {
     } else if (activeStep === "intake") {
       getIntake(token, caseId).then(setIntake).catch(() => setStepError("Intake questionnaire is not available for this case scope."));
     } else if (activeStep === "eligibility") {
-      getEligibility(token, caseId).then(setEligibility).catch(() => { setEligibility(null); setStepError(null); });
+      getEligibility(token, caseId)
+        .then((res) => {
+          setEligibility(res);
+          // If cached snapshot is out_of_scope (missing answers), auto-re-evaluate with fresh answers
+          if (res && res.result === "out_of_scope") {
+            void evaluateEligibility(token, caseId)
+              .then((fresh) => {
+                setEligibility(fresh);
+                void refreshGuidance();
+              })
+              .catch(() => {});
+          }
+        })
+        .catch(() => {
+          // If not evaluated yet, auto-evaluate
+          setSubmitting(true);
+          evaluateEligibility(token, caseId)
+            .then((fresh) => {
+              setEligibility(fresh);
+              void refreshGuidance();
+            })
+            .catch(() => {
+              setEligibility(null);
+            })
+            .finally(() => setSubmitting(false));
+        });
     } else if (activeStep === "checklist") {
       getChecklist(token, caseId).then(setChecklist).catch(() => setStepError("Checklist is not available for this case scope."));
     } else if (activeStep === "forms") {
@@ -463,9 +489,11 @@ export default function CaseDetailPage() {
               state={intake}
               profile={profile || user}
               onAnswer={handleAnswer}
+              targetKey={intakeTargetKey}
               onProceedToEligibility={() => {
                 setError(null);
                 setActiveStep("eligibility");
+                void handleEvaluateEligibility();
               }}
             />
           )}
@@ -477,8 +505,9 @@ export default function CaseDetailPage() {
               jurisdictionCode={caseData?.reference ? caseData.reference.split("-")[0] : "JP"}
               jurisdictionName={caseData?.scope_label ? caseData.scope_label.split("·")[0]?.trim() : undefined}
               visaCategoryName={caseData?.scope_label || caseData?.visa_category_code || ""}
-              onReturnToIntake={() => {
+              onReturnToIntake={(targetKey) => {
                 setError(null);
+                setIntakeTargetKey(targetKey || null);
                 setActiveStep("intake");
               }}
             />

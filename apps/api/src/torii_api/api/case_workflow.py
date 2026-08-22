@@ -750,23 +750,67 @@ async def download_application_form_pdf(
     format: str | None = Query(default=None),
 ) -> Response:
     from torii_api.services.pdf_generator import (
+        generate_generic_visa_application_pdf,
         generate_japan_work_renewal_pdf,
         generate_official_japan_visa_form_pdf,
+        generate_uk_visa_application_pdf,
+        generate_us_visa_application_pdf,
     )
 
     case = await _owned_case(session, case_id, user)
     answers = dict(case.intake_answers or {})
-    _, _, _, scope_label = await _scope_label(session, case)
+    j_code, v_code, a_code, scope_label = await _scope_label(session, case)
+    j_code_upper = (j_code or (case.reference.split("-")[0] if case.reference else "JP")).upper()
+
+    photo_data = user.avatar_url or answers.get("photo") or answers.get("applicant_photo") or answers.get("passport_photo")
+
     safe_ref = "".join(
         c for c in (case.reference or f"CASE-{case.id}") if c.isalnum() or c in ("-", "_", ".")
     )
     filename = f"{safe_ref or f'Case-{case_id}'}_Application_Form.pdf"
-    pdf_bytes = generate_official_japan_visa_form_pdf(
-        case.reference or f"CASE-{case.id}",
-        answers,
-        destination_label=scope_label or "Japan",
-        applicant_email=case.applicant_email or user.email,
-    )
+
+    if j_code_upper in ("UK", "GB"):
+        pdf_bytes = generate_uk_visa_application_pdf(
+            case.reference or f"UK-{case.id}",
+            answers,
+            destination_label=scope_label or "United Kingdom",
+            applicant_email=case.applicant_email or user.email,
+            photo_data=photo_data,
+        )
+    elif j_code_upper == "US":
+        pdf_bytes = generate_us_visa_application_pdf(
+            case.reference or f"US-{case.id}",
+            answers,
+            destination_label=scope_label or "United States",
+            applicant_email=case.applicant_email or user.email,
+            photo_data=photo_data,
+        )
+    elif j_code_upper == "JP":
+        if a_code == "new_application" or (v_code == "tourist" and a_code not in ("renewal", "change_of_status")):
+            pdf_bytes = generate_official_japan_visa_form_pdf(
+                case.reference or f"JP-{case.id}",
+                answers,
+                destination_label=scope_label or "Japan",
+                applicant_email=case.applicant_email or user.email,
+                photo_data=photo_data,
+            )
+        else:
+            pdf_bytes = generate_japan_work_renewal_pdf(
+                case.reference or f"JP-{case.id}",
+                answers,
+                destination_label=scope_label or "Japan",
+                photo_data=photo_data,
+                action_code=a_code,
+            )
+    else:
+        pdf_bytes = generate_generic_visa_application_pdf(
+            case.reference or f"CASE-{case.id}",
+            answers,
+            destination_label=scope_label or "Visa Application",
+            applicant_email=case.applicant_email or user.email,
+            photo_data=photo_data,
+        )
+
     if format in ("base64", "json") or "application/json" in request.headers.get("accept", ""):
         return JSONResponse(
             content={

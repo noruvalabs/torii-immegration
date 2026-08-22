@@ -31,7 +31,7 @@ type FormsStepProps = {
   reference?: string;
 };
 
-function getFormMetadata(code: string): { title: string; purpose: string; officialUrl?: string } {
+function getFormMetadata(code: string, fallbackTitle?: string, fallbackUrl?: string): { title: string; purpose: string; officialUrl?: string } {
   const c = code.toLowerCase();
   if (c === "i901" || c.includes("i901") || c.includes("sevis_fee")) {
     return {
@@ -68,24 +68,45 @@ function getFormMetadata(code: string): { title: string; purpose: string; offici
       officialUrl: "https://ceac.state.gov/genniv/",
     };
   }
+  if (c === "change_of_status" || c.includes("change_of_status")) {
+    return {
+      title: "Application for Change of Status of Residence (在留資格変更許可申請書)",
+      purpose: "Official statutory application form submitted to the Immigration Services Agency of Japan (出入国在留管理庁) to change residence status.",
+      officialUrl: "https://www.moj.go.jp/isa/applications/procedures/16-2.html",
+    };
+  }
+  if (c === "extension_of_stay" || c.includes("extension")) {
+    return {
+      title: "Application for Extension of Period of Stay — Applicant Part (在留期間更新許可申請書)",
+      purpose: "Official statutory application form submitted to the Immigration Services Agency of Japan (出入国在留管理庁) to extend authorized stay.",
+      officialUrl: "https://www.moj.go.jp/isa/applications/procedures/16-1.html",
+    };
+  }
+  if (c === "student_visa_application" || c.includes("student_visa") || c.includes("mofa")) {
+    return {
+      title: "Visa Application Form to Enter Japan (日本国査証申請書)",
+      purpose: "Official Ministry of Foreign Affairs (MOFA) entry visa application filed with a Japanese Embassy or Consulate overseas.",
+      officialUrl: "https://www.mofa.go.jp/j_info/visit/visa/index.html",
+    };
+  }
   if (c === "isa_application" || c.includes("isa") || c.includes("16-1") || c.includes("16-3")) {
     return {
-      title: "Application for Extension / Change of Status (在留期間更新・資格変更許可申請書)",
+      title: "Application for Certificate of Eligibility / Status (在留諸申請書)",
       purpose: "Standard official application form submitted to the Immigration Services Agency of Japan (出入国在留管理庁).",
       officialUrl: "https://www.moj.go.jp/isa/applications/procedures/16-1.html",
     };
   }
   if (c.includes("institution") || c.includes("school")) {
     return {
-      title: "Application for Extension — Institution Part (所属機関等作成用)",
+      title: "Application — Educational Institution Part (所属機関等作成用)",
       purpose: "Section completed and sealed by the sponsoring Japanese educational institution or university verifying enrollment and attendance.",
       officialUrl: "https://www.moj.go.jp/isa/applications/procedures/16-1.html",
     };
   }
   if (c.includes("organization") || c.includes("employer")) {
     return {
-      title: "Application for Extension — Employer Part (所属機関等作成用 技人国)",
-      purpose: "Section completed by the sponsoring employer in Japan declaring corporate category, remuneration, and contract terms.",
+      title: "Application — Sponsoring Organization / Employer Part (所属機関等作成用)",
+      purpose: "Section completed by the sponsoring employer or host organization in Japan declaring corporate category, remuneration, and contract terms.",
       officialUrl: "https://www.moj.go.jp/isa/applications/procedures/16-3.html",
     };
   }
@@ -104,8 +125,9 @@ function getFormMetadata(code: string): { title: string; purpose: string; offici
     };
   }
   return {
-    title: `Official Application Form (${code})`,
+    title: fallbackTitle || `Official Application Form (${code})`,
     purpose: "Official government immigration filing form required by published statutory regulations.",
+    officialUrl: fallbackUrl,
   };
 }
 
@@ -254,7 +276,11 @@ export function FormsStep({
           </div>
 
           {forms.map((form) => {
-            const meta = getFormMetadata(form.form_code);
+            const meta = getFormMetadata(
+              form.form_code,
+              typeof form.citation?.title === "string" ? form.citation.title : undefined,
+              typeof form.citation?.url === "string" ? form.citation.url : undefined,
+            );
             const hasFilledFields = Object.keys(form.filled_fields).length > 0;
             const displayFields = hasFilledFields
               ? form.filled_fields

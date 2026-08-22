@@ -5,259 +5,292 @@ scope:
   is_live: false
   research_enabled: true
   name: United Kingdom Standard Visitor — research-driven scope
-
-# Research-enabled scope: is_live=false means the live tables stay empty and this
-# case is served by the live-research pipeline (ScopeResearch), so requirements are
-# re-verified against current gov.uk sources. This static pack is retained as a
-# parse/citation-gate reference only; it is never promoted to live.
-
 stages:
-  - sequence: 1
-    code: applicant_filing
-    actor: applicant
-
+- sequence: 1
+  code: applicant_filing
+  actor: applicant
 intake:
   questions:
-    - key: full_name
-      prompt: What is your full name as it appears on your passport?
-      type: string
-      min_length: 2
-      max_length: 200
-    - key: nationality
-      prompt: What is your nationality (passport country)?
-      type: enum
-      options:
-        - BD
-        - IN
-        - PK
-        - LK
-        - NP
-        - JP
-        - CN
-        - PH
-        - VN
-        - US
-        - CA
-        - AU
-        - DE
-        - FR
-        - other
-    - key: passport_number
-      prompt: What is your passport number?
-      type: string
-      min_length: 5
-      max_length: 32
-    - key: passport_expiry
-      prompt: When does your passport expire?
-      type: string
-      required: true
-    - key: current_residence_country
-      prompt: Which country do you currently live in?
-      type: enum
-      options:
-        - Japan
-        - United States
-        - United Kingdom
-        - Canada
-        - Australia
-        - Germany
-        - France
-        - Singapore
-        - South Korea
-        - United Arab Emirates
-        - Saudi Arabia
-        - Bangladesh
-        - India
-        - other
-    - key: purpose_of_visit
-      prompt: What is the main purpose of your visit to the UK?
-      type: enum
-      options:
-        - tourism
-        - visiting_family
-        - business
-        - other
-    - key: intended_length_of_stay_months
-      prompt: How many months do you plan to stay in the UK?
-      type: integer
-      min_value: 1
-      max_value: 6
-    - key: has_sufficient_funds
-      prompt: >
-        Can you show evidence of sufficient funds to support yourself during the
-        visit without working or using public funds?
-      type: boolean
-    - key: has_employment_or_ties
-      prompt: >
-        Do you have employment, study, or family ties in your home country that
-        you plan to return to?
-      type: boolean
+  - key: full_name
+    prompt: What is your full name as it appears on your passport?
+    type: string
+    min_length: 2
+    max_length: 200
+    citation:
+      authority: UK Visas and Immigration (UKVI / Home Office)
+      title: Official UK Immigration Rules & Guidance (GOV.UK)
+      url: https://www.gov.uk/browse/visas-immigration
+  - key: nationality
+    prompt: What is your nationality (passport country)?
+    type: enum
+    options:
+    - BD
+    - IN
+    - PK
+    - LK
+    - NP
+    - JP
+    - CN
+    - PH
+    - VN
+    - US
+    - CA
+    - AU
+    - DE
+    - FR
+    - other
+    citation:
+      authority: UK Visas and Immigration (UKVI / Home Office)
+      title: Official UK Immigration Rules & Guidance (GOV.UK)
+      url: https://www.gov.uk/browse/visas-immigration
+  - key: passport_number
+    prompt: What is your passport number?
+    type: string
+    min_length: 5
+    max_length: 32
+    citation:
+      authority: UK Visas and Immigration (UKVI / Home Office)
+      title: Official UK Immigration Rules & Guidance (GOV.UK)
+      url: https://www.gov.uk/browse/visas-immigration
+  - key: passport_expiry
+    prompt: When does your passport expire?
+    type: string
+    required: true
+    citation:
+      authority: UK Visas and Immigration (UKVI / Home Office)
+      title: Official UK Immigration Rules & Guidance (GOV.UK)
+      url: https://www.gov.uk/browse/visas-immigration
+  - key: current_residence_country
+    prompt: Which country do you currently live in?
+    type: enum
+    options:
+    - Japan
+    - United States
+    - United Kingdom
+    - Canada
+    - Australia
+    - Germany
+    - France
+    - Singapore
+    - South Korea
+    - United Arab Emirates
+    - Saudi Arabia
+    - Bangladesh
+    - India
+    - other
+    citation:
+      authority: UK Visas and Immigration (UKVI / Home Office)
+      title: Official UK Immigration Rules & Guidance (GOV.UK)
+      url: https://www.gov.uk/browse/visas-immigration
+  - key: purpose_of_visit
+    prompt: What is the main purpose of your visit to the UK?
+    type: enum
+    options:
+    - tourism
+    - visiting_family
+    - business
+    - other
+    citation:
+      authority: UK Visas and Immigration (UKVI / Home Office)
+      title: Official UK Immigration Rules & Guidance (GOV.UK)
+      url: https://www.gov.uk/browse/visas-immigration
+  - key: intended_length_of_stay_months
+    prompt: How many months do you plan to stay in the UK?
+    type: integer
+    min_value: 1
+    max_value: 6
+    citation:
+      authority: UK Visas and Immigration (UKVI / Home Office)
+      title: Official UK Immigration Rules & Guidance (GOV.UK)
+      url: https://www.gov.uk/browse/visas-immigration
+  - key: has_sufficient_funds
+    prompt: 'Can you show evidence of sufficient funds to support yourself during
+      the visit without working or using public funds?
 
+      '
+    type: boolean
+    citation:
+      authority: UK Visas and Immigration (UKVI / Home Office)
+      title: Official UK Immigration Rules & Guidance (GOV.UK)
+      url: https://www.gov.uk/browse/visas-immigration
+  - key: has_employment_or_ties
+    prompt: 'Do you have employment, study, or family ties in your home country that
+      you plan to return to?
+
+      '
+    type: boolean
+    citation:
+      authority: UK Visas and Immigration (UKVI / Home Office)
+      title: Official UK Immigration Rules & Guidance (GOV.UK)
+      url: https://www.gov.uk/browse/visas-immigration
 eligibility:
   rules:
-    - key: passport_expiry
-      operator: not_empty
-      value: null
-      failure_status: fail
-      message: You must hold a valid passport for your Standard Visitor application.
-      citation:
-        authority: UK Government
-        title: Standard visitor visa — Documents you must provide
-        url: https://www.gov.uk/standard-visitor-visa/documents-you-must-provide
-        source_version: "2026-04"
-    - key: intended_length_of_stay_months
-      operator: max
-      value: 6
-      failure_status: at_risk
-      message: >
-        A Standard Visitor visa normally allows a stay of up to 6 months. Longer
-        stays may require a different visa route.
-      citation:
-        authority: UK Government
-        title: Standard visitor visa — When you can visit the UK
-        url: https://www.gov.uk/standard-visitor-visa/when-you-can-visit-the-uk
-        source_version: "2026-04"
-    - key: has_sufficient_funds
-      operator: equals
-      value: true
-      failure_status: at_risk
-      message: >
-        You must be able to fund your visit without working or claiming public
-        funds. Prepare bank statements covering the intended stay.
-      citation:
-        authority: UK Government
-        title: Standard visitor visa — Eligibility
-        url: https://www.gov.uk/standard-visitor-visa/eligibility
-        source_version: "2026-04"
-    - key: has_employment_or_ties
-      operator: equals
-      value: true
-      failure_status: at_risk
-      message: >
-        You must show you intend to leave the UK at the end of your visit.
-        Evidence of employment or ties to your home country strengthens this.
-      citation:
-        authority: UK Government
-        title: Standard visitor visa — Eligibility
-        url: https://www.gov.uk/standard-visitor-visa/eligibility
-        source_version: "2026-04"
-
-documents:
-  items:
-    - code: passport
-      name:
-        en: Valid passport
-      how_to_obtain:
-        en: Use your current valid passport biographic page.
-      why_required:
-        en: Confirms your identity and travel document details.
-      is_required: true
-      citation:
-        authority: UK Government
-        title: Standard visitor visa — Documents you must provide
-        url: https://www.gov.uk/standard-visitor-visa/documents-you-must-provide
-        source_version: "2026-04"
-    - code: proof_of_funds
-      name:
-        en: Evidence of finances (e.g. bank statements)
-      how_to_obtain:
-        en: >
-          Request bank statements or other financial evidence showing you can
-          support yourself during the visit.
-      why_required:
-        en: Shows you can fund the visit without working or using public funds.
-      is_required: true
-      citation:
-        authority: UK Government
-        title: Standard visitor visa — Documents you must provide
-        url: https://www.gov.uk/standard-visitor-visa/documents-you-must-provide
-        source_version: "2026-04"
-    - code: employment_evidence
-      name:
-        en: Evidence of employment or ties to your home country
-      how_to_obtain:
-        en: >
-          Obtain a letter from your employer, school, or other proof of ties
-          showing you intend to return after your visit.
-      why_required:
-        en: Demonstrates you are likely to leave the UK at the end of your stay.
-      is_required: true
-      citation:
-        authority: UK Government
-        title: Standard visitor visa — Documents you must provide
-        url: https://www.gov.uk/standard-visitor-visa/documents-you-must-provide
-        source_version: "2026-04"
-    - code: accommodation_evidence
-      name:
-        en: Evidence of where you will stay
-      how_to_obtain:
-        en: >
-          Provide hotel bookings, a letter of invitation, or proof of where you
-          will be staying in the UK.
-      why_required:
-        en: Confirms your accommodation plans during the visit.
-      is_required: true
-      citation:
-        authority: UK Government
-        title: Standard visitor visa — Documents you must provide
-        url: https://www.gov.uk/standard-visitor-visa/documents-you-must-provide
-        source_version: "2026-04"
-    - code: travel_itinerary
-      name:
-        en: Travel itinerary
-      how_to_obtain:
-        en: >
-          Prepare a plan of your intended travel dates and activities in the UK.
-      why_required:
-        en: Supports the purpose and length of your visit.
-      is_required: true
-      citation:
-        authority: UK Government
-        title: Standard visitor visa — Documents you must provide
-        url: https://www.gov.uk/standard-visitor-visa/documents-you-must-provide
-        source_version: "2026-04"
-
-forms:
-  - code: standard_visitor_visa_application
-    version: "2026-04"
-    official_title: Standard Visitor visa online application
+  - key: passport_expiry
+    operator: not_empty
+    value: null
+    failure_status: fail
+    message: You must hold a valid passport for your Standard Visitor application.
     citation:
       authority: UK Government
-      title: Standard visitor visa — Apply
-      url: https://www.gov.uk/standard-visitor-visa/apply
-      source_version: "2026-04"
-    field_mappings:
-      - form_field: applicant.full_name
-        answer_key: full_name
-        required: true
-      - form_field: applicant.nationality
-        answer_key: nationality
-        required: true
-      - form_field: applicant.passport_number
-        answer_key: passport_number
-        required: true
-      - form_field: applicant.passport_expiry
-        answer_key: passport_expiry
-        required: true
-      - form_field: visit.purpose
-        answer_key: purpose_of_visit
-        required: true
-      - form_field: visit.length_of_stay_months
-        answer_key: intended_length_of_stay_months
-        required: true
-      - form_field: applicant.residence_country
-        answer_key: current_residence_country
-        required: true
+      title: Standard visitor visa — Documents you must provide
+      url: https://www.gov.uk/standard-visitor-visa/documents-you-must-provide
+      source_version: 2026-04
+  - key: intended_length_of_stay_months
+    operator: max
+    value: 6
+    failure_status: at_risk
+    message: 'A Standard Visitor visa normally allows a stay of up to 6 months. Longer
+      stays may require a different visa route.
 
-fees: []
+      '
+    citation:
+      authority: UK Government
+      title: Standard visitor visa — When you can visit the UK
+      url: https://www.gov.uk/standard-visitor-visa/when-you-can-visit-the-uk
+      source_version: 2026-04
+  - key: has_sufficient_funds
+    operator: equals
+    value: true
+    failure_status: at_risk
+    message: 'You must be able to fund your visit without working or claiming public
+      funds. Prepare bank statements covering the intended stay.
 
-sources:
-  - title: Standard visitor visa
-    url: https://www.gov.uk/standard-visitor-visa
-    retrieved: "2026-08-03"
-  - title: Standard visitor visa — Documents you must provide
-    url: https://www.gov.uk/standard-visitor-visa/documents-you-must-provide
-    retrieved: "2026-08-03"
-  - title: Standard visitor visa — Apply
+      '
+    citation:
+      authority: UK Government
+      title: Standard visitor visa — Eligibility
+      url: https://www.gov.uk/standard-visitor-visa/eligibility
+      source_version: 2026-04
+  - key: has_employment_or_ties
+    operator: equals
+    value: true
+    failure_status: at_risk
+    message: 'You must show you intend to leave the UK at the end of your visit. Evidence
+      of employment or ties to your home country strengthens this.
+
+      '
+    citation:
+      authority: UK Government
+      title: Standard visitor visa — Eligibility
+      url: https://www.gov.uk/standard-visitor-visa/eligibility
+      source_version: 2026-04
+documents:
+  items:
+  - code: passport
+    name:
+      en: Valid passport
+    how_to_obtain:
+      en: Use your current valid passport biographic page.
+    why_required:
+      en: Confirms your identity and travel document details.
+    is_required: true
+    citation:
+      authority: UK Government
+      title: Standard visitor visa — Documents you must provide
+      url: https://www.gov.uk/standard-visitor-visa/documents-you-must-provide
+      source_version: 2026-04
+  - code: proof_of_funds
+    name:
+      en: Evidence of finances (e.g. bank statements)
+    how_to_obtain:
+      en: 'Request bank statements or other financial evidence showing you can support
+        yourself during the visit.
+
+        '
+    why_required:
+      en: Shows you can fund the visit without working or using public funds.
+    is_required: true
+    citation:
+      authority: UK Government
+      title: Standard visitor visa — Documents you must provide
+      url: https://www.gov.uk/standard-visitor-visa/documents-you-must-provide
+      source_version: 2026-04
+  - code: employment_evidence
+    name:
+      en: Evidence of employment or ties to your home country
+    how_to_obtain:
+      en: 'Obtain a letter from your employer, school, or other proof of ties showing
+        you intend to return after your visit.
+
+        '
+    why_required:
+      en: Demonstrates you are likely to leave the UK at the end of your stay.
+    is_required: true
+    citation:
+      authority: UK Government
+      title: Standard visitor visa — Documents you must provide
+      url: https://www.gov.uk/standard-visitor-visa/documents-you-must-provide
+      source_version: 2026-04
+  - code: accommodation_evidence
+    name:
+      en: Evidence of where you will stay
+    how_to_obtain:
+      en: 'Provide hotel bookings, a letter of invitation, or proof of where you will
+        be staying in the UK.
+
+        '
+    why_required:
+      en: Confirms your accommodation plans during the visit.
+    is_required: true
+    citation:
+      authority: UK Government
+      title: Standard visitor visa — Documents you must provide
+      url: https://www.gov.uk/standard-visitor-visa/documents-you-must-provide
+      source_version: 2026-04
+  - code: travel_itinerary
+    name:
+      en: Travel itinerary
+    how_to_obtain:
+      en: 'Prepare a plan of your intended travel dates and activities in the UK.
+
+        '
+    why_required:
+      en: Supports the purpose and length of your visit.
+    is_required: true
+    citation:
+      authority: UK Government
+      title: Standard visitor visa — Documents you must provide
+      url: https://www.gov.uk/standard-visitor-visa/documents-you-must-provide
+      source_version: 2026-04
+forms:
+- code: standard_visitor_visa_application
+  version: 2026-04
+  official_title: Standard Visitor visa online application
+  citation:
+    authority: UK Government
+    title: Standard visitor visa — Apply
     url: https://www.gov.uk/standard-visitor-visa/apply
-    retrieved: "2026-08-03"
+    source_version: 2026-04
+  field_mappings:
+  - form_field: applicant.full_name
+    answer_key: full_name
+    required: true
+  - form_field: applicant.nationality
+    answer_key: nationality
+    required: true
+  - form_field: applicant.passport_number
+    answer_key: passport_number
+    required: true
+  - form_field: applicant.passport_expiry
+    answer_key: passport_expiry
+    required: true
+  - form_field: visit.purpose
+    answer_key: purpose_of_visit
+    required: true
+  - form_field: visit.length_of_stay_months
+    answer_key: intended_length_of_stay_months
+    required: true
+  - form_field: applicant.residence_country
+    answer_key: current_residence_country
+    required: true
+fees: []
+sources:
+- title: Standard visitor visa
+  url: https://www.gov.uk/standard-visitor-visa
+  retrieved: '2026-08-03'
+- title: Standard visitor visa — Documents you must provide
+  url: https://www.gov.uk/standard-visitor-visa/documents-you-must-provide
+  retrieved: '2026-08-03'
+- title: Standard visitor visa — Apply
+  url: https://www.gov.uk/standard-visitor-visa/apply
+  retrieved: '2026-08-03'

@@ -14,7 +14,8 @@ categories:
     is_live: true
   - code: tourist
     name: Standard Visitor Visa
-    is_live: true
+    is_live: false
+    research_enabled: true
 actions:
   - code: new
     name: New Visa
@@ -24,4 +25,7 @@ actions:
     is_live: true
   - code: new_application
     name: New application
+    is_live: true
+  - code: change_of_status
+    name: Change of status
     is_live: true

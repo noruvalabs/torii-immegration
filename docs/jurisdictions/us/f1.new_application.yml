@@ -4,1290 +4,1424 @@ scope:
   action: new_application
   is_live: true
   name: United States F-1/M-1 student — new application (I-20 → SEVIS → DS-160 → interview)
-
 stages:
-  - sequence: 1
-    code: sponsor_petition
-    actor: sponsor
-    handoff_artifact: i20
-  - sequence: 2
-    code: applicant_filing
-    actor: applicant
-
+- sequence: 1
+  code: sponsor_petition
+  actor: sponsor
+  handoff_artifact: i20
+- sequence: 2
+  code: applicant_filing
+  actor: applicant
 intake:
   questions:
-    # =========================================================================
-    # Section 1: SEVIS & U.S. Academic Program Details (Form I-20 / DS-2019)
-    # =========================================================================
-    - key: visa_category_subtype
-      section: 1. SEVIS & Academic Program
-      prompt: What is your student / exchange visa category?
-      type: enum
-      options:
-        - F1_Academic_Student
-        - M1_Vocational_Student
-        - J1_Exchange_Visitor
-      required: true
-      citation:
-        authority: U.S. Department of State
-        title: Student Visa Categories
-        url: https://travel.state.gov/content/travel/en/us-visas/study/student-visa.html
-
-    - key: has_i20
-      section: 1. SEVIS & Academic Program
-      prompt: Have you received your official signed Form I-20 (or Form DS-2019 for J-1) from your U.S. institution?
-      type: boolean
-      required: true
-      citation:
-        authority: U.S. Immigration and Customs Enforcement
-        title: Student and Exchange Visitor Program (SEVP)
-        url: https://www.ice.gov/sevis
-
-    - key: sevis_id
-      section: 1. SEVIS & Academic Program
-      prompt: What is your SEVIS ID Number (printed at the top of Form I-20, starting with 'N' followed by 10 digits)?
-      type: string
-      min_length: 10
-      max_length: 11
-      required: true
-      show_when:
-        key: has_i20
-        equals: true
-
-    - key: school_sevis_code
-      section: 1. SEVIS & Academic Program
-      prompt: What is the School SEVIS Code (e.g. NYC214F00123000)?
-      type: string
-      min_length: 5
-      max_length: 32
-      required: true
-      show_when:
-        key: has_i20
-        equals: true
-
-    - key: school_name
-      section: 1. SEVIS & Academic Program
-      prompt: What is the legal name of your U.S. school or university (as printed on Form I-20)?
-      type: string
-      min_length: 2
-      max_length: 200
-      required: true
-      show_when:
-        key: has_i20
-        equals: true
-
-    - key: course_of_study_major
-      section: 1. SEVIS & Academic Program
-      prompt: What is your major or primary course of study (and CIP code if listed)?
-      type: string
-      min_length: 2
-      max_length: 150
-      required: true
-
-    - key: study_level
-      section: 1. SEVIS & Academic Program
-      prompt: What is your level of study?
-      type: enum
-      options:
-        - Bachelor_Degree
-        - Master_Degree
-        - Doctorate_PhD
-        - Associate_Degree
-        - Language_Training
-        - High_School
-        - Non_Degree_Certificate
-        - other
-      required: true
-
-    - key: program_start_date
-      section: 1. SEVIS & Academic Program
-      prompt: What is your program start date as printed on the I-20 (YYYY-MM-DD)?
-      type: date
-      required: true
-      show_when:
-        key: has_i20
-        equals: true
-
-    - key: program_end_date
-      section: 1. SEVIS & Academic Program
-      prompt: What is your expected program completion date (YYYY-MM-DD)?
-      type: date
-      required: true
-      show_when:
-        key: has_i20
-        equals: true
-
-    - key: school_address
-      section: 1. SEVIS & Academic Program
-      prompt: What is the official street address and state of your school / campus?
-      type: string
-      min_length: 5
-      max_length: 250
-      required: true
-
-    - key: school_zip_code
-      section: 1. SEVIS & Academic Program
-      prompt: What is the postal ZIP code of your school?
-      type: string
-      min_length: 4
-      max_length: 12
-      required: true
-
-    - key: dso_name
-      section: 1. SEVIS & Academic Program
-      prompt: What is the Designated School Official (DSO) or Responsible Officer name on your I-20?
-      type: string
-      min_length: 2
-      max_length: 150
-      required: true
-
-    - key: dso_email
-      section: 1. SEVIS & Academic Program
-      prompt: What is the DSO's email address?
-      type: string
-      min_length: 5
-      max_length: 100
-      required: false
-
-    - key: dso_phone
-      section: 1. SEVIS & Academic Program
-      prompt: What is the DSO or International Student Office telephone number?
-      type: string
-      min_length: 5
-      max_length: 32
-      required: false
-
-    - key: has_sevis_fee_receipt
-      section: 1. SEVIS & Academic Program
-      prompt: Have you paid the mandatory SEVIS I-901 fee ($350 for F-1) at FMJfee.com and received the receipt?
-      type: boolean
-      required: true
-      citation:
-        authority: U.S. Immigration and Customs Enforcement
-        title: SEVIS I-901 Fee Payment
-        url: https://www.fmjfee.com/i901fee/index.html
-
-    - key: sevis_fee_receipt_number
-      section: 1. SEVIS & Academic Program
-      prompt: What is your SEVIS I-901 Fee payment confirmation / receipt number?
-      type: string
-      min_length: 5
-      max_length: 32
-      required: false
-      show_when:
-        key: has_sevis_fee_receipt
-        equals: true
-
-    # =========================================================================
-    # Section 2: Academic Background & Test Credentials
-    # =========================================================================
-    - key: educational_institutions_attended
-      section: 2. Academic Background & Tests
-      prompt: List previous secondary and higher education institutions attended (school name, address, degree earned, start/end dates).
-      type: string
-      min_length: 5
-      max_length: 800
-      required: true
-
-    - key: standardized_tests_taken
-      section: 2. Academic Background & Tests
-      prompt: List standardized tests taken and scores (e.g. TOEFL 102, IELTS 7.5, Duolingo 130, GRE, GMAT, SAT).
-      type: string
-      min_length: 2
-      max_length: 200
-      required: true
-
-    - key: gpa_final_grades
-      section: 2. Academic Background & Tests
-      prompt: What was your GPA or final grade average in your most recent degree/high school program?
-      type: string
-      min_length: 1
-      max_length: 50
-      required: true
-
-    - key: academic_continuity_notes
-      section: 2. Academic Background & Tests
-      prompt: Briefly explain how this U.S. study program logically builds on your past academic background or career step.
-      type: string
-      min_length: 5
-      max_length: 500
-      required: true
-
-    # =========================================================================
-    # Section 3: Financial Funding & Sponsorship Breakdown
-    # =========================================================================
-    - key: i20_year1_total_cost_usd
-      section: 3. Financial Funding & Sponsorship
-      prompt: What is the total estimated cost of attendance for Year 1 as printed on Form I-20 (Tuition + Living Expenses in USD)?
-      type: integer
-      min_value: 1000
-      max_value: 200000
-      required: true
-
-    - key: funding_source
-      section: 3. Financial Funding & Sponsorship
-      prompt: What is your primary funding source?
-      type: enum
-      options:
-        - Self_Funded
-        - Family_Individual_Sponsor
-        - University_Scholarship_Assistantship
-        - Educational_Bank_Loan
-        - Corporate_Government_Sponsorship
-        - other
-      required: true
-
-    - key: sponsor_name
-      section: 3. Financial Funding & Sponsorship
-      prompt: What is the full name of your primary financial sponsor (or 'Self')?
-      type: string
-      min_length: 2
-      max_length: 150
-      required: true
-
-    - key: sponsor_relationship
-      section: 3. Financial Funding & Sponsorship
-      prompt: What is the sponsor's relationship to you (e.g. Parent, Self, Spouse, Relative, Employer)?
-      type: string
-      min_length: 2
-      max_length: 100
-      required: true
-
-    - key: sponsor_occupation
-      section: 3. Financial Funding & Sponsorship
-      prompt: What is the sponsor's occupation and employer name?
-      type: string
-      min_length: 2
-      max_length: 150
-      required: true
-
-    - key: sponsor_annual_income_jpy
-      section: 3. Financial Funding & Sponsorship
-      prompt: What is the sponsor's annual income in local currency (in JPY)?
-      type: integer
-      min_value: 0
-      max_value: 1000000000
-      required: true
-
-    - key: applicant_liquid_funds_jpy
-      section: 3. Financial Funding & Sponsorship
-      prompt: What is the total liquid funds currently available in bank accounts (in JPY)?
-      type: integer
-      min_value: 0
-      max_value: 1000000000
-      required: true
-
-    - key: scholarship_amount_usd
-      section: 3. Financial Funding & Sponsorship
-      prompt: What is the university scholarship, assistantship, or fellowship award amount (in USD, if applicable)?
-      type: integer
-      min_value: 0
-      max_value: 200000
-      required: false
-
-    - key: has_financial_support
-      section: 3. Financial Funding & Sponsorship
-      prompt: Do you have verified documentation showing immediate liquid funds covering at least Year 1 expenses?
-      type: boolean
-      required: true
-
-    # =========================================================================
-    # Section 4: Residence Status in Japan (For Applicants in Japan)
-    # =========================================================================
-    - key: current_location_country
-      section: 4. Residence Status in Japan
-      prompt: Which country are you currently residing in?
-      type: enum
-      options:
-        - Japan
-        - United States
-        - United Kingdom
-        - Canada
-        - Australia
-        - Germany
-        - France
-        - Singapore
-        - South Korea
-        - United Arab Emirates
-        - New Zealand
-        - Netherlands
-        - India
-        - China
-        - Bangladesh
-        - Philippines
-        - Vietnam
-        - Indonesia
-        - other
-      required: true
-
-    - key: residence_card_number
-      section: 4. Residence Status in Japan
-      prompt: What is your Japanese Residence Card (Zairyu Card) Number (if non-Japanese national in Japan)?
-      type: string
-      min_length: 12
-      max_length: 12
-      required: false
-
-    - key: japan_residence_status
-      section: 4. Residence Status in Japan
-      prompt: What is your current Japanese residence status (e.g. Student, Work, Dependent, Permanent Resident)?
-      type: string
-      min_length: 2
-      max_length: 100
-      required: false
-
-    - key: japan_residence_expiry
-      section: 4. Residence Status in Japan
-      prompt: What is the expiration date on your Japanese Residence Card (YYYY-MM-DD)?
-      type: date
-      required: false
-
-    - key: registered_address_japan
-      section: 4. Residence Status in Japan
-      prompt: What is your current residential address and phone number in Japan?
-      type: string
-      min_length: 5
-      max_length: 300
-      required: true
-
-    # =========================================================================
-    # Section 5: U.S. Point of Contact & Accommodation
-    # =========================================================================
-    - key: us_school_contact_name
-      section: 5. U.S. Contact & Housing
-      prompt: What is the contact person or office name at your U.S. school (DSO / International Student Office)?
-      type: string
-      min_length: 2
-      max_length: 150
-      required: true
-
-    - key: us_accommodation_type
-      section: 5. U.S. Contact & Housing
-      prompt: Where do you plan to reside in the U.S.?
-      type: enum
-      options:
-        - Campus_Dormitory
-        - Off_Campus_Apartment
-        - Homestay_Family
-        - Not_Yet_Known_Use_Campus_Address
-      required: true
-
-    - key: us_stay_address
-      section: 5. U.S. Contact & Housing
-      prompt: What is the address where you will reside in the U.S. (or school campus address if dorm/undecided)?
-      type: string
-      min_length: 5
-      max_length: 300
-      required: true
-
-    # =========================================================================
-    # Section 6: Core DS-160 Personal, Passport & Family Information
-    # =========================================================================
-    - key: full_name
-      section: 6. Core DS-160 Information
-      prompt: What is your full legal name as it appears on your passport (Surname, Given Names)?
-      type: string
-      min_length: 2
-      max_length: 200
-      required: true
-      citation:
-        authority: U.S. Department of State
-        title: DS-160 Online Nonimmigrant Visa Application
-        url: https://travel.state.gov/content/travel/en/us-visas/visa-information-resources/forms/ds-160-online-nonimmigrant-visa-application.html
-
-    - key: nationality
-      section: 6. Core DS-160 Information
-      prompt: What is your primary nationality (passport country)?
-      type: enum
-      options:
-        - JP
-        - US
-        - GB
-        - CA
-        - AU
-        - KR
-        - DE
-        - FR
-        - SG
-        - AE
-        - NZ
-        - NL
-        - IN
-        - CN
-        - BD
-        - PH
-        - VN
-        - ID
-        - TH
-        - MY
-        - SA
-        - other
-      required: true
-
-    - key: gender
-      section: 6. Core DS-160 Information
-      prompt: What is your sex / gender?
-      type: enum
-      options:
-        - Male
-        - Female
-        - Other
-      required: true
-
-    - key: date_of_birth
-      section: 6. Core DS-160 Information
-      prompt: What is your date of birth (YYYY-MM-DD)?
-      type: date
-      required: true
-
-    - key: city_of_birth
-      section: 6. Core DS-160 Information
-      prompt: What is your city of birth?
-      type: string
-      min_length: 2
-      max_length: 100
-      required: true
-
-    - key: country_of_birth
-      section: 6. Core DS-160 Information
-      prompt: What is your country of birth?
-      type: string
-      min_length: 2
-      max_length: 100
-      required: true
-
-    - key: passport_number
-      section: 6. Core DS-160 Information
-      prompt: What is your passport number?
-      type: string
-      min_length: 5
-      max_length: 32
-      required: true
-
-    - key: passport_expiry
-      section: 6. Core DS-160 Information
-      prompt: What is your passport expiration date (YYYY-MM-DD)?
-      type: date
-      required: true
-
-    - key: passport_is_epassport
-      section: 6. Core DS-160 Information
-      prompt: Does your passport contain an embedded digital chip (e-passport)?
-      type: boolean
-      required: true
-
-    - key: father_full_name
-      section: 6. Core DS-160 Information
-      prompt: What is your father's full name (Surname, Given Names)?
-      type: string
-      min_length: 2
-      max_length: 150
-      required: true
-
-    - key: mother_full_name
-      section: 6. Core DS-160 Information
-      prompt: What is your mother's full name (Surname, Given Names)?
-      type: string
-      min_length: 2
-      max_length: 150
-      required: true
-
-    - key: has_immediate_relatives_in_us
-      section: 6. Core DS-160 Information
-      prompt: Do you have any immediate relatives in the U.S. (Spouse, Fiancé, Child, Sibling)?
-      type: boolean
-      required: true
-
-    - key: has_previous_us_visits
-      section: 6. Core DS-160 Information
-      prompt: Have you ever previously visited the United States?
-      type: boolean
-      required: true
-
-    - key: has_previous_us_visa
-      section: 6. Core DS-160 Information
-      prompt: Have you ever been issued a U.S. Visa?
-      type: boolean
-      required: true
-
-    - key: prior_us_visa_refusal
-      section: 6. Core DS-160 Information
-      prompt: Have you ever been refused a U.S. Visa or denied admission to the U.S.?
-      type: boolean
-      required: true
-
-    - key: languages_spoken
-      section: 6. Core DS-160 Information
-      prompt: Which languages do you speak?
-      type: string
-      min_length: 2
-      max_length: 150
-      required: true
-
-    - key: countries_visited_past_5yrs
-      section: 6. Core DS-160 Information
-      prompt: List all countries and regions you have visited in the past 5 years.
-      type: string
-      min_length: 2
-      max_length: 500
-      required: true
-
-    - key: social_media_handles_past_5yrs
-      section: 6. Core DS-160 Information
-      prompt: List social media platform identifiers/handles used in the past 5 years (e.g. LinkedIn, Instagram, X/Twitter).
-      type: string
-      min_length: 2
-      max_length: 300
-      required: true
-
-    - key: phone_numbers_past_5yrs
-      section: 6. Core DS-160 Information
-      prompt: List all phone numbers used in the past 5 years.
-      type: string
-      min_length: 5
-      max_length: 200
-      required: true
-
-    - key: email_addresses_past_5yrs
-      section: 6. Core DS-160 Information
-      prompt: List all email addresses used in the past 5 years.
-      type: string
-      min_length: 5
-      max_length: 250
-      required: true
-
-    # =========================================================================
-    # Section 7: INA 214(b) Nonimmigrant Intent & Post-Graduation Plans
-    # =========================================================================
-    - key: post_graduation_career_plan
-      section: 7. Nonimmigrant Intent & Career Plan
-      prompt: What is your concrete career plan in Japan or your home country after completing your U.S. degree?
-      type: string
-      min_length: 10
-      max_length: 600
-      required: true
-      citation:
-        authority: U.S. Department of State
-        title: INA Section 214(b) Student Intent
-        url: https://travel.state.gov/content/travel/en/us-visas/visa-information-resources/visa-denials.html
-
-    - key: home_country_ties_summary
-      section: 7. Nonimmigrant Intent & Career Plan
-      prompt: Describe your social, family, and economic anchors in Japan / home country ensuring your departure upon graduation.
-      type: string
-      min_length: 5
-      max_length: 600
-      required: true
-
-    # =========================================================================
-    # Section 8: Consular Interview & Inadmissibility Screening
-    # =========================================================================
-    - key: interview_aware
-      section: 8. Interview & Security Screening
-      prompt: >-
-        An in-person interview is mandatory for F-1 applicants (no interview waiver / dropbox
-        for F/M/J) since September 2025. Are you prepared to attend an in-person interview?
-      type: boolean
-      required: true
-      citation:
-        authority: U.S. Department of State
-        title: In-person interview requirement for nonimmigrant visas
-        url: https://travel.state.gov/content/travel/en/us-visas/visa-information-resources/policy-updates.html
-
-    - key: criminal_disclosures
-      section: 8. Interview & Security Screening
-      prompt: Have you ever been convicted of a crime, arrested, or cited for any legal offense?
-      type: boolean
-      required: true
-      citation:
-        authority: U.S. Citizenship and Immigration Services
-        title: Inadmissibility Grounds (INA 212(a))
-        url: https://www.uscis.gov/laws-and-regulations/immigration-and-nationality-act
-
-    - key: drug_abuse_addiction_history
-      section: 8. Interview & Security Screening
-      prompt: Have you ever been a drug abuser or addict, or violated any controlled substance laws?
-      type: boolean
-      required: true
-
-    - key: prior_immigration_violations_deportations
-      section: 8. Interview & Security Screening
-      prompt: Have you ever been ordered removed, deported, or subject to exclusion proceedings in any country?
-      type: boolean
-      required: true
-
-    - key: sanctioned_countries_travel
-      section: 8. Interview & Security Screening
-      prompt: Have you traveled to Cuba (on/after Jan 12 2021), Iran, Iraq, Syria, Sudan, Libya, Somalia, Yemen, or North Korea?
-      type: boolean
-      required: true
-
-eligibility:
-  rules:
-    # -------------------------------------------------------------------------
-    # Pillar 1: Institutional & Academic Qualification
-    # -------------------------------------------------------------------------
-    - key: has_i20
-      operator: equals
-      value: true
-      failure_status: fail
-      message: >-
-        An official, signed Form I-20 issued by an SEVP-certified U.S. institution
-        is legally required before applying for an F-1 student visa.
-      citation:
-        authority: U.S. Department of Homeland Security
-        title: SEVP — Form I-20 Certificate of Eligibility
-        url: https://www.ice.gov/sevis
-        source_version: "2026-04"
-
-    - key: has_sevis_fee_receipt
-      operator: equals
-      value: true
-      failure_status: fail
-      message: >-
-        The mandatory SEVIS I-901 fee ($350 for F-1) must be paid at FMJfee.com prior
-        to attending the consular visa interview.
-      citation:
-        authority: U.S. Immigration and Customs Enforcement
-        title: SEVIS I-901 fee
-        url: https://www.fmjfee.com/i901fee/index.html
-        source_version: "2026-04"
-
-    # -------------------------------------------------------------------------
-    # Pillar 2: Financial Capacity (INA 214(b))
-    # -------------------------------------------------------------------------
-    - key: has_financial_support
-      operator: equals
-      value: true
-      failure_status: fail
-      message: >-
-        Under INA 214(b), you must document immediate liquid funds covering the full
-        1-year estimated cost of attendance (tuition + living expenses) stated on Form I-20.
-      citation:
-        authority: U.S. Department of State
-        title: F-1 Student Visa Financial Qualifications
-        url: https://travel.state.gov/content/travel/en/us-visas/study/student-visa.html
-        source_version: "2026-04"
-
-    - key: applicant_liquid_funds_jpy
-      operator: min
-      value: 3000000
-      failure_status: at_risk
-      message: >-
-        Available liquid bank funds appear low relative to standard U.S. university Year 1 tuition and living costs.
-        Consular officers scrutinize unencumbered bank balances and sponsor income capacity.
-      citation:
-        authority: U.S. Department of State
-        title: Student Visa Financial Requirements
-        url: https://travel.state.gov/content/travel/en/us-visas/study/student-visa.html
-        source_version: "2026-04"
-
-    # -------------------------------------------------------------------------
-    # Pillar 3: Nonimmigrant Intent & Interview Readiness
-    # -------------------------------------------------------------------------
-    - key: interview_aware
-      operator: equals
-      value: true
-      failure_status: review
-      message: >-
-        An in-person interview is mandatory for all F/M/J applicants. Schedule the appointment
-        at the U.S. Embassy Tokyo or Consulate Naha/Osaka after submitting Form DS-160.
-      citation:
-        authority: U.S. Department of State
-        title: In-person interview requirement for nonimmigrant visas
-        url: https://travel.state.gov/content/travel/en/us-visas/visa-information-resources/policy-updates.html
-        source_version: "2026-04"
-
-    - key: prior_us_visa_refusal
-      operator: equals
-      value: false
-      failure_status: review
-      message: >-
-        Prior U.S. visa refusal requires detailed disclosure on Form DS-160 and strong
-        proof of academic intent and changed circumstances under INA 214(b).
-      citation:
-        authority: U.S. Department of State
-        title: Visa Denials and Student Intent
-        url: https://travel.state.gov/content/travel/en/us-visas/visa-information-resources/visa-denials.html
-        source_version: "2026-04"
-
-    # -------------------------------------------------------------------------
-    # Pillar 4: General Admissibility & Clean Record (INA 212(a))
-    # -------------------------------------------------------------------------
-    - key: criminal_disclosures
-      operator: equals
-      value: false
-      failure_status: review
-      message: >-
-        Certain criminal arrests or convictions may trigger inadmissibility under INA 212(a)(2);
-        consular review and court records required.
-      citation:
-        authority: U.S. Citizenship and Immigration Services
-        title: Inadmissibility Grounds (INA 212(a))
-        url: https://www.uscis.gov/laws-and-regulations/immigration-and-nationality-act
-        source_version: "2026-04"
-
-    - key: drug_abuse_addiction_history
-      operator: equals
-      value: false
-      failure_status: fail
-      message: >-
-        Drug abuse or controlled substance violations trigger mandatory ineligibility under INA 212(a)(2)(A).
-      citation:
-        authority: U.S. Department of State
-        title: Controlled Substances Ineligibility
-        url: https://travel.state.gov/content/travel/en/us-visas/visa-information-resources/waivers.html
-        source_version: "2026-04"
-
-    - key: prior_immigration_violations_deportations
-      operator: equals
-      value: false
-      failure_status: fail
-      message: >-
-        Prior deportation, unlawful presence, or visa fraud requires an INA 212(d)(3) waiver of inadmissibility.
-      citation:
-        authority: U.S. Citizenship and Immigration Services
-        title: Unlawful Presence and Inadmissibility
-        url: https://www.uscis.gov/laws-and-regulations/immigration-and-nationality-act
-        source_version: "2026-04"
-
-    - key: sanctioned_countries_travel
-      operator: equals
-      value: false
-      failure_status: warning
-      message: >-
-        Travel to sanctioned countries requires additional administrative security screening.
-      citation:
-        authority: U.S. Department of State
-        title: Administrative Processing and Security Screenings
-        url: https://travel.state.gov/content/travel/en/us-visas/visa-information-resources/administrative-processing-information.html
-        source_version: "2026-04"
-
-documents:
-  items:
-    # --- Mandatory Consular Interview Documents ---
-    - code: passport
-      name:
-        en: Valid Passport (valid at least 6 months beyond intended U.S. stay)
-        ja: 有効なパスポート（米国滞在予定期間＋6ヶ月以上の残存期間）
-      how_to_obtain:
-        en: Original valid passport plus any previous passports containing prior U.S. visas.
-      why_required:
-        en: Primary identification and travel document required for visa issuance.
-      is_required: true
-      citation:
-        authority: U.S. Department of State
-        title: F-1 Student Visa Checklist
-        url: https://travel.state.gov/content/travel/en/us-visas/study/student-visa.html
-        source_version: "2026-04"
-
-    - code: ds160_confirmation
-      name:
-        en: DS-160 Confirmation Page with Barcode
-        ja: DS-160確認ページ（バーコード付き）
-      how_to_obtain:
-        en: Submit Form DS-160 online at ceac.state.gov (with SEVIS ID and school details) and print barcode confirmation.
-      why_required:
-        en: Mandatory entry pass for the consular visa interview.
-      is_required: true
-      citation:
-        authority: U.S. Department of State
-        title: DS-160 Online Nonimmigrant Visa Application
-        url: https://ceac.state.gov/genniv/
-        source_version: "2026-04"
-
-    - code: interview_letter
-      name:
-        en: Visa Interview Appointment Confirmation Letter
-        ja: 面接予約確認書
-      how_to_obtain:
-        en: Schedule an appointment on the official U.S. visa portal for Japan and print the confirmation letter.
-      why_required:
-        en: Entry pass for the mandatory in-person interview at U.S. Embassy Tokyo / Consulates.
-      is_required: true
-      citation:
-        authority: U.S. Department of State
-        title: In-person interview requirement for nonimmigrant visas
-        url: https://travel.state.gov/content/travel/en/us-visas/visa-information-resources/policy-updates.html
-        source_version: "2026-04"
-
-    - code: mrv_fee_receipt
-      name:
-        en: MRV Application Fee Payment Receipt ($185)
-        ja: ビザ申請料金（MRV Fee $185）領収書
-      how_to_obtain:
-        en: Pay the non-refundable MRV visa fee online or via bank transfer and print confirmation.
-      why_required:
-        en: Proof of mandatory visa application fee payment.
-      is_required: true
-      citation:
-        authority: U.S. Department of State
-        title: Fees for Visa Services
-        url: https://travel.state.gov/content/travel/en/us-visas/visa-information-resources/fees/fees-visa-services.html
-        source_version: "2026-04"
-
-    - code: photo
-      name:
-        en: U.S. Visa Photo (2x2 inch / 5x5 cm color, white background)
-        ja: 米国ビザ用写真（5cm×5cm、白背景）
-      how_to_obtain:
-        en: Compliant 2x2 inch color photo taken within 6 months meeting State Department guidelines.
-      why_required:
-        en: Required for visa foil issuance.
-      is_required: true
-      citation:
-        authority: U.S. Department of State
-        title: Photo Requirements
-        url: https://travel.state.gov/content/travel/en/us-visas/visa-information-resources/photos.html
-        source_version: "2026-04"
-
-    - code: residence_card
-      name:
-        en: Japanese Residence Card (Zairyu Card) - for non-Japanese applicants
-        ja: 在留カード（日本国籍以外の方）
-      how_to_obtain:
-        en: Original current Japanese Residence Card with valid status of residence.
-      why_required:
-        en: Proves legal residence status in Japan for third-country nationals applying in Japan.
-      is_required: true
-      citation:
-        authority: Immigration Services Agency of Japan
-        title: Residence Card System
-        url: https://www.moj.go.jp/isa/applications/procedures/index.html
-        source_version: "2026-04"
-
-    # --- Official SEVP Documents ---
-    - code: i20
-      name:
-        en: Form I-20 (Certificate of Eligibility for Nonimmigrant Student Status)
-        ja: I-20原本（学校DSOおよび申請者本人の署名入り）
-      how_to_obtain:
-        en: Issued by your SEVP-certified U.S. school; signed by both the school DSO and you (or parent if under 18).
-      why_required:
-        en: Primary legal document establishing SEVP acceptance, SEVIS ID, program duration, and estimated costs.
-      is_required: true
-      citation:
-        authority: U.S. Department of Homeland Security
-        title: SEVP — Students (F/M)
-        url: https://www.ice.gov/sevis
-        source_version: "2026-04"
-
-    - code: sevis_fee_receipt
-      name:
-        en: SEVIS I-901 Fee Payment Receipt ($350)
-        ja: SEVIS I-901費用（$350）支払証明書
-      how_to_obtain:
-        en: Pay online at fmjfee.com using your SEVIS ID and school code, and print the official receipt.
-      why_required:
-        en: Mandatory proof of SEVIS fee payment required before visa interview.
-      is_required: true
-      citation:
-        authority: U.S. Immigration and Customs Enforcement
-        title: SEVIS I-901 fee
-        url: https://www.fmjfee.com/i901fee/index.html
-        source_version: "2026-04"
-
-    # --- Academic Credentials & Acceptance ---
-    - code: admission_letter
-      name:
-        en: University / School Official Acceptance Letter
-        ja: 米国大学・教育機関の正式合格通知書（Acceptance Letter）
-      how_to_obtain:
-        en: Provided by the U.S. university or school international admissions office.
-      why_required:
-        en: Confirms unconditional admission to the academic program.
-      is_required: true
-      citation:
-        authority: U.S. Department of State
-        title: F-1 Student Visa Requirements
-        url: https://travel.state.gov/content/travel/en/us-visas/study/student-visa.html
-        source_version: "2026-04"
-
-    - code: academic_transcripts
-      name:
-        en: Official Academic Transcripts (High School & Higher Education)
-        ja: 成績証明書原本（高校および大学・大学院）
-      how_to_obtain:
-        en: Sealed official transcripts in English from all secondary schools and colleges attended.
-      why_required:
-        en: Proves academic qualification, grade point average, and continuous academic standing.
-      is_required: true
-      citation:
-        authority: U.S. Department of State
-        title: Student Visa Application Documents
-        url: https://travel.state.gov/content/travel/en/us-visas/study/student-visa.html
-        source_version: "2026-04"
-
-    - code: degree_certificates
-      name:
-        en: Degree Certificates / Diplomas / Graduation Certificates
-        ja: 卒業証明書・学位記
-      how_to_obtain:
-        en: Official graduation certificates or degree diplomas from prior educational institutions.
-      why_required:
-        en: Verifies completion of prerequisites required for the intended level of study.
-      is_required: true
-      citation:
-        authority: U.S. Department of State
-        title: Student Visa Application Documents
-        url: https://travel.state.gov/content/travel/en/us-visas/study/student-visa.html
-        source_version: "2026-04"
-
-    - code: test_score_reports
-      name:
-        en: Standardized Test Score Reports (TOEFL, IELTS, Duolingo, GRE, GMAT, SAT)
-        ja: 語学試験・適性試験スコア票（TOEFL, IELTS, Duolingo, GRE, GMAT等）
-      how_to_obtain:
-        en: Official score reports from ETS, British Council, Duolingo, College Board, etc.
-      why_required:
-        en: Demonstrates English language proficiency and academic aptitude matching program requirements.
-      is_required: true
-      citation:
-        authority: U.S. Department of State
-        title: Student Visa Language Proficiency
-        url: https://travel.state.gov/content/travel/en/us-visas/study/student-visa.html
-        source_version: "2026-04"
-
-    # --- Financial Evidence & Sponsorship ---
-    - code: financial_evidence
-      name:
-        en: Bank Balance Certificate(s) & 6-Month Statements (Covering Year 1 I-20 Total Cost)
-        ja: 残高証明書および過去6ヶ月分の預金取引明細書（初年度総費用をカバー）
-      how_to_obtain:
-        en: Bank balance certificate in English and 6 months of detailed account statements showing liquid funds.
-      why_required:
-        en: Demonstrates immediate liquid funds covering tuition and living expenses without unauthorized work.
-      is_required: true
-      citation:
-        authority: U.S. Department of State
-        title: F-1 Student Visa Financial Qualifications
-        url: https://travel.state.gov/content/travel/en/us-visas/study/student-visa.html
-        source_version: "2026-04"
-
-    - code: sponsor_affidavit
-      name:
-        en: Signed Sponsor Affidavit of Support & Proof of Sponsor Income (Tax Returns / Pay Slips)
-        ja: 資金提供者の身元引受書（Affidavit of Support）および所得証明・納税証明書
-      how_to_obtain:
-        en: Signed affidavit of financial support from parent/sponsor, along with employment certificate, tax returns, and relationship proof.
-      why_required:
-        en: Demonstrates legitimate, continuous financial backing for subsequent years of study.
-      is_required: false
-      citation:
-        authority: U.S. Citizenship and Immigration Services
-        title: Form I-134 Declaration of Financial Support
-        url: https://www.uscis.gov/i-134
-        source_version: "2026-04"
-
-    - code: scholarship_letter
-      name:
-        en: Official University Scholarship / Assistantship / Loan Sanction Letter
-        ja: 奨学金授与証明書または教育ローン承認書（該当者のみ）
-      how_to_obtain:
-        en: Letter from university department or approved bank detailing grant, stipend, or loan amount.
-      why_required:
-        en: Proves institutional funding or authorized educational credit.
-      is_required: false
-      citation:
-        authority: U.S. Department of State
-        title: Student Financial Sponsorship
-        url: https://travel.state.gov/content/travel/en/us-visas/study/student-visa.html
-        source_version: "2026-04"
-
-forms:
-  - code: ds160
-    version: "2026-04"
-    official_title: Online Nonimmigrant Visa Application (Form DS-160 - Student / SEVIS Edition)
+  - key: visa_category_subtype
+    section: 1. SEVIS & Academic Program
+    prompt: What is your student / exchange visa category?
+    type: enum
+    options:
+    - F1_Academic_Student
+    - M1_Vocational_Student
+    - J1_Exchange_Visitor
+    required: true
+    citation:
+      authority: U.S. Department of State
+      title: Student Visa Categories
+      url: https://travel.state.gov/content/travel/en/us-visas/study/student-visa.html
+  - key: has_i20
+    section: 1. SEVIS & Academic Program
+    prompt: Have you received your official signed Form I-20 (or Form DS-2019 for
+      J-1) from your U.S. institution?
+    type: boolean
+    required: true
+    citation:
+      authority: U.S. Immigration and Customs Enforcement
+      title: Student and Exchange Visitor Program (SEVP)
+      url: https://www.ice.gov/sevis
+  - key: sevis_id
+    section: 1. SEVIS & Academic Program
+    prompt: What is your SEVIS ID Number (printed at the top of Form I-20, starting
+      with 'N' followed by 10 digits)?
+    type: string
+    min_length: 10
+    max_length: 11
+    required: true
+    show_when:
+      key: has_i20
+      equals: true
+    citation:
+      authority: U.S. Department of State & SEVP
+      title: Form DS-160 & SEVIS I-20 Student Verification Guidelines
+      url: https://travel.state.gov/content/travel/en/us-visas/study/student-visa.html
+  - key: school_sevis_code
+    section: 1. SEVIS & Academic Program
+    prompt: What is the School SEVIS Code (e.g. NYC214F00123000)?
+    type: string
+    min_length: 5
+    max_length: 32
+    required: true
+    show_when:
+      key: has_i20
+      equals: true
+    citation:
+      authority: U.S. Department of State & SEVP
+      title: Form DS-160 & SEVIS I-20 Student Verification Guidelines
+      url: https://travel.state.gov/content/travel/en/us-visas/study/student-visa.html
+  - key: school_name
+    section: 1. SEVIS & Academic Program
+    prompt: What is the legal name of your U.S. school or university (as printed on
+      Form I-20)?
+    type: string
+    min_length: 2
+    max_length: 200
+    required: true
+    show_when:
+      key: has_i20
+      equals: true
+    citation:
+      authority: U.S. Department of State & SEVP
+      title: Form DS-160 & SEVIS I-20 Student Verification Guidelines
+      url: https://travel.state.gov/content/travel/en/us-visas/study/student-visa.html
+  - key: course_of_study_major
+    section: 1. SEVIS & Academic Program
+    prompt: What is your major or primary course of study (and CIP code if listed)?
+    type: string
+    min_length: 2
+    max_length: 150
+    required: true
+    citation:
+      authority: U.S. Department of State (Consular Affairs)
+      title: Form DS-160 Online Nonimmigrant Visa Application Guidelines
+      url: https://travel.state.gov/content/travel/en/us-visas/tourism-visit/visitor.html
+  - key: study_level
+    section: 1. SEVIS & Academic Program
+    prompt: What is your level of study?
+    type: enum
+    options:
+    - Bachelor_Degree
+    - Master_Degree
+    - Doctorate_PhD
+    - Associate_Degree
+    - Language_Training
+    - High_School
+    - Non_Degree_Certificate
+    - other
+    required: true
+    citation:
+      authority: U.S. Department of State (Consular Affairs)
+      title: Form DS-160 Online Nonimmigrant Visa Application Guidelines
+      url: https://travel.state.gov/content/travel/en/us-visas/tourism-visit/visitor.html
+  - key: program_start_date
+    section: 1. SEVIS & Academic Program
+    prompt: What is your program start date as printed on the I-20 (YYYY-MM-DD)?
+    type: date
+    required: true
+    show_when:
+      key: has_i20
+      equals: true
+    citation:
+      authority: U.S. Department of State (Consular Affairs)
+      title: Form DS-160 Online Nonimmigrant Visa Application Guidelines
+      url: https://travel.state.gov/content/travel/en/us-visas/tourism-visit/visitor.html
+  - key: program_end_date
+    section: 1. SEVIS & Academic Program
+    prompt: What is your expected program completion date (YYYY-MM-DD)?
+    type: date
+    required: true
+    show_when:
+      key: has_i20
+      equals: true
+    citation:
+      authority: U.S. Department of State (Consular Affairs)
+      title: Form DS-160 Online Nonimmigrant Visa Application Guidelines
+      url: https://travel.state.gov/content/travel/en/us-visas/tourism-visit/visitor.html
+  - key: school_address
+    section: 1. SEVIS & Academic Program
+    prompt: What is the official street address and state of your school / campus?
+    type: string
+    min_length: 5
+    max_length: 250
+    required: true
+    citation:
+      authority: U.S. Department of State & SEVP
+      title: Form DS-160 & SEVIS I-20 Student Verification Guidelines
+      url: https://travel.state.gov/content/travel/en/us-visas/study/student-visa.html
+  - key: school_zip_code
+    section: 1. SEVIS & Academic Program
+    prompt: What is the postal ZIP code of your school?
+    type: string
+    min_length: 4
+    max_length: 12
+    required: true
+    citation:
+      authority: U.S. Department of State & SEVP
+      title: Form DS-160 & SEVIS I-20 Student Verification Guidelines
+      url: https://travel.state.gov/content/travel/en/us-visas/study/student-visa.html
+  - key: dso_name
+    section: 1. SEVIS & Academic Program
+    prompt: What is the Designated School Official (DSO) or Responsible Officer name
+      on your I-20?
+    type: string
+    min_length: 2
+    max_length: 150
+    required: true
+    citation:
+      authority: U.S. Department of State & SEVP
+      title: Form DS-160 & SEVIS I-20 Student Verification Guidelines
+      url: https://travel.state.gov/content/travel/en/us-visas/study/student-visa.html
+  - key: dso_email
+    section: 1. SEVIS & Academic Program
+    prompt: What is the DSO's email address?
+    type: string
+    min_length: 5
+    max_length: 100
+    required: false
+    citation:
+      authority: U.S. Department of State & SEVP
+      title: Form DS-160 & SEVIS I-20 Student Verification Guidelines
+      url: https://travel.state.gov/content/travel/en/us-visas/study/student-visa.html
+  - key: dso_phone
+    section: 1. SEVIS & Academic Program
+    prompt: What is the DSO or International Student Office telephone number?
+    type: string
+    min_length: 5
+    max_length: 32
+    required: false
+    citation:
+      authority: U.S. Department of State & SEVP
+      title: Form DS-160 & SEVIS I-20 Student Verification Guidelines
+      url: https://travel.state.gov/content/travel/en/us-visas/study/student-visa.html
+  - key: has_sevis_fee_receipt
+    section: 1. SEVIS & Academic Program
+    prompt: Have you paid the mandatory SEVIS I-901 fee ($350 for F-1) at FMJfee.com
+      and received the receipt?
+    type: boolean
+    required: true
+    citation:
+      authority: U.S. Immigration and Customs Enforcement
+      title: SEVIS I-901 Fee Payment
+      url: https://www.fmjfee.com/i901fee/index.html
+  - key: sevis_fee_receipt_number
+    section: 1. SEVIS & Academic Program
+    prompt: What is your SEVIS I-901 Fee payment confirmation / receipt number?
+    type: string
+    min_length: 5
+    max_length: 32
+    required: false
+    show_when:
+      key: has_sevis_fee_receipt
+      equals: true
+    citation:
+      authority: U.S. Department of State & SEVP
+      title: Form DS-160 & SEVIS I-20 Student Verification Guidelines
+      url: https://travel.state.gov/content/travel/en/us-visas/study/student-visa.html
+  - key: educational_institutions_attended
+    section: 2. Academic Background & Tests
+    prompt: List previous secondary and higher education institutions attended (school
+      name, address, degree earned, start/end dates).
+    type: string
+    min_length: 5
+    max_length: 800
+    required: true
+    citation:
+      authority: U.S. Department of State (Consular Affairs)
+      title: Form DS-160 Online Nonimmigrant Visa Application Guidelines
+      url: https://travel.state.gov/content/travel/en/us-visas/tourism-visit/visitor.html
+  - key: standardized_tests_taken
+    section: 2. Academic Background & Tests
+    prompt: List standardized tests taken and scores (e.g. TOEFL 102, IELTS 7.5, Duolingo
+      130, GRE, GMAT, SAT).
+    type: string
+    min_length: 2
+    max_length: 200
+    required: true
+    citation:
+      authority: U.S. Department of State (Consular Affairs)
+      title: Form DS-160 Online Nonimmigrant Visa Application Guidelines
+      url: https://travel.state.gov/content/travel/en/us-visas/tourism-visit/visitor.html
+  - key: gpa_final_grades
+    section: 2. Academic Background & Tests
+    prompt: What was your GPA or final grade average in your most recent degree/high
+      school program?
+    type: string
+    min_length: 1
+    max_length: 50
+    required: true
+    citation:
+      authority: U.S. Department of State (Consular Affairs)
+      title: Form DS-160 Online Nonimmigrant Visa Application Guidelines
+      url: https://travel.state.gov/content/travel/en/us-visas/tourism-visit/visitor.html
+  - key: academic_continuity_notes
+    section: 2. Academic Background & Tests
+    prompt: Briefly explain how this U.S. study program logically builds on your past
+      academic background or career step.
+    type: string
+    min_length: 5
+    max_length: 500
+    required: true
+    citation:
+      authority: U.S. Department of State (Consular Affairs)
+      title: Form DS-160 Online Nonimmigrant Visa Application Guidelines
+      url: https://travel.state.gov/content/travel/en/us-visas/tourism-visit/visitor.html
+  - key: i20_year1_total_cost_usd
+    section: 3. Financial Funding & Sponsorship
+    prompt: What is the total estimated cost of attendance for Year 1 as printed on
+      Form I-20 (Tuition + Living Expenses in USD)?
+    type: integer
+    min_value: 1000
+    max_value: 200000
+    required: true
+    citation:
+      authority: U.S. Department of State & SEVP
+      title: Form DS-160 & SEVIS I-20 Student Verification Guidelines
+      url: https://travel.state.gov/content/travel/en/us-visas/study/student-visa.html
+  - key: funding_source
+    section: 3. Financial Funding & Sponsorship
+    prompt: What is your primary funding source?
+    type: enum
+    options:
+    - Self_Funded
+    - Family_Individual_Sponsor
+    - University_Scholarship_Assistantship
+    - Educational_Bank_Loan
+    - Corporate_Government_Sponsorship
+    - other
+    required: true
+    citation:
+      authority: U.S. Department of State (Consular Affairs)
+      title: Form DS-160 Online Nonimmigrant Visa Application Guidelines
+      url: https://travel.state.gov/content/travel/en/us-visas/tourism-visit/visitor.html
+  - key: sponsor_name
+    section: 3. Financial Funding & Sponsorship
+    prompt: What is the full name of your primary financial sponsor (or 'Self')?
+    type: string
+    min_length: 2
+    max_length: 150
+    required: true
+    citation:
+      authority: U.S. Citizenship and Immigration Services (USCIS)
+      title: INA Section 101(a)(15)(H) & Form I-129 Petition Regulations
+      url: https://www.uscis.gov/working-in-the-united-states/temporary-workers/h-1b-specialty-occupations
+  - key: sponsor_relationship
+    section: 3. Financial Funding & Sponsorship
+    prompt: What is the sponsor's relationship to you (e.g. Parent, Self, Spouse,
+      Relative, Employer)?
+    type: string
+    min_length: 2
+    max_length: 100
+    required: true
+    citation:
+      authority: U.S. Citizenship and Immigration Services (USCIS)
+      title: INA Section 101(a)(15)(H) & Form I-129 Petition Regulations
+      url: https://www.uscis.gov/working-in-the-united-states/temporary-workers/h-1b-specialty-occupations
+  - key: sponsor_occupation
+    section: 3. Financial Funding & Sponsorship
+    prompt: What is the sponsor's occupation and employer name?
+    type: string
+    min_length: 2
+    max_length: 150
+    required: true
+    citation:
+      authority: U.S. Citizenship and Immigration Services (USCIS)
+      title: INA Section 101(a)(15)(H) & Form I-129 Petition Regulations
+      url: https://www.uscis.gov/working-in-the-united-states/temporary-workers/h-1b-specialty-occupations
+  - key: sponsor_annual_income_jpy
+    section: 3. Financial Funding & Sponsorship
+    prompt: What is the sponsor's annual income in local currency (in JPY)?
+    type: integer
+    min_value: 0
+    max_value: 1000000000
+    required: true
+    citation:
+      authority: U.S. Citizenship and Immigration Services (USCIS)
+      title: INA Section 101(a)(15)(H) & Form I-129 Petition Regulations
+      url: https://www.uscis.gov/working-in-the-united-states/temporary-workers/h-1b-specialty-occupations
+  - key: applicant_liquid_funds_jpy
+    section: 3. Financial Funding & Sponsorship
+    prompt: What is the total liquid funds currently available in bank accounts (in
+      JPY)?
+    type: integer
+    min_value: 0
+    max_value: 1000000000
+    required: true
+    citation:
+      authority: U.S. Department of State (Consular Affairs)
+      title: Form DS-160 Online Nonimmigrant Visa Application Guidelines
+      url: https://travel.state.gov/content/travel/en/us-visas/tourism-visit/visitor.html
+  - key: scholarship_amount_usd
+    section: 3. Financial Funding & Sponsorship
+    prompt: What is the university scholarship, assistantship, or fellowship award
+      amount (in USD, if applicable)?
+    type: integer
+    min_value: 0
+    max_value: 200000
+    required: false
+    citation:
+      authority: U.S. Department of State (Consular Affairs)
+      title: Form DS-160 Online Nonimmigrant Visa Application Guidelines
+      url: https://travel.state.gov/content/travel/en/us-visas/tourism-visit/visitor.html
+  - key: has_financial_support
+    section: 3. Financial Funding & Sponsorship
+    prompt: Do you have verified documentation showing immediate liquid funds covering
+      at least Year 1 expenses?
+    type: boolean
+    required: true
+    citation:
+      authority: U.S. Department of State (Consular Affairs)
+      title: Form DS-160 Online Nonimmigrant Visa Application Guidelines
+      url: https://travel.state.gov/content/travel/en/us-visas/tourism-visit/visitor.html
+  - key: current_location_country
+    section: 4. Residence Status in Japan
+    prompt: Which country are you currently residing in?
+    type: enum
+    options:
+    - Japan
+    - United States
+    - United Kingdom
+    - Canada
+    - Australia
+    - Germany
+    - France
+    - Singapore
+    - South Korea
+    - United Arab Emirates
+    - New Zealand
+    - Netherlands
+    - India
+    - China
+    - Bangladesh
+    - Philippines
+    - Vietnam
+    - Indonesia
+    - other
+    required: true
+    citation:
+      authority: U.S. Department of State (Consular Affairs)
+      title: Form DS-160 Online Nonimmigrant Visa Application Guidelines
+      url: https://travel.state.gov/content/travel/en/us-visas/tourism-visit/visitor.html
+  - key: residence_card_number
+    section: 4. Residence Status in Japan
+    prompt: What is your Japanese Residence Card (Zairyu Card) Number (if non-Japanese
+      national in Japan)?
+    type: string
+    min_length: 12
+    max_length: 12
+    required: false
+    citation:
+      authority: U.S. Department of State (Consular Affairs)
+      title: Form DS-160 Online Nonimmigrant Visa Application Guidelines
+      url: https://travel.state.gov/content/travel/en/us-visas/tourism-visit/visitor.html
+  - key: japan_residence_status
+    section: 4. Residence Status in Japan
+    prompt: What is your current Japanese residence status (e.g. Student, Work, Dependent,
+      Permanent Resident)?
+    type: string
+    min_length: 2
+    max_length: 100
+    required: false
+    citation:
+      authority: U.S. Department of State (Consular Affairs)
+      title: Form DS-160 Online Nonimmigrant Visa Application Guidelines
+      url: https://travel.state.gov/content/travel/en/us-visas/tourism-visit/visitor.html
+  - key: japan_residence_expiry
+    section: 4. Residence Status in Japan
+    prompt: What is the expiration date on your Japanese Residence Card (YYYY-MM-DD)?
+    type: date
+    required: false
+    citation:
+      authority: U.S. Department of State (Consular Affairs)
+      title: Form DS-160 Online Nonimmigrant Visa Application Guidelines
+      url: https://travel.state.gov/content/travel/en/us-visas/tourism-visit/visitor.html
+  - key: registered_address_japan
+    section: 4. Residence Status in Japan
+    prompt: What is your current residential address and phone number in Japan?
+    type: string
+    min_length: 5
+    max_length: 300
+    required: true
+    citation:
+      authority: U.S. Department of State (Consular Affairs)
+      title: Form DS-160 Online Nonimmigrant Visa Application Guidelines
+      url: https://travel.state.gov/content/travel/en/us-visas/tourism-visit/visitor.html
+  - key: us_school_contact_name
+    section: 5. U.S. Contact & Housing
+    prompt: What is the contact person or office name at your U.S. school (DSO / International
+      Student Office)?
+    type: string
+    min_length: 2
+    max_length: 150
+    required: true
+    citation:
+      authority: U.S. Department of State & SEVP
+      title: Form DS-160 & SEVIS I-20 Student Verification Guidelines
+      url: https://travel.state.gov/content/travel/en/us-visas/study/student-visa.html
+  - key: us_accommodation_type
+    section: 5. U.S. Contact & Housing
+    prompt: Where do you plan to reside in the U.S.?
+    type: enum
+    options:
+    - Campus_Dormitory
+    - Off_Campus_Apartment
+    - Homestay_Family
+    - Not_Yet_Known_Use_Campus_Address
+    required: true
+    citation:
+      authority: U.S. Department of State (Consular Affairs)
+      title: Form DS-160 Online Nonimmigrant Visa Application Guidelines
+      url: https://travel.state.gov/content/travel/en/us-visas/tourism-visit/visitor.html
+  - key: us_stay_address
+    section: 5. U.S. Contact & Housing
+    prompt: What is the address where you will reside in the U.S. (or school campus
+      address if dorm/undecided)?
+    type: string
+    min_length: 5
+    max_length: 300
+    required: true
+    citation:
+      authority: U.S. Department of State (Consular Affairs)
+      title: Form DS-160 Online Nonimmigrant Visa Application Guidelines
+      url: https://travel.state.gov/content/travel/en/us-visas/tourism-visit/visitor.html
+  - key: full_name
+    section: 6. Core DS-160 Information
+    prompt: What is your full legal name as it appears on your passport (Surname,
+      Given Names)?
+    type: string
+    min_length: 2
+    max_length: 200
+    required: true
     citation:
       authority: U.S. Department of State
       title: DS-160 Online Nonimmigrant Visa Application
       url: https://travel.state.gov/content/travel/en/us-visas/visa-information-resources/forms/ds-160-online-nonimmigrant-visa-application.html
-      source_version: "2026-04"
-    field_mappings:
-      # Personal & Identity
-      - form_field: applicant.full_name
-        answer_key: full_name
-        required: true
-      - form_field: applicant.gender
-        answer_key: gender
-        required: true
-      - form_field: applicant.date_of_birth
-        answer_key: date_of_birth
-        required: true
-      - form_field: applicant.city_of_birth
-        answer_key: city_of_birth
-        required: true
-      - form_field: applicant.country_of_birth
-        answer_key: country_of_birth
-        required: true
-      - form_field: applicant.nationality
-        answer_key: nationality
-        required: true
-      # Passport
-      - form_field: applicant.passport_number
-        answer_key: passport_number
-        required: true
-      - form_field: applicant.passport_expiry
-        answer_key: passport_expiry
-        required: true
-      # SEVIS & Student Details
-      - form_field: sevis.sevis_id
-        answer_key: sevis_id
-        required: true
-      - form_field: sevis.school_name
-        answer_key: school_name
-        required: true
-      - form_field: sevis.school_address
-        answer_key: school_address
-        required: true
-      - form_field: sevis.school_zip_code
-        answer_key: school_zip_code
-        required: true
-      - form_field: sevis.course_of_study
-        answer_key: course_of_study_major
-        required: true
-      - form_field: sevis.program_start_date
-        answer_key: program_start_date
-        required: true
-      - form_field: sevis.dso_contact_name
-        answer_key: dso_name
-        required: true
-      # Japan Residence (if applying in Japan)
-      - form_field: applicant.japan_residence_card
-        answer_key: residence_card_number
-        required: false
-      - form_field: applicant.japan_residence_status
-        answer_key: japan_residence_status
-        required: false
-      - form_field: applicant.japan_residence_expiry
-        answer_key: japan_residence_expiry
-        required: false
-      # Family & Contacts
-      - form_field: family.father_full_name
-        answer_key: father_full_name
-        required: true
-      - form_field: family.mother_full_name
-        answer_key: mother_full_name
-        required: true
-      - form_field: contact.us_school_contact
-        answer_key: us_school_contact_name
-        required: true
-      - form_field: travel.us_stay_address
-        answer_key: us_stay_address
-        required: true
-      # Academic & Career
-      - form_field: education.previous_institutions
-        answer_key: educational_institutions_attended
-        required: true
-      - form_field: education.test_scores
-        answer_key: standardized_tests_taken
-        required: true
-      - form_field: intent.post_graduation_career_plan
-        answer_key: post_graduation_career_plan
-        required: true
-      # Background & Social
-      - form_field: background.languages
-        answer_key: languages_spoken
-        required: true
-      - form_field: background.countries_visited_5yrs
-        answer_key: countries_visited_past_5yrs
-        required: true
-      - form_field: background.social_media_handles
-        answer_key: social_media_handles_past_5yrs
-        required: true
-      - form_field: background.phone_numbers_5yrs
-        answer_key: phone_numbers_past_5yrs
-        required: true
-      - form_field: background.email_addresses_5yrs
-        answer_key: email_addresses_past_5yrs
-        required: true
-
-  - code: i901
-    version: "2026-04"
-    official_title: I-901 SEVIS Fee Payment Form
+  - key: nationality
+    section: 6. Core DS-160 Information
+    prompt: What is your primary nationality (passport country)?
+    type: enum
+    options:
+    - JP
+    - US
+    - GB
+    - CA
+    - AU
+    - KR
+    - DE
+    - FR
+    - SG
+    - AE
+    - NZ
+    - NL
+    - IN
+    - CN
+    - BD
+    - PH
+    - VN
+    - ID
+    - TH
+    - MY
+    - SA
+    - other
+    required: true
     citation:
-      authority: U.S. Immigration and Customs Enforcement
-      title: SEVIS I-901 fee
-      url: https://www.fmjfee.com/i901fee/index.html
-      source_version: "2026-04"
-    field_mappings:
-      - form_field: student.sevis_id
-        answer_key: sevis_id
-        required: true
-      - form_field: student.last_name
-        answer_key: full_name
-        required: true
-      - form_field: student.first_name
-        answer_key: full_name
-        required: true
-      - form_field: student.date_of_birth
-        answer_key: date_of_birth
-        required: true
-      - form_field: student.gender
-        answer_key: gender
-        required: true
-      - form_field: student.country_of_birth
-        answer_key: country_of_birth
-        required: true
-      - form_field: student.country_of_citizenship
-        answer_key: nationality
-        required: true
-      - form_field: school.school_code
-        answer_key: school_sevis_code
-        required: true
-      - form_field: school.school_name
-        answer_key: school_name
-        required: true
-      - form_field: category.visa_category
-        answer_key: visa_category_subtype
-        required: true
-
-  - code: i20
-    version: "2026-04"
-    official_title: Form I-20 Student Record Data
+      authority: U.S. Department of State (Consular Affairs)
+      title: Form DS-160 Online Nonimmigrant Visa Application Guidelines
+      url: https://travel.state.gov/content/travel/en/us-visas/tourism-visit/visitor.html
+  - key: gender
+    section: 6. Core DS-160 Information
+    prompt: What is your sex / gender?
+    type: enum
+    options:
+    - Male
+    - Female
+    - Other
+    required: true
     citation:
-      authority: U.S. Department of Homeland Security
-      title: SEVP Form I-20 Data Record
-      url: https://www.ice.gov/sevis
-      source_version: "2026-04"
-    field_mappings:
-      - form_field: student.sevis_id
-        answer_key: sevis_id
-        required: true
-      - form_field: student.legal_name
-        answer_key: full_name
-        required: true
-      - form_field: student.date_of_birth
-        answer_key: date_of_birth
-        required: true
-      - form_field: student.citizenship
-        answer_key: nationality
-        required: true
-      - form_field: program.school_name
-        answer_key: school_name
-        required: true
-      - form_field: program.school_code
-        answer_key: school_sevis_code
-        required: true
-      - form_field: program.major_field
-        answer_key: course_of_study_major
-        required: true
-      - form_field: program.education_level
-        answer_key: study_level
-        required: true
-      - form_field: program.start_date
-        answer_key: program_start_date
-        required: true
-      - form_field: program.end_date
-        answer_key: program_end_date
-        required: true
-      - form_field: financial.year1_total_cost_usd
-        answer_key: i20_year1_total_cost_usd
-        required: true
-      - form_field: financial.funding_source
-        answer_key: funding_source
-        required: true
-
-  - code: i134
-    version: "2026-04"
-    official_title: Form I-134 Declaration of Financial Support
+      authority: U.S. Department of State (Consular Affairs)
+      title: Form DS-160 Online Nonimmigrant Visa Application Guidelines
+      url: https://travel.state.gov/content/travel/en/us-visas/tourism-visit/visitor.html
+  - key: date_of_birth
+    section: 6. Core DS-160 Information
+    prompt: What is your date of birth (YYYY-MM-DD)?
+    type: date
+    required: true
     citation:
-      authority: U.S. Citizenship and Immigration Services
-      title: Declaration of Financial Support (Form I-134)
-      url: https://www.uscis.gov/i-134
-      source_version: "2026-04"
-    field_mappings:
-      - form_field: sponsor.full_name
-        answer_key: sponsor_name
-        required: true
-      - form_field: sponsor.relationship
-        answer_key: sponsor_relationship
-        required: true
-      - form_field: sponsor.occupation
-        answer_key: sponsor_occupation
-        required: true
-      - form_field: sponsor.annual_income_jpy
-        answer_key: sponsor_annual_income_jpy
-        required: true
-      - form_field: beneficiary.student_full_name
-        answer_key: full_name
-        required: true
-      - form_field: beneficiary.date_of_birth
-        answer_key: date_of_birth
-        required: true
-      - form_field: beneficiary.nationality
-        answer_key: nationality
-        required: true
-      - form_field: financial.funds_available_jpy
-        answer_key: applicant_liquid_funds_jpy
-        required: true
-
-  - code: appointment_mrv
-    version: "2026-04"
-    official_title: U.S. Visa Appointment Portal & MRV Fee Scheduling
+      authority: U.S. Department of State (Consular Affairs)
+      title: Form DS-160 Online Nonimmigrant Visa Application Guidelines
+      url: https://travel.state.gov/content/travel/en/us-visas/tourism-visit/visitor.html
+  - key: city_of_birth
+    section: 6. Core DS-160 Information
+    prompt: What is your city of birth?
+    type: string
+    min_length: 2
+    max_length: 100
+    required: true
     citation:
-      authority: U.S. Department of State / CGI Federal
-      title: Official U.S. Visa Services Japan
-      url: https://travel.state.gov/content/travel/en/us-visas/visa-information-resources/policy-updates.html
-      source_version: "2026-04"
-    field_mappings:
-      - form_field: appointment.applicant_full_name
-        answer_key: full_name
-        required: true
-      - form_field: appointment.nationality
-        answer_key: nationality
-        required: true
-      - form_field: appointment.passport_number
-        answer_key: passport_number
-        required: true
-      - form_field: appointment.sevis_id
-        answer_key: sevis_id
-        required: true
-      - form_field: appointment.school_name
-        answer_key: school_name
-        required: true
-      - form_field: appointment.residence_country
-        answer_key: current_location_country
-        required: true
-
-fees:
-  - code: sevis_i901
-    amount: 350
-    currency: USD
-    channel: online
-    published: true
-    note: Mandatory I-901 SEVIS fee for F-1 / M-1 students paid online at FMJfee.com prior to the visa interview. Non-refundable.
+      authority: U.S. Department of State (Consular Affairs)
+      title: Form DS-160 Online Nonimmigrant Visa Application Guidelines
+      url: https://travel.state.gov/content/travel/en/us-visas/tourism-visit/visitor.html
+  - key: country_of_birth
+    section: 6. Core DS-160 Information
+    prompt: What is your country of birth?
+    type: string
+    min_length: 2
+    max_length: 100
+    required: true
     citation:
-      authority: U.S. Immigration and Customs Enforcement
-      title: SEVIS I-901 fee
-      url: https://www.fmjfee.com/i901fee/index.html
-      retrieved: "2026-08-01"
-
-  - code: mrv_fee
-    amount: 185
-    currency: USD
-    channel: embassy
-    published: true
-    note: Machine Readable Visa (MRV) application fee for student visa category. Non-refundable. Paid before scheduling interview.
+      authority: U.S. Department of State (Consular Affairs)
+      title: Form DS-160 Online Nonimmigrant Visa Application Guidelines
+      url: https://travel.state.gov/content/travel/en/us-visas/tourism-visit/visitor.html
+  - key: passport_number
+    section: 6. Core DS-160 Information
+    prompt: What is your passport number?
+    type: string
+    min_length: 5
+    max_length: 32
+    required: true
+    citation:
+      authority: U.S. Department of State (Consular Affairs)
+      title: Form DS-160 Online Nonimmigrant Visa Application Guidelines
+      url: https://travel.state.gov/content/travel/en/us-visas/tourism-visit/visitor.html
+  - key: passport_expiry
+    section: 6. Core DS-160 Information
+    prompt: What is your passport expiration date (YYYY-MM-DD)?
+    type: date
+    required: true
+    citation:
+      authority: U.S. Department of State (Consular Affairs)
+      title: Form DS-160 Online Nonimmigrant Visa Application Guidelines
+      url: https://travel.state.gov/content/travel/en/us-visas/tourism-visit/visitor.html
+  - key: passport_is_epassport
+    section: 6. Core DS-160 Information
+    prompt: Does your passport contain an embedded digital chip (e-passport)?
+    type: boolean
+    required: true
+    citation:
+      authority: U.S. Department of State (Consular Affairs)
+      title: Form DS-160 Online Nonimmigrant Visa Application Guidelines
+      url: https://travel.state.gov/content/travel/en/us-visas/tourism-visit/visitor.html
+  - key: father_full_name
+    section: 6. Core DS-160 Information
+    prompt: What is your father's full name (Surname, Given Names)?
+    type: string
+    min_length: 2
+    max_length: 150
+    required: true
+    citation:
+      authority: U.S. Department of State (Consular Affairs)
+      title: Form DS-160 Online Nonimmigrant Visa Application Guidelines
+      url: https://travel.state.gov/content/travel/en/us-visas/tourism-visit/visitor.html
+  - key: mother_full_name
+    section: 6. Core DS-160 Information
+    prompt: What is your mother's full name (Surname, Given Names)?
+    type: string
+    min_length: 2
+    max_length: 150
+    required: true
+    citation:
+      authority: U.S. Department of State (Consular Affairs)
+      title: Form DS-160 Online Nonimmigrant Visa Application Guidelines
+      url: https://travel.state.gov/content/travel/en/us-visas/tourism-visit/visitor.html
+  - key: has_immediate_relatives_in_us
+    section: 6. Core DS-160 Information
+    prompt: Do you have any immediate relatives in the U.S. (Spouse, Fiancé, Child,
+      Sibling)?
+    type: boolean
+    required: true
+    citation:
+      authority: U.S. Department of State (Consular Affairs)
+      title: Form DS-160 Online Nonimmigrant Visa Application Guidelines
+      url: https://travel.state.gov/content/travel/en/us-visas/tourism-visit/visitor.html
+  - key: has_previous_us_visits
+    section: 6. Core DS-160 Information
+    prompt: Have you ever previously visited the United States?
+    type: boolean
+    required: true
+    citation:
+      authority: U.S. Department of State (Consular Affairs)
+      title: Form DS-160 Online Nonimmigrant Visa Application Guidelines
+      url: https://travel.state.gov/content/travel/en/us-visas/tourism-visit/visitor.html
+  - key: has_previous_us_visa
+    section: 6. Core DS-160 Information
+    prompt: Have you ever been issued a U.S. Visa?
+    type: boolean
+    required: true
+    citation:
+      authority: U.S. Department of State (Consular Affairs)
+      title: Form DS-160 Online Nonimmigrant Visa Application Guidelines
+      url: https://travel.state.gov/content/travel/en/us-visas/tourism-visit/visitor.html
+  - key: prior_us_visa_refusal
+    section: 6. Core DS-160 Information
+    prompt: Have you ever been refused a U.S. Visa or denied admission to the U.S.?
+    type: boolean
+    required: true
+    citation:
+      authority: U.S. Department of State (Consular Affairs)
+      title: Form DS-160 Online Nonimmigrant Visa Application Guidelines
+      url: https://travel.state.gov/content/travel/en/us-visas/tourism-visit/visitor.html
+  - key: languages_spoken
+    section: 6. Core DS-160 Information
+    prompt: Which languages do you speak?
+    type: string
+    min_length: 2
+    max_length: 150
+    required: true
+    citation:
+      authority: U.S. Department of State (Consular Affairs)
+      title: Form DS-160 Online Nonimmigrant Visa Application Guidelines
+      url: https://travel.state.gov/content/travel/en/us-visas/tourism-visit/visitor.html
+  - key: countries_visited_past_5yrs
+    section: 6. Core DS-160 Information
+    prompt: List all countries and regions you have visited in the past 5 years.
+    type: string
+    min_length: 2
+    max_length: 500
+    required: true
+    citation:
+      authority: U.S. Department of State (Consular Affairs)
+      title: Form DS-160 Online Nonimmigrant Visa Application Guidelines
+      url: https://travel.state.gov/content/travel/en/us-visas/tourism-visit/visitor.html
+  - key: social_media_handles_past_5yrs
+    section: 6. Core DS-160 Information
+    prompt: List social media platform identifiers/handles used in the past 5 years
+      (e.g. LinkedIn, Instagram, X/Twitter).
+    type: string
+    min_length: 2
+    max_length: 300
+    required: true
+    citation:
+      authority: U.S. Department of State (Consular Affairs)
+      title: Form DS-160 Online Nonimmigrant Visa Application Guidelines
+      url: https://travel.state.gov/content/travel/en/us-visas/tourism-visit/visitor.html
+  - key: phone_numbers_past_5yrs
+    section: 6. Core DS-160 Information
+    prompt: List all phone numbers used in the past 5 years.
+    type: string
+    min_length: 5
+    max_length: 200
+    required: true
+    citation:
+      authority: U.S. Department of State (Consular Affairs)
+      title: Form DS-160 Online Nonimmigrant Visa Application Guidelines
+      url: https://travel.state.gov/content/travel/en/us-visas/tourism-visit/visitor.html
+  - key: email_addresses_past_5yrs
+    section: 6. Core DS-160 Information
+    prompt: List all email addresses used in the past 5 years.
+    type: string
+    min_length: 5
+    max_length: 250
+    required: true
+    citation:
+      authority: U.S. Department of State (Consular Affairs)
+      title: Form DS-160 Online Nonimmigrant Visa Application Guidelines
+      url: https://travel.state.gov/content/travel/en/us-visas/tourism-visit/visitor.html
+  - key: post_graduation_career_plan
+    section: 7. Nonimmigrant Intent & Career Plan
+    prompt: What is your concrete career plan in Japan or your home country after
+      completing your U.S. degree?
+    type: string
+    min_length: 10
+    max_length: 600
+    required: true
     citation:
       authority: U.S. Department of State
-      title: Visa fees and reciprocity tables
+      title: INA Section 214(b) Student Intent
+      url: https://travel.state.gov/content/travel/en/us-visas/visa-information-resources/visa-denials.html
+  - key: home_country_ties_summary
+    section: 7. Nonimmigrant Intent & Career Plan
+    prompt: Describe your social, family, and economic anchors in Japan / home country
+      ensuring your departure upon graduation.
+    type: string
+    min_length: 5
+    max_length: 600
+    required: true
+    citation:
+      authority: U.S. Department of State (Consular Affairs)
+      title: Form DS-160 Online Nonimmigrant Visa Application Guidelines
+      url: https://travel.state.gov/content/travel/en/us-visas/tourism-visit/visitor.html
+  - key: interview_aware
+    section: 8. Interview & Security Screening
+    prompt: An in-person interview is mandatory for F-1 applicants (no interview waiver
+      / dropbox for F/M/J) since September 2025. Are you prepared to attend an in-person
+      interview?
+    type: boolean
+    required: true
+    citation:
+      authority: U.S. Department of State
+      title: In-person interview requirement for nonimmigrant visas
+      url: https://travel.state.gov/content/travel/en/us-visas/visa-information-resources/policy-updates.html
+  - key: criminal_disclosures
+    section: 8. Interview & Security Screening
+    prompt: Have you ever been convicted of a crime, arrested, or cited for any legal
+      offense?
+    type: boolean
+    required: true
+    citation:
+      authority: U.S. Citizenship and Immigration Services
+      title: Inadmissibility Grounds (INA 212(a))
+      url: https://www.uscis.gov/laws-and-regulations/immigration-and-nationality-act
+  - key: drug_abuse_addiction_history
+    section: 8. Interview & Security Screening
+    prompt: Have you ever been a drug abuser or addict, or violated any controlled
+      substance laws?
+    type: boolean
+    required: true
+    citation:
+      authority: U.S. Department of State (Consular Affairs)
+      title: Immigration and Nationality Act (INA) Section 212(a) Inadmissibility
+        Grounds
+      url: https://travel.state.gov/content/travel/en/us-visas.html
+  - key: prior_immigration_violations_deportations
+    section: 8. Interview & Security Screening
+    prompt: Have you ever been ordered removed, deported, or subject to exclusion
+      proceedings in any country?
+    type: boolean
+    required: true
+    citation:
+      authority: U.S. Department of State (Consular Affairs)
+      title: Immigration and Nationality Act (INA) Section 212(a) Inadmissibility
+        Grounds
+      url: https://travel.state.gov/content/travel/en/us-visas.html
+  - key: sanctioned_countries_travel
+    section: 8. Interview & Security Screening
+    prompt: Have you traveled to Cuba (on/after Jan 12 2021), Iran, Iraq, Syria, Sudan,
+      Libya, Somalia, Yemen, or North Korea?
+    type: boolean
+    required: true
+    citation:
+      authority: U.S. Department of State (Consular Affairs)
+      title: Form DS-160 Online Nonimmigrant Visa Application Guidelines
+      url: https://travel.state.gov/content/travel/en/us-visas/tourism-visit/visitor.html
+eligibility:
+  rules:
+  - key: has_i20
+    operator: equals
+    value: true
+    failure_status: fail
+    message: An official, signed Form I-20 issued by an SEVP-certified U.S. institution
+      is legally required before applying for an F-1 student visa.
+    citation:
+      authority: U.S. Department of Homeland Security
+      title: SEVP — Form I-20 Certificate of Eligibility
+      url: https://www.ice.gov/sevis
+      source_version: 2026-04
+  - key: has_sevis_fee_receipt
+    operator: equals
+    value: true
+    failure_status: fail
+    message: The mandatory SEVIS I-901 fee ($350 for F-1) must be paid at FMJfee.com
+      prior to attending the consular visa interview.
+    citation:
+      authority: U.S. Immigration and Customs Enforcement
+      title: SEVIS I-901 fee
+      url: https://www.fmjfee.com/i901fee/index.html
+      source_version: 2026-04
+  - key: has_financial_support
+    operator: equals
+    value: true
+    failure_status: fail
+    message: Under INA 214(b), you must document immediate liquid funds covering the
+      full 1-year estimated cost of attendance (tuition + living expenses) stated
+      on Form I-20.
+    citation:
+      authority: U.S. Department of State
+      title: F-1 Student Visa Financial Qualifications
+      url: https://travel.state.gov/content/travel/en/us-visas/study/student-visa.html
+      source_version: 2026-04
+  - key: applicant_liquid_funds_jpy
+    operator: min
+    value: 3000000
+    failure_status: at_risk
+    message: Available liquid bank funds appear low relative to standard U.S. university
+      Year 1 tuition and living costs. Consular officers scrutinize unencumbered bank
+      balances and sponsor income capacity.
+    citation:
+      authority: U.S. Department of State
+      title: Student Visa Financial Requirements
+      url: https://travel.state.gov/content/travel/en/us-visas/study/student-visa.html
+      source_version: 2026-04
+  - key: interview_aware
+    operator: equals
+    value: true
+    failure_status: review
+    message: An in-person interview is mandatory for all F/M/J applicants. Schedule
+      the appointment at the U.S. Embassy Tokyo or Consulate Naha/Osaka after submitting
+      Form DS-160.
+    citation:
+      authority: U.S. Department of State
+      title: In-person interview requirement for nonimmigrant visas
+      url: https://travel.state.gov/content/travel/en/us-visas/visa-information-resources/policy-updates.html
+      source_version: 2026-04
+  - key: prior_us_visa_refusal
+    operator: equals
+    value: false
+    failure_status: review
+    message: Prior U.S. visa refusal requires detailed disclosure on Form DS-160 and
+      strong proof of academic intent and changed circumstances under INA 214(b).
+    citation:
+      authority: U.S. Department of State
+      title: Visa Denials and Student Intent
+      url: https://travel.state.gov/content/travel/en/us-visas/visa-information-resources/visa-denials.html
+      source_version: 2026-04
+  - key: criminal_disclosures
+    operator: equals
+    value: false
+    failure_status: review
+    message: Certain criminal arrests or convictions may trigger inadmissibility under
+      INA 212(a)(2); consular review and court records required.
+    citation:
+      authority: U.S. Citizenship and Immigration Services
+      title: Inadmissibility Grounds (INA 212(a))
+      url: https://www.uscis.gov/laws-and-regulations/immigration-and-nationality-act
+      source_version: 2026-04
+  - key: drug_abuse_addiction_history
+    operator: equals
+    value: false
+    failure_status: fail
+    message: Drug abuse or controlled substance violations trigger mandatory ineligibility
+      under INA 212(a)(2)(A).
+    citation:
+      authority: U.S. Department of State
+      title: Controlled Substances Ineligibility
+      url: https://travel.state.gov/content/travel/en/us-visas/visa-information-resources/waivers.html
+      source_version: 2026-04
+  - key: prior_immigration_violations_deportations
+    operator: equals
+    value: false
+    failure_status: fail
+    message: Prior deportation, unlawful presence, or visa fraud requires an INA 212(d)(3)
+      waiver of inadmissibility.
+    citation:
+      authority: U.S. Citizenship and Immigration Services
+      title: Unlawful Presence and Inadmissibility
+      url: https://www.uscis.gov/laws-and-regulations/immigration-and-nationality-act
+      source_version: 2026-04
+  - key: sanctioned_countries_travel
+    operator: equals
+    value: false
+    failure_status: warning
+    message: Travel to sanctioned countries requires additional administrative security
+      screening.
+    citation:
+      authority: U.S. Department of State
+      title: Administrative Processing and Security Screenings
+      url: https://travel.state.gov/content/travel/en/us-visas/visa-information-resources/administrative-processing-information.html
+      source_version: 2026-04
+documents:
+  items:
+  - code: passport
+    name:
+      en: Valid Passport (valid at least 6 months beyond intended U.S. stay)
+      ja: 有効なパスポート（米国滞在予定期間＋6ヶ月以上の残存期間）
+    how_to_obtain:
+      en: Original valid passport plus any previous passports containing prior U.S.
+        visas.
+    why_required:
+      en: Primary identification and travel document required for visa issuance.
+    is_required: true
+    citation:
+      authority: U.S. Department of State
+      title: F-1 Student Visa Checklist
+      url: https://travel.state.gov/content/travel/en/us-visas/study/student-visa.html
+      source_version: 2026-04
+  - code: ds160_confirmation
+    name:
+      en: DS-160 Confirmation Page with Barcode
+      ja: DS-160確認ページ（バーコード付き）
+    how_to_obtain:
+      en: Submit Form DS-160 online at ceac.state.gov (with SEVIS ID and school details)
+        and print barcode confirmation.
+    why_required:
+      en: Mandatory entry pass for the consular visa interview.
+    is_required: true
+    citation:
+      authority: U.S. Department of State
+      title: DS-160 Online Nonimmigrant Visa Application
+      url: https://ceac.state.gov/genniv/
+      source_version: 2026-04
+  - code: interview_letter
+    name:
+      en: Visa Interview Appointment Confirmation Letter
+      ja: 面接予約確認書
+    how_to_obtain:
+      en: Schedule an appointment on the official U.S. visa portal for Japan and print
+        the confirmation letter.
+    why_required:
+      en: Entry pass for the mandatory in-person interview at U.S. Embassy Tokyo /
+        Consulates.
+    is_required: true
+    citation:
+      authority: U.S. Department of State
+      title: In-person interview requirement for nonimmigrant visas
+      url: https://travel.state.gov/content/travel/en/us-visas/visa-information-resources/policy-updates.html
+      source_version: 2026-04
+  - code: mrv_fee_receipt
+    name:
+      en: MRV Application Fee Payment Receipt ($185)
+      ja: ビザ申請料金（MRV Fee $185）領収書
+    how_to_obtain:
+      en: Pay the non-refundable MRV visa fee online or via bank transfer and print
+        confirmation.
+    why_required:
+      en: Proof of mandatory visa application fee payment.
+    is_required: true
+    citation:
+      authority: U.S. Department of State
+      title: Fees for Visa Services
       url: https://travel.state.gov/content/travel/en/us-visas/visa-information-resources/fees/fees-visa-services.html
-      retrieved: "2026-08-01"
-
-sources:
-  - title: F-1 Student Visa (U.S. Department of State)
-    url: https://travel.state.gov/content/travel/en/us-visas/study/student-visa.html
-    retrieved: "2026-08-01"
-  - title: SEVIS I-901 fee (ICE)
-    url: https://www.fmjfee.com/i901fee/index.html
-    retrieved: "2026-08-01"
-  - title: DS-160 Online Nonimmigrant Visa Application
+      source_version: 2026-04
+  - code: photo
+    name:
+      en: U.S. Visa Photo (2x2 inch / 5x5 cm color, white background)
+      ja: 米国ビザ用写真（5cm×5cm、白背景）
+    how_to_obtain:
+      en: Compliant 2x2 inch color photo taken within 6 months meeting State Department
+        guidelines.
+    why_required:
+      en: Required for visa foil issuance.
+    is_required: true
+    citation:
+      authority: U.S. Department of State
+      title: Photo Requirements
+      url: https://travel.state.gov/content/travel/en/us-visas/visa-information-resources/photos.html
+      source_version: 2026-04
+  - code: residence_card
+    name:
+      en: Japanese Residence Card (Zairyu Card) - for non-Japanese applicants
+      ja: 在留カード（日本国籍以外の方）
+    how_to_obtain:
+      en: Original current Japanese Residence Card with valid status of residence.
+    why_required:
+      en: Proves legal residence status in Japan for third-country nationals applying
+        in Japan.
+    is_required: true
+    citation:
+      authority: Immigration Services Agency of Japan
+      title: Residence Card System
+      url: https://www.moj.go.jp/isa/applications/procedures/index.html
+      source_version: 2026-04
+  - code: i20
+    name:
+      en: Form I-20 (Certificate of Eligibility for Nonimmigrant Student Status)
+      ja: I-20原本（学校DSOおよび申請者本人の署名入り）
+    how_to_obtain:
+      en: Issued by your SEVP-certified U.S. school; signed by both the school DSO
+        and you (or parent if under 18).
+    why_required:
+      en: Primary legal document establishing SEVP acceptance, SEVIS ID, program duration,
+        and estimated costs.
+    is_required: true
+    citation:
+      authority: U.S. Department of Homeland Security
+      title: SEVP — Students (F/M)
+      url: https://www.ice.gov/sevis
+      source_version: 2026-04
+  - code: sevis_fee_receipt
+    name:
+      en: SEVIS I-901 Fee Payment Receipt ($350)
+      ja: SEVIS I-901費用（$350）支払証明書
+    how_to_obtain:
+      en: Pay online at fmjfee.com using your SEVIS ID and school code, and print
+        the official receipt.
+    why_required:
+      en: Mandatory proof of SEVIS fee payment required before visa interview.
+    is_required: true
+    citation:
+      authority: U.S. Immigration and Customs Enforcement
+      title: SEVIS I-901 fee
+      url: https://www.fmjfee.com/i901fee/index.html
+      source_version: 2026-04
+  - code: admission_letter
+    name:
+      en: University / School Official Acceptance Letter
+      ja: 米国大学・教育機関の正式合格通知書（Acceptance Letter）
+    how_to_obtain:
+      en: Provided by the U.S. university or school international admissions office.
+    why_required:
+      en: Confirms unconditional admission to the academic program.
+    is_required: true
+    citation:
+      authority: U.S. Department of State
+      title: F-1 Student Visa Requirements
+      url: https://travel.state.gov/content/travel/en/us-visas/study/student-visa.html
+      source_version: 2026-04
+  - code: academic_transcripts
+    name:
+      en: Official Academic Transcripts (High School & Higher Education)
+      ja: 成績証明書原本（高校および大学・大学院）
+    how_to_obtain:
+      en: Sealed official transcripts in English from all secondary schools and colleges
+        attended.
+    why_required:
+      en: Proves academic qualification, grade point average, and continuous academic
+        standing.
+    is_required: true
+    citation:
+      authority: U.S. Department of State
+      title: Student Visa Application Documents
+      url: https://travel.state.gov/content/travel/en/us-visas/study/student-visa.html
+      source_version: 2026-04
+  - code: degree_certificates
+    name:
+      en: Degree Certificates / Diplomas / Graduation Certificates
+      ja: 卒業証明書・学位記
+    how_to_obtain:
+      en: Official graduation certificates or degree diplomas from prior educational
+        institutions.
+    why_required:
+      en: Verifies completion of prerequisites required for the intended level of
+        study.
+    is_required: true
+    citation:
+      authority: U.S. Department of State
+      title: Student Visa Application Documents
+      url: https://travel.state.gov/content/travel/en/us-visas/study/student-visa.html
+      source_version: 2026-04
+  - code: test_score_reports
+    name:
+      en: Standardized Test Score Reports (TOEFL, IELTS, Duolingo, GRE, GMAT, SAT)
+      ja: 語学試験・適性試験スコア票（TOEFL, IELTS, Duolingo, GRE, GMAT等）
+    how_to_obtain:
+      en: Official score reports from ETS, British Council, Duolingo, College Board,
+        etc.
+    why_required:
+      en: Demonstrates English language proficiency and academic aptitude matching
+        program requirements.
+    is_required: true
+    citation:
+      authority: U.S. Department of State
+      title: Student Visa Language Proficiency
+      url: https://travel.state.gov/content/travel/en/us-visas/study/student-visa.html
+      source_version: 2026-04
+  - code: financial_evidence
+    name:
+      en: Bank Balance Certificate(s) & 6-Month Statements (Covering Year 1 I-20 Total
+        Cost)
+      ja: 残高証明書および過去6ヶ月分の預金取引明細書（初年度総費用をカバー）
+    how_to_obtain:
+      en: Bank balance certificate in English and 6 months of detailed account statements
+        showing liquid funds.
+    why_required:
+      en: Demonstrates immediate liquid funds covering tuition and living expenses
+        without unauthorized work.
+    is_required: true
+    citation:
+      authority: U.S. Department of State
+      title: F-1 Student Visa Financial Qualifications
+      url: https://travel.state.gov/content/travel/en/us-visas/study/student-visa.html
+      source_version: 2026-04
+  - code: sponsor_affidavit
+    name:
+      en: Signed Sponsor Affidavit of Support & Proof of Sponsor Income (Tax Returns
+        / Pay Slips)
+      ja: 資金提供者の身元引受書（Affidavit of Support）および所得証明・納税証明書
+    how_to_obtain:
+      en: Signed affidavit of financial support from parent/sponsor, along with employment
+        certificate, tax returns, and relationship proof.
+    why_required:
+      en: Demonstrates legitimate, continuous financial backing for subsequent years
+        of study.
+    is_required: false
+    citation:
+      authority: U.S. Citizenship and Immigration Services
+      title: Form I-134 Declaration of Financial Support
+      url: https://www.uscis.gov/i-134
+      source_version: 2026-04
+  - code: scholarship_letter
+    name:
+      en: Official University Scholarship / Assistantship / Loan Sanction Letter
+      ja: 奨学金授与証明書または教育ローン承認書（該当者のみ）
+    how_to_obtain:
+      en: Letter from university department or approved bank detailing grant, stipend,
+        or loan amount.
+    why_required:
+      en: Proves institutional funding or authorized educational credit.
+    is_required: false
+    citation:
+      authority: U.S. Department of State
+      title: Student Financial Sponsorship
+      url: https://travel.state.gov/content/travel/en/us-visas/study/student-visa.html
+      source_version: 2026-04
+forms:
+- code: ds160
+  version: 2026-04
+  official_title: Online Nonimmigrant Visa Application (Form DS-160 - Student / SEVIS
+    Edition)
+  citation:
+    authority: U.S. Department of State
+    title: DS-160 Online Nonimmigrant Visa Application
     url: https://travel.state.gov/content/travel/en/us-visas/visa-information-resources/forms/ds-160-online-nonimmigrant-visa-application.html
-    retrieved: "2026-08-01"
-  - title: In-person interview requirement for nonimmigrant visas
-    url: https://travel.state.gov/content/travel/en/us-visas/visa-information-resources/policy-updates.html
-    retrieved: "2026-08-01"
-  - title: Form I-134 Declaration of Financial Support
+    source_version: 2026-04
+  field_mappings:
+  - form_field: applicant.full_name
+    answer_key: full_name
+    required: true
+  - form_field: applicant.gender
+    answer_key: gender
+    required: true
+  - form_field: applicant.date_of_birth
+    answer_key: date_of_birth
+    required: true
+  - form_field: applicant.city_of_birth
+    answer_key: city_of_birth
+    required: true
+  - form_field: applicant.country_of_birth
+    answer_key: country_of_birth
+    required: true
+  - form_field: applicant.nationality
+    answer_key: nationality
+    required: true
+  - form_field: applicant.passport_number
+    answer_key: passport_number
+    required: true
+  - form_field: applicant.passport_expiry
+    answer_key: passport_expiry
+    required: true
+  - form_field: sevis.sevis_id
+    answer_key: sevis_id
+    required: true
+  - form_field: sevis.school_name
+    answer_key: school_name
+    required: true
+  - form_field: sevis.school_address
+    answer_key: school_address
+    required: true
+  - form_field: sevis.school_zip_code
+    answer_key: school_zip_code
+    required: true
+  - form_field: sevis.course_of_study
+    answer_key: course_of_study_major
+    required: true
+  - form_field: sevis.program_start_date
+    answer_key: program_start_date
+    required: true
+  - form_field: sevis.dso_contact_name
+    answer_key: dso_name
+    required: true
+  - form_field: applicant.japan_residence_card
+    answer_key: residence_card_number
+    required: false
+  - form_field: applicant.japan_residence_status
+    answer_key: japan_residence_status
+    required: false
+  - form_field: applicant.japan_residence_expiry
+    answer_key: japan_residence_expiry
+    required: false
+  - form_field: family.father_full_name
+    answer_key: father_full_name
+    required: true
+  - form_field: family.mother_full_name
+    answer_key: mother_full_name
+    required: true
+  - form_field: contact.us_school_contact
+    answer_key: us_school_contact_name
+    required: true
+  - form_field: travel.us_stay_address
+    answer_key: us_stay_address
+    required: true
+  - form_field: education.previous_institutions
+    answer_key: educational_institutions_attended
+    required: true
+  - form_field: education.test_scores
+    answer_key: standardized_tests_taken
+    required: true
+  - form_field: intent.post_graduation_career_plan
+    answer_key: post_graduation_career_plan
+    required: true
+  - form_field: background.languages
+    answer_key: languages_spoken
+    required: true
+  - form_field: background.countries_visited_5yrs
+    answer_key: countries_visited_past_5yrs
+    required: true
+  - form_field: background.social_media_handles
+    answer_key: social_media_handles_past_5yrs
+    required: true
+  - form_field: background.phone_numbers_5yrs
+    answer_key: phone_numbers_past_5yrs
+    required: true
+  - form_field: background.email_addresses_5yrs
+    answer_key: email_addresses_past_5yrs
+    required: true
+- code: i901
+  version: 2026-04
+  official_title: I-901 SEVIS Fee Payment Form
+  citation:
+    authority: U.S. Immigration and Customs Enforcement
+    title: SEVIS I-901 fee
+    url: https://www.fmjfee.com/i901fee/index.html
+    source_version: 2026-04
+  field_mappings:
+  - form_field: student.sevis_id
+    answer_key: sevis_id
+    required: true
+  - form_field: student.last_name
+    answer_key: full_name
+    required: true
+  - form_field: student.first_name
+    answer_key: full_name
+    required: true
+  - form_field: student.date_of_birth
+    answer_key: date_of_birth
+    required: true
+  - form_field: student.gender
+    answer_key: gender
+    required: true
+  - form_field: student.country_of_birth
+    answer_key: country_of_birth
+    required: true
+  - form_field: student.country_of_citizenship
+    answer_key: nationality
+    required: true
+  - form_field: school.school_code
+    answer_key: school_sevis_code
+    required: true
+  - form_field: school.school_name
+    answer_key: school_name
+    required: true
+  - form_field: category.visa_category
+    answer_key: visa_category_subtype
+    required: true
+- code: i20
+  version: 2026-04
+  official_title: Form I-20 Student Record Data
+  citation:
+    authority: U.S. Department of Homeland Security
+    title: SEVP Form I-20 Data Record
+    url: https://www.ice.gov/sevis
+    source_version: 2026-04
+  field_mappings:
+  - form_field: student.sevis_id
+    answer_key: sevis_id
+    required: true
+  - form_field: student.legal_name
+    answer_key: full_name
+    required: true
+  - form_field: student.date_of_birth
+    answer_key: date_of_birth
+    required: true
+  - form_field: student.citizenship
+    answer_key: nationality
+    required: true
+  - form_field: program.school_name
+    answer_key: school_name
+    required: true
+  - form_field: program.school_code
+    answer_key: school_sevis_code
+    required: true
+  - form_field: program.major_field
+    answer_key: course_of_study_major
+    required: true
+  - form_field: program.education_level
+    answer_key: study_level
+    required: true
+  - form_field: program.start_date
+    answer_key: program_start_date
+    required: true
+  - form_field: program.end_date
+    answer_key: program_end_date
+    required: true
+  - form_field: financial.year1_total_cost_usd
+    answer_key: i20_year1_total_cost_usd
+    required: true
+  - form_field: financial.funding_source
+    answer_key: funding_source
+    required: true
+- code: i134
+  version: 2026-04
+  official_title: Form I-134 Declaration of Financial Support
+  citation:
+    authority: U.S. Citizenship and Immigration Services
+    title: Declaration of Financial Support (Form I-134)
     url: https://www.uscis.gov/i-134
-    retrieved: "2026-08-01"
+    source_version: 2026-04
+  field_mappings:
+  - form_field: sponsor.full_name
+    answer_key: sponsor_name
+    required: true
+  - form_field: sponsor.relationship
+    answer_key: sponsor_relationship
+    required: true
+  - form_field: sponsor.occupation
+    answer_key: sponsor_occupation
+    required: true
+  - form_field: sponsor.annual_income_jpy
+    answer_key: sponsor_annual_income_jpy
+    required: true
+  - form_field: beneficiary.student_full_name
+    answer_key: full_name
+    required: true
+  - form_field: beneficiary.date_of_birth
+    answer_key: date_of_birth
+    required: true
+  - form_field: beneficiary.nationality
+    answer_key: nationality
+    required: true
+  - form_field: financial.funds_available_jpy
+    answer_key: applicant_liquid_funds_jpy
+    required: true
+- code: appointment_mrv
+  version: 2026-04
+  official_title: U.S. Visa Appointment Portal & MRV Fee Scheduling
+  citation:
+    authority: U.S. Department of State / CGI Federal
+    title: Official U.S. Visa Services Japan
+    url: https://travel.state.gov/content/travel/en/us-visas/visa-information-resources/policy-updates.html
+    source_version: 2026-04
+  field_mappings:
+  - form_field: appointment.applicant_full_name
+    answer_key: full_name
+    required: true
+  - form_field: appointment.nationality
+    answer_key: nationality
+    required: true
+  - form_field: appointment.passport_number
+    answer_key: passport_number
+    required: true
+  - form_field: appointment.sevis_id
+    answer_key: sevis_id
+    required: true
+  - form_field: appointment.school_name
+    answer_key: school_name
+    required: true
+  - form_field: appointment.residence_country
+    answer_key: current_location_country
+    required: true
+fees:
+- code: sevis_i901
+  amount: 350
+  currency: USD
+  channel: online
+  published: true
+  note: Mandatory I-901 SEVIS fee for F-1 / M-1 students paid online at FMJfee.com
+    prior to the visa interview. Non-refundable.
+  citation:
+    authority: U.S. Immigration and Customs Enforcement
+    title: SEVIS I-901 fee
+    url: https://www.fmjfee.com/i901fee/index.html
+    retrieved: '2026-08-01'
+- code: mrv_fee
+  amount: 185
+  currency: USD
+  channel: embassy
+  published: true
+  note: Machine Readable Visa (MRV) application fee for student visa category. Non-refundable.
+    Paid before scheduling interview.
+  citation:
+    authority: U.S. Department of State
+    title: Visa fees and reciprocity tables
+    url: https://travel.state.gov/content/travel/en/us-visas/visa-information-resources/fees/fees-visa-services.html
+    retrieved: '2026-08-01'
+sources:
+- title: F-1 Student Visa (U.S. Department of State)
+  url: https://travel.state.gov/content/travel/en/us-visas/study/student-visa.html
+  retrieved: '2026-08-01'
+- title: SEVIS I-901 fee (ICE)
+  url: https://www.fmjfee.com/i901fee/index.html
+  retrieved: '2026-08-01'
+- title: DS-160 Online Nonimmigrant Visa Application
+  url: https://travel.state.gov/content/travel/en/us-visas/visa-information-resources/forms/ds-160-online-nonimmigrant-visa-application.html
+  retrieved: '2026-08-01'
+- title: In-person interview requirement for nonimmigrant visas
+  url: https://travel.state.gov/content/travel/en/us-visas/visa-information-resources/policy-updates.html
+  retrieved: '2026-08-01'
+- title: Form I-134 Declaration of Financial Support
+  url: https://www.uscis.gov/i-134
+  retrieved: '2026-08-01'

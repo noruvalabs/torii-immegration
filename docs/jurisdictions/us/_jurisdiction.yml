@@ -36,3 +36,6 @@ actions:
   - code: new
     name: New Visa
     is_live: true
+  - code: change_of_status
+    name: Change of status
+    is_live: true

@@ -257,7 +257,7 @@ async def list_visa_categories(
         .order_by(VisaCategory.code)
     )
     if live_only:
-        stmt = stmt.where(VisaCategory.is_live.is_(True))
+        stmt = stmt.where(VisaCategory.is_live.is_(True) | VisaCategory.research_enabled.is_(True))
     result = await session.execute(stmt)
     return list(result.scalars().all())
 
@@ -286,7 +286,7 @@ async def list_case_actions(
         .order_by(CaseAction.code)
     )
     if live_only:
-        stmt = stmt.where(CaseAction.is_live.is_(True))
+        stmt = stmt.where(CaseAction.is_live.is_(True) | CaseAction.research_enabled.is_(True))
     result = await session.execute(stmt)
     return list(result.scalars().all())
 
@@ -912,6 +912,7 @@ async def answer_intake(
     case.intake_answers = prune_answers(questions, merged)
     case.intake_step = target_key
     case.review_flags_acknowledged = False
+    case.eligibility_snapshot = None
     _sync_prior_application(case)
 
     # Auto-sync answer to user global profile if it maps to a profile field

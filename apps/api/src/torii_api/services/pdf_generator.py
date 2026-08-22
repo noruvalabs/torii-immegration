@@ -9,7 +9,10 @@ Generates official government-styled PDFs using ReportLab:
 
 from __future__ import annotations
 
+import base64
 import io
+import os
+import tempfile
 from datetime import UTC, datetime
 from typing import Any
 
@@ -18,6 +21,7 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.platypus import (
     HRFlowable,
+    Image as RLImage,
     PageBreak,
     Paragraph,
     SimpleDocTemplate,
@@ -25,6 +29,115 @@ from reportlab.platypus import (
     Table,
     TableStyle,
 )
+
+
+def _extract_image_bytes(photo_data: bytes | str | None) -> bytes | None:
+    """Extract raw image bytes from bytes, base64 data-URL, or local path."""
+    if not photo_data:
+        return None
+    if isinstance(photo_data, bytes):
+        return photo_data
+    if isinstance(photo_data, str):
+        s = photo_data.strip()
+        if s.startswith("data:image/"):
+            try:
+                base64_part = s.split("base64,", 1)[1]
+                return base64.b64decode(base64_part)
+            except Exception:
+                return None
+        try:
+            return base64.b64decode(s)
+        except Exception:
+            pass
+        if os.path.exists(s):
+            try:
+                with open(s, "rb") as f:
+                    return f.read()
+            except Exception:
+                return None
+    return None
+
+
+def _build_photo_element(
+    photo_data: bytes | str | None,
+    width_pt: float = 90,
+    height_pt: float = 115,
+) -> Any:
+    """Return a ReportLab Image if photo data is available, or an official paste box."""
+    from PIL import Image as PILImage
+
+    img_bytes = _extract_image_bytes(photo_data)
+    if img_bytes:
+        try:
+            bio = io.BytesIO(img_bytes)
+            pil = PILImage.open(bio)
+            pil.verify()
+            bio.seek(0)
+            return RLImage(bio, width=width_pt, height=height_pt)
+        except Exception:
+            pass
+
+    # Official standard photo box placeholder
+    placeholder = Table(
+        [
+            [
+                Paragraph(
+                    "<font size=7 color='#64748b'><b>AFFIX RECENT PHOTO</b><br/><br/>45mm × 35mm<br/>(2 in × 1.4 in)<br/><br/><i>White background</i></font>",
+                    ParagraphStyle("PhotoPlaceholder", alignment=1, leading=10),
+                )
+            ]
+        ],
+        colWidths=[width_pt],
+        rowHeights=[height_pt],
+    )
+    placeholder.setStyle(
+        TableStyle(
+            [
+                ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("BOX", (0, 0), (-1, -1), 1, colors.HexColor("#94a3b8")),
+                ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#f8fafc")),
+            ]
+        )
+    )
+    return placeholder
+
+
+def _build_header_with_photo(
+    title_text: str,
+    subtitle_text: str,
+    agency_header: str,
+    meta_rows: list[tuple[str, str]],
+    photo_data: bytes | str | None,
+    styles: dict[str, ParagraphStyle],
+) -> Table:
+    """Build official government header with Agency title, metadata, and photo side-by-side."""
+    left_elements = [
+        Paragraph(agency_header, styles["jp_header"]),
+        Paragraph(title_text, styles["title"]),
+        Paragraph(subtitle_text, styles["subtitle"]),
+        HRFlowable(width="100%", thickness=1.5, color=colors.HexColor("#0f172a"), spaceAfter=6),
+        _build_key_value_table(meta_rows, styles, col_widths=[130, 275]),
+    ]
+    photo_elem = _build_photo_element(photo_data, width_pt=95, height_pt=125)
+
+    header_table = Table(
+        [[left_elements, photo_elem]],
+        colWidths=[415, 105],
+    )
+    header_table.setStyle(
+        TableStyle(
+            [
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("ALIGN", (1, 0), (1, 0), "RIGHT"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                ("TOPPADDING", (0, 0), (-1, -1), 0),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+            ]
+        )
+    )
+    return header_table
 
 
 def _get_styles() -> dict[str, ParagraphStyle]:
@@ -152,6 +265,8 @@ def generate_japan_work_renewal_pdf(
     case_reference: str,
     answers: dict[str, Any],
     destination_label: str = "Japan",
+    photo_data: bytes | str | None = None,
+    action_code: str | None = None,
 ) -> bytes:
     """Generate official Application Form PDF tailored to the visa purpose."""
     buffer = io.BytesIO()
@@ -166,50 +281,60 @@ def generate_japan_work_renewal_pdf(
     styles = _get_styles()
     story = []
 
+    dest_lower = destination_label.lower()
+    is_change_of_status = (
+        action_code == "change_of_status"
+        or "change" in dest_lower
+        or "資格変更" in dest_lower
+        or "change_of_status" in str(answers.get("action_code", ""))
+    )
     is_tourist = (
-        "tourist" in destination_label.lower()
+        "tourist" in dest_lower
         or "tourism" in str(answers.get("purpose_of_visit", "")).lower()
         or "tourism" in str(answers.get("main_purpose", "")).lower()
-        or "travel" in destination_label.lower()
-        or "visitor" in destination_label.lower()
+        or "travel" in dest_lower
+        or "visitor" in dest_lower
+    )
+    is_student = (
+        "student" in dest_lower
+        or "留学" in dest_lower
+        or answers.get("school_name") is not None
+        or answers.get("attendance_rate") is not None
     )
 
-    # 1. Header Banners
-    story.append(
-        Paragraph("MINISTRY OF FOREIGN AFFAIRS / IMMIGRATION SERVICES AGENCY OF JAPAN", styles["jp_header"])
-    )
-    if is_tourist:
-        story.append(Paragraph("VISA APPLICATION FORM TO ENTER JAPAN", styles["title"]))
-        story.append(
-            Paragraph(
-                "日本国査証申請書 (短期滞在 · 観光 / 業務 / 知人訪問等)", styles["subtitle"]
-            )
-        )
+    if is_change_of_status:
+        title_txt = "APPLICATION FOR CHANGE OF STATUS OF RESIDENCE"
+        sub_txt = "在留資格変更許可申請書 (出入国在留管理庁 · 留学 / 技人国等)"
+    elif is_tourist or action_code == "new_application":
+        title_txt = "VISA APPLICATION FORM TO ENTER JAPAN"
+        sub_txt = "日本国査証申請書 (短期滞在 · 観光 / 業務 / 知人訪問等)"
     else:
-        story.append(Paragraph("APPLICATION FOR EXTENSION OF PERIOD OF STAY", styles["title"]))
-        story.append(
-            Paragraph(
-                "在留期間更新許可申請書 (技術・人文知識・国際業務 / 教授・教育等)", styles["subtitle"]
-            )
-        )
-    story.append(
-        HRFlowable(width="100%", thickness=1.5, color=colors.HexColor("#0f172a"), spaceAfter=10)
-    )
+        title_txt = "APPLICATION FOR EXTENSION OF PERIOD OF STAY"
+        sub_txt = "在留期間更新許可申請書 (出入国在留管理庁 · 留学 / 技人国等)"
+    agency_txt = "MINISTRY OF FOREIGN AFFAIRS / IMMIGRATION SERVICES AGENCY OF JAPAN"
 
-    # Meta banner
     meta_rows = [
         ("Application Reference", case_reference or "DRAFT-APPLICATION"),
         ("Date of Preparation", datetime.now(UTC).strftime("%Y-%m-%d")),
         (
             "Issuing Authority / Filing Portal",
-            "Embassy / Consular Mission / Regional Immigration Bureau",
+            "Regional Immigration Services Bureau (地方出入国在留管理局)" if not is_tourist else "Embassy / Consular Mission",
         ),
         (
-            "Target Visa Category",
-            destination_label or "Temporary Visitor / Short-Term Stay",
+            "Target Visa Category / Route",
+            destination_label or ("Student (留学)" if is_student else "Temporary Visitor"),
         ),
     ]
-    story.append(_build_key_value_table(meta_rows, styles))
+    story.append(
+        _build_header_with_photo(
+            title_txt,
+            sub_txt,
+            agency_txt,
+            meta_rows,
+            photo_data,
+            styles,
+        )
+    )
     story.append(Spacer(1, 10))
 
     # 2. Section 1: Applicant Personal Identity
@@ -238,7 +363,7 @@ def generate_japan_work_renewal_pdf(
         (
             "Residential Address",
             str(
-                answers.get("address_in_japan") or answers.get("current_address") or answers.get("accommodation_address") or "—"
+                answers.get("address_in_japan") or answers.get("registered_address_japan") or answers.get("current_address") or answers.get("accommodation_address") or "—"
             ),
         ),
         (
@@ -248,6 +373,8 @@ def generate_japan_work_renewal_pdf(
     ]
     if not is_tourist and answers.get("residence_card_number"):
         sec1_rows.append(("Current Residence Card Number (在留カード番号)", str(answers.get("residence_card_number"))))
+    if answers.get("residence_card_expiry"):
+        sec1_rows.append(("Residence Card Expiration Date (在留期限)", str(answers.get("residence_card_expiry"))))
     story.append(_build_key_value_table(sec1_rows, styles))
     story.append(Spacer(1, 10))
 
@@ -312,6 +439,147 @@ def generate_japan_work_renewal_pdf(
             (
                 "Financial Self-Sufficiency",
                 "Certified / Solvency Proof & Bank Statements Attached",
+            ),
+        ]
+        story.append(_build_key_value_table(sec3_rows, styles))
+        story.append(Spacer(1, 14))
+    elif is_change_of_status:
+        # 3. Section 2: Education & Future Employer Details (Change of Status)
+        story.append(
+            Paragraph(
+                "2. ACADEMIC RECORD & FUTURE EMPLOYER / 学歴及び勤務予定先に関する事項",
+                styles["section_heading"],
+            )
+        )
+        salary_val = answers.get("annual_salary_jpy") or answers.get("monthly_salary") or "—"
+        if str(salary_val).isdigit():
+            salary_display = f"¥{int(salary_val):,} JPY / Year" if int(salary_val) > 1000000 else f"¥{int(salary_val):,} JPY / Month"
+        else:
+            salary_display = str(salary_val)
+
+        sec2_rows = [
+            (
+                "Current / Graduating Educational Institution",
+                str(answers.get("school_name") or "—"),
+            ),
+            (
+                "Program of Study / Degree",
+                str(answers.get("study_program_type") or "University Undergraduate").replace("_", " ").title(),
+            ),
+            (
+                "Program Completion / Graduation Status",
+                "Completed / Graduating" if answers.get("school_completed") else "Scheduled",
+            ),
+            (
+                "Expected / Actual Graduation Date",
+                str(answers.get("expected_graduation_date") or "—"),
+            ),
+            (
+                "Future Sponsoring Employer Name",
+                str(answers.get("employer_name") or answers.get("company_name") or "—"),
+            ),
+            (
+                "Employer Corporate Number (法人番号)",
+                str(answers.get("employer_corporate_number") or answers.get("corporate_number") or "—"),
+            ),
+            (
+                "Employer Category (所属機関区分)",
+                f"Category {answers.get('employer_category')}" if answers.get("employer_category") else "Category 3",
+            ),
+            (
+                "Offered Position Duties / Job Description",
+                str(answers.get("job_description") or "Specialist / Professional Activities"),
+            ),
+            ("Offered Remuneration (報酬額)", salary_display),
+        ]
+        story.append(_build_key_value_table(sec2_rows, styles))
+        story.append(Spacer(1, 10))
+
+        # 4. Section 3: Legal Compliance & Declarations
+        story.append(
+            Paragraph("3. COMPLIANCE & DECLARATIONS / 遵守状況・申告事項", styles["section_heading"])
+        )
+        sec3_rows = [
+            (
+                "Resident Tax (住民税) Compliance",
+                "Paid & Up to Date (納付済)" if answers.get("resident_tax_status", True) else "Arrears / Disclosed",
+            ),
+            (
+                "Pension / Health Insurance Status",
+                "Paid & Up to Date (適正納付)" if answers.get("pension_health_insurance", True) else "Enrolled",
+            ),
+            (
+                "Criminal / Traffic Violation Record",
+                "None (無)" if not answers.get("criminal_disclosures", False) else "Disclosed",
+            ),
+            (
+                "Desired Status of Residence",
+                "技術・人文知識・国際業務 (Engineer/Specialist in Humanities/Intl Services)",
+            ),
+            (
+                "Reason for Change of Status",
+                "Graduation from Japanese educational institution and employment commencement.",
+            ),
+        ]
+        story.append(_build_key_value_table(sec3_rows, styles))
+        story.append(Spacer(1, 14))
+    elif is_student:
+        # 3. Section 2: Educational Institution Details (Student Renewal / Extension)
+        story.append(
+            Paragraph(
+                "2. EDUCATIONAL INSTITUTION DETAILS / 在学・所属教育機関に関する事項",
+                styles["section_heading"],
+            )
+        )
+        att_rate = answers.get("attendance_rate")
+        att_display = f"{att_rate}%" if att_rate is not None else "—"
+
+        sec2_rows = [
+            (
+                "Educational Institution Name",
+                str(answers.get("school_name") or "—"),
+            ),
+            (
+                "Program of Study",
+                str(answers.get("study_program_type") or "University").replace("_", " ").title(),
+            ),
+            ("Attendance Rate (出席率)", att_display),
+            (
+                "Expected Course Completion Date",
+                str(answers.get("expected_graduation_date") or "—"),
+            ),
+            (
+                "Financial Support Source",
+                str(answers.get("sponsor_type") or answers.get("financial_supporter") or "Self / Family Sponsor").replace("_", " ").title(),
+            ),
+        ]
+        story.append(_build_key_value_table(sec2_rows, styles))
+        story.append(Spacer(1, 10))
+
+        # 4. Section 3: Legal Compliance & Extension Request
+        story.append(
+            Paragraph("3. COMPLIANCE & DECLARATIONS / 遵守状況・申告事項", styles["section_heading"])
+        )
+        sec3_rows = [
+            (
+                "Resident Tax (住民税) Status",
+                "Up to date" if answers.get("resident_tax_status", True) else "Disclosed",
+            ),
+            (
+                "National Pension / Health Insurance",
+                "Enrolled" if answers.get("pension_health_insurance", True) else "Disclosed",
+            ),
+            (
+                "Part-Time Work Limit Compliance (28h/week)",
+                "Compliant (資格外活動許可遵守)" if not answers.get("overwork_violation", False) else "Disclosed",
+            ),
+            (
+                "Desired Extension Period",
+                str(answers.get("desired_period_years") or "2 Years / 1 Year"),
+            ),
+            (
+                "Reason for Extension",
+                "Continuation of regular academic studies toward program completion.",
             ),
         ]
         story.append(_build_key_value_table(sec3_rows, styles))
@@ -825,9 +1093,9 @@ def generate_official_japan_visa_form_pdf(
     answers: dict[str, Any],
     destination_label: str = "Japan",
     applicant_email: str | None = None,
+    photo_data: bytes | str | None = None,
 ) -> bytes:
     """Fill the authentic official Ministry of Foreign Affairs (MOFA) Japan Visa Application Form template."""
-    import os
     import pypdf
 
     # Path to official government template (MOFA 000124525.pdf)
@@ -835,12 +1103,36 @@ def generate_official_japan_visa_form_pdf(
         os.path.dirname(__file__), "..", "templates", "japan_visa_application_form_template.pdf"
     )
     if not os.path.exists(template_path):
-        return generate_japan_work_renewal_pdf(case_reference, answers, destination_label)
+        return generate_japan_work_renewal_pdf(case_reference, answers, destination_label, photo_data=photo_data)
 
     try:
         reader = pypdf.PdfReader(template_path)
         writer = pypdf.PdfWriter()
         writer.append(reader)
+
+        # Build photo overlay for Page 1 if photo is provided
+        img_bytes = _extract_image_bytes(photo_data)
+        if img_bytes:
+            try:
+                from reportlab.pdfgen import canvas
+                overlay_buf = io.BytesIO()
+                c = canvas.Canvas(overlay_buf, pagesize=(595.321, 841.921))
+                with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
+                    tmp.write(img_bytes)
+                    tmp_path = tmp.name
+                try:
+                    # MOFA photo box: x=422, y=588, width=88, height=118
+                    c.drawImage(tmp_path, 422, 588, width=88, height=118)
+                    c.save()
+                    overlay_buf.seek(0)
+                    overlay_reader = pypdf.PdfReader(overlay_buf)
+                    if overlay_reader.pages:
+                        writer.pages[0].merge_page(overlay_reader.pages[0])
+                finally:
+                    if os.path.exists(tmp_path):
+                        os.remove(tmp_path)
+            except Exception as exc:
+                print(f"Warning: failed to build photo overlay for MOFA template: {exc}")
 
         full_name = str(answers.get("full_name") or "").strip()
         parts = full_name.split()
@@ -978,5 +1270,456 @@ def generate_official_japan_visa_form_pdf(
     except Exception as exc:
         print(f"Warning: failed to fill official template: {exc}, using fallback generator")
 
-    return generate_japan_work_renewal_pdf(case_reference, answers, destination_label)
+    return generate_japan_work_renewal_pdf(case_reference, answers, destination_label, photo_data=photo_data)
+
+
+def generate_uk_visa_application_pdf(
+    case_reference: str,
+    answers: dict[str, Any],
+    destination_label: str = "United Kingdom",
+    applicant_email: str | None = None,
+    photo_data: bytes | str | None = None,
+) -> bytes:
+    """Generate official UK Visas & Immigration (UKVI) Application Form & Submission Dossier."""
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        leftMargin=36,
+        rightMargin=36,
+        topMargin=36,
+        bottomMargin=36,
+    )
+    styles = _get_styles()
+    story = []
+
+    is_student = "student" in destination_label.lower() or "study" in destination_label.lower()
+    is_work = "work" in destination_label.lower() or "skilled" in destination_label.lower()
+
+    route_name = (
+        "Skilled Worker Visa (Appendix Skilled Worker)"
+        if is_work
+        else (
+            "Student Visa (Appendix Student)"
+            if is_student
+            else "Standard Visitor Visa (Appendix V: Visitor)"
+        )
+    )
+
+    # 1. Header with photo
+    meta_rows = [
+        ("Application Reference", case_reference or "UK-APPLICATION-DRAFT"),
+        ("Date of Preparation", datetime.now(UTC).strftime("%Y-%m-%d")),
+        ("Issuing Authority", "UK Visas & Immigration (UKVI) / Home Office"),
+        ("Immigration Route", route_name),
+    ]
+    story.append(
+        _build_header_with_photo(
+            "UK VISA APPLICATION DOSSIER",
+            f"Official UKVI Filing Summary · {route_name}",
+            "GOV.UK · UK VISAS AND IMMIGRATION (HOME OFFICE)",
+            meta_rows,
+            photo_data,
+            styles,
+        )
+    )
+    story.append(Spacer(1, 10))
+
+    # 2. Section 1: Applicant Personal Identity & Travel Document
+    story.append(
+        Paragraph("1. APPLICANT PERSONAL IDENTIFICATION & TRAVEL DOCUMENT", styles["section_heading"])
+    )
+    nationality = str(answers.get("nationality") or "—")
+    full_name = str(answers.get("full_name") or answers.get("applicant_name") or "—")
+    sec1_rows = [
+        ("Full Legal Name (as in passport)", full_name),
+        ("Nationality / Country of Citizenship", nationality),
+        ("Date of Birth (YYYY-MM-DD)", str(answers.get("date_of_birth") or "—")),
+        ("Sex / Gender", str(answers.get("sex") or answers.get("gender") or "Male")),
+        ("Passport Number", str(answers.get("passport_number") or answers.get("passport_no") or "—")),
+        ("Passport Expiration Date", str(answers.get("passport_expiry") or answers.get("passport_expiry_date") or "—")),
+        ("Passport Issuing Authority", str(answers.get("passport_issuing_authority") or f"Government of {nationality}")),
+        ("Country of Current Residence", str(answers.get("residence_country") or answers.get("current_residence_country") or nationality)),
+        ("Residential Address", str(answers.get("current_address") or answers.get("residential_address") or "—")),
+        ("Contact Telephone", str(answers.get("phone_number") or answers.get("telephone") or "—")),
+        ("Applicant Email", str(answers.get("email") or applicant_email or "—")),
+    ]
+    story.append(_build_key_value_table(sec1_rows, styles))
+    story.append(Spacer(1, 10))
+
+    # 3. Section 2: Sponsorship / Course / Trip Purpose
+    if is_work:
+        story.append(
+            Paragraph("2. SPONSORSHIP & EMPLOYMENT DETAILS (UK SPONSOR LICENCE)", styles["section_heading"])
+        )
+        salary_val = answers.get("annual_salary_gbp") or answers.get("salary_gbp") or "—"
+        if str(salary_val).isdigit():
+            salary_str = f"£{int(salary_val):,} GBP / Year"
+        else:
+            salary_str = str(salary_val)
+
+        sec2_rows = [
+            ("Certificate of Sponsorship (CoS) Reference", str(answers.get("cos_reference") or answers.get("cos_number") or "—")),
+            ("UK Licensed Sponsor Employer", str(answers.get("sponsor_name") or answers.get("employer_name") or "—")),
+            ("Proposed Job Title in the UK", str(answers.get("job_title") or "Professional / Skilled Role")),
+            ("Proposed Gross Annual Remuneration", salary_str),
+            ("Occupation Code (SOC 2020)", str(answers.get("soc_code") or "Standard SOC Eligible Code")),
+            ("Work Location / Office Address in UK", str(answers.get("workplace_address") or answers.get("employer_address") or "United Kingdom")),
+        ]
+        story.append(_build_key_value_table(sec2_rows, styles))
+        story.append(Spacer(1, 10))
+
+        # 4. Section 3: Qualifications, English Language & Maintenance
+        story.append(
+            Paragraph("3. ENGLISH LANGUAGE & FINANCIAL MAINTENANCE COMPLIANCE", styles["section_heading"])
+        )
+        eng_proof = str(answers.get("english_language_proof") or "Passed approved SELT test at CEFR B1").replace("_", " ").title()
+        maint_cert = "Certified by A-rated Sponsor on CoS" if answers.get("sponsor_certifies_maintenance", True) else "Personal Bank Statements Provided (£1,276 for 28 consecutive days)"
+        sec3_rows = [
+            ("English Language Assessment Criterion", eng_proof),
+            ("CEFR Requirement Level", "Level B1 (Reading, Writing, Speaking, Listening)"),
+            ("Maintenance Funds Requirement (£1,276)", maint_cert),
+            ("Immigration Health Surcharge (IHS)", "Payable online (£1,035/year adult) via Access UK portal"),
+        ]
+        story.append(_build_key_value_table(sec3_rows, styles))
+        story.append(Spacer(1, 10))
+    elif is_student:
+        story.append(
+            Paragraph("2. COURSE & LICENSED STUDENT SPONSOR (CAS DETAILS)", styles["section_heading"])
+        )
+        sec2_rows = [
+            ("Confirmation of Acceptance for Studies (CAS)", str(answers.get("cas_number") or answers.get("cas_reference") or "—")),
+            ("Licensed Student Sponsor / University", str(answers.get("institution_name") or answers.get("university_name") or "—")),
+            ("Course Title & Qualification Level", str(answers.get("course_title") or "Degree Programme / RQF Level 6+")),
+            ("Course Start & End Dates", str(answers.get("course_duration") or "Academic Year 2026/2027")),
+        ]
+        story.append(_build_key_value_table(sec2_rows, styles))
+        story.append(Spacer(1, 10))
+
+        story.append(
+            Paragraph("3. TUITION & MAINTENANCE FUNDS REQUIREMENTS", styles["section_heading"])
+        )
+        sec3_rows = [
+            ("English Language Proficiency", str(answers.get("english_language_proof") or "Verified via CAS Higher Education Assessment").replace("_", " ").title()),
+            ("Living Costs Maintenance Proof", "28-Day Bank Statement (£1,334/month in London, £1,023 outside)"),
+            ("ATAS Certificate Required", "Not applicable / Exempt for this academic discipline" if not answers.get("atas_required", False) else "ATAS Clearance Certificate Attached"),
+        ]
+        story.append(_build_key_value_table(sec3_rows, styles))
+        story.append(Spacer(1, 10))
+    else:
+        story.append(
+            Paragraph("2. VISIT DETAILS & INTENDED ITINERARY", styles["section_heading"])
+        )
+        sec2_rows = [
+            ("Main Purpose of Visit", str(answers.get("purpose_of_visit") or answers.get("main_purpose") or "Tourism / Sightseeing / Family Visit")),
+            ("Intended Length of Stay", f"{answers.get('intended_length_of_stay_days') or 15} Days"),
+            ("Planned Travel / Arrival Date", str(answers.get("planned_arrival_date") or answers.get("arrival_date") or "—")),
+            ("Accommodation in the UK", str(answers.get("accommodation_name") or "Hotel / Host Residence")),
+            ("Financial Support for Visit", str(answers.get("trip_payer") or "Self-Funded via Personal Savings").replace("_", " ").title()),
+        ]
+        story.append(_build_key_value_table(sec2_rows, styles))
+        story.append(Spacer(1, 10))
+
+    # 5. Suitability & Declarations (Part 9 Grounds for Refusal)
+    story.append(
+        Paragraph("4. STATUTORY SUITABILITY & IMMIGRATION DECLARATIONS (PART 9 RULES)", styles["section_heading"])
+    )
+    sec4_rows = [
+        ("Criminal Convictions & Cautions", "None (Clean Record Declared)" if not answers.get("criminal_record", False) else "Disclosed"),
+        ("UK / Global Visa Refusal History", "None Declared" if not answers.get("has_visa_refusal", False) else "Disclosed in Questionnaire"),
+        ("Immigration Breaches / Overstay", "None Declared" if not answers.get("prior_overstay", False) else "Disclosed"),
+        ("Tuberculosis (TB) Screening Test", "Verified / Clinic Certificate Attached" if answers.get("tb_test_required", True) else "Exempt based on residence"),
+    ]
+    story.append(_build_key_value_table(sec4_rows, styles))
+    story.append(Spacer(1, 12))
+
+    # 6. Declaration & Signature
+    story.append(
+        Paragraph(
+            "<b>Applicant Declaration:</b> I confirm that the information given on this form is correct and complete. "
+            "I understand that false statements or omitted facts can lead to refusal, revocation, or a 10-year ban under Part 9 of the UK Immigration Rules.",
+            styles["legal_notice"],
+        )
+    )
+    story.append(Spacer(1, 10))
+
+    sig_data = [
+        [
+            Paragraph(
+                f"<b>Applicant Signature:</b><br/><br/><br/>________________________________________<br/><b>{full_name}</b>",
+                styles["body"],
+            ),
+            Paragraph(
+                f"<b>Date:</b><br/><br/><br/>{datetime.now(UTC).strftime('%B %d, %Y')}<br/><b>Place:</b> {nationality}",
+                styles["body"],
+            ),
+        ]
+    ]
+    sig_table = Table(sig_data, colWidths=[320, 190])
+    sig_table.setStyle(
+        TableStyle(
+            [
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+            ]
+        )
+    )
+    story.append(sig_table)
+
+    doc.build(story)
+    return buffer.getvalue()
+
+
+def generate_us_visa_application_pdf(
+    case_reference: str,
+    answers: dict[str, Any],
+    destination_label: str = "United States",
+    applicant_email: str | None = None,
+    photo_data: bytes | str | None = None,
+) -> bytes:
+    """Generate official U.S. Nonimmigrant Visa Application & Petition Summary (DS-160 / Form I-129)."""
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        leftMargin=36,
+        rightMargin=36,
+        topMargin=36,
+        bottomMargin=36,
+    )
+    styles = _get_styles()
+    story = []
+
+    is_student = "student" in destination_label.lower() or "f1" in destination_label.lower() or "f-1" in destination_label.lower()
+    is_work = "h1b" in destination_label.lower() or "h-1b" in destination_label.lower() or "work" in destination_label.lower()
+
+    visa_class = "H-1B Specialty Occupation" if is_work else ("F-1 Academic Student" if is_student else "B-1/B-2 Visitor for Business or Pleasure")
+
+    # 1. Header with photo (US 2x2 in standard)
+    meta_rows = [
+        ("Application Reference", case_reference or "US-APPLICATION-DRAFT"),
+        ("Date of Preparation", datetime.now(UTC).strftime("%Y-%m-%d")),
+        ("Filing Jurisdiction", "U.S. Department of State (CEAC) / USCIS"),
+        ("Visa Classification", visa_class),
+    ]
+    story.append(
+        _build_header_with_photo(
+            "U.S. VISA APPLICATION & FILING DOSSIER",
+            f"Official Submission Summary · Nonimmigrant Visa Class {visa_class}",
+            "U.S. DEPARTMENT OF STATE · CONSULAR AFFAIRS / USCIS",
+            meta_rows,
+            photo_data,
+            styles,
+        )
+    )
+    story.append(Spacer(1, 10))
+
+    # 2. Section 1: Personal & Passport Information
+    story.append(
+        Paragraph("1. PERSONAL INFORMATION & TRAVEL DOCUMENT", styles["section_heading"])
+    )
+    nationality = str(answers.get("nationality") or "—")
+    full_name = str(answers.get("full_name") or answers.get("applicant_name") or "—")
+    sec1_rows = [
+        ("Full Name (Surnames, Given Names)", full_name),
+        ("Country of Citizenship / Nationality", nationality),
+        ("Date of Birth (YYYY-MM-DD)", str(answers.get("date_of_birth") or "—")),
+        ("Sex / Gender", str(answers.get("sex") or answers.get("gender") or "Male")),
+        ("Passport Number", str(answers.get("passport_number") or answers.get("passport_no") or "—")),
+        ("Passport Expiration Date", str(answers.get("passport_expiry") or answers.get("passport_expiry_date") or "—")),
+        ("Passport Issuing Country", str(answers.get("passport_issuing_authority") or f"Government of {nationality}")),
+        ("Current Country of Residence", str(answers.get("residence_country") or answers.get("current_residence_country") or nationality)),
+        ("Residential Address", str(answers.get("current_address") or "—")),
+        ("Telephone Number", str(answers.get("phone_number") or "—")),
+        ("Email Address", str(answers.get("email") or applicant_email or "—")),
+    ]
+    story.append(_build_key_value_table(sec1_rows, styles))
+    story.append(Spacer(1, 10))
+
+    # 3. Section 2: Travel & Purpose
+    story.append(
+        Paragraph("2. TRAVEL INFORMATION & U.S. CONTACT / SPONSOR", styles["section_heading"])
+    )
+    sec2_rows = [
+        ("Purpose of Trip to the U.S.", visa_class),
+        ("Intended Length of Stay in U.S.", str(answers.get("intended_length_of_stay_days") or answers.get("stay_duration_days") or "3 Years")),
+        ("U.S. Employer / Institution / Sponsor", str(answers.get("employer_name") or answers.get("sponsor_name") or answers.get("institution_name") or "—")),
+        ("U.S. Contact Address", str(answers.get("workplace_address") or answers.get("us_address") or "United States")),
+        ("Petition / SEVIS Number", str(answers.get("petition_number") or answers.get("sevis_id") or answers.get("receipt_number") or "Filed / Attached in Dossier")),
+    ]
+    story.append(_build_key_value_table(sec2_rows, styles))
+    story.append(Spacer(1, 10))
+
+    # 4. Section 3: Security & INA Statutory Compliance
+    story.append(
+        Paragraph("3. STATUTORY ELIGIBILITY & INA COMPLIANCE (SECTION 214(b) / 212(a))", styles["section_heading"])
+    )
+    sec3_rows = [
+        ("INA 214(b) Nonimmigrant Intent / Dual Intent", "Satisfied / Compliant under statutory category rules"),
+        ("Criminal History / Disqualifying Convictions", "None Declared" if not answers.get("criminal_record", False) else "Disclosed"),
+        ("Prior U.S. Visa Refusals or Inadmissibility", "None Declared" if not answers.get("has_visa_refusal", False) else "Disclosed"),
+        ("Biometrics & Consular Appointment", "Required at U.S. Embassy / Consulate General (OFC / VAC)"),
+    ]
+    story.append(_build_key_value_table(sec3_rows, styles))
+    story.append(Spacer(1, 12))
+
+    # 5. Declaration
+    story.append(
+        Paragraph(
+            "<b>Applicant Certification:</b> I certify under penalty of perjury under the laws of the United States of America that the foregoing is true and correct. "
+            "I understand that any willfully false or misleading statement or willful concealment of a material fact may subject me to permanent exclusion from the United States.",
+            styles["legal_notice"],
+        )
+    )
+    story.append(Spacer(1, 10))
+
+    sig_data = [
+        [
+            Paragraph(
+                f"<b>Applicant Signature:</b><br/><br/><br/>________________________________________<br/><b>{full_name}</b>",
+                styles["body"],
+            ),
+            Paragraph(
+                f"<b>Date:</b><br/><br/><br/>{datetime.now(UTC).strftime('%B %d, %Y')}<br/><b>Location:</b> {nationality}",
+                styles["body"],
+            ),
+        ]
+    ]
+    sig_table = Table(sig_data, colWidths=[320, 190])
+    sig_table.setStyle(
+        TableStyle(
+            [
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+            ]
+        )
+    )
+    story.append(sig_table)
+
+    doc.build(story)
+    return buffer.getvalue()
+
+
+def generate_generic_visa_application_pdf(
+    case_reference: str,
+    answers: dict[str, Any],
+    destination_label: str = "Visa Application",
+    applicant_email: str | None = None,
+    photo_data: bytes | str | None = None,
+) -> bytes:
+    """Generate official Consular Visa Application Form Dossier for any country."""
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        leftMargin=36,
+        rightMargin=36,
+        topMargin=36,
+        bottomMargin=36,
+    )
+    styles = _get_styles()
+    story = []
+
+    country_name = destination_label.split("·")[0].strip() if "·" in destination_label else destination_label
+
+    meta_rows = [
+        ("Application Reference", case_reference or "APPLICATION-DRAFT"),
+        ("Date of Preparation", datetime.now(UTC).strftime("%Y-%m-%d")),
+        ("Destination Jurisdiction", country_name),
+        ("Target Scope", destination_label),
+    ]
+    story.append(
+        _build_header_with_photo(
+            f"{country_name.upper()} VISA APPLICATION DOSSIER",
+            f"Official Submission Summary · {destination_label}",
+            f"MINISTRY OF FOREIGN AFFAIRS / IMMIGRATION AUTHORITY OF {country_name.upper()}",
+            meta_rows,
+            photo_data,
+            styles,
+        )
+    )
+    story.append(Spacer(1, 10))
+
+    story.append(
+        Paragraph("1. APPLICANT PERSONAL IDENTIFICATION & PASSPORT DETAILS", styles["section_heading"])
+    )
+    nationality = str(answers.get("nationality") or "—")
+    full_name = str(answers.get("full_name") or answers.get("applicant_name") or "—")
+    sec1_rows = [
+        ("Full Legal Name (as in passport)", full_name),
+        ("Nationality / Country of Citizenship", nationality),
+        ("Date of Birth (YYYY-MM-DD)", str(answers.get("date_of_birth") or "—")),
+        ("Sex / Gender", str(answers.get("sex") or answers.get("gender") or "Male")),
+        ("Passport Number", str(answers.get("passport_number") or answers.get("passport_no") or "—")),
+        ("Passport Expiration Date", str(answers.get("passport_expiry") or answers.get("passport_expiry_date") or "—")),
+        ("Passport Issuing Authority", str(answers.get("passport_issuing_authority") or f"Government of {nationality}")),
+        ("Country of Current Residence", str(answers.get("residence_country") or answers.get("current_residence_country") or nationality)),
+        ("Residential Address", str(answers.get("current_address") or "—")),
+        ("Contact Telephone", str(answers.get("phone_number") or "—")),
+        ("Email Address", str(answers.get("email") or applicant_email or "—")),
+    ]
+    story.append(_build_key_value_table(sec1_rows, styles))
+    story.append(Spacer(1, 10))
+
+    story.append(
+        Paragraph("2. TRAVEL DETAILS, PURPOSE & HOST SPONSOR", styles["section_heading"])
+    )
+    sec2_rows = [
+        ("Purpose of Visit / Category", str(answers.get("purpose_of_visit") or answers.get("main_purpose") or destination_label)),
+        ("Intended Length of Stay", f"{answers.get('intended_length_of_stay_days') or answers.get('stay_duration_days') or 15} Days"),
+        ("Planned Travel / Arrival Date", str(answers.get("planned_arrival_date") or answers.get("arrival_date") or "—")),
+        ("Host Sponsor / Employer / Accommodation", str(answers.get("sponsor_name") or answers.get("employer_name") or answers.get("accommodation_name") or "—")),
+        ("Address in Destination Country", str(answers.get("accommodation_address") or answers.get("workplace_address") or country_name)),
+    ]
+    story.append(_build_key_value_table(sec2_rows, styles))
+    story.append(Spacer(1, 10))
+
+    story.append(
+        Paragraph("3. STATUTORY DECLARATIONS & SUBMISSION COMPLIANCE", styles["section_heading"])
+    )
+    sec3_rows = [
+        ("Criminal Convictions / Police Record", "None Declared (Clean Record)" if not answers.get("criminal_record", False) else "Disclosed"),
+        ("Prior Visa Refusals or Overstays", "None Declared" if not answers.get("has_visa_refusal", False) else "Disclosed"),
+        ("Financial Solvency & Coverage", "Certified / Bank Solvency Proof Attached"),
+    ]
+    story.append(_build_key_value_table(sec3_rows, styles))
+    story.append(Spacer(1, 12))
+
+    story.append(
+        Paragraph(
+            "<b>Applicant Certification:</b> I hereby declare that the particulars given above are true and complete in every respect. "
+            "I understand that any false statements or omission of required materials will result in immediate rejection of my visa application.",
+            styles["legal_notice"],
+        )
+    )
+    story.append(Spacer(1, 10))
+
+    sig_data = [
+        [
+            Paragraph(
+                f"<b>Applicant Signature:</b><br/><br/><br/>________________________________________<br/><b>{full_name}</b>",
+                styles["body"],
+            ),
+            Paragraph(
+                f"<b>Date:</b><br/><br/><br/>{datetime.now(UTC).strftime('%B %d, %Y')}<br/><b>Place:</b> {nationality}",
+                styles["body"],
+            ),
+        ]
+    ]
+    sig_table = Table(sig_data, colWidths=[320, 190])
+    sig_table.setStyle(
+        TableStyle(
+            [
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+            ]
+        )
+    )
+    story.append(sig_table)
+
+    doc.build(story)
+    return buffer.getvalue()
 
