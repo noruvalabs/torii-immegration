@@ -108,12 +108,9 @@ export function FloatingAssistant() {
   const [isMinimized, setIsMinimized] = useState(false);
   const [sizeMode, setSizeMode] = useState<SizeMode>("standard");
   const [position, setPosition] = useState<{ x: number; y: number } | null>(null);
-  const [triggerPos, setTriggerPos] = useState<{ x: number; y: number } | null>(null);
 
   const [isDragging, setIsDragging] = useState(false);
-  const [isDraggingTrigger, setIsDraggingTrigger] = useState(false);
   const dragStartRef = useRef<{ startX: number; startY: number; startPosX: number; startPosY: number } | null>(null);
-  const triggerDragStartRef = useRef<{ startX: number; startY: number; startPosX: number; startPosY: number; hasMoved: boolean } | null>(null);
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
@@ -129,18 +126,12 @@ export function FloatingAssistant() {
   // Initialize and load saved positions & sizes
   useEffect(() => {
     try {
+      localStorage.removeItem("torii_assistant_trigger_pos");
       const savedPos = localStorage.getItem("torii_assistant_pos");
       if (savedPos) {
         const parsed = JSON.parse(savedPos);
         if (typeof parsed.x === "number" && typeof parsed.y === "number") {
-          setPosition(clampPosition(parsed.x, parsed.y, SIZE_CONFIG.standard.width, SIZE_CONFIG.standard.height));
-        }
-      }
-      const savedTriggerPos = localStorage.getItem("torii_assistant_trigger_pos");
-      if (savedTriggerPos) {
-        const parsed = JSON.parse(savedTriggerPos);
-        if (typeof parsed.x === "number" && typeof parsed.y === "number") {
-          setTriggerPos(clampPosition(parsed.x, parsed.y, 180, 48));
+          setPosition(clampPosition(parsed.x, parsed.y, 350, 460));
         }
       }
       const savedSize = localStorage.getItem("torii_assistant_size") as SizeMode;
@@ -155,14 +146,13 @@ export function FloatingAssistant() {
   // Recalculate clamps on window resize
   useEffect(() => {
     const handleResize = () => {
-      const w = isMinimized ? 300 : SIZE_CONFIG[sizeMode].width;
-      const h = isMinimized ? 48 : SIZE_CONFIG[sizeMode].height;
+      const w = isMinimized ? 280 : 350;
+      const h = isMinimized ? 48 : 460;
       setPosition((prev) => (prev ? clampPosition(prev.x, prev.y, w, h) : null));
-      setTriggerPos((prev) => (prev ? clampPosition(prev.x, prev.y, 180, 48) : null));
     };
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
-  }, [sizeMode, isMinimized]);
+  }, [isMinimized]);
 
   // Extract case ID if currently on a case page
   const caseMatch = pathname?.match(/\/cases\/(\d+)/);
@@ -263,8 +253,8 @@ export function FloatingAssistant() {
   // Window drag handlers
   const handlePointerDown = (e: PointerEvent<HTMLDivElement>) => {
     if (e.button !== 0) return;
-    const w = isMinimized ? 300 : SIZE_CONFIG[sizeMode].width;
-    const h = isMinimized ? 48 : SIZE_CONFIG[sizeMode].height;
+    const w = isMinimized ? 280 : 350;
+    const h = isMinimized ? 48 : 460;
     const currentX = position?.x ?? Math.max(12, window.innerWidth - w - 24);
     const currentY = position?.y ?? Math.max(12, window.innerHeight - h - 24);
 
@@ -282,8 +272,8 @@ export function FloatingAssistant() {
     if (!isDragging || !dragStartRef.current) return;
     const deltaX = e.clientX - dragStartRef.current.startX;
     const deltaY = e.clientY - dragStartRef.current.startY;
-    const w = isMinimized ? 300 : SIZE_CONFIG[sizeMode].width;
-    const h = isMinimized ? 48 : SIZE_CONFIG[sizeMode].height;
+    const w = isMinimized ? 280 : 350;
+    const h = isMinimized ? 48 : 460;
 
     const rawX = dragStartRef.current.startPosX + deltaX;
     const rawY = dragStartRef.current.startPosY + deltaY;
@@ -309,73 +299,10 @@ export function FloatingAssistant() {
     }
   };
 
-  // Trigger button drag handlers
-  const handleTriggerPointerDown = (e: PointerEvent<HTMLButtonElement>) => {
-    if (e.button !== 0) return;
-    const currentX = triggerPos?.x ?? Math.max(12, window.innerWidth - 180 - 24);
-    const currentY = triggerPos?.y ?? Math.max(12, window.innerHeight - 48 - 24);
-
-    triggerDragStartRef.current = {
-      startX: e.clientX,
-      startY: e.clientY,
-      startPosX: currentX,
-      startPosY: currentY,
-      hasMoved: false,
-    };
-    setIsDraggingTrigger(true);
-    e.currentTarget.setPointerCapture(e.pointerId);
-  };
-
-  const handleTriggerPointerMove = (e: PointerEvent<HTMLButtonElement>) => {
-    if (!isDraggingTrigger || !triggerDragStartRef.current) return;
-    const deltaX = e.clientX - triggerDragStartRef.current.startX;
-    const deltaY = e.clientY - triggerDragStartRef.current.startY;
-
-    if (Math.abs(deltaX) > 4 || Math.abs(deltaY) > 4) {
-      triggerDragStartRef.current.hasMoved = true;
-    }
-
-    const rawX = triggerDragStartRef.current.startPosX + deltaX;
-    const rawY = triggerDragStartRef.current.startPosY + deltaY;
-    const clamped = clampPosition(rawX, rawY, 180, 48);
-    setTriggerPos(clamped);
-  };
-
-  const handleTriggerPointerUp = (e: PointerEvent<HTMLButtonElement>) => {
-    if (!isDraggingTrigger) return;
-    setIsDraggingTrigger(false);
-    try {
-      e.currentTarget.releasePointerCapture(e.pointerId);
-    } catch {
-      // Ignore
-    }
-    const hasMoved = triggerDragStartRef.current?.hasMoved;
-    triggerDragStartRef.current = null;
-
-    if (triggerPos) {
-      try {
-        localStorage.setItem("torii_assistant_trigger_pos", JSON.stringify(triggerPos));
-      } catch {
-        // Ignore
-      }
-    }
-
-    if (!hasMoved) {
-      setIsOpen(true);
-      setIsMinimized(false);
-    }
-  };
-
   const handleResetPosition = () => {
-    const w = isMinimized ? 300 : SIZE_CONFIG[sizeMode].width;
-    const h = isMinimized ? 48 : SIZE_CONFIG[sizeMode].height;
-    const defaultPos = {
-      x: Math.max(12, window.innerWidth - w - 24),
-      y: Math.max(12, window.innerHeight - h - 24),
-    };
-    setPosition(defaultPos);
+    setPosition(null);
     try {
-      localStorage.setItem("torii_assistant_pos", JSON.stringify(defaultPos));
+      localStorage.removeItem("torii_assistant_pos");
     } catch {
       // Ignore
     }
@@ -530,21 +457,16 @@ export function FloatingAssistant() {
   return (
     <>
       {/* Draggable Floating Trigger Button (Compact) */}
+      {/* Floating Trigger Button (Compact Bottom-Right) */}
       {!isOpen && (
         <button
-          onPointerDown={handleTriggerPointerDown}
-          onPointerMove={handleTriggerPointerMove}
-          onPointerUp={handleTriggerPointerUp}
-          style={
-            triggerPos
-              ? { left: `${triggerPos.x}px`, top: `${triggerPos.y}px` }
-              : { right: "24px", bottom: "24px" }
-          }
-          className={`fixed z-50 flex items-center gap-2 rounded-full bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground shadow-xl transition-transform duration-150 select-none touch-none ${
-            isDraggingTrigger ? "cursor-grabbing scale-105 opacity-90" : "cursor-grab hover:scale-105 hover:bg-primary/90"
-          } focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2`}
-          aria-label="Open AI Assistant (Drag to reposition)"
-          title="Click to open AI Assistant · Drag to reposition"
+          onClick={() => {
+            setIsOpen(true);
+            setIsMinimized(false);
+          }}
+          className="fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-full bg-primary px-3.5 py-2 text-xs font-semibold text-primary-foreground shadow-2xl transition-all duration-150 hover:scale-105 hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
+          aria-label="Open AI Assistant"
+          title="Click to open AI Assistant"
         >
           <div className="relative">
             <Bot className="size-4" />
