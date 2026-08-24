@@ -62,6 +62,36 @@ _SPECIFIC_CITATIONS: dict[str, dict[str, dict[str, str]]] = {
             "title": "Commercial and Corporate Registration Certification (商業・法人登記)",
             "url": "https://www.moj.go.jp/MINJI/minji06.html",
         },
+        "hsp": {
+            "authority": "Immigration Services Agency of Japan (ISA)",
+            "title": "Points-Based Preferential Treatment for Highly Skilled Foreign Professionals (高度人材ポイント制)",
+            "url": "https://www.isa.go.jp/en/applications/procedures/nyuukokukanri07_00037.html",
+        },
+        "permanent_resident": {
+            "authority": "Immigration Services Agency of Japan (ISA)",
+            "title": "Guidelines for Permission for Permanent Residence (永住許可に関するガイドライン)",
+            "url": "https://www.isa.go.jp/en/applications/procedures/nyuukokukanri07_00115.html",
+        },
+        "spouse": {
+            "authority": "Immigration Services Agency of Japan (ISA)",
+            "title": "Status of Residence: Spouse or Child of Japanese National / PR (日本人の配偶者等)",
+            "url": "https://www.isa.go.jp/en/applications/procedures/zairyu_shikaku01.html",
+        },
+        "dependent": {
+            "authority": "Immigration Services Agency of Japan (ISA)",
+            "title": "Status of Residence: Dependent (家族滞在)",
+            "url": "https://www.isa.go.jp/en/applications/procedures/zairyu_shikaku23.html",
+        },
+        "designated_activities": {
+            "authority": "Immigration Services Agency of Japan (ISA)",
+            "title": "Status of Residence: Designated Activities (特定活動 - 46号・就職活動)",
+            "url": "https://www.isa.go.jp/en/applications/procedures/nyuukokukanri07_00038.html",
+        },
+        "guarantor": {
+            "authority": "Immigration Services Agency of Japan (ISA)",
+            "title": "Letter of Guarantee Regulations (身元保証書要領)",
+            "url": "https://www.isa.go.jp/en/applications/procedures/nyuukokukanri07_00115.html",
+        },
         "extension": {
             "authority": "Immigration Services Agency of Japan (ISA)",
             "title": "Guidelines for Permission for Extension of Period of Stay (在留期間更新許可のガイドライン)",
@@ -224,6 +254,18 @@ def resolve_official_citation(
         topic = "residence_card"
     elif "corporate" in key or "registry" in key or "registration" in key:
         topic = "company_registry" if jur == "JP" else "sponsor"
+    elif "hsp" in key or "point" in key or cat == "hsp":
+        topic = "hsp"
+    elif "permanent" in key or "eiju" in key or cat in ("permanent_resident", "pr"):
+        topic = "permanent_resident"
+    elif "spouse" in key or "koseki" in key or "shitsumonsho" in key or cat == "spouse":
+        topic = "spouse"
+    elif "dependent" in key or "supporter" in key or "kazoku" in key or cat == "dependent":
+        topic = "dependent"
+    elif "designated" in key or "article_46" in key or "tokutei" in key or cat == "designated_activities":
+        topic = "designated_activities"
+    elif "guarantor" in key or "hosho" in key:
+        topic = "guarantor"
     elif "lca" in key or "labor" in key or "prevailing_wage" in key:
         topic = "lca" if jur == "US" else "work"
     elif "cos" in key or "sponsor" in key or "employer_name" in key:

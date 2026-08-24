@@ -1,0 +1,220 @@
+jurisdiction: JP
+visa_category: spouse
+action: new_application
+title: Spouse of Japanese National / PR (日本人の配偶者等) - New Application & COE
+description: Residence status for spouses and children of Japanese citizens or Permanent Residents, granting unrestricted work rights.
+version: 2026-04
+is_live: true
+
+stages:
+  - sequence: 1
+    code: sponsor_petition
+    actor: sponsor
+    handoff_artifact: coe
+
+intake:
+  questions:
+    - key: full_name
+      prompt: Applicant Full Name (as shown in passport)
+      type: string
+      required: true
+      section: Applicant Information
+    - key: nationality
+      prompt: Applicant Nationality
+      type: string
+      required: true
+      section: Applicant Information
+    - key: spouse_type
+      prompt: Sponsoring Spouse Status
+      type: choice
+      options:
+        - japanese_citizen: Japanese National (日本人の配偶者)
+        - permanent_resident: Permanent Resident of Japan (永住者の配偶者)
+      required: true
+      section: Marital Relationship
+    - key: marriage_date
+      prompt: Official Marriage Registration Date
+      type: string
+      required: true
+      section: Marital Relationship
+    - key: living_together_in_japan
+      prompt: Will you co-habit and live together at the same address in Japan?
+      type: boolean
+      required: true
+      section: Marital Relationship
+    - key: household_annual_income_jpy
+      prompt: Combined Household Annual Gross Income (JPY)
+      type: number
+      required: true
+      section: Financial Sufficiency
+    - key: criminal_record_any
+      prompt: Any past criminal record or immigration infractions?
+      type: boolean
+      required: true
+      section: Compliance
+
+eligibility:
+  rules:
+    - key: living_together_in_japan
+      operator: equals
+      value: true
+      failure_status: fail
+      message: Spousal status of residence requires bona fide co-habitation in Japan as a genuine married couple. Separate living arrangements require clear business justification.
+      citation:
+        authority: Immigration Services Agency of Japan (ISA)
+        title: "Guidelines on Status of Residence: Spouse or Child of Japanese National"
+        url: https://www.isa.go.jp/en/applications/procedures/zairyu_shikaku01.html
+        source_version: 2026-04
+
+    - key: household_annual_income_jpy
+      operator: min
+      value: 2000000
+      failure_status: warning
+      message: The household must demonstrate stable financial means to support life in Japan without relying on public assistance.
+      citation:
+        authority: Immigration Services Agency of Japan (ISA)
+        title: "Financial Capacity Review for Spousal Visas"
+        url: https://www.isa.go.jp/en/applications/procedures/zairyu_shikaku01.html
+        source_version: 2026-04
+
+documents:
+  items:
+    - code: passport
+      name:
+        en: Applicant Passport (Copy)
+        ja: 申請人の旅券写し
+      how_to_obtain:
+        en: Copy of photo and bio-data page.
+      why_required:
+        en: Proof of identity and nationality.
+      is_required: true
+      citation:
+        authority: Ministry of Foreign Affairs of Japan (MOFA)
+        title: "Passport Verification Standards"
+        url: https://www.mofa.go.jp/j_info/visit/visa/index.html
+        source_version: 2026-04
+
+    - code: spouse_koseki_tohon
+      name:
+        en: Japanese Spouse's Family Register Extract (戸籍謄本 - 全部の記載があるもの)
+        ja: 日本人配偶者の戸籍謄本（婚姻事実の記載がある全部事項証明書）
+      how_to_obtain:
+        en: Issued by the municipal office of the spouse's registered domicile (本籍地) within the last 3 months.
+      why_required:
+        en: Definitive legal proof of marriage registered under Japanese civil law.
+      is_required: true
+      citation:
+        authority: Ministry of Justice Legal Affairs Bureau & ISA
+        title: "Family Register Certification (戸籍全部事項証明書)"
+        url: https://www.isa.go.jp/en/applications/procedures/zairyu_shikaku01.html
+        source_version: 2026-04
+
+    - code: foreign_marriage_certificate
+      name:
+        en: Foreign Country Marriage Certificate with Japanese Translation (結婚証明書及び訳文)
+        ja: 申請人の母国の機関から発行された婚姻証明書及び日本語訳
+      how_to_obtain:
+        en: Official marriage certificate from applicant's home country with full Japanese translation.
+      why_required:
+        en: Proves legal validity of marriage in both nations.
+      is_required: true
+      citation:
+        authority: Immigration Services Agency of Japan (ISA)
+        title: "Foreign Marriage Certificate Evidentiary Standards"
+        url: https://www.isa.go.jp/en/applications/procedures/zairyu_shikaku01.html
+        source_version: 2026-04
+
+    - code: marriage_questionnaire_shitsumonsho
+      name:
+        en: Official Marriage Questionnaire Form (質問書)
+        ja: 質問書（出会いの経緯・交際期間・紹介者・共通言語等の詳細記載）
+      how_to_obtain:
+        en: Complete the official 8-page ISA Questionnaire detailing courtship history, first meeting, and family awareness.
+      why_required:
+        en: Mandatory statutory form used to screen marriage authenticity and prevent sham marriages.
+      is_required: true
+      citation:
+        authority: Immigration Services Agency of Japan (ISA)
+        title: "Official Spousal Questionnaire (質問書)"
+        url: https://www.isa.go.jp/en/applications/procedures/zairyu_shikaku01.html
+        source_version: 2026-04
+
+    - code: couple_photos
+      name:
+        en: Photos of the Couple Together (スナップ写真 2〜3枚)
+        ja: 夫婦で写っているスナップ写真（2〜3枚・交際中・結婚式・親族との写真）
+      how_to_obtain:
+        en: Provide clear photographs showing both faces clearly together during dating, wedding, or family visits.
+      why_required:
+        en: Corroborates the relationship timeline stated in the questionnaire.
+      is_required: true
+      citation:
+        authority: Immigration Services Agency of Japan (ISA)
+        title: "Photographic Evidence for Spousal Applications"
+        url: https://www.isa.go.jp/en/applications/procedures/zairyu_shikaku01.html
+        source_version: 2026-04
+
+    - code: spouse_juminhyo
+      name:
+        en: Certificate of Residence showing Full Household (住民票 - 世帯全員記載)
+        ja: 配偶者の住民票（世帯全員の記載があるもの）
+      how_to_obtain:
+        en: Issued by local Ward/City Municipal Office within the last 3 months.
+      why_required:
+        en: Verifies current legal address and co-habitants.
+      is_required: true
+      citation:
+        authority: Ministry of Internal Affairs and Communications (MIC)
+        title: "Juminhyo Household Certification"
+        url: https://www.isa.go.jp/en/applications/procedures/zairyu_shikaku01.html
+        source_version: 2026-04
+
+    - code: spouse_tax_certificates
+      name:
+        en: Spouse Tax Certificates (住民税の課税証明書及び納税証明書)
+        ja: 日本人配偶者の直近年度の住民税の課税証明書及び納税証明書
+      how_to_obtain:
+        en: Issued by local municipal ward office.
+      why_required:
+        en: Verifies annual income and taxation compliance.
+      is_required: true
+      citation:
+        authority: National Tax Agency of Japan (国税庁)
+        title: "Resident Tax Documentation"
+        url: https://www.nta.go.jp/taxes/tetsuzuki/shinsei/annai/hotei/23100051.htm
+        source_version: 2026-04
+
+    - code: guarantor_letter_spouse
+      name:
+        en: Letter of Guarantee (身元保証書)
+        ja: 身元保証書（日本人配偶者または永住者配偶者が署名したもの）
+      how_to_obtain:
+        en: Signed by the Japanese or PR spouse guaranteeing living expenses and legal conduct.
+      why_required:
+        en: Statutory requirement under ISA regulations.
+      is_required: true
+      citation:
+        authority: Immigration Services Agency of Japan (ISA)
+        title: "Spousal Letter of Guarantee (身元保証書)"
+        url: https://www.isa.go.jp/en/applications/procedures/zairyu_shikaku01.html
+        source_version: 2026-04
+
+forms:
+  - code: jp_spouse_coe_form
+    version: 2026-04
+    official_title: Application for Certificate of Eligibility (日本人の配偶者等)
+    citation:
+      authority: Immigration Services Agency of Japan (ISA)
+      title: "Spouse of Japanese National COE Form"
+      url: https://www.isa.go.jp/en/applications/procedures/zairyu_shikaku01.html
+      source_version: 2026-04
+    field_mappings:
+      - form_field: applicant.full_name
+        answer_key: full_name
+        required: true
+      - form_field: applicant.nationality
+        answer_key: nationality
+        required: true
+      - form_field: marriage.registration_date
+        answer_key: marriage_date
+        required: true

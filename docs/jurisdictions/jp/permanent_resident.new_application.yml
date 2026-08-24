@@ -1,0 +1,282 @@
+jurisdiction: JP
+visa_category: permanent_resident
+action: new_application
+title: Permanent Residence Permission (永住許可申請)
+description: Permanent residency in Japan with exemption from visa renewals, full career flexibility, and access to domestic mortgage financing.
+version: 2026-04
+is_live: true
+
+stages:
+  - sequence: 1
+    code: applicant_filing
+    actor: applicant
+
+intake:
+  questions:
+    - key: full_name
+      prompt: Full Name (as shown in passport)
+      type: string
+      required: true
+      section: Personal Information
+    - key: nationality
+      prompt: Nationality / Country of Citizenship
+      type: string
+      required: true
+      section: Personal Information
+    - key: residence_card_number
+      prompt: Current Residence Card Number
+      type: string
+      required: true
+      section: Residence Status
+    - key: current_period_of_stay_years
+      prompt: Current Period of Stay Granted on Residence Card (Years)
+      type: number
+      required: true
+      section: Residence Status
+    - key: pr_application_path
+      prompt: Basis of Permanent Residency Application
+      type: choice
+      options:
+        - standard_10_years: Standard 10-Year Residency (Minimum 5 years on work visa)
+        - hsp_80_points_1_year: Highly Skilled Professional (>= 80 Points maintained for 1+ year)
+        - hsp_70_points_3_years: Highly Skilled Professional (>= 70 Points maintained for 3+ years)
+        - spouse_of_japanese_or_pr: Spouse of Japanese National or PR holder (Married 3+ yrs + 1+ yr in Japan)
+      required: true
+      section: Application Path & Criteria
+    - key: years_in_japan
+      prompt: Total Consecutive Years Residing in Japan
+      type: number
+      required: true
+      section: Residency History
+    - key: annual_income_jpy
+      prompt: Most Recent Annual Gross Income in Japan (JPY)
+      type: number
+      required: true
+      section: Livelihood Stability
+    - key: number_of_dependents
+      prompt: Number of Tax Dependents (Spouse / Children / Parents in Japan or Abroad)
+      type: number
+      required: true
+      section: Livelihood Stability
+    - key: tax_compliance_5_years
+      prompt: Have you paid all Municipal Resident Taxes (住民税) on time for the past 5 consecutive years?
+      type: boolean
+      required: true
+      section: Statutory Compliance
+    - key: pension_compliance_2_to_5_years
+      prompt: Have all National Pension / Employees' Pension (年金) and Health Insurance payments been made on or before the due date?
+      type: boolean
+      required: true
+      section: Statutory Compliance
+    - key: has_guarantor_in_japan
+      prompt: Do you have a guarantor (身元保証人) who is a Japanese citizen or Permanent Resident?
+      type: boolean
+      required: true
+      section: Guarantor Details
+    - key: criminal_record_any
+      prompt: Any history of criminal convictions, serious traffic violations, or immigration penalties?
+      type: boolean
+      required: true
+      section: Good Conduct
+
+eligibility:
+  rules:
+    - key: current_period_of_stay_years
+      operator: min
+      value: 3
+      failure_status: fail
+      message: You must hold the maximum or substantial statutory period of stay (currently 3 years or 5 years) to apply for Permanent Residence. Applicants holding a 1-year visa cannot apply.
+      citation:
+        authority: Immigration Services Agency of Japan (ISA)
+        title: "Guidelines for Permission for Permanent Residence (永住許可に関するガイドライン)"
+        url: https://www.isa.go.jp/en/applications/procedures/nyuukokukanri07_00115.html
+        source_version: 2026-04
+
+    - key: tax_compliance_5_years
+      operator: equals
+      value: true
+      failure_status: fail
+      message: Flawless on-time payment of municipal resident taxes and national income taxes for the past 5 years is mandatory. Even late payments after the statutory deadline cause refusal.
+      citation:
+        authority: National Tax Agency of Japan (国税庁) & ISA
+        title: "Tax Compliance Review Standards for Permanent Residency"
+        url: https://www.isa.go.jp/en/applications/procedures/nyuukokukanri07_00115.html
+        source_version: 2026-04
+
+    - key: pension_compliance_2_to_5_years
+      operator: equals
+      value: true
+      failure_status: fail
+      message: Perfect public pension and health insurance payment records are strictly scrutinized. A single missed or overdue payment slip within the inspection window is a leading ground for refusal.
+      citation:
+        authority: Japan Pension Service (日本年金機構) & ISA
+        title: "Public Pension & Health Insurance Compliance Guidelines for PR"
+        url: https://www.nenkin.go.jp/international/index.html
+        source_version: 2026-04
+
+    - key: annual_income_jpy
+      operator: min
+      value: 3000000
+      failure_status: fail
+      message: Independent livelihood criteria requires stable annual earnings of at least 3,000,000 to 3,500,000 JPY (plus ~700,000 to 800,000 JPY per dependent) sustained over the last 3-5 years.
+      citation:
+        authority: Immigration Services Agency of Japan (ISA)
+        title: "Independent Livelihood Requirement for Permanent Residence"
+        url: https://www.isa.go.jp/en/applications/procedures/nyuukokukanri07_00115.html
+        source_version: 2026-04
+
+    - key: has_guarantor_in_japan
+      operator: equals
+      value: true
+      failure_status: fail
+      message: A guarantor (身元保証人) who is a Japanese national or Japan Permanent Resident is statutory required.
+      citation:
+        authority: Immigration Services Agency of Japan (ISA)
+        title: "Guarantor Requirements for Permanent Residence Applications"
+        url: https://www.isa.go.jp/en/applications/procedures/nyuukokukanri07_00115.html
+        source_version: 2026-04
+
+documents:
+  items:
+    - code: passport
+      name:
+        en: Passport (Original & Copy)
+        ja: 旅券（原本及び写し）
+      how_to_obtain:
+        en: Present valid original passport.
+      why_required:
+        en: Identity and entry/exit continuity verification.
+      is_required: true
+      citation:
+        authority: Ministry of Foreign Affairs of Japan (MOFA)
+        title: "Passport Verification Standards"
+        url: https://www.mofa.go.jp/j_info/visit/visa/index.html
+        source_version: 2026-04
+
+    - code: residence_card
+      name:
+        en: Residence Card (Original)
+        ja: 在留カード（原本）
+      how_to_obtain:
+        en: Present physical residence card showing 3 or 5 year period of stay.
+      why_required:
+        en: Confirms holding qualifying period of stay.
+      is_required: true
+      citation:
+        authority: Immigration Services Agency of Japan (ISA)
+        title: "Residence Card Inspection"
+        url: https://www.isa.go.jp/en/applications/guide/residencecard.html
+        source_version: 2026-04
+
+    - code: reason_letter_pr
+      name:
+        en: Reason Statement for Permanent Residence (永住許可申請理由書)
+        ja: 永住許可を必要とする理由書（日本語）
+      how_to_obtain:
+        en: Draft a formal Japanese letter explaining your life history in Japan, contributions to Japanese society, career stability, and future intentions.
+      why_required:
+        en: Core document evaluated by immigration examiners to assess national interest contribution.
+      is_required: true
+      citation:
+        authority: Immigration Services Agency of Japan (ISA)
+        title: "Guidelines on Application Reason Letter for Permanent Residence"
+        url: https://www.isa.go.jp/en/applications/procedures/nyuukokukanri07_00115.html
+        source_version: 2026-04
+
+    - code: tax_certificates_5_years
+      name:
+        en: Municipal Resident Tax Certificates - 5 Years (住民税の課税証明書及び納税証明書)
+        ja: 直近5年分の住民税の課税証明書及び納税証明書（その1・その2）
+      how_to_obtain:
+        en: Issued by local Ward/City Municipal Offices for all municipalities you resided in during the past 5 years.
+      why_required:
+        en: Proves continuous taxation compliance and gross annual income history.
+      is_required: true
+      citation:
+        authority: National Tax Agency of Japan (国税庁) & Municipalities
+        title: "Statutory Tax Documentation for Permanent Residency"
+        url: https://www.nta.go.jp/taxes/tetsuzuki/shinsei/annai/hotei/23100051.htm
+        source_version: 2026-04
+
+    - code: national_tax_compliance_certificate
+      name:
+        en: National Tax Payment Certificate Part 3 (国税の納税証明書 その3)
+        ja: 国税の納税証明書（その3：源泉所得税・申告所得税・消費税等に未納がない旨の証明書）
+      how_to_obtain:
+        en: Issued by the Regional National Taxation Office (税務署).
+      why_required:
+        en: Confirms zero unpaid national income taxes or penalties.
+      is_required: true
+      citation:
+        authority: National Tax Agency of Japan (国税庁)
+        title: "National Tax Certification Procedures (納税証明書その3)"
+        url: https://www.nta.go.jp/taxes/nozei/nofu_shomei/01.htm
+        source_version: 2026-04
+
+    - code: pension_records_nenkin_net
+      name:
+        en: Pension Payment Records - Nenkin Net (年金定期便 / ねんきんネットの各月の年金記録印刷)
+        ja: ねんきん定期便または「ねんきんネット」の各月の年金記録画面の印刷
+      how_to_obtain:
+        en: Download and print full historical monthly record from Nenkin Net portal (Japan Pension Service).
+      why_required:
+        en: Demonstrates zero missed or late monthly pension contributions over the evaluation window.
+      is_required: true
+      citation:
+        authority: Japan Pension Service (日本年金機構)
+        title: "Nenkin Net Pension Contribution Verification (ねんきんネット)"
+        url: https://www.nenkin.go.jp/international/index.html
+        source_version: 2026-04
+
+    - code: guarantor_documents
+      name:
+        en: Guarantor Document Dossier (身元保証書・住民票・課税証明書)
+        ja: 身元保証書、身元保証人の住民票及び所得課税証明書
+      how_to_obtain:
+        en: Executed by a Japanese citizen or PR guarantor, including their Juminhyo and tax certificate.
+      why_required:
+        en: Statutory requirement under Immigration Control Act Article 22.
+      is_required: true
+      citation:
+        authority: Immigration Services Agency of Japan (ISA)
+        title: "Letter of Guarantee Requirements (身元保証書)"
+        url: https://www.isa.go.jp/en/applications/procedures/nyuukokukanri07_00115.html
+        source_version: 2026-04
+
+    - code: juminhyo_resident_record
+      name:
+        en: Certificate of Residence for All Household Members (世帯全員の住民票)
+        ja: 住民票（世帯全員の記載があるもの・マイナンバー省略）
+      how_to_obtain:
+        en: Issued by local Ward/City Office showing all co-habiting household members (no MyNumber).
+      why_required:
+        en: Verifies household composition and address continuity.
+      is_required: true
+      citation:
+        authority: Ministry of Internal Affairs and Communications (MIC)
+        title: "Household Juminhyo Registry Verification"
+        url: https://www.isa.go.jp/en/applications/procedures/nyuukokukanri07_00115.html
+        source_version: 2026-04
+
+forms:
+  - code: jp_pr_application_form
+    version: 2026-04
+    official_title: Application for Permanent Residence (永住許可申請書)
+    citation:
+      authority: Immigration Services Agency of Japan (ISA)
+      title: "Permanent Residence Application Form"
+      url: https://www.isa.go.jp/en/applications/procedures/nyuukokukanri07_00115.html
+      source_version: 2026-04
+    field_mappings:
+      - form_field: applicant.full_name
+        answer_key: full_name
+        required: true
+      - form_field: applicant.nationality
+        answer_key: nationality
+        required: true
+      - form_field: applicant.residence_card_number
+        answer_key: residence_card_number
+        required: true
+      - form_field: financial.annual_income_jpy
+        answer_key: annual_income_jpy
+        required: true

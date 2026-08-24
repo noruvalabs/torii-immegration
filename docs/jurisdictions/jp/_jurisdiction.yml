@@ -15,11 +15,26 @@ categories:
   - code: work
     name: Work Visa - 技術・人文知識・国際業務 (Engineer / Specialist in Humanities / International Services)
     is_live: true
+  - code: hsp
+    name: Highly Skilled Professional - 高度専門職 (Points-based fast track to PR)
+    is_live: true
+  - code: permanent_resident
+    name: Permanent Residency - 永住許可 (PR status & fast-track paths)
+    is_live: true
+  - code: spouse
+    name: Spouse / Child of Japanese National or PR - 日本人の配偶者等 / 永住者の配偶者等
+    is_live: true
+  - code: dependent
+    name: Dependent Visa - 家族滞在 (Spouse & children of work/student residents)
+    is_live: true
+  - code: designated_activities
+    name: Designated Activities - 特定活動 (Article 46 graduates, job hunting, internships)
+    is_live: true
   - code: student
-    name: Student Visa - Study at a university or language school
+    name: Student Visa - 留学 (Study at a university, college, or language school)
     is_live: true
   - code: tourist
-    name: Tourist Visa - Short-term travel (guarantor pack)
+    name: Tourist / Temporary Visitor - 短期滞在 (Short-term travel, business, visiting relatives)
     is_live: true
 actions:
   - code: renewal

@@ -1,0 +1,212 @@
+jurisdiction: JP
+visa_category: hsp
+action: change_of_status
+title: Highly Skilled Professional (高度専門職) - Change of Status
+description: Change from a standard work visa (技人国), student, or intra-company transferee status to Highly Skilled Professional (1号イ/ロ/ハ).
+version: 2026-04
+is_live: true
+
+stages:
+  - sequence: 1
+    code: applicant_filing
+    actor: applicant
+
+intake:
+  questions:
+    - key: full_name
+      prompt: Full Name (as shown in passport)
+      type: string
+      required: true
+      section: Personal Information
+    - key: nationality
+      prompt: Nationality / Country of Citizenship
+      type: string
+      required: true
+      section: Personal Information
+    - key: residence_card_number
+      prompt: Current Residence Card Number
+      type: string
+      required: true
+      section: Current Residence Status
+    - key: current_status_of_residence
+      prompt: Current Status of Residence in Japan
+      type: choice
+      options:
+        - gijinkoku: Engineer / Specialist in Humanities / International Services (技術・人文知識・国際業務)
+        - student: Student (留学)
+        - researcher: Researcher / Professor (研究・教授)
+        - management: Business Manager (経営・管理)
+        - other: Other
+      required: true
+      section: Current Residence Status
+    - key: hsp_total_points
+      prompt: Calculated Total Points on HSP Matrix (Minimum 70 points)
+      type: number
+      required: true
+      section: Points Matrix Assessment
+    - key: annual_salary_jpy
+      prompt: Contracted Annual Gross Salary in Japan (JPY)
+      type: number
+      required: true
+      section: Employment & Compensation
+    - key: resident_tax_status
+      prompt: Are all Japanese Resident Taxes (住民税) fully paid with zero arrears or overdue periods?
+      type: boolean
+      required: true
+      section: Tax & Social Compliance
+    - key: pension_health_insurance
+      prompt: Are all National/Employees' Pension and Health Insurance contributions up to date?
+      type: boolean
+      required: true
+      section: Tax & Social Compliance
+    - key: criminal_disclosures
+      prompt: Any criminal record or immigration violations in Japan?
+      type: boolean
+      required: true
+      section: Compliance
+
+eligibility:
+  rules:
+    - key: hsp_total_points
+      operator: min
+      value: 70
+      failure_status: fail
+      message: Qualification for HSP Change of Status requires meeting the 70-point threshold on the official points table.
+      citation:
+        authority: Immigration Services Agency of Japan (ISA)
+        title: "Points-Based Preferential Treatment for Highly Skilled Foreign Professionals"
+        url: https://www.isa.go.jp/en/applications/procedures/nyuukokukanri07_00037.html
+        source_version: 2026-04
+
+    - key: annual_salary_jpy
+      operator: min
+      value: 3000000
+      failure_status: fail
+      message: Statutory minimum salary floor of 3,000,000 JPY is required.
+      citation:
+        authority: Immigration Services Agency of Japan (ISA)
+        title: "Income Standards for HSP Category 1b/1c"
+        url: https://www.isa.go.jp/en/applications/procedures/nyuukokukanri07_00037.html
+        source_version: 2026-04
+
+    - key: resident_tax_status
+      operator: equals
+      value: true
+      failure_status: fail
+      message: Flawless resident tax compliance is required for granting status changes.
+      citation:
+        authority: National Tax Agency of Japan (国税庁) & Municipal Tax Law
+        title: "Individual Resident Tax Compliance Review"
+        url: https://www.nta.go.jp/taxes/tetsuzuki/shinsei/annai/hotei/23100051.htm
+        source_version: 2026-04
+
+    - key: pension_health_insurance
+      operator: equals
+      value: true
+      failure_status: warning
+      message: Unpaid or late pension contributions jeopardize application approval.
+      citation:
+        authority: Japan Pension Service (日本年金機構)
+        title: "Pension & Health Insurance Verification Standards"
+        url: https://www.nenkin.go.jp/international/index.html
+        source_version: 2026-04
+
+documents:
+  items:
+    - code: passport
+      name:
+        en: Passport (Original)
+        ja: 旅券（原本）
+      how_to_obtain:
+        en: Present current valid passport.
+      why_required:
+        en: Identity and nationality verification.
+      is_required: true
+      citation:
+        authority: Ministry of Foreign Affairs of Japan (MOFA)
+        title: "Passport Verification Guidelines"
+        url: https://www.mofa.go.jp/j_info/visit/visa/index.html
+        source_version: 2026-04
+
+    - code: residence_card
+      name:
+        en: Residence Card (Original)
+        ja: 在留カード（原本）
+      how_to_obtain:
+        en: Present currently valid physical residence card.
+      why_required:
+        en: Confirms lawful domestic stay and continuity.
+      is_required: true
+      citation:
+        authority: Immigration Services Agency of Japan (ISA)
+        title: "Residence Card Management Guidelines"
+        url: https://www.isa.go.jp/en/applications/guide/residencecard.html
+        source_version: 2026-04
+
+    - code: hsp_points_calculation_sheet
+      name:
+        en: Official Points Calculation Sheet & Evidentiary Documents (ポイント計算表及び立証資料)
+        ja: 高度専門職ポイント計算表及び立証資料
+      how_to_obtain:
+        en: Fill out points table and attach diplomas, JLPT certs, and income proofs.
+      why_required:
+        en: Establishes score >= 70 or >= 80 points.
+      is_required: true
+      citation:
+        authority: Immigration Services Agency of Japan (ISA)
+        title: "Points Calculation Table for Change of Status"
+        url: https://www.isa.go.jp/en/applications/procedures/nyuukokukanri07_00037.html
+        source_version: 2026-04
+
+    - code: tax_certificate
+      name:
+        en: Municipal Resident Tax Certificates (課税証明書・納税証明書)
+        ja: 直近年度の住民税の課税証明書及び納税証明書
+      how_to_obtain:
+        en: Obtain from local Ward/City Office (区役所/市役所).
+      why_required:
+        en: Verifies income level and past tax compliance.
+      is_required: true
+      citation:
+        authority: National Tax Agency of Japan (国税庁)
+        title: "Resident Tax Certification Procedures"
+        url: https://www.nta.go.jp/taxes/tetsuzuki/shinsei/annai/hotei/23100051.htm
+        source_version: 2026-04
+
+    - code: withholding_tax_slip
+      name:
+        en: Annual Withholding Tax Slip (源泉徴収票)
+        ja: 給与所得の源泉徴収票
+      how_to_obtain:
+        en: Issued by Japanese employer.
+      why_required:
+        en: Verifies gross income in the most recent calendar year.
+      is_required: true
+      citation:
+        authority: National Tax Agency of Japan (国税庁)
+        title: "Withholding Tax Slip Review"
+        url: https://www.nta.go.jp/taxes/tetsuzuki/shinsei/annai/hotei/23100051.htm
+        source_version: 2026-04
+
+forms:
+  - code: jp_change_of_status_hsp
+    version: 2026-04
+    official_title: Application for Permission to Change Status of Residence (高度専門職)
+    citation:
+      authority: Immigration Services Agency of Japan (ISA)
+      title: "Change of Status Application Procedures"
+      url: https://www.moj.go.jp/isa/applications/procedures/16-2.html
+      source_version: 2026-04
+    field_mappings:
+      - form_field: applicant.full_name
+        answer_key: full_name
+        required: true
+      - form_field: applicant.nationality
+        answer_key: nationality
+        required: true
+      - form_field: applicant.residence_card_number
+        answer_key: residence_card_number
+        required: true
+      - form_field: points.total_points
+        answer_key: hsp_total_points
+        required: true

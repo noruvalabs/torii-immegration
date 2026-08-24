@@ -190,11 +190,39 @@ def _default_citation_for_question(q: IntakeQuestion) -> dict[str, str]:
     }
 
 
+def _normalize_raw_question(item: dict[str, Any]) -> dict[str, Any]:
+    d = dict(item)
+    qtype = str(d.get("type", "string")).lower().strip()
+    if qtype in ("choice", "select", "radio", "dropdown"):
+        d["type"] = "enum"
+    elif qtype in ("number", "numeric", "float"):
+        d["type"] = "integer"
+    elif qtype not in ("boolean", "string", "integer", "enum", "date"):
+        d["type"] = "string"
+
+    opts = d.get("options")
+    if isinstance(opts, list):
+        norm_opts: list[str] = []
+        for opt in opts:
+            if isinstance(opt, dict):
+                norm_opts.extend([str(k) for k in opt.keys()])
+            elif isinstance(opt, str):
+                norm_opts.append(opt)
+            else:
+                norm_opts.append(str(opt))
+        d["options"] = norm_opts
+    return d
+
+
 def parse_questions(raw: list[dict[str, Any]] | list[IntakeQuestion]) -> list[IntakeQuestion]:
     """Normalize stored JSON (or models) into typed questions."""
     out: list[IntakeQuestion] = []
     for item in raw:
-        q = item if isinstance(item, IntakeQuestion) else IntakeQuestion.model_validate(item)
+        if isinstance(item, IntakeQuestion):
+            q = item
+        else:
+            norm = _normalize_raw_question(item)
+            q = IntakeQuestion.model_validate(norm)
         if q.type == "enum" and not q.options:
             raise ValueError(f"enum question '{q.key}' requires options")
         if q.citation is None or not isinstance(q.citation, dict) or not q.citation.get("url"):

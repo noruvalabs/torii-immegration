@@ -245,9 +245,22 @@ def parse_pack(data: dict[str, Any], *, scope_id: str) -> ContentPack:
     forms_raw = data.get("forms") or []
     if isinstance(forms_raw, dict):
         forms_raw = [forms_raw]
+    scope_data = data.get("scope")
+    if not isinstance(scope_data, dict):
+        parts = scope_id.split("/")
+        jur = parts[0] if parts else "jp"
+        rest = parts[1].split(".") if len(parts) > 1 else ["work", "new_application"]
+        scope_data = {
+            "jurisdiction": data.get("jurisdiction") or jur.upper(),
+            "visa_category": data.get("visa_category") or (rest[0] if rest else "work"),
+            "action": data.get("action") or (rest[1] if len(rest) > 1 else "new_application"),
+            "is_live": data.get("is_live", True),
+            "name": data.get("title") or data.get("name") or f"{jur.upper()} {rest[0]} {rest[1]}",
+            "research_enabled": data.get("research_enabled", False),
+        }
     return ContentPack(
         scope_id=scope_id,
-        scope=ScopeMeta.model_validate(data["scope"]),
+        scope=ScopeMeta.model_validate(scope_data),
         stages=[PackStage.model_validate(s) for s in (data.get("stages") or [])],
         intake=dict(data.get("intake") or {}),
         eligibility=dict(data.get("eligibility") or {}),
