@@ -1262,6 +1262,12 @@ def generate_official_japan_visa_form_pdf(
         for page in writer.pages:
             writer.update_page_form_field_values(page, field_values, auto_regenerate=False)
 
+        # Ensure visual appearance of filled fields in all browsers (Chrome, Edge, Safari, Mobile)
+        if "/AcroForm" in writer.root_object:
+            writer.root_object["/AcroForm"].update(
+                {pypdf.generic.NameObject("/NeedAppearances"): pypdf.generic.BooleanObject(True)}
+            )
+
         buf = io.BytesIO()
         writer.write(buf)
         filled_bytes = buf.getvalue()

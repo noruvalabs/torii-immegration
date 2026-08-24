@@ -894,24 +894,69 @@ export function PacketStep({ packet, caseData, loading, onBuild, onSubmit }: Pac
 
           {/* Feature 2: Official Step-by-Step Submission Roadmap */}
           <div className="space-y-3">
-            <h4 className="text-sm font-bold tracking-tight flex items-center gap-2">
-              <ArrowRight className="size-4 text-primary" /> Step-by-Step Submission Roadmap
-            </h4>
+            <div className="flex items-center justify-between">
+              <h4 className="text-sm font-bold tracking-tight flex items-center gap-2">
+                <ArrowRight className="size-4 text-primary" /> Official Submission Roadmap &amp; Filing Channels
+              </h4>
+              <span className="text-[11px] text-muted-foreground">Every instruction backed by official government source</span>
+            </div>
             <div className="grid gap-3 sm:grid-cols-2">
               {effectivePacket && Array.isArray(effectivePacket.submission_steps) && effectivePacket.submission_steps.length > 0 ? (
-                (effectivePacket.submission_steps as { step?: number; title?: string; description?: string }[]).map((st, i) => (
-                  <div key={i} className="rounded-[var(--radius)] border bg-card p-4 space-y-1">
-                    <div className="flex items-center justify-between">
-                      <Badge tone="default">Step {st.step ?? i + 1}</Badge>
-                      <span className="text-[10px] text-primary font-semibold">Official Requirement</span>
+                (effectivePacket.submission_steps as {
+                  step?: number;
+                  title?: string;
+                  description?: string;
+                  portal_url?: string | null;
+                  authority?: string | null;
+                  official_citation_url?: string | null;
+                  category?: string | null;
+                }[]).map((st, i) => (
+                  <div key={i} className="rounded-xl border border-border bg-card p-4 space-y-2 flex flex-col justify-between shadow-xs">
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <Badge tone="default">Step {st.step ?? i + 1}</Badge>
+                        {st.authority && (
+                          <span className="text-[10px] text-muted-foreground truncate max-w-[190px]" title={st.authority}>
+                            🏛️ {st.authority}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs font-bold text-foreground pt-1">{st.title}</p>
+                      <p className="text-[11px] text-muted-foreground leading-relaxed">{st.description}</p>
                     </div>
-                    <p className="text-xs font-semibold text-foreground pt-1">{st.title}</p>
-                    <p className="text-[11px] text-muted-foreground">{st.description}</p>
+
+                    <div className="pt-2 border-t flex flex-wrap items-center justify-between gap-2 text-[11px]">
+                      {st.portal_url ? (
+                        <a
+                          href={st.portal_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-primary hover:underline font-semibold"
+                        >
+                          <ExternalLink className="size-3" />
+                          Open Official Portal
+                        </a>
+                      ) : (
+                        <span className="text-muted-foreground text-[10px]">In-Person / Consular Channel</span>
+                      )}
+
+                      {st.official_citation_url && (
+                        <a
+                          href={st.official_citation_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground text-[10px]"
+                          title="Verify official government regulation"
+                        >
+                          Verify Source ↗
+                        </a>
+                      )}
+                    </div>
                   </div>
                 ))
               ) : (
                 <>
-                  <div className="rounded-[var(--radius)] border bg-card p-4 space-y-1">
+                  <div className="rounded-xl border bg-card p-4 space-y-1">
                     <div className="flex items-center justify-between">
                       <Badge tone="default">Step 1</Badge>
                       <span className="text-[10px] text-primary font-semibold">Online Portal</span>
@@ -921,7 +966,7 @@ export function PacketStep({ packet, caseData, loading, onBuild, onSubmit }: Pac
                       Use Torii&apos;s copyable field guide from the Forms tab to fill out the embassy web portal.
                     </p>
                   </div>
-                  <div className="rounded-[var(--radius)] border bg-card p-4 space-y-1">
+                  <div className="rounded-xl border bg-card p-4 space-y-1">
                     <div className="flex items-center justify-between">
                       <Badge tone="default">Step 2</Badge>
                       <span className="text-[10px] text-primary font-semibold">Filing Fee</span>
@@ -931,7 +976,7 @@ export function PacketStep({ packet, caseData, loading, onBuild, onSubmit }: Pac
                       Pay required fee through the government payment gateway and save receipt.
                     </p>
                   </div>
-                  <div className="rounded-[var(--radius)] border bg-card p-4 space-y-1">
+                  <div className="rounded-xl border bg-card p-4 space-y-1">
                     <div className="flex items-center justify-between">
                       <Badge tone="default">Step 3</Badge>
                       <span className="text-[10px] text-primary font-semibold">Appointment</span>
@@ -941,7 +986,7 @@ export function PacketStep({ packet, caseData, loading, onBuild, onSubmit }: Pac
                       Schedule appointment date at the nearest Visa Application Center or Embassy.
                     </p>
                   </div>
-                  <div className="rounded-[var(--radius)] border bg-card p-4 space-y-1">
+                  <div className="rounded-xl border bg-card p-4 space-y-1">
                     <div className="flex items-center justify-between">
                       <Badge tone="default">Step 4</Badge>
                       <span className="text-[10px] text-primary font-semibold">Dossier</span>
