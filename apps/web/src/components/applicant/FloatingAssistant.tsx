@@ -4,9 +4,7 @@ import { useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
 import { usePathname } from "next/navigation";
 import {
   Bot,
-  ChevronUp,
   Loader2,
-  Minus,
   Send,
   X,
   Zap,
@@ -35,13 +33,7 @@ type IntakeAction = {
   label: string;
 };
 
-type SizeMode = "compact" | "standard" | "expanded";
 
-const SIZE_CONFIG: Record<SizeMode, { width: number; height: number; label: string }> = {
-  compact: { width: 340, height: 420, label: "Compact" },
-  standard: { width: 380, height: 490, label: "Standard" },
-  expanded: { width: 480, height: 580, label: "Expanded" },
-};
 
 const CATEGORY_PROMPTS: Record<string, string[]> = {
   student: [
@@ -105,8 +97,6 @@ export function FloatingAssistant() {
   const pathname = usePathname();
   const { token } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
-  const [isMinimized, setIsMinimized] = useState(false);
-  const [sizeMode, setSizeMode] = useState<SizeMode>("standard");
   const [position, setPosition] = useState<{ x: number; y: number } | null>(null);
 
   const [isDragging, setIsDragging] = useState(false);
@@ -123,20 +113,17 @@ export function FloatingAssistant() {
   const [activeProfile, setActiveProfile] = useState<User | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Initialize and load saved positions & sizes
+  // Initialize and load saved positions
   useEffect(() => {
     try {
       localStorage.removeItem("torii_assistant_trigger_pos");
+      localStorage.removeItem("torii_assistant_size");
       const savedPos = localStorage.getItem("torii_assistant_pos");
       if (savedPos) {
         const parsed = JSON.parse(savedPos);
         if (typeof parsed.x === "number" && typeof parsed.y === "number") {
           setPosition(clampPosition(parsed.x, parsed.y, 350, 460));
         }
-      }
-      const savedSize = localStorage.getItem("torii_assistant_size") as SizeMode;
-      if (savedSize && SIZE_CONFIG[savedSize]) {
-        setSizeMode(savedSize);
       }
     } catch {
       // Ignore storage errors
@@ -146,13 +133,11 @@ export function FloatingAssistant() {
   // Recalculate clamps on window resize
   useEffect(() => {
     const handleResize = () => {
-      const w = isMinimized ? 280 : 350;
-      const h = isMinimized ? 48 : 460;
-      setPosition((prev) => (prev ? clampPosition(prev.x, prev.y, w, h) : null));
+      setPosition((prev) => (prev ? clampPosition(prev.x, prev.y, 350, 460) : null));
     };
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
-  }, [isMinimized]);
+  }, []);
 
   // Extract case ID if currently on a case page
   const caseMatch = pathname?.match(/\/cases\/(\d+)/);
@@ -245,18 +230,16 @@ export function FloatingAssistant() {
   }, [isOpen, caseId, visaCategory]);
 
   useEffect(() => {
-    if (isOpen && !isMinimized) {
+    if (isOpen) {
       messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }
-  }, [messages, isOpen, isMinimized]);
+  }, [messages, isOpen]);
 
   // Window drag handlers
   const handlePointerDown = (e: PointerEvent<HTMLDivElement>) => {
     if (e.button !== 0) return;
-    const w = isMinimized ? 280 : 350;
-    const h = isMinimized ? 48 : 460;
-    const currentX = position?.x ?? Math.max(12, window.innerWidth - w - 24);
-    const currentY = position?.y ?? Math.max(12, window.innerHeight - h - 24);
+    const currentX = position?.x ?? Math.max(12, window.innerWidth - 350 - 24);
+    const currentY = position?.y ?? Math.max(12, window.innerHeight - 460 - 24);
 
     dragStartRef.current = {
       startX: e.clientX,
@@ -272,12 +255,10 @@ export function FloatingAssistant() {
     if (!isDragging || !dragStartRef.current) return;
     const deltaX = e.clientX - dragStartRef.current.startX;
     const deltaY = e.clientY - dragStartRef.current.startY;
-    const w = isMinimized ? 280 : 350;
-    const h = isMinimized ? 48 : 460;
 
     const rawX = dragStartRef.current.startPosX + deltaX;
     const rawY = dragStartRef.current.startPosY + deltaY;
-    const clamped = clampPosition(rawX, rawY, w, h);
+    const clamped = clampPosition(rawX, rawY, 350, 460);
     setPosition(clamped);
   };
 
@@ -308,20 +289,7 @@ export function FloatingAssistant() {
     }
   };
 
-  const toggleSizeMode = () => {
-    const nextMode: SizeMode =
-      sizeMode === "compact" ? "standard" : sizeMode === "standard" ? "expanded" : "compact";
-    setSizeMode(nextMode);
-    try {
-      localStorage.setItem("torii_assistant_size", nextMode);
-    } catch {
-      // Ignore
-    }
-    if (position) {
-      const nextConf = SIZE_CONFIG[nextMode];
-      setPosition((prev) => (prev ? clampPosition(prev.x, prev.y, nextConf.width, nextConf.height) : null));
-    }
-  };
+
 
   async function handleApplyIntakeAction(action: IntakeAction) {
     if (!token || !caseId || applyingAction) return;
@@ -452,18 +420,12 @@ export function FloatingAssistant() {
       (f.status as string) === "incomplete",
   );
 
-  const activeConf = SIZE_CONFIG[sizeMode];
-
   return (
     <>
-      {/* Draggable Floating Trigger Button (Compact) */}
       {/* Floating Trigger Button (Compact Bottom-Right) */}
       {!isOpen && (
         <button
-          onClick={() => {
-            setIsOpen(true);
-            setIsMinimized(false);
-          }}
+          onClick={() => setIsOpen(true)}
           className="fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-full bg-primary px-3.5 py-2 text-xs font-semibold text-primary-foreground shadow-2xl transition-all duration-150 hover:scale-105 hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
           aria-label="Open AI Assistant"
           title="Click to open AI Assistant"
@@ -479,7 +441,7 @@ export function FloatingAssistant() {
         </button>
       )}
 
-      {/* Floating Chat Window (Full or Minimized) */}
+      {/* Floating Chat Window */}
       {isOpen && (
         <div
           style={{
@@ -487,8 +449,8 @@ export function FloatingAssistant() {
             top: position ? `${position.y}px` : undefined,
             right: !position ? "24px" : undefined,
             bottom: !position ? "24px" : undefined,
-            width: isMinimized ? "min(280px, calc(100vw - 24px))" : "min(350px, calc(100vw - 24px))",
-            height: isMinimized ? "auto" : "min(460px, calc(100vh - 24px))",
+            width: "min(350px, calc(100vw - 24px))",
+            height: "min(460px, calc(100vh - 24px))",
           }}
           className={`fixed z-50 flex flex-col overflow-hidden rounded-2xl border bg-card/95 backdrop-blur-md shadow-2xl transition-[width,height] duration-200 animate-in fade-in ${
             isDragging ? "ring-2 ring-primary/60 shadow-primary/20" : ""
@@ -515,62 +477,38 @@ export function FloatingAssistant() {
                   <h3 className="text-xs font-bold text-foreground truncate">Ask AI Assistant</h3>
                   <span className="size-1.5 rounded-full bg-emerald-500" title="Online" />
                 </div>
-                {!isMinimized && (
-                  <p className="text-[10px] text-muted-foreground truncate">
-                    {caseId
-                      ? `${activeCase?.reference || `Case #${caseId}`} · ${activeCase?.scope_label || `${jurisdictionCode} ${visaCategory ? visaCategory.toUpperCase() : "VISA"}`}`
-                      : "Procedural immigration guidance"}
-                  </p>
-                )}
+                <p className="text-[10px] text-muted-foreground truncate">
+                  {caseId
+                    ? `${activeCase?.reference || `Case #${caseId}`} · ${activeCase?.scope_label || `${jurisdictionCode} ${visaCategory ? visaCategory.toUpperCase() : "VISA"}`}`
+                    : "Procedural immigration guidance"}
+                </p>
               </div>
             </div>
 
-            {/* Header Right Action Controls: Only Minimize & Close */}
-            <div
-              className="flex items-center gap-1"
-              onPointerDown={(e) => e.stopPropagation()}
-              onClick={(e) => e.stopPropagation()}
+            {/* Header Right: Close Button */}
+            <button
+              onClick={() => setIsOpen(false)}
+              className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+              title="Close assistant"
             >
-              {/* Minimize / Expand Bar toggle */}
-              <button
-                onClick={() => setIsMinimized(!isMinimized)}
-                className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-                title={isMinimized ? "Restore chat window" : "Minimize to floating bar"}
-              >
-                {isMinimized ? <ChevronUp className="size-3.5" /> : <Minus className="size-3.5" />}
-              </button>
-
-              {/* Close window */}
-              <button
-                onClick={() => {
-                  setIsOpen(false);
-                  setIsMinimized(false);
-                }}
-                className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-                title="Close assistant"
-              >
-                <X className="size-3.5" />
-              </button>
-            </div>
+              <X className="size-3.5" />
+            </button>
           </div>
 
-          {/* Minimized Content: None (slim bar). Full Content: Body + Input */}
-          {!isMinimized && (
-            <>
-              {/* Live Issue Banner if case has disqualified findings */}
-              {disqualifiedFindings.length > 0 && (
-                <div className="bg-amber-500/10 border-b border-amber-500/20 px-3 py-1.5 flex items-center justify-between gap-2 text-[11px] shrink-0">
-                  <span className="text-amber-800 dark:text-amber-300 font-medium truncate">
-                    ⚠️ {disqualifiedFindings.length} eligibility warning(s) detected
-                  </span>
-                  <button
-                    onClick={() => handleSend("how to fix this")}
-                    className="text-primary hover:underline font-semibold text-[11px] shrink-0"
-                  >
-                    Fix with AI &rarr;
-                  </button>
-                </div>
-              )}
+          {/* Live Issue Banner if case has disqualified findings */}
+          {disqualifiedFindings.length > 0 && (
+            <div className="bg-amber-500/10 border-b border-amber-500/20 px-3 py-1.5 flex items-center justify-between gap-2 text-[11px] shrink-0">
+              <span className="text-amber-800 dark:text-amber-300 font-medium truncate">
+                ⚠️ {disqualifiedFindings.length} eligibility warning(s) detected
+              </span>
+              <button
+                onClick={() => handleSend("how to fix this")}
+                className="text-primary hover:underline font-semibold text-[11px] shrink-0"
+              >
+                Fix with AI &rarr;
+              </button>
+            </div>
+          )}
 
               {/* Chat Messages */}
               <div className="flex-1 overflow-y-auto p-3.5 space-y-3 text-xs overscroll-contain">
@@ -691,8 +629,6 @@ export function FloatingAssistant() {
                   <span>Official immigration grounded</span>
                 </div>
               </div>
-            </>
-          )}
         </div>
       )}
     </>
