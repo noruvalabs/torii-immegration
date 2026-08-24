@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import {
   Bot,
   Loader2,
+  Minus,
   Send,
   X,
   Zap,
@@ -238,6 +239,7 @@ export function FloatingAssistant() {
   // Window drag handlers
   const handlePointerDown = (e: PointerEvent<HTMLDivElement>) => {
     if (e.button !== 0) return;
+    if ((e.target as HTMLElement).closest("button, a, input, textarea")) return;
     const currentX = position?.x ?? Math.max(12, window.innerWidth - 350 - 24);
     const currentY = position?.y ?? Math.max(12, window.innerHeight - 460 - 24);
 
@@ -485,14 +487,41 @@ export function FloatingAssistant() {
               </div>
             </div>
 
-            {/* Header Right: Close Button */}
-            <button
-              onClick={() => setIsOpen(false)}
-              className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-              title="Close assistant"
+            {/* Header Right Action Controls: Minimize and Close */}
+            <div
+              className="flex items-center gap-1 shrink-0"
+              onPointerDown={(e) => e.stopPropagation()}
+              onPointerUp={(e) => e.stopPropagation()}
+              onClick={(e) => e.stopPropagation()}
             >
-              <X className="size-3.5" />
-            </button>
+              {/* Minimize to bottom-right floating pill */}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsOpen(false);
+                }}
+                className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors cursor-pointer"
+                title="Minimize assistant"
+                aria-label="Minimize assistant"
+              >
+                <Minus className="size-3.5" />
+              </button>
+
+              {/* Close assistant */}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsOpen(false);
+                }}
+                className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors cursor-pointer"
+                title="Close assistant"
+                aria-label="Close assistant"
+              >
+                <X className="size-3.5" />
+              </button>
+            </div>
           </div>
 
           {/* Live Issue Banner if case has disqualified findings */}
