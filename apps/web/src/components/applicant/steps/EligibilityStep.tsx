@@ -80,10 +80,12 @@ export function EligibilityStep({
           <p className="mt-0.5 text-xs text-muted-foreground">{headerSubtitle}</p>
         </div>
 
-        <Button onClick={onEvaluate} disabled={loading} className="gap-1.5 shrink-0 h-8 px-3 text-xs">
-          {loading ? <Loader2 className="size-4 animate-spin" /> : <Scale className="size-4" />}
-          {result ? "Re-evaluate screening" : "Evaluate eligibility now"}
-        </Button>
+        {result && (
+          <Button onClick={onEvaluate} disabled={loading} variant="outline" className="gap-1.5 shrink-0 h-8 px-3 text-xs">
+            {loading ? <Loader2 className="size-3.5 animate-spin" /> : <Scale className="size-3.5" />}
+            Re-evaluate screening
+          </Button>
+        )}
       </div>
 
       {!result ? (

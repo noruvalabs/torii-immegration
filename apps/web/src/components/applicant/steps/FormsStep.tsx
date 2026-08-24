@@ -234,12 +234,14 @@ export function FormsStep({
             Torii automatically maps your intake data and scanned documents directly into official embassy application forms.
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Button onClick={onGenerate} disabled={loading}>
-            {loading ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Sparkles className="mr-2 size-4" />}
-            {forms.length === 0 ? "Auto-fill official forms" : "Regenerate forms"}
-          </Button>
-        </div>
+        {forms.length > 0 && (
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={onGenerate} disabled={loading} className="text-xs h-8">
+              {loading ? <Loader2 className="mr-1.5 size-3.5 animate-spin" /> : <Sparkles className="mr-1.5 size-3.5" />}
+              Regenerate forms
+            </Button>
+          </div>
+        )}
       </div>
 
       {quickSaveNotice && (

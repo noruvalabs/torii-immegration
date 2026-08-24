@@ -28,10 +28,12 @@ export function ReviewStep({ result, loading, onReview, onAcknowledge }: ReviewS
             Multi-pillar consistency check: passport validity, statutory filing window, salary threshold, and tax compliance.
           </p>
         </div>
-        <Button onClick={onReview} disabled={loading} className="w-fit">
-          <Sparkles className="mr-1.5 size-4" />
-          {loading ? "Auditing Application..." : "Run Risk Audit"}
-        </Button>
+        {result && (
+          <Button onClick={onReview} disabled={loading} variant="outline" className="w-fit h-8 text-xs">
+            <Sparkles className="mr-1.5 size-3.5" />
+            {loading ? "Auditing Application..." : "Re-run Risk Audit"}
+          </Button>
+        )}
       </div>
 
       {!result ? (

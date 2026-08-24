@@ -390,7 +390,9 @@ export default function CaseDetailPage() {
     guidance &&
     guidance.phase !== "blocked" &&
     guidance.phase !== "done" &&
+    activeStep !== "intake" &&
     activeStep !== "research" &&
+    activeStep !== "review" &&
     activeStep !== "packet";
 
   return (
@@ -428,8 +430,8 @@ export default function CaseDetailPage() {
                 <p className="mt-2 text-sm text-[var(--color-danger)]">{guidance.blocked_reason}</p>
               )}
             </div>
-            {guidance.phase !== "blocked" && (
-              <Button onClick={goToGuidancePhase}>
+            {guidance.phase !== "blocked" && phaseToStep(guidance.phase) !== activeStep && (
+              <Button onClick={goToGuidancePhase} className="shrink-0">
                 {guidance.cta_label}
               </Button>
             )}

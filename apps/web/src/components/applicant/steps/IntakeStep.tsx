@@ -406,7 +406,7 @@ export function IntakeStep({ state, profile, onAnswer, onProceedToEligibility, t
               </button>
             </div>
           ) : (
-            <div className="flex gap-2 pt-1">
+            <div className="pt-1">
               <input
                 type={q.type === "integer" ? "number" : isDateInput ? "date" : "text"}
                 value={String(current ?? "")}
@@ -416,20 +416,18 @@ export function IntakeStep({ state, profile, onAnswer, onProceedToEligibility, t
                   if (e.key === "Enter") {
                     e.preventDefault();
                     handleSubmit(q.key);
+                    (e.target as HTMLInputElement).blur();
                   }
                 }}
                 placeholder={`Enter ${q.key.replaceAll("_", " ")}...`}
-                className="h-9 flex-1 rounded-md border bg-background px-3 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring font-normal"
+                className="h-9 w-full rounded-md border bg-background px-3 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring font-normal transition-colors"
               />
-              <Button onClick={() => handleSubmit(q.key)} className="text-xs h-9 px-3.5 font-medium shrink-0">
-                Save
-              </Button>
             </div>
           )}
         </div>
 
         {state.answers[q.key] !== undefined && (
-          <div className="flex items-center gap-1 text-[11px] text-emerald-500 dark:text-emerald-400 font-medium pt-2">
+          <div className="flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-400 font-medium pt-2">
             <Check className="size-3.5 shrink-0" />
             <span>Answer Saved</span>
           </div>
@@ -492,16 +490,16 @@ export function IntakeStep({ state, profile, onAnswer, onProceedToEligibility, t
                     ? "bg-primary text-primary-foreground shadow-sm font-semibold ring-2 ring-primary/30"
                     : isSecComplete
                       ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800"
-                      : "bg-amber-50 dark:bg-amber-950/30 text-amber-900 dark:text-amber-200 border border-amber-200 dark:border-amber-800 hover:bg-amber-100/50"
+                      : "bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground border"
                 }`}
               >
                 {isSecComplete ? (
                   <Check className="size-3 text-emerald-500 shrink-0" />
                 ) : (
-                  <AlertCircle className="size-3 text-amber-500 shrink-0" />
+                  <AlertCircle className="size-3 text-muted-foreground/60 shrink-0" />
                 )}
                 <span>{secName}</span>
-                <span className={`text-[10px] font-semibold ${isSecComplete ? "opacity-80" : "text-amber-700 dark:text-amber-300"}`}>
+                <span className={`text-[10px] font-semibold ${isSecComplete ? "opacity-80" : "text-muted-foreground"}`}>
                   ({answeredInSec}/{secQuestions.length})
                 </span>
               </button>
@@ -532,7 +530,7 @@ export function IntakeStep({ state, profile, onAnswer, onProceedToEligibility, t
                   </h4>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {secQuestions.map(renderQuestion)}
                 </div>
               </div>
@@ -563,48 +561,9 @@ export function IntakeStep({ state, profile, onAnswer, onProceedToEligibility, t
                 {currentAnsweredCount} / {currentQuestions.length} completed
               </Badge>
             </h4>
-
-            <div className="flex items-center gap-1">
-              {currentSectionIndex > 0 && (
-                <Button
-                  variant="ghost"
-                  onClick={() => setActiveSection(sectionKeys[currentSectionIndex - 1])}
-                  className="h-7 text-xs gap-1 px-2 text-muted-foreground hover:text-foreground"
-                >
-                  <ChevronLeft className="size-3" /> Previous
-                </Button>
-              )}
-              {currentSectionIndex < sectionKeys.length - 1 && (
-                <Button
-                  variant="ghost"
-                  onClick={() => setActiveSection(sectionKeys[currentSectionIndex + 1])}
-                  className="h-7 text-xs gap-1 px-2 text-primary hover:text-primary/80"
-                >
-                  Next <ChevronRight className="size-3" />
-                </Button>
-              )}
-            </div>
           </div>
 
-          {isCurrentSectionComplete && !state.progress.complete && firstIncompleteSection && (
-            <div className="rounded-lg border border-blue-500/30 bg-blue-500/5 p-3.5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs text-blue-950 dark:text-blue-200">
-              <div className="flex items-center gap-2">
-                <CheckCircle2 className="size-4 text-emerald-500 shrink-0" />
-                <span>
-                  <strong>{currentSectionKey}</strong> is complete ({currentAnsweredCount}/{currentQuestions.length}). There are {state.progress.total - state.progress.answered} remaining question(s) in other modules.
-                </span>
-              </div>
-              <Button
-                size="sm"
-                onClick={() => setActiveSection(firstIncompleteSection)}
-                className="h-7 text-xs gap-1 bg-blue-600 hover:bg-blue-700 text-white font-medium shrink-0"
-              >
-                Go to: {firstIncompleteSection} <ArrowRight className="size-3" />
-              </Button>
-            </div>
-          )}
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {currentQuestions.map(renderQuestion)}
           </div>
 
@@ -622,7 +581,7 @@ export function IntakeStep({ state, profile, onAnswer, onProceedToEligibility, t
 
             <div className="flex flex-col sm:flex-row items-center gap-2">
               {!isCurrentSectionComplete && (
-                <span className="text-xs text-amber-600 dark:text-amber-400 font-medium">
+                <span className="text-xs text-muted-foreground font-medium">
                   {remainingInCurrent} question(s) left in this module
                 </span>
               )}
@@ -645,9 +604,9 @@ export function IntakeStep({ state, profile, onAnswer, onProceedToEligibility, t
                 <Button
                   variant="outline"
                   onClick={() => setActiveSection(firstIncompleteSection)}
-                  className="h-9 text-xs gap-1.5 px-4 text-amber-700 border-amber-300 hover:bg-amber-50"
+                  className="h-9 text-xs gap-1.5 px-4 text-primary border-primary/30 hover:bg-primary/5"
                 >
-                  Jump to Missing Fields in: {firstIncompleteSection} <ArrowRight className="size-3.5" />
+                  Go to Incomplete: {firstIncompleteSection} <ArrowRight className="size-3.5" />
                 </Button>
               ) : (
                 <Badge tone="default" className="text-xs py-1.5 px-3">
