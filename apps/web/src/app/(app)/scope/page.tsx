@@ -302,7 +302,7 @@ export default function ScopePage() {
                     {user?.current_country ? "Profile / auto-detected:" : "Auto-detected:"}
                   </span>
                   <span className="font-semibold text-primary">
-                    {residenceLabel} ({residenceCountry})
+                    {residenceLabel}
                   </span>
                 </div>
               )}
@@ -333,7 +333,7 @@ export default function ScopePage() {
                   Selected Passport:
                 </span>
                 <span className="font-semibold text-foreground">
-                  {nationalityLabel} ({nationality})
+                  {nationalityLabel}
                 </span>
               </div>
 
