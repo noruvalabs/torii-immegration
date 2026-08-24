@@ -5,11 +5,8 @@ import { usePathname } from "next/navigation";
 import {
   Bot,
   ChevronUp,
-  GripHorizontal,
   Loader2,
   Minus,
-  RefreshCw,
-  RotateCcw,
   Send,
   X,
   Zap,
@@ -532,7 +529,7 @@ export function FloatingAssistant() {
 
   return (
     <>
-      {/* Draggable Floating Trigger Button */}
+      {/* Draggable Floating Trigger Button (Compact) */}
       {!isOpen && (
         <button
           onPointerDown={handleTriggerPointerDown}
@@ -543,23 +540,20 @@ export function FloatingAssistant() {
               ? { left: `${triggerPos.x}px`, top: `${triggerPos.y}px` }
               : { right: "24px", bottom: "24px" }
           }
-          className={`fixed z-50 flex items-center gap-2.5 rounded-full bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground shadow-2xl transition-transform duration-150 select-none touch-none ${
+          className={`fixed z-50 flex items-center gap-2 rounded-full bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground shadow-xl transition-transform duration-150 select-none touch-none ${
             isDraggingTrigger ? "cursor-grabbing scale-105 opacity-90" : "cursor-grab hover:scale-105 hover:bg-primary/90"
           } focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2`}
           aria-label="Open AI Assistant (Drag to reposition)"
-          title="Click to open AI Assistant · Drag to reposition anywhere"
+          title="Click to open AI Assistant · Drag to reposition"
         >
           <div className="relative">
-            <Bot className="size-5" />
-            <span className="absolute -top-1 -right-1 flex size-2.5">
+            <Bot className="size-4" />
+            <span className="absolute -top-0.5 -right-0.5 flex size-2">
               <span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-400 opacity-75"></span>
-              <span className="relative inline-flex size-2.5 rounded-full bg-emerald-500"></span>
+              <span className="relative inline-flex size-2 rounded-full bg-emerald-500"></span>
             </span>
           </div>
-          <span className="font-medium truncate max-w-[180px]">
-            {disqualifiedFindings.length > 0 ? `AI Helper (${disqualifiedFindings.length} issues)` : "Need Help? Ask AI"}
-          </span>
-          <GripHorizontal className="size-3.5 text-primary-foreground/60 shrink-0" />
+          <span>Ask AI</span>
         </button>
       )}
 
@@ -571,8 +565,8 @@ export function FloatingAssistant() {
             top: position ? `${position.y}px` : undefined,
             right: !position ? "24px" : undefined,
             bottom: !position ? "24px" : undefined,
-            width: isMinimized ? "min(320px, calc(100vw - 24px))" : `min(${activeConf.width}px, calc(100vw - 24px))`,
-            height: isMinimized ? "auto" : `min(${activeConf.height}px, calc(100vh - 24px))`,
+            width: isMinimized ? "min(280px, calc(100vw - 24px))" : "min(350px, calc(100vw - 24px))",
+            height: isMinimized ? "auto" : "min(460px, calc(100vh - 24px))",
           }}
           className={`fixed z-50 flex flex-col overflow-hidden rounded-2xl border bg-card/95 backdrop-blur-md shadow-2xl transition-[width,height] duration-200 animate-in fade-in ${
             isDragging ? "ring-2 ring-primary/60 shadow-primary/20" : ""
@@ -583,85 +577,42 @@ export function FloatingAssistant() {
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
-            className={`flex items-center justify-between border-b bg-muted/70 px-3.5 py-2.5 select-none touch-none ${
+            onDoubleClick={handleResetPosition}
+            className={`flex items-center justify-between border-b bg-muted/70 px-3 py-2 select-none touch-none ${
               isDragging ? "cursor-grabbing bg-muted/90" : "cursor-grab hover:bg-muted/80"
             }`}
-            title="Drag to move assistant window anywhere"
+            title="Drag to move · Double-click to reset position"
           >
-            {/* Header Left: Bot Icon + Title + Drag Grip */}
+            {/* Header Left: Bot Icon + Title */}
             <div className="flex items-center gap-2 min-w-0 flex-1">
-              <div className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                <Bot className="size-4" />
+              <div className="flex size-6 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+                <Bot className="size-3.5" />
               </div>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-1.5">
-                  <h3 className="text-xs font-bold text-foreground truncate">AI Visa Assistant</h3>
-                  <Badge tone="success" className="text-[8px] px-1 py-0 h-4">Online</Badge>
-                  {isMinimized && disqualifiedFindings.length > 0 && (
-                    <Badge tone="warning" className="text-[8px] px-1 py-0 h-4">
-                      {disqualifiedFindings.length} issue(s)
-                    </Badge>
-                  )}
+                  <h3 className="text-xs font-bold text-foreground truncate">Ask AI Assistant</h3>
+                  <span className="size-1.5 rounded-full bg-emerald-500" title="Online" />
                 </div>
                 {!isMinimized && (
                   <p className="text-[10px] text-muted-foreground truncate">
                     {caseId
                       ? `${activeCase?.reference || `Case #${caseId}`} · ${activeCase?.scope_label || `${jurisdictionCode} ${visaCategory ? visaCategory.toUpperCase() : "VISA"}`}`
-                      : "Official procedural guidance"}
+                      : "Procedural immigration guidance"}
                   </p>
                 )}
               </div>
             </div>
 
-            {/* Drag Handle Indicator */}
-            <div className="flex items-center justify-center px-1 text-muted-foreground/50 hover:text-muted-foreground transition-colors" title="Drag to move">
-              <GripHorizontal className="size-4" />
-            </div>
-
-            {/* Header Right Action Controls */}
+            {/* Header Right Action Controls: Only Minimize & Close */}
             <div
-              className="flex items-center gap-0.5"
+              className="flex items-center gap-1"
               onPointerDown={(e) => e.stopPropagation()}
               onClick={(e) => e.stopPropagation()}
             >
-              {/* Reset to bottom-right position */}
-              <button
-                onClick={handleResetPosition}
-                className="rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-                title="Reset to default position (Bottom Right)"
-              >
-                <RotateCcw className="size-3.5" />
-              </button>
-
-              {/* Size Mode Switcher (only in expanded mode) */}
-              {!isMinimized && (
-                <button
-                  onClick={toggleSizeMode}
-                  className="rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors text-[10px] font-medium"
-                  title={`Current: ${activeConf.label}. Click to switch size (Compact / Standard / Expanded)`}
-                >
-                  <span className="sr-only">Toggle size mode</span>
-                  {sizeMode === "compact" && <span className="text-[10px] font-bold px-0.5">S</span>}
-                  {sizeMode === "standard" && <span className="text-[10px] font-bold px-0.5">M</span>}
-                  {sizeMode === "expanded" && <span className="text-[10px] font-bold px-0.5">L</span>}
-                </button>
-              )}
-
-              {/* Clear chat history */}
-              {!isMinimized && (
-                <button
-                  onClick={() => setMessages([])}
-                  className="rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-                  title="Clear chat history"
-                >
-                  <RefreshCw className="size-3.5" />
-                </button>
-              )}
-
               {/* Minimize / Expand Bar toggle */}
               <button
                 onClick={() => setIsMinimized(!isMinimized)}
-                className="rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+                className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
                 title={isMinimized ? "Restore chat window" : "Minimize to floating bar"}
               >
                 {isMinimized ? <ChevronUp className="size-3.5" /> : <Minus className="size-3.5" />}
@@ -673,7 +624,7 @@ export function FloatingAssistant() {
                   setIsOpen(false);
                   setIsMinimized(false);
                 }}
-                className="rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+                className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
                 title="Close assistant"
               >
                 <X className="size-3.5" />
