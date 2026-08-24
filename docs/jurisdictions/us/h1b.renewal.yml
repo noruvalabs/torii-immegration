@@ -173,9 +173,9 @@ documents:
       en: Confirms identity and travel document details.
     is_required: true
     citation:
-      authority: U.S. Citizenship and Immigration Services
-      title: H-1B Specialty Occupations
-      url: https://www.uscis.gov/working-in-the-united-states/temporary-workers/h-1b-specialty-occupations
+      authority: U.S. Department of State (Bureau of Consular Affairs)
+      title: Form DS-160 Online Nonimmigrant Visa Application & Passport Standards
+      url: https://travel.state.gov/content/travel/en/us-visas/visa-information-resources/forms/ds-160-online-nonimmigrant-visa-application.html
       source_version: 2026-04
   - code: degree_diploma
     name:
@@ -190,7 +190,7 @@ documents:
     is_required: true
     citation:
       authority: U.S. Citizenship and Immigration Services
-      title: H-1B Specialty Occupations
+      title: H-1B Specialty Occupations Education Evaluation
       url: https://www.uscis.gov/working-in-the-united-states/temporary-workers/h-1b-specialty-occupations
       source_version: 2026-04
   - code: job_offer_letter
@@ -208,9 +208,9 @@ documents:
       key: has_employer_sponsor
       equals: true
     citation:
-      authority: U.S. Citizenship and Immigration Services
-      title: H-1B Specialty Occupations
-      url: https://www.uscis.gov/working-in-the-united-states/temporary-workers/h-1b-specialty-occupations
+      authority: U.S. Department of Labor (ETA)
+      title: "Office of Foreign Labor Certification: Form ETA-9035 LCA Compliance"
+      url: https://www.dol.gov/agencies/eta/foreign-labor/programs/h-1b
       source_version: 2026-04
   - code: i94_record
     name:

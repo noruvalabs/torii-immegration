@@ -14,6 +14,7 @@ import structlog
 from pydantic import BaseModel
 
 from torii_api.config import get_settings
+from torii_api.services.citations import resolve_official_citation
 from torii_api.services.content_packs import is_effective_on
 from torii_api.services.pack_exports import pack_rules
 
@@ -320,13 +321,21 @@ def evaluate_eligibility(
             continue
         key = str(rule["key"])
         answer = _get_answer_for_key(key, answers)
+        jur_code = str(context.get("jurisdiction_code") or context.get("jurisdiction") or "JP")
+        visa_cat = str(context.get("visa_category") or context.get("category") or "")
+        citation = resolve_official_citation(
+            jurisdiction_code=jur_code,
+            visa_category=visa_cat,
+            item_key_or_code=key,
+            existing_citation=rule.get("citation"),
+        )
         if answer is None or str(answer).strip() == "":
             findings.append(
                 EligibilityFinding(
                     key=key,
                     status="out_of_scope",
                     message=f"Cannot evaluate '{key.replace('_', ' ')}' because the answer is missing in intake.",
-                    citation=dict(rule.get("citation") or {}),
+                    citation=citation,
                 )
             )
             continue
@@ -338,7 +347,7 @@ def evaluate_eligibility(
                     message=str(
                         rule.get("message", f"Rule for '{key.replace('_', ' ')}' was not met.")
                     ),
-                    citation=dict(rule.get("citation") or {}),
+                    citation=citation,
                 )
             )
         else:
@@ -352,7 +361,7 @@ def evaluate_eligibility(
                             f"Criterion '{key.replace('_', ' ')}' is satisfied based on intake answers.",
                         )
                     ),
-                    citation=dict(rule.get("citation") or {}),
+                    citation=citation,
                 )
             )
 

@@ -436,7 +436,11 @@ export function ChecklistStep({
                         rel="noreferrer"
                         className="mt-2 inline-flex items-center gap-1 text-xs text-primary hover:underline"
                       >
-                        Official source{version ? ` (${version})` : ""} <ExternalLink className="size-3" />
+                        <span>
+                          {String(item.citation?.authority || item.citation?.title || "Official authority source")}
+                          {version ? ` (${version})` : ""}
+                        </span>
+                        <ExternalLink className="size-3" />
                       </a>
                     )}
                   </div>

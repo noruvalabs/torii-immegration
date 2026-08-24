@@ -192,8 +192,8 @@ eligibility:
       message: Your gross salary must meet the general Skilled Worker salary threshold (typically £38,700, or £29,000 / lower going rate under transitional/shortage rules).
       citation:
         authority: UK Visas and Immigration (UKVI / Home Office)
-        title: Minimum Salary Threshold Criteria
-        url: https://www.gov.uk/skilled-worker-visa/your-job
+        title: "Skilled Worker Visa: Eligible Occupations, Going Rates & Salary Thresholds"
+        url: https://www.gov.uk/government/publications/skilled-worker-visa-going-rates-for-eligible-occupations
 
     - key: english_language_proof
       operator: in
@@ -206,7 +206,7 @@ eligibility:
       message: Proof of English proficiency at CEFR level B1 (reading, writing, speaking and listening) is required.
       citation:
         authority: UK Visas and Immigration (UKVI / Home Office)
-        title: Knowledge of English Prerequisite
+        title: "Knowledge of English: Approved Secure English Language Tests (SELT)"
         url: https://www.gov.uk/skilled-worker-visa/knowledge-of-english
 
 documents:
@@ -216,39 +216,39 @@ documents:
       is_required: true
       citation:
         authority: UK Visas and Immigration (UKVI / Home Office)
-        title: Official CoS Reference
-        url: https://www.gov.uk/skilled-worker-visa/documents-you-must-provide
+        title: "UK Visa Sponsorship for Employers: Eligibility and Verification"
+        url: https://www.gov.uk/uk-visa-sponsorship-employers
 
     - code: passport_scan
       name: Current Valid Passport (Photo and Bio-data Page)
       is_required: true
       citation:
         authority: UK Visas and Immigration (UKVI / Home Office)
-        title: Proof of Identity and Nationality
-        url: https://www.gov.uk/skilled-worker-visa/documents-you-must-provide
+        title: Identity and Passport Verification Guidelines
+        url: https://www.gov.uk/government/publications/biometric-information-enrolment-guidance
 
     - code: english_proficiency_evidence
       name: English Language Test Certificate (SELT) or ECCTIS Degree Statement
       is_required: true
       citation:
         authority: UK Visas and Immigration (UKVI / Home Office)
-        title: Evidence of English Competence
-        url: https://www.gov.uk/skilled-worker-visa/documents-you-must-provide
+        title: "Knowledge of English: Approved Secure English Language Tests (SELT)"
+        url: https://www.gov.uk/skilled-worker-visa/knowledge-of-english
 
     - code: maintenance_bank_statement
       name: Bank Statements Showing £1,276 Savings for 28 Consecutive Days (or Sponsor Maintenance Letter)
       is_required: true
       citation:
         authority: UK Visas and Immigration (UKVI / Home Office)
-        title: Financial Independence Evidence
-        url: https://www.gov.uk/skilled-worker-visa/documents-you-must-provide
+        title: Financial Evidence for Sponsored Routes & 28-day Maintenance Rule
+        url: https://www.gov.uk/guidance/financial-evidence-for-sponsored-or-endorsed-work-routes
 
     - code: tb_test_certificate
       name: Tuberculosis (TB) Test Certificate from Approved Clinic (if applying from listed country)
       is_required: false
       citation:
         authority: UK Visas and Immigration (UKVI / Home Office)
-        title: Medical & Tuberculosis Screening
+        title: Tuberculosis (TB) Testing for UK Visa Applicants
         url: https://www.gov.uk/tb-test-visa
 
 forms:

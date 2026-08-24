@@ -30,6 +30,7 @@ from torii_api.db.models import (
     User,
 )
 from torii_api.db.session import get_session
+from torii_api.services.citations import resolve_official_citation
 from torii_api.services.checklist import ChecklistStatus, update_status, visible_requirement_items
 from torii_api.services.eligibility import (
     EligibilityResult,
@@ -347,14 +348,14 @@ async def evaluate_case_eligibility(
     # affect a filing (e.g. the ISA's tiered fees effective 2026-10-01).
     as_of = case.created_at.date() if case.created_at is not None else date.today()
     # Context carries dimensions that live outside the intake answers: the employer
-    # category (documents/language requirements are a function of the employer) and
-    # continuity facts captured from the previous application (context_equals rules).
+    j_code, v_code, a_code, _ = await _scope_label(session, case)
     context: dict[str, Any] = {
         "employer_category": (case.intake_answers or {}).get("employer_category"),
+        "jurisdiction_code": j_code or "JP",
+        "visa_category": v_code or "",
     }
     if case.prior_application:
         context.update(case.prior_application)
-    j_code, v_code, a_code, _ = await _scope_label(session, case)
     answers = dict(case.intake_answers or {})
     result = await evaluate_eligibility_with_ai(
         answers,
@@ -416,6 +417,7 @@ async def refresh_checklist(
     old_items = {item.code: item for item in await _checklist(session, case.id)}
     await session.execute(delete(CaseChecklistItem).where(CaseChecklistItem.case_id == case.id))
     new_items: list[CaseChecklistItem] = []
+    j_code, v_code, _, _ = await _scope_label(session, case)
     for item in visible_requirement_items(items, dict(case.intake_answers or {})):
         old = old_items.get(item.code)
         doc_name = localized(item.name, case.locale) or item.code or "Document"
@@ -425,6 +427,12 @@ async def refresh_checklist(
         why = localized(item.why_required, case.locale) if item.why_required else ""
         if not why:
             why = "Required supporting document for your visa application dossier."
+        specific_citation = resolve_official_citation(
+            jurisdiction_code=j_code or "JP",
+            visa_category=v_code or "",
+            item_key_or_code=item.code,
+            existing_citation=item.citation,
+        )
         created = CaseChecklistItem(
             case_id=case.id,
             code=item.code,
@@ -433,7 +441,7 @@ async def refresh_checklist(
             why_required=why,
             is_required=item.is_required,
             status=old.status if old else "needed",
-            citation=item.citation or {},
+            citation=specific_citation,
             document_id=old.document_id if old else None,
         )
         session.add(created)

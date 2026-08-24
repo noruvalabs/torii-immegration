@@ -19,6 +19,7 @@ from typing import Any
 import httpx
 import structlog
 
+from torii_ai.citations.resolver import resolve_official_citation
 from torii_ai.config import Settings
 from torii_ai.llm.groq import ChatClient
 from torii_ai.services.web_fetch import fetch_govuk_text, scrape_pages
@@ -545,12 +546,19 @@ Return JSON only."""
         dest_name = country_label(jurisdiction_code) or jurisdiction_code
         default_authority = f"{dest_name} Immigration Authority"
 
-        # Normalize and guarantee valid citations with current date
+        # Normalize and guarantee specific valid citations with current date
         version_str = now.strftime("%Y-%m")
         for category in ["eligibility_rules", "document_requirements", "form_templates"]:
             for item in data.get(category, []):
                 if isinstance(item, dict):
-                    _normalize_item_citation(item, default_authority, default_url, version_str)
+                    _normalize_item_citation(
+                        item,
+                        jurisdiction_code=jurisdiction_code,
+                        visa_category=visa_category,
+                        default_authority=default_authority,
+                        default_url=default_url,
+                        version=version_str,
+                    )
 
         result = ScrapeResult(
             jurisdiction_code=jurisdiction_code,
@@ -587,25 +595,28 @@ Return JSON only."""
 
 
 def _normalize_item_citation(
-    item: dict[str, Any], default_authority: str, default_url: str, version: str
+    item: dict[str, Any],
+    jurisdiction_code: str,
+    visa_category: str,
+    default_authority: str,
+    default_url: str,
+    version: str,
 ) -> None:
-    cit = item.get("citation")
-    if not isinstance(cit, dict):
-        cit = {}
-    if not cit.get("authority"):
-        cit["authority"] = default_authority
-    url = cit.get("url")
-    if not isinstance(url, str) or not url.startswith("http"):
-        cit["url"] = default_url
-    if not cit.get("title"):
-        cit["title"] = str(
-            item.get("name")
-            or item.get("key")
-            or item.get("official_title")
-            or "Official Government Requirements"
-        )
-    cit["source_version"] = version
-    item["citation"] = cit
+    item_key = str(
+        item.get("key")
+        or item.get("code")
+        or item.get("name")
+        or item.get("official_title")
+        or ""
+    )
+    specific = resolve_official_citation(
+        jurisdiction_code=jurisdiction_code,
+        visa_category=visa_category,
+        item_key_or_code=item_key,
+        existing_citation=item.get("citation"),
+        default_version=version,
+    )
+    item["citation"] = specific
 
 
 def _fallback_structured_data(
@@ -732,12 +743,12 @@ def _fallback_structured_data(
             "value": None,
             "failure_status": "fail",
             "message": f"Must possess a valid passport recognized by {dest} immigration authorities.",
-            "citation": {
-                "authority": default_authority,
-                "title": f"Passport Validity Guidelines for {dest}",
-                "url": default_url,
-                "source_version": now_str,
-            },
+            "citation": resolve_official_citation(
+                jurisdiction_code=jurisdiction_code,
+                visa_category=visa_category,
+                item_key_or_code="passport",
+                default_version=now_str,
+            ),
         },
         {
             "key": "has_sufficient_funds",
@@ -745,12 +756,12 @@ def _fallback_structured_data(
             "value": True,
             "failure_status": "fail",
             "message": f"Applicants must demonstrate adequate financial capability for the intended {cat_label} stay.",
-            "citation": {
-                "authority": default_authority,
-                "title": f"{cat_label} Financial Requirement Guidelines",
-                "url": default_url,
-                "source_version": now_str,
-            },
+            "citation": resolve_official_citation(
+                jurisdiction_code=jurisdiction_code,
+                visa_category=visa_category,
+                item_key_or_code="funds",
+                default_version=now_str,
+            ),
         },
         {
             "key": "has_prior_visa_refusals",
@@ -758,12 +769,12 @@ def _fallback_structured_data(
             "value": False,
             "failure_status": "at_risk",
             "message": "Prior visa refusals or immigration violations require disclosure and supporting explanation.",
-            "citation": {
-                "authority": default_authority,
-                "title": "General Eligibility and Entry Clearances",
-                "url": default_url,
-                "source_version": now_str,
-            },
+            "citation": resolve_official_citation(
+                jurisdiction_code=jurisdiction_code,
+                visa_category=visa_category,
+                item_key_or_code="criminal",
+                default_version=now_str,
+            ),
         },
     ]
 
@@ -781,12 +792,12 @@ def _fallback_structured_data(
                 "en": "Required for primary international identification and visa issuance."
             },
             "is_required": True,
-            "citation": {
-                "authority": default_authority,
-                "title": "Required Travel Documents",
-                "url": default_url,
-                "source_version": now_str,
-            },
+            "citation": resolve_official_citation(
+                jurisdiction_code=jurisdiction_code,
+                visa_category=visa_category,
+                item_key_or_code="passport",
+                default_version=now_str,
+            ),
         },
         {
             "code": "photo",
@@ -801,12 +812,12 @@ def _fallback_structured_data(
                 "en": "Required for visa certificate and immigration registration records."
             },
             "is_required": True,
-            "citation": {
-                "authority": default_authority,
-                "title": "Photograph Standards for Visa Applications",
-                "url": default_url,
-                "source_version": now_str,
-            },
+            "citation": resolve_official_citation(
+                jurisdiction_code=jurisdiction_code,
+                visa_category=visa_category,
+                item_key_or_code="photo",
+                default_version=now_str,
+            ),
         },
         {
             "code": "proof_of_funds",
@@ -821,12 +832,12 @@ def _fallback_structured_data(
                 "en": "Demonstrates capability to cover tuition, living expenses, and travel costs."
             },
             "is_required": True,
-            "citation": {
-                "authority": default_authority,
-                "title": "Financial Documentation Proof Guidelines",
-                "url": default_url,
-                "source_version": now_str,
-            },
+            "citation": resolve_official_citation(
+                jurisdiction_code=jurisdiction_code,
+                visa_category=visa_category,
+                item_key_or_code="funds",
+                default_version=now_str,
+            ),
         },
         {
             "code": "sponsor_certificate",
@@ -841,12 +852,12 @@ def _fallback_structured_data(
                 "en": "Validates official acceptance, sponsoring status, and qualification for the immigration route."
             },
             "is_required": True,
-            "citation": {
-                "authority": default_authority,
-                "title": "Host Institution Documentation Criteria",
-                "url": default_url,
-                "source_version": now_str,
-            },
+            "citation": resolve_official_citation(
+                jurisdiction_code=jurisdiction_code,
+                visa_category=visa_category,
+                item_key_or_code="work" if "work" in visa_category.lower() else "student",
+                default_version=now_str,
+            ),
         },
     ]
 
@@ -874,12 +885,12 @@ def _fallback_structured_data(
                 },
                 {"form_field": "stay.purpose", "answer_key": "purpose_of_stay", "required": True},
             ],
-            "citation": {
-                "authority": default_authority,
-                "title": f"Official {dest} Application Forms",
-                "url": default_url,
-                "source_version": now_str,
-            },
+            "citation": resolve_official_citation(
+                jurisdiction_code=jurisdiction_code,
+                visa_category=visa_category,
+                item_key_or_code="work" if "work" in visa_category.lower() else "student" if "student" in visa_category.lower() else "tourist",
+                default_version=now_str,
+            ),
         }
     ]
 
