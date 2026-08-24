@@ -32,7 +32,7 @@ export function CountrySelector({
   gridMaxHeightClass = "max-h-56",
   gridColsClass = "sm:grid-cols-2",
   id,
-  autoFillSearch = true,
+  autoFillSearch = false,
 }: CountrySelectorProps) {
   const selectedCountry = useMemo(() => {
     if (!value) return null;
