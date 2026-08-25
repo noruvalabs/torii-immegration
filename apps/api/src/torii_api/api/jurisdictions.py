@@ -129,6 +129,40 @@ async def create_jurisdiction(
             detail=f"jurisdiction '{payload.code.upper()}' already exists",
         ) from exc
     await session.refresh(jurisdiction)
+
+    # Seed default categories and actions for quick start
+    default_cats = [
+        ("work", "Work / Employment"),
+        ("student", "Student"),
+        ("tourist", "Tourist / Visitor"),
+    ]
+    for c_code, c_name in default_cats:
+        session.add(
+            VisaCategory(
+                jurisdiction_id=jurisdiction.id,
+                code=c_code,
+                name=c_name,
+                is_live=True,
+                research_enabled=True,
+            )
+        )
+
+    default_acts = [
+        ("new", "New Visa"),
+        ("renewal", "Renewal / Extension"),
+        ("change_of_status", "Change of status"),
+    ]
+    for a_code, a_name in default_acts:
+        session.add(
+            CaseAction(
+                jurisdiction_id=jurisdiction.id,
+                code=a_code,
+                name=a_name,
+                is_live=True,
+                research_enabled=True,
+            )
+        )
+    await session.flush()
     return jurisdiction
 
 

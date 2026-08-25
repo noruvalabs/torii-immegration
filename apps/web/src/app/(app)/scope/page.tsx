@@ -243,7 +243,7 @@ export default function ScopePage() {
           Start a new application
         </h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Apply for a visa from {residenceLabel || geoData?.detected_country?.country_name || "your residence"} to Japan, United States, or United Kingdom.
+          Apply for a visa from {residenceLabel || geoData?.detected_country?.country_name || "your residence"} to our supported destinations.
         </p>
       </div>
 
@@ -381,20 +381,23 @@ export default function ScopePage() {
               No destinations available.
             </p>
           ) : (
-            destinations.map((d) => (
-              <button
-                key={d.code}
-                onClick={() => selectDestination(d)}
-                className="flex w-full items-center gap-4 rounded-[var(--radius)] border bg-card p-4 text-left transition-colors hover:bg-accent"
-              >
-                <span className="text-2xl">{d.flag}</span>
-                <div className="flex-1">
-                  <p className="font-medium">{d.name}</p>
-                  <p className="text-xs text-muted-foreground">{d.currency}</p>
-                </div>
-                <ArrowRight className="size-4 text-muted-foreground" />
-              </button>
-            ))
+            destinations.map((d) => {
+              const flag = d.flag || matchCountry(d.code).flag || "🌐";
+              return (
+                <button
+                  key={d.code}
+                  onClick={() => selectDestination(d)}
+                  className="flex w-full items-center gap-4 rounded-[var(--radius)] border bg-card p-4 text-left transition-colors hover:bg-accent"
+                >
+                  <span className="text-2xl">{flag}</span>
+                  <div className="flex-1">
+                    <p className="font-medium">{d.name}</p>
+                    <p className="text-xs text-muted-foreground">{d.currency}</p>
+                  </div>
+                  <ArrowRight className="size-4 text-muted-foreground" />
+                </button>
+              );
+            })
           )}
         </div>
       )}

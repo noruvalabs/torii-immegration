@@ -16,6 +16,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { matchCountry } from "@/lib/countries";
 import type { IntakeState, User } from "./types";
 
 type IntakeStepProps = {
@@ -165,6 +166,7 @@ export function IntakeStep({ state, profile, onAnswer, onProceedToEligibility, t
   const [drafts, setDrafts] = useState<Record<string, unknown>>({});
   const [activeSection, setActiveSection] = useState<string | null>(null);
   const [enumSearch, setEnumSearch] = useState<Record<string, string>>({});
+  const [openSelectorKey, setOpenSelectorKey] = useState<string | null>(null);
   const [viewAll, setViewAll] = useState<boolean>(false);
   const [highlightedKey, setHighlightedKey] = useState<string | null>(null);
 
@@ -327,26 +329,150 @@ export function IntakeStep({ state, profile, onAnswer, onProceedToEligibility, t
           </div>
 
           {q.type === "enum" && q.options ? (
-            optionsCount <= 4 ? (
-              <div className="flex flex-wrap gap-1.5 pt-1">
-                {q.options.map((opt) => (
-                  <button
-                    key={opt}
-                    type="button"
-                    onClick={() => onAnswer(q.key, opt)}
-                    className={`rounded-md border px-3 py-1.5 text-xs transition-all ${
-                      current === opt
-                        ? "border-primary bg-primary/10 text-primary font-semibold shadow-sm ring-1 ring-primary/40"
-                        : "hover:bg-accent text-muted-foreground bg-background"
-                    }`}
-                  >
-                    {opt.replaceAll("_", " ")}
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <div className="space-y-2 pt-1">
-                {isLongEnum && (
+            (() => {
+              const isCountryQuestion =
+                q.key.toLowerCase().includes("nationality") ||
+                q.key.toLowerCase().includes("citizenship") ||
+                q.key.toLowerCase().includes("country") ||
+                q.prompt.toLowerCase().includes("nationality") ||
+                q.prompt.toLowerCase().includes("passport country") ||
+                q.prompt.toLowerCase().includes("residence country");
+
+              const hasSelected = current !== undefined && current !== "" && current !== null;
+              const isEditing = openSelectorKey === q.key;
+
+              // If country question and already selected: show full country with flag and Change button
+              if (isCountryQuestion) {
+                if (hasSelected && !isEditing) {
+                  const currentStr = String(current);
+                  const isOther = currentStr.toLowerCase() === "other";
+                  const cMeta = isOther
+                    ? { flag: "🌐", name: "Other / Not Listed", code: "other" }
+                    : matchCountry(currentStr);
+                  return (
+                    <div className="flex items-center justify-between rounded-lg border border-primary/30 bg-primary/5 p-3 text-xs shadow-xs">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <span className="text-2xl shrink-0">{cMeta.flag}</span>
+                        <div className="min-w-0">
+                          <p className="font-bold text-sm text-foreground truncate">{cMeta.name}</p>
+                          <p className="text-[11px] text-muted-foreground font-mono">
+                            Selected Code: {currentStr.toUpperCase()}
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setOpenSelectorKey(q.key);
+                          setEnumSearch((prev) => ({ ...prev, [q.key]: "" }));
+                        }}
+                        className="rounded-md border bg-background px-3 py-1.5 text-xs font-semibold text-primary hover:bg-accent shadow-xs transition-colors shrink-0"
+                      >
+                        Change
+                      </button>
+                    </div>
+                  );
+                }
+
+                // If not selected or user clicked "Change", show search bar and full country options
+                return (
+                  <div className="space-y-2 pt-1">
+                    <div className="relative">
+                      <Search className="absolute left-2.5 top-2.5 size-3.5 text-muted-foreground" />
+                      <input
+                        type="text"
+                        value={searchVal}
+                        onChange={(e) => setEnumSearch((prev) => ({ ...prev, [q.key]: e.target.value }))}
+                        placeholder="Search country name or code (e.g. Japan, US, Bangladesh)..."
+                        autoFocus={isEditing}
+                        className="h-8 w-full rounded-md border bg-background pl-8 pr-3 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring font-normal"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-52 overflow-y-auto pr-1">
+                      {q.options.map((opt) => {
+                        const isOther = opt.toLowerCase() === "other";
+                        const cMeta = isOther
+                          ? { flag: "🌐", name: "Other / Not Listed", code: "other" }
+                          : matchCountry(opt);
+                        const searchLower = searchVal.toLowerCase();
+                        if (
+                          searchVal &&
+                          !opt.toLowerCase().includes(searchLower) &&
+                          !cMeta.name.toLowerCase().includes(searchLower)
+                        ) {
+                          return null;
+                        }
+                        const isSelected = String(current).toUpperCase() === opt.toUpperCase();
+                        return (
+                          <button
+                            key={opt}
+                            type="button"
+                            onClick={() => {
+                              onAnswer(q.key, opt);
+                              setOpenSelectorKey(null);
+                              setEnumSearch((prev) => ({ ...prev, [q.key]: "" }));
+                            }}
+                            className={`flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-left text-xs transition-all ${
+                              isSelected
+                                ? "border-primary bg-primary/10 text-primary font-semibold ring-1 ring-primary/40"
+                                : "hover:bg-accent text-foreground bg-background"
+                            }`}
+                          >
+                            <span className="text-base shrink-0">{cMeta.flag}</span>
+                            <span className="truncate flex-1 font-medium">{cMeta.name}</span>
+                            <span className="text-[10px] text-muted-foreground font-mono">{opt}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              }
+
+              // General small enum (<= 4 options)
+              if (optionsCount <= 4) {
+                return (
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    {q.options.map((opt) => (
+                      <button
+                        key={opt}
+                        type="button"
+                        onClick={() => onAnswer(q.key, opt)}
+                        className={`rounded-md border px-3 py-1.5 text-xs transition-all ${
+                          current === opt
+                            ? "border-primary bg-primary/10 text-primary font-semibold shadow-sm ring-1 ring-primary/40"
+                            : "hover:bg-accent text-muted-foreground bg-background"
+                        }`}
+                      >
+                        {opt.replaceAll("_", " ")}
+                      </button>
+                    ))}
+                  </div>
+                );
+              }
+
+              // General large enum (> 4 options)
+              if (hasSelected && !isEditing) {
+                return (
+                  <div className="flex items-center justify-between rounded-lg border border-primary/30 bg-primary/5 p-2.5 text-xs shadow-xs">
+                    <span className="font-semibold text-foreground truncate">{String(current).replaceAll("_", " ")}</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setOpenSelectorKey(q.key);
+                        setEnumSearch((prev) => ({ ...prev, [q.key]: "" }));
+                      }}
+                      className="rounded-md border bg-background px-2.5 py-1 text-xs font-semibold text-primary hover:bg-accent shadow-xs transition-colors shrink-0"
+                    >
+                      Change
+                    </button>
+                  </div>
+                );
+              }
+
+              return (
+                <div className="space-y-2 pt-1">
                   <div className="relative">
                     <Search className="absolute left-2.5 top-2.5 size-3.5 text-muted-foreground" />
                     <input
@@ -354,32 +480,37 @@ export function IntakeStep({ state, profile, onAnswer, onProceedToEligibility, t
                       value={searchVal}
                       onChange={(e) => setEnumSearch((prev) => ({ ...prev, [q.key]: e.target.value }))}
                       placeholder={`Search ${optionsCount} options...`}
+                      autoFocus={isEditing}
                       className="h-8 w-full rounded-md border bg-background pl-8 pr-3 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring font-normal"
                     />
                   </div>
-                )}
 
-                <div className="flex flex-wrap gap-1.5 max-h-48 overflow-y-auto pr-1">
-                  {filteredOptions.map((opt) => (
-                    <button
-                      key={opt}
-                      type="button"
-                      onClick={() => onAnswer(q.key, opt)}
-                      className={`rounded-md border px-2.5 py-1 text-xs transition-all ${
-                        current === opt
-                          ? "border-primary bg-primary/10 text-primary font-semibold shadow-sm ring-1 ring-primary/40"
-                          : "hover:bg-accent text-muted-foreground bg-background"
-                      }`}
-                    >
-                      {opt.replaceAll("_", " ")}
-                    </button>
-                  ))}
-                  {filteredOptions.length === 0 && (
-                    <p className="text-[11px] text-muted-foreground py-1">No options match &quot;{searchVal}&quot;</p>
-                  )}
+                  <div className="flex flex-wrap gap-1.5 max-h-48 overflow-y-auto pr-1">
+                    {filteredOptions.map((opt) => (
+                      <button
+                        key={opt}
+                        type="button"
+                        onClick={() => {
+                          onAnswer(q.key, opt);
+                          setOpenSelectorKey(null);
+                          setEnumSearch((prev) => ({ ...prev, [q.key]: "" }));
+                        }}
+                        className={`rounded-md border px-2.5 py-1 text-xs transition-all ${
+                          current === opt
+                            ? "border-primary bg-primary/10 text-primary font-semibold shadow-sm ring-1 ring-primary/40"
+                            : "hover:bg-accent text-muted-foreground bg-background"
+                        }`}
+                      >
+                        {opt.replaceAll("_", " ")}
+                      </button>
+                    ))}
+                    {filteredOptions.length === 0 && (
+                      <p className="text-[11px] text-muted-foreground py-1">No options match &quot;{searchVal}&quot;</p>
+                    )}
+                  </div>
                 </div>
-              </div>
-            )
+              );
+            })()
           ) : q.type === "boolean" ? (
             <div className="flex gap-2 pt-1">
               <button

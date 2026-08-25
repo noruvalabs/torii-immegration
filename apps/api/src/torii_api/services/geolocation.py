@@ -28,7 +28,43 @@ SUPPORTED_DESTINATIONS: dict[str, dict[str, str]] = {
     "JP": {"name": "Japan", "currency": "JPY", "flag": "🇯🇵"},
     "US": {"name": "United States", "currency": "USD", "flag": "🇺🇸"},
     "UK": {"name": "United Kingdom", "currency": "GBP", "flag": "🇬🇧"},
+    "GB": {"name": "United Kingdom", "currency": "GBP", "flag": "🇬🇧"},
 }
+
+def resolve_country_meta(code: str, name: str | None = None) -> dict[str, str]:
+    """Resolve standard name, flag emoji, and currency for a country code."""
+    code_upper = code.strip().upper()
+    lookup_code = "UK" if code_upper == "GB" else code_upper
+
+    if lookup_code in SUPPORTED_DESTINATIONS:
+        dest = SUPPORTED_DESTINATIONS[lookup_code]
+        return {
+            "code": code_upper,
+            "name": name or dest["name"],
+            "currency": dest["currency"],
+            "flag": dest["flag"],
+        }
+    if code_upper in SUPPORTED_NATIONALITIES:
+        entry = SUPPORTED_NATIONALITIES[code_upper]
+        return {
+            "code": code_upper,
+            "name": name or entry["name"],
+            "currency": entry["currency"],
+            "flag": entry["flag"],
+        }
+
+    # Generate flag emoji from 2-letter ISO code if available
+    flag = "🌐"
+    if len(code_upper) == 2 and code_upper.isalpha():
+        flag = "".join(chr(127397 + ord(char)) for char in code_upper)
+
+    return {
+        "code": code_upper,
+        "name": name or code_upper,
+        "currency": "USD",
+        "flag": flag,
+    }
+
 
 # Supported nationalities (country of origin / citizenship) for cross-border guidance.
 # Destination codes are reused where possible, plus the most common origin countries.

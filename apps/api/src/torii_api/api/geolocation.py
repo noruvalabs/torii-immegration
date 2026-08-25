@@ -15,6 +15,7 @@ from torii_api.services.geolocation import (
     get_destinations_excluding,
     get_nationalities,
     get_visa_types,
+    resolve_country_meta,
 )
 
 router = APIRouter(prefix="/v1/geo", tags=["geolocation"])
@@ -83,10 +84,25 @@ async def detect_country(
 @router.get("/destinations", response_model=list[DestinationOut])
 async def list_destinations(
     current_user: CurrentUserDep,
+    session: SessionDep = None,
 ) -> list[DestinationOut]:
-    """List all supported destination countries (excluding user's current country)."""
-    current_country = getattr(current_user, "current_country", None) or "JP"
-    destinations = get_destinations_excluding(current_country)
+    """List all supported destination countries (excluding user's current country if applicable)."""
+    current_country = (getattr(current_user, "current_country", None) or "").upper()
+    if session:
+        live_jurisdictions = (
+            await session.scalars(
+                select(Jurisdiction).where(Jurisdiction.is_live.is_(True)).order_by(Jurisdiction.name)
+            )
+        ).all()
+        if live_jurisdictions:
+            destinations = []
+            for j in live_jurisdictions:
+                if j.code.upper() == current_country and len(live_jurisdictions) > 1:
+                    continue
+                destinations.append(resolve_country_meta(j.code, j.name))
+            return [DestinationOut(**d) for d in destinations]
+
+    destinations = get_destinations_excluding(current_country or "JP")
     return [DestinationOut(**d) for d in destinations]
 
 
@@ -186,11 +202,24 @@ async def list_application_types(
 @router.get("/all", response_model=GeoDataOut)
 async def get_all_geo_data(
     request: Request,
+    session: SessionDep = None,
 ) -> GeoDataOut:
     """Get all geolocation data in one call (for frontend initialization)."""
     geo = await detect_country_from_ip(request)
 
-    destinations = get_destinations_excluding(geo.country_code)
+    destinations = []
+    if session:
+        live_jurisdictions = (
+            await session.scalars(
+                select(Jurisdiction).where(Jurisdiction.is_live.is_(True)).order_by(Jurisdiction.name)
+            )
+        ).all()
+        for j in live_jurisdictions:
+            destinations.append(resolve_country_meta(j.code, j.name))
+
+    if not destinations:
+        destinations = get_destinations_excluding(geo.country_code)
+
     nationalities = get_nationalities()
     visa_types = get_visa_types()
     app_types = get_application_types()
