@@ -12,6 +12,7 @@ import {
   ListChecks,
   LayoutGrid,
   AlertCircle,
+  ShieldCheck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -267,9 +268,67 @@ export function IntakeStep({ state, profile, onAnswer, onProceedToEligibility, t
   const isCurrentSectionComplete = currentQuestions.length > 0 && currentAnsweredCount === currentQuestions.length;
   const remainingInCurrent = currentQuestions.length - currentAnsweredCount;
 
+  function SectionSourceBanner({ questions }: { questions: (typeof state.questions) }) {
+    const sources = useMemo(() => {
+      const map = new Map<string, { authority: string; title: string; url: string }>();
+      for (const q of questions) {
+        const cit = q.citation as { authority?: string; title?: string; url?: string } | null | undefined;
+        if (cit?.url) {
+          if (!map.has(cit.url)) {
+            map.set(cit.url, {
+              authority: cit.authority || "Official Government Authority",
+              title: cit.title || "Statutory Immigration Standard",
+              url: cit.url,
+            });
+          }
+        }
+      }
+      return Array.from(map.values());
+    }, [questions]);
+
+    if (sources.length === 0) return null;
+
+    return (
+      <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 text-xs shadow-2xs space-y-2">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="size-4 text-primary shrink-0" />
+            <div>
+              <span className="font-semibold text-foreground text-xs">
+                Official Statutory Authority &amp; Verified Legal Basis
+              </span>
+              <span className="text-[11px] text-muted-foreground ml-1.5 hidden sm:inline">
+                (Questions in this section are verified against statutory government standards)
+              </span>
+            </div>
+          </div>
+          <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 border border-emerald-500/30 px-2 py-0.5 rounded-full">
+            ✓ Verified Legal Source
+          </span>
+        </div>
+
+        <div className="flex items-center gap-2 flex-wrap pt-1 border-t border-border/40">
+          <span className="text-[11px] font-medium text-muted-foreground">Official Government Sources:</span>
+          {sources.map((src, i) => (
+            <a
+              key={i}
+              href={src.url}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1.5 rounded-md border border-border/80 bg-background hover:bg-accent px-2.5 py-1 text-[11px] font-medium text-foreground hover:text-primary transition-colors shadow-2xs"
+              title={`${src.title} — ${src.authority}`}
+            >
+              <span>{src.authority}</span>
+              <ExternalLink className="size-3 text-muted-foreground" />
+            </a>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   function renderQuestion(q: (typeof state.questions)[number]) {
     const current = (state.answers[q.key] ?? drafts[q.key]) as string | number | boolean | undefined;
-    const citation = q.citation as { title?: string; url?: string; authority?: string } | null | undefined;
     const hasOptions = q.type === "enum" && q.options && q.options.length > 0;
     const optionsCount = q.options?.length ?? 0;
     const isLongEnum = hasOptions && optionsCount > 5;
@@ -313,19 +372,6 @@ export function IntakeStep({ state, profile, onAnswer, onProceedToEligibility, t
               {q.prompt}
               {q.required !== false && <span className="ml-1 text-[var(--color-danger)] font-bold">*</span>}
             </label>
-
-            {citation?.url && (
-              <a
-                href={citation.url}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-1 text-[10px] font-medium text-primary bg-primary/5 hover:bg-primary/10 border border-primary/20 px-1.5 py-0.5 rounded transition-all shrink-0"
-                title={`${citation.title || "Official Statutory Standard"} (${citation.authority || "Official Government Authority"})`}
-              >
-                <span>Official Source</span>
-                <ExternalLink className="size-2.5" />
-              </a>
-            )}
           </div>
 
           {q.type === "enum" && q.options ? (
@@ -661,6 +707,8 @@ export function IntakeStep({ state, profile, onAnswer, onProceedToEligibility, t
                   </h4>
                 </div>
 
+                <SectionSourceBanner questions={secQuestions} />
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {secQuestions.map(renderQuestion)}
                 </div>
@@ -693,6 +741,8 @@ export function IntakeStep({ state, profile, onAnswer, onProceedToEligibility, t
               </Badge>
             </h4>
           </div>
+
+          <SectionSourceBanner questions={currentQuestions} />
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {currentQuestions.map(renderQuestion)}

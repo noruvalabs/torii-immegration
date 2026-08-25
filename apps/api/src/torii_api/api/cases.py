@@ -561,8 +561,13 @@ async def _intake_questions_for_case(session: AsyncSession, case: Case) -> list[
     )
 
 
-def _intake_state(case: Case, questions: list[dict[str, Any]]) -> IntakeStateOut:
-    parsed = parse_questions(questions)
+def _intake_state(
+    case: Case,
+    questions: list[dict[str, Any]],
+    jurisdiction_code: str = "JP",
+    visa_category: str = "",
+) -> IntakeStateOut:
+    parsed = parse_questions(questions, jurisdiction_code=jurisdiction_code, visa_category=visa_category)
     answers = dict(case.intake_answers or {})
     return IntakeStateOut(
         case_id=case.id,
@@ -826,6 +831,7 @@ async def get_intake(
     """Return visible intake questions, answers, and progress for a case (US-02)."""
     case = await _owned_case(session, case_id, user)
     questions = await _intake_questions_for_case(session, case)
+    j_code, v_code, _, _ = await _scope_label(session, case)
 
     # Pre-fill any missing answers from the user's global profile
     profile_prefill = _prefill_from_profile(user)
@@ -836,11 +842,11 @@ async def get_intake(
             current_answers[k] = v
             needs_flush = True
     if needs_flush:
-        parsed_q = parse_questions(questions)
+        parsed_q = parse_questions(questions, jurisdiction_code=j_code, visa_category=v_code)
         case.intake_answers = prune_answers(parsed_q, current_answers)
         await session.flush()
 
-    return _intake_state(case, questions)
+    return _intake_state(case, questions, jurisdiction_code=j_code, visa_category=v_code)
 
 
 INTAKE_KEY_ALIASES: dict[str, list[str]] = {
@@ -874,7 +880,12 @@ async def answer_intake(
 ) -> IntakeStateOut:
     """Validate and store one intake answer; re-branch and clear stale answers (US-02.3–02.5)."""
     case = await _owned_case(session, case_id, user)
-    questions = parse_questions(await _intake_questions_for_case(session, case))
+    j_code, v_code, _, _ = await _scope_label(session, case)
+    questions = parse_questions(
+        await _intake_questions_for_case(session, case),
+        jurisdiction_code=j_code,
+        visa_category=v_code,
+    )
     by_key = {q.key: q for q in questions}
 
     target_key = payload.key
@@ -924,14 +935,14 @@ async def answer_intake(
             required_fields = ["full_name", "nationality", "passport_number", "current_country"]
             user.profile_complete = all(bool(getattr(user, f, None)) for f in required_fields)
 
-    state = _intake_state(case, [q.model_dump() for q in questions])
+    state = _intake_state(case, [q.model_dump() for q in questions], jurisdiction_code=j_code, visa_category=v_code)
     if state.progress.complete:
         new_status = next_status_for_phase("eligibility", case.status)
         if new_status is not None:
             case.status = new_status
     await session.flush()
     await session.refresh(case)
-    return _intake_state(case, [q.model_dump() for q in questions])
+    return _intake_state(case, [q.model_dump() for q in questions], jurisdiction_code=j_code, visa_category=v_code)
 
 
 @router.get("/{case_id}/guidance", response_model=GuidanceOut)

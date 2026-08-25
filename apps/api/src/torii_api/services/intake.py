@@ -10,6 +10,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
+from torii_api.services.citations import resolve_official_citation
 from torii_api.services.pack_exports import pack_questions
 
 QuestionType = Literal["boolean", "string", "integer", "enum", "date"]
@@ -129,64 +130,29 @@ def progress_for(questions: list[IntakeQuestion], answers: dict[str, Any]) -> In
     return IntakeProgress(answered=answered, total=total, complete=total > 0 and answered == total)
 
 
-def _default_citation_for_question(q: IntakeQuestion) -> dict[str, str]:
-    """Provide an official statutory citation if a question lacks an explicit citation."""
+def _default_citation_for_question(
+    q: IntakeQuestion,
+    jurisdiction_code: str = "JP",
+    visa_category: str = "",
+) -> dict[str, str]:
+    """Provide an official statutory citation for an intake question."""
     k = q.key.lower()
-    p = (q.prompt or "").lower()
-    s = (q.section or "").lower()
+    detected_jur = jurisdiction_code
+    if "cos" in k or "sponsor_licence" in k or "cas" in k:
+        detected_jur = "UK"
+    elif "sevis" in k or "i20" in k or "ds160" in k or "lca" in k:
+        detected_jur = "US"
 
-    if "tax" in k or "tax" in p or "tax" in s:
-        return {
-            "authority": "Immigration Services Agency of Japan & National Tax Agency",
-            "title": "Resident Tax (住民税) & Income Tax Compliance Standards",
-            "url": "https://www.moj.go.jp/isa/applications/procedures/16-3.html",
-        }
-    if "pension" in k or "insurance" in k or "health" in k:
-        return {
-            "authority": "Japan Pension Service & Ministry of Justice",
-            "title": "Social Insurance & Pension Contribution Standards for Renewal",
-            "url": "https://www.moj.go.jp/isa/applications/procedures/16-3.html",
-        }
-    if "residence_card" in k or "residence_status" in k or "years_in_japan" in k:
-        return {
-            "authority": "Immigration Services Agency of Japan (ISA)",
-            "title": "Residence Card Registry & Continuity Verification (在留カード)",
-            "url": "https://www.moj.go.jp/isa/applications/procedures/16-3.html",
-        }
-    if "cos" in k or "sponsor_licence" in k:
-        return {
-            "authority": "UK Visas and Immigration (UKVI / Home Office)",
-            "title": "Immigration Rules Appendix Skilled Worker: Sponsorship",
-            "url": "https://www.gov.uk/skilled-worker-visa",
-        }
-    if "cas" in k:
-        return {
-            "authority": "UK Visas and Immigration (UKVI / Home Office)",
-            "title": "Immigration Rules Appendix Student: CAS & Academic Criteria",
-            "url": "https://www.gov.uk/student-visa",
-        }
-    if "sevis" in k or "i20" in k:
-        return {
-            "authority": "U.S. Department of State & SEVP",
-            "title": "Form DS-160 & SEVIS I-20 Student Verification Guidelines",
-            "url": "https://travel.state.gov/content/travel/en/us-visas/study/student-visa.html",
-        }
-    if "employer" in k or "sponsor" in k or "salary" in k or "job" in k or "corporate_number" in k:
-        return {
-            "authority": "Immigration Services Agency of Japan (ISA)",
-            "title": "Sponsoring Organization & Professional Activity Guidelines",
-            "url": "https://www.moj.go.jp/isa/applications/procedures/16-3.html",
-        }
-    if "criminal" in k or "deportation" in k or "refusal" in k:
-        return {
-            "authority": "Immigration Control and Refugee Recognition Act Article 5",
-            "title": "Statutory Suitability & Denial of Landing Standards",
-            "url": "https://www.moj.go.jp/isa/applications/procedures/16-3.html",
-        }
+    cit = resolve_official_citation(
+        jurisdiction_code=detected_jur,
+        visa_category=visa_category,
+        item_key_or_code=q.key,
+        existing_citation=q.citation if isinstance(q.citation, dict) else None,
+    )
     return {
-        "authority": "Immigration Services Agency of Japan (出入国在留管理庁)",
-        "title": "Official Statutory Notice on Visa & Residence Applications",
-        "url": "https://www.moj.go.jp/isa/applications/procedures/16-3.html",
+        "authority": str(cit.get("authority", "")),
+        "title": str(cit.get("title", "")),
+        "url": str(cit.get("url", "")),
     }
 
 
@@ -214,8 +180,12 @@ def _normalize_raw_question(item: dict[str, Any]) -> dict[str, Any]:
     return d
 
 
-def parse_questions(raw: list[dict[str, Any]] | list[IntakeQuestion]) -> list[IntakeQuestion]:
-    """Normalize stored JSON (or models) into typed questions."""
+def parse_questions(
+    raw: list[dict[str, Any]] | list[IntakeQuestion],
+    jurisdiction_code: str = "JP",
+    visa_category: str = "",
+) -> list[IntakeQuestion]:
+    """Normalize stored JSON (or models) into typed questions with accurate citations."""
     out: list[IntakeQuestion] = []
     for item in raw:
         if isinstance(item, IntakeQuestion):
@@ -225,8 +195,7 @@ def parse_questions(raw: list[dict[str, Any]] | list[IntakeQuestion]) -> list[In
             q = IntakeQuestion.model_validate(norm)
         if q.type == "enum" and not q.options:
             raise ValueError(f"enum question '{q.key}' requires options")
-        if q.citation is None or not isinstance(q.citation, dict) or not q.citation.get("url"):
-            q.citation = _default_citation_for_question(q)
+        q.citation = _default_citation_for_question(q, jurisdiction_code, visa_category)
         out.append(q)
     return out
 

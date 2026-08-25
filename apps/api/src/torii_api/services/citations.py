@@ -23,9 +23,9 @@ _SPECIFIC_CITATIONS: dict[str, dict[str, dict[str, str]]] = {
             "url": "https://www.isa.go.jp/en/applications/guide/residencecard.html",
         },
         "tax": {
-            "authority": "National Tax Agency of Japan (国税庁) & Municipal Tax Law",
-            "title": "Individual Resident Tax (住民税) & Municipal Tax Compliance Guidelines",
-            "url": "https://www.nta.go.jp/taxes/tetsuzuki/shinsei/annai/hotei/23100051.htm",
+            "authority": "National Tax Agency of Japan (国税庁) & Municipal Taxation",
+            "title": "Individual Resident Tax (住民税) & Income Tax Compliance Guidelines",
+            "url": "https://www.nta.go.jp/english/index.htm",
         },
         "pension": {
             "authority": "Japan Pension Service (日本年金機構) & MHLW",
@@ -209,50 +209,24 @@ def resolve_official_citation(
     cat = (visa_category or "").lower()
     key = (item_key_or_code or "").lower()
 
-    # If existing citation is already specific (not generic 16-3 for everything), preserve it
-    if existing_citation and isinstance(existing_citation, dict):
-        url = existing_citation.get("url")
-        auth = existing_citation.get("authority")
-        title = existing_citation.get("title")
-        if url and auth and title:
-            # Check if it's the duplicate 16-3.html on non-extension topics
-            is_generic_jp = (
-                jur == "JP"
-                and str(url).endswith("16-3.html")
-                and (
-                    "tax" in key
-                    or "pension" in key
-                    or "passport" in key
-                    or "student" in key
-                    or "tourist" in key
-                    or "criminal" in key
-                    or "registry" in key
-                )
-            )
-            is_generic_us = (
-                jur == "US"
-                and "visitor.html" in str(url)
-                and ("h1b" in key or "work" in key or "student" in key or "f1" in key)
-            )
-            if not is_generic_jp and not is_generic_us:
-                return {
-                    "authority": auth,
-                    "title": title,
-                    "url": url,
-                    "source_version": existing_citation.get("source_version") or default_version,
-                }
-
     jur_map = _SPECIFIC_CITATIONS.get(jur, _SPECIFIC_CITATIONS["JP"])
 
     # Determine topic key
     topic = "passport"
-    if "tax" in key or "withholding" in key or "resident_tax" in key:
-        topic = "tax"
-    elif "pension" in key or "insurance" in key or "health" in key:
-        topic = "pension"
-    elif "residence_card" in key or "years_in_japan" in key:
+    if (
+        "residence_card" in key
+        or "zairyu" in key
+        or "address" in key
+        or "registered_address" in key
+        or "period_of_stay" in key
+        or "years_in_japan" in key
+    ):
         topic = "residence_card"
-    elif "corporate" in key or "registry" in key or "registration" in key:
+    elif "tax" in key or "withholding" in key or "resident_tax" in key or "juminzei" in key or "shotokuzei" in key:
+        topic = "tax"
+    elif "pension" in key or "insurance" in key or "health" in key or "nenkin" in key:
+        topic = "pension"
+    elif "corporate" in key or "registry" in key or "registration" in key or "shogyo" in key or "touhon" in key:
         topic = "company_registry" if jur == "JP" else "sponsor"
     elif "hsp" in key or "point" in key or cat == "hsp":
         topic = "hsp"
@@ -268,28 +242,106 @@ def resolve_official_citation(
         topic = "guarantor"
     elif "lca" in key or "labor" in key or "prevailing_wage" in key:
         topic = "lca" if jur == "US" else "work"
-    elif "cos" in key or "sponsor" in key or "employer_name" in key:
+    elif "cos" in key or "sponsor" in key:
         topic = "sponsor" if jur in ("UK", "GB") else "work"
-    elif "salary" in key or "soc" in key or "rate" in key:
+    elif "salary" in key or "soc" in key or "rate" in key or "monthly_salary" in key:
         topic = "salary" if jur in ("UK", "GB") else "work"
-    elif "english" in key or "selt" in key or "language" in key:
-        topic = "english"
+    elif "english" in key or "selt" in key or "language" in key or "jlpt" in key:
+        topic = "english" if jur in ("UK", "GB") else "student"
     elif "tb" in key or "tuberculosis" in key:
         topic = "tb"
-    elif "student" in key or "cas" in key or "i20" in key or "school" in key or "university" in key or cat == "student":
+    elif (
+        "student" in key
+        or "school" in key
+        or "study" in key
+        or "major" in key
+        or "program" in key
+        or "gpa" in key
+        or "attendance" in key
+        or "cas" in key
+        or "i20" in key
+        or "university" in key
+        or "institution" in key
+        or cat == "student"
+    ):
         topic = "student"
     elif "tourist" in key or "visitor" in key or "itinerary" in key or cat in ("tourist", "b1b2", "visitor"):
         topic = "tourist"
-    elif "fund" in key or "bank" in key or "saving" in key or "financial" in key or "maintenance" in key:
+    elif (
+        "fund" in key
+        or "bank" in key
+        or "saving" in key
+        or "financial" in key
+        or "maintenance" in key
+        or "expense" in key
+    ):
         topic = "funds"
-    elif "criminal" in key or "violation" in key or "overstay" in key or "deportation" in key or "refusal" in key:
+    elif (
+        "criminal" in key
+        or "violation" in key
+        or "overstay" in key
+        or "deportation" in key
+        or "refusal" in key
+        or "suitability" in key
+    ):
         topic = "criminal"
-    elif "work" in key or "job" in key or "h1b" in key or "employed" in key or cat in ("work", "h1b"):
+    elif (
+        "work" in key
+        or "job" in key
+        or "h1b" in key
+        or "employed" in key
+        or "employer" in key
+        or "contract" in key
+        or "organization" in key
+        or cat in ("work", "h1b")
+    ):
         topic = "work"
+    elif (
+        "passport" in key
+        or "nationality" in key
+        or "name" in key
+        or "full_name" in key
+        or "birth" in key
+        or "dob" in key
+        or "gender" in key
+    ):
+        topic = "passport"
     elif "change" in key:
         topic = "change_of_status"
     elif "extension" in key or "renew" in key:
         topic = "extension"
+    elif cat == "student":
+        topic = "student"
+    elif cat in ("work", "engineer"):
+        topic = "work"
+
+    # If existing citation is already specific (not generic 16-3 for everything), preserve it
+    if existing_citation and isinstance(existing_citation, dict):
+        url = existing_citation.get("url")
+        auth = existing_citation.get("authority")
+        title = existing_citation.get("title")
+        if url and auth and title:
+            # Check if it's the duplicate 16-3.html or generic procedure link on specific topics
+            is_generic_jp = (
+                jur == "JP"
+                and (
+                    (str(url).endswith("16-3.html") and topic != "extension")
+                    or (str(url).endswith("16-2.html") and topic != "change_of_status")
+                    or (str(url).endswith("16-1.html") and topic != "coe")
+                )
+            )
+            is_generic_us = (
+                jur == "US"
+                and "visitor.html" in str(url)
+                and topic != "tourist"
+            )
+            if not is_generic_jp and not is_generic_us:
+                return {
+                    "authority": auth,
+                    "title": title,
+                    "url": url,
+                    "source_version": existing_citation.get("source_version") or default_version,
+                }
 
     selected = jur_map.get(topic) or jur_map.get("work") or jur_map.get("passport") or {}
     return {

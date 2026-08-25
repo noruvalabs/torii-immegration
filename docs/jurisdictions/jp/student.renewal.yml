@@ -48,9 +48,9 @@ intake:
     - other
     required: true
     citation:
-      authority: Immigration Services Agency of Japan (MOJ)
-      title: Statutory Passport & Identity Verification Standards
-      url: https://www.moj.go.jp/isa/applications/procedures/16-3.html
+      authority: Ministry of Foreign Affairs of Japan (MOFA)
+      title: Statutory Passport & Identity Verification Standards (旅券・身元確認要領)
+      url: https://www.mofa.go.jp/j_info/visit/visa/index.html
   - key: passport_number
     section: Personal & Identity
     prompt: What is your passport number?
@@ -59,18 +59,18 @@ intake:
     max_length: 32
     required: true
     citation:
-      authority: Immigration Services Agency of Japan (MOJ)
-      title: Statutory Passport & Identity Verification Standards
-      url: https://www.moj.go.jp/isa/applications/procedures/16-3.html
+      authority: Ministry of Foreign Affairs of Japan (MOFA)
+      title: Statutory Passport & Identity Verification Standards (旅券・身元確認要領)
+      url: https://www.mofa.go.jp/j_info/visit/visa/index.html
   - key: passport_expiry
     section: Personal & Identity
     prompt: What is your passport expiration date (YYYY-MM-DD)?
     type: date
     required: true
     citation:
-      authority: Immigration Services Agency of Japan (MOJ)
-      title: Statutory Passport & Identity Verification Standards
-      url: https://www.moj.go.jp/isa/applications/procedures/16-3.html
+      authority: Ministry of Foreign Affairs of Japan (MOFA)
+      title: Statutory Passport & Identity Verification Standards (旅券・身元確認要領)
+      url: https://www.mofa.go.jp/j_info/visit/visa/index.html
   - key: residence_card_number
     section: Residence Card & Status
     prompt: What is your 12-character Residence Card number (在留カード番号)?
@@ -80,8 +80,8 @@ intake:
     required: true
     citation:
       authority: Immigration Services Agency of Japan (ISA)
-      title: Residence Card Registry & Continuity Verification (在留カード)
-      url: https://www.moj.go.jp/isa/applications/procedures/16-3.html
+      title: Residence Card Registry & Continuity Verification (在留カード等確認)
+      url: https://www.isa.go.jp/en/applications/guide/residencecard.html
   - key: residence_card_expiry
     section: Residence Card & Status
     prompt: What is the current expiration date on your Residence Card (YYYY-MM-DD)?
@@ -89,8 +89,8 @@ intake:
     required: true
     citation:
       authority: Immigration Services Agency of Japan (ISA)
-      title: Residence Card Registry & Continuity Verification (在留カード)
-      url: https://www.moj.go.jp/isa/applications/procedures/16-3.html
+      title: Residence Card Registry & Continuity Verification (在留カード等確認)
+      url: https://www.isa.go.jp/en/applications/guide/residencecard.html
   - key: registered_address_japan
     section: Residence Card & Status
     prompt: What is your registered residential address in Japan?
@@ -99,9 +99,9 @@ intake:
     max_length: 300
     required: true
     citation:
-      authority: Immigration Services Agency of Japan (出入国在留管理庁)
-      title: Official Notice on Application for Extension of Period of Stay
-      url: https://www.moj.go.jp/isa/applications/procedures/16-3.html
+      authority: Immigration Services Agency of Japan (ISA)
+      title: Residence Card Address Notification Procedures (住居地届出手続)
+      url: https://www.isa.go.jp/en/applications/guide/residencecard.html
   - key: school_name
     section: School & Study Record
     prompt: What is the official legal name of your educational institution in Japan?
@@ -110,9 +110,9 @@ intake:
     max_length: 200
     required: true
     citation:
-      authority: Immigration Services Agency of Japan (MOJ)
-      title: Statutory Passport & Identity Verification Standards
-      url: https://www.moj.go.jp/isa/applications/procedures/16-3.html
+      authority: Immigration Services Agency of Japan (ISA)
+      title: "Status of Residence: Student (留学資格審査基準)"
+      url: https://www.isa.go.jp/en/applications/procedures/zairyu_shikaku10.html
   - key: study_program_type
     section: School & Study Record
     prompt: What is your program of study?
@@ -124,9 +124,9 @@ intake:
     - vocational_college
     required: true
     citation:
-      authority: Immigration Services Agency of Japan (出入国在留管理庁)
-      title: Official Notice on Application for Extension of Period of Stay
-      url: https://www.moj.go.jp/isa/applications/procedures/16-3.html
+      authority: Immigration Services Agency of Japan (ISA)
+      title: "Status of Residence: Student (留学資格審査基準)"
+      url: https://www.isa.go.jp/en/applications/procedures/zairyu_shikaku10.html
   - key: school_completed
     section: School & Study Record
     prompt: Have you completed your program at your current institution (graduation
@@ -136,7 +136,7 @@ intake:
     citation:
       authority: Immigration Services Agency of Japan (ISA)
       title: Educational Institution Status & Attendance Standards
-      url: https://www.moj.go.jp/isa/applications/procedures/16-3.html
+      url: https://www.isa.go.jp/en/applications/procedures/zairyu_shikaku10.html
   - key: planned_future_steps
     section: School & Study Record
     prompt: What is your plan after the current school program?
@@ -149,9 +149,9 @@ intake:
     - return_home
     required: true
     citation:
-      authority: Immigration Services Agency of Japan (出入国在留管理庁)
-      title: Official Notice on Application for Extension of Period of Stay
-      url: https://www.moj.go.jp/isa/applications/procedures/16-3.html
+      authority: Immigration Services Agency of Japan (ISA)
+      title: Guidelines for Extension of Student Residence Period (留学期間更新審査基準)
+      url: https://www.isa.go.jp/en/applications/procedures/zairyu_shikaku10.html
   - key: attendance_rate
     section: School & Study Record
     prompt: What is your current attendance rate at the institution (percent)?
@@ -160,9 +160,9 @@ intake:
     max_value: 100
     required: true
     citation:
-      authority: Immigration Services Agency of Japan
-      title: Attendance compliance for student extension
-      url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
+      authority: Immigration Services Agency of Japan (ISA)
+      title: Attendance Compliance & Academic Record Standards for Student Extension (出席率・成績審査基準)
+      url: https://www.isa.go.jp/en/applications/procedures/zairyu_shikaku10.html
   - key: same_institution_as_last_application
     section: School & Study Record
     prompt: Are you enrolled at the same institution as in your last application for
@@ -171,9 +171,9 @@ intake:
     type: boolean
     required: true
     citation:
-      authority: Immigration Services Agency of Japan (出入国在留管理庁)
-      title: Official Notice on Application for Extension of Period of Stay
-      url: https://www.moj.go.jp/isa/applications/procedures/16-3.html
+      authority: Immigration Services Agency of Japan (ISA)
+      title: Educational Continuity & Language Institution Verification (在籍継続確認)
+      url: https://www.isa.go.jp/en/applications/procedures/zairyu_shikaku10.html
   - key: work_under_28_hours
     section: Work Rules & Compliance
     prompt: Do you (and any permitted part-time job) stay within the 28-hour-per-week
@@ -181,9 +181,9 @@ intake:
     type: boolean
     required: true
     citation:
-      authority: Immigration Services Agency of Japan
-      title: Permitted part-time work limit for international students
-      url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
+      authority: Immigration Services Agency of Japan (ISA)
+      title: Permission to Engage in Activity Other Than That Permitted (資格外活動許可・週28時間基準)
+      url: https://www.isa.go.jp/en/applications/procedures/nyuukokukanri07_00045.html
   - key: work_exceeds_hours
     section: Work Rules & Compliance
     prompt: Have you exceeded the permitted work hours (28 h/week, or 40 h/week for
@@ -194,9 +194,9 @@ intake:
       key: work_under_28_hours
       equals: false
     citation:
-      authority: Immigration Services Agency of Japan (出入国在留管理庁)
-      title: Official Notice on Application for Extension of Period of Stay
-      url: https://www.moj.go.jp/isa/applications/procedures/16-3.html
+      authority: Immigration Services Agency of Japan (ISA)
+      title: Statutory Work Hour Limits & Good Conduct Review (資格外活動制限遵守要件)
+      url: https://www.isa.go.jp/en/applications/procedures/nyuukokukanri07_00045.html
   - key: has_financial_support
     section: Financial Support & Expenses
     prompt: Can you continue to prove sufficient liquid funds for tuition and living
@@ -204,27 +204,27 @@ intake:
     type: boolean
     required: true
     citation:
-      authority: Immigration Services Agency of Japan (出入国在留管理庁)
-      title: Official Notice on Application for Extension of Period of Stay
-      url: https://www.moj.go.jp/isa/applications/procedures/16-3.html
+      authority: Immigration Services Agency of Japan (ISA)
+      title: Verification Standards for Living Expenses & Financial Capacity (経費支弁能力審査基準)
+      url: https://www.isa.go.jp/en/applications/procedures/zairyu_shikaku10.html
   - key: resident_tax_status
     section: Tax & Pension Compliance
     prompt: Is your Resident Tax (住民税) fully paid to date with no outstanding arrears?
     type: boolean
     required: true
     citation:
-      authority: Immigration Services Agency of Japan
-      title: Review Standards for Extension of Period of Stay
-      url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
+      authority: National Tax Agency of Japan (国税庁) & Municipal Taxation System
+      title: Individual Resident Tax & Income Tax Compliance Guidelines (住民税・所得税納付要件)
+      url: https://www.nta.go.jp/taxes/tetsuzuki/shinsei/annai/hotei/23100051.htm
   - key: pension_health_insurance
     section: Tax & Pension Compliance
     prompt: Are your National Pension / Health Insurance contributions fully paid?
     type: boolean
     required: true
     citation:
-      authority: Immigration Services Agency of Japan & National Tax Agency
-      title: Resident Tax (住民税) & Income Tax Compliance Standards
-      url: https://www.moj.go.jp/isa/applications/procedures/16-3.html
+      authority: Japan Pension Service (日本年金機構) & MHLW
+      title: Public Pension & National Health Insurance Contribution Standards (公的年金・健康保険納付要件)
+      url: https://www.nenkin.go.jp/international/index.html
   - key: departures_past_year
     section: Travel & Disclosures
     prompt: How many days in total have you spent outside Japan in the past 12 months?
@@ -233,9 +233,9 @@ intake:
     max_value: 365
     required: true
     citation:
-      authority: Immigration Control and Refugee Recognition Act Article 5
-      title: Statutory Suitability & Good Conduct Review Standards
-      url: https://www.moj.go.jp/isa/applications/procedures/16-3.html
+      authority: Immigration Control and Refugee Recognition Act (Article 5 & 24)
+      title: Statutory Continuity of Residence & Good Conduct Review Standards
+      url: https://www.isa.go.jp/en/applications/procedures/index.html
   - key: criminal_disclosures
     section: Travel & Disclosures
     prompt: Have you ever been convicted of any crime or fined for traffic violations
@@ -243,9 +243,9 @@ intake:
     type: boolean
     required: true
     citation:
-      authority: Immigration Control and Refugee Recognition Act Article 5
-      title: Statutory Suitability & Good Conduct Review Standards
-      url: https://www.moj.go.jp/isa/applications/procedures/16-3.html
+      authority: Immigration Control and Refugee Recognition Act (Article 5 & 24)
+      title: Statutory Grounds for Refusal of Landing & Good Conduct Review (入管法第5条・第24条審査基準)
+      url: https://www.isa.go.jp/en/applications/procedures/index.html
 eligibility:
   rules:
   - key: school_completed

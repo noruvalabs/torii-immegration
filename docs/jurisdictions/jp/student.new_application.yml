@@ -49,9 +49,9 @@ intake:
     - other
     required: true
     citation:
-      authority: Immigration Services Agency of Japan (MOJ)
-      title: Statutory Passport & Identity Verification Standards
-      url: https://www.moj.go.jp/isa/applications/procedures/16-3.html
+      authority: Ministry of Foreign Affairs of Japan (MOFA)
+      title: Statutory Passport & Identity Verification Standards (旅券・身元確認要領)
+      url: https://www.mofa.go.jp/j_info/visit/visa/index.html
   - key: passport_number
     section: Personal & Identity
     prompt: What is your passport number?
@@ -60,9 +60,9 @@ intake:
     max_length: 32
     required: true
     citation:
-      authority: Immigration Services Agency of Japan (MOJ)
-      title: Statutory Passport & Identity Verification Standards
-      url: https://www.moj.go.jp/isa/applications/procedures/16-3.html
+      authority: Ministry of Foreign Affairs of Japan (MOFA)
+      title: Statutory Passport & Identity Verification Standards (旅券・身元確認要領)
+      url: https://www.mofa.go.jp/j_info/visit/visa/index.html
   - key: passport_expiry
     section: Personal & Identity
     prompt: What is your passport expiration date (YYYY-MM-DD)?
@@ -71,9 +71,9 @@ intake:
     max_length: 12
     required: true
     citation:
-      authority: Immigration Services Agency of Japan (MOJ)
-      title: Statutory Passport & Identity Verification Standards
-      url: https://www.moj.go.jp/isa/applications/procedures/16-3.html
+      authority: Ministry of Foreign Affairs of Japan (MOFA)
+      title: Statutory Passport & Identity Verification Standards (旅券・身元確認要領)
+      url: https://www.mofa.go.jp/j_info/visit/visa/index.html
   - key: current_location_country
     section: Personal & Identity
     prompt: Which country are you currently residing in?
@@ -105,9 +105,9 @@ intake:
     - Indonesia
     required: true
     citation:
-      authority: Immigration Services Agency of Japan (出入国在留管理庁)
-      title: Official Notice on Application for Extension of Period of Stay
-      url: https://www.moj.go.jp/isa/applications/procedures/16-3.html
+      authority: Ministry of Foreign Affairs of Japan (MOFA)
+      title: Guide to Japanese Visas and Diplomatic Missions Abroad (在外公館ビザ案内)
+      url: https://www.mofa.go.jp/j_info/visit/visa/index.html
   - key: has_school_acceptance
     section: Academic Sponsor & COE
     prompt: Do you have an official acceptance letter from a school or university
@@ -116,8 +116,8 @@ intake:
     required: true
     citation:
       authority: Immigration Services Agency of Japan (ISA)
-      title: Educational Institution Status & Attendance Standards
-      url: https://www.moj.go.jp/isa/applications/procedures/16-3.html
+      title: "Status of Residence: Student (留学資格基準)"
+      url: https://www.isa.go.jp/en/applications/procedures/zairyu_shikaku10.html
   - key: school_name
     section: Academic Sponsor & COE
     prompt: What is the official legal name of your educational institution in Japan?
@@ -128,9 +128,9 @@ intake:
       key: has_school_acceptance
       equals: true
     citation:
-      authority: Immigration Services Agency of Japan (MOJ)
-      title: Statutory Passport & Identity Verification Standards
-      url: https://www.moj.go.jp/isa/applications/procedures/16-3.html
+      authority: Immigration Services Agency of Japan (ISA)
+      title: "Status of Residence: Student (留学資格審査基準)"
+      url: https://www.isa.go.jp/en/applications/procedures/zairyu_shikaku10.html
   - key: study_program_type
     section: Academic Sponsor & COE
     prompt: What is your program of study?
@@ -142,18 +142,18 @@ intake:
     - vocational_college
     required: true
     citation:
-      authority: Immigration Services Agency of Japan (出入国在留管理庁)
-      title: Official Notice on Application for Extension of Period of Stay
-      url: https://www.moj.go.jp/isa/applications/procedures/16-3.html
+      authority: Immigration Services Agency of Japan (ISA)
+      title: "Status of Residence: Student (留学資格審査基準)"
+      url: https://www.isa.go.jp/en/applications/procedures/zairyu_shikaku10.html
   - key: has_coe
     section: Academic Sponsor & COE
     prompt: Has your school issued your Certificate of Eligibility (COE 在留資格認定証明書)?
     type: boolean
     required: true
     citation:
-      authority: Immigration Services Agency of Japan (出入国在留管理庁)
-      title: Official Notice on Application for Extension of Period of Stay
-      url: https://www.moj.go.jp/isa/applications/procedures/16-3.html
+      authority: Immigration Services Agency of Japan (ISA)
+      title: Application for Certificate of Eligibility (在留資格認定証明書交付手続)
+      url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
   - key: has_financial_support
     section: Financial Support & Expenses
     prompt: Can you prove sufficient liquid funds (approx. ¥1.5M–¥2M/year) for tuition
@@ -161,9 +161,9 @@ intake:
     type: boolean
     required: true
     citation:
-      authority: Immigration Services Agency of Japan (出入国在留管理庁)
-      title: Official Notice on Application for Extension of Period of Stay
-      url: https://www.moj.go.jp/isa/applications/procedures/16-3.html
+      authority: Immigration Services Agency of Japan (ISA)
+      title: Verification Standards for Living Expenses & Financial Capacity (経費支弁能力審査基準)
+      url: https://www.isa.go.jp/en/applications/procedures/zairyu_shikaku10.html
   - key: sponsor_type
     section: Financial Support & Expenses
     prompt: Who is primarily paying your tuition and living expenses in Japan?
@@ -176,8 +176,8 @@ intake:
     required: true
     citation:
       authority: Immigration Services Agency of Japan (ISA)
-      title: Sponsoring Organization & Professional Activity Guidelines (別紙4)
-      url: https://www.moj.go.jp/isa/applications/procedures/16-3.html
+      title: Financial Support and Sponsor Verification Guidelines (経費支弁者審査要領)
+      url: https://www.isa.go.jp/en/applications/procedures/zairyu_shikaku10.html
   - key: financial_supporter_relation
     section: Financial Support & Expenses
     prompt: What is your financial supporter's relationship to you (e.g. Parent, Self,
@@ -189,9 +189,9 @@ intake:
       key: sponsor_type
       equals: family
     citation:
-      authority: Immigration Services Agency of Japan (出入国在留管理庁)
-      title: Official Notice on Application for Extension of Period of Stay
-      url: https://www.moj.go.jp/isa/applications/procedures/16-3.html
+      authority: Immigration Services Agency of Japan (ISA)
+      title: Financial Supporter Relationship Verification Standards (支弁者関係証明要領)
+      url: https://www.isa.go.jp/en/applications/procedures/zairyu_shikaku10.html
   - key: annual_living_budget_jpy
     section: Financial Support & Expenses
     prompt: What is your estimated annual available budget for living expenses in
@@ -201,9 +201,9 @@ intake:
     max_value: 50000000
     required: true
     citation:
-      authority: Immigration Services Agency of Japan (出入国在留管理庁)
-      title: Official Notice on Application for Extension of Period of Stay
-      url: https://www.moj.go.jp/isa/applications/procedures/16-3.html
+      authority: Immigration Services Agency of Japan (ISA)
+      title: Verification Standards for Living Expenses & Financial Capacity (経費支弁能力審査基準)
+      url: https://www.isa.go.jp/en/applications/procedures/zairyu_shikaku10.html
   - key: intended_entry_date
     section: Planned Stay Details
     prompt: What is your intended arrival date in Japan (YYYY-MM-DD)?
@@ -212,18 +212,18 @@ intake:
     max_length: 12
     required: true
     citation:
-      authority: Immigration Services Agency of Japan (出入国在留管理庁)
-      title: Official Notice on Application for Extension of Period of Stay
-      url: https://www.moj.go.jp/isa/applications/procedures/16-3.html
+      authority: Ministry of Foreign Affairs of Japan (MOFA)
+      title: Guide to Japanese Visas and Entry Procedures (在外公館ビザ案内)
+      url: https://www.mofa.go.jp/j_info/visit/visa/index.html
   - key: previous_japan_visits
     section: Planned Stay Details
     prompt: Have you previously visited Japan or held a Japanese visa?
     type: boolean
     required: true
     citation:
-      authority: Immigration Services Agency of Japan (出入国在留管理庁)
-      title: Official Notice on Application for Extension of Period of Stay
-      url: https://www.moj.go.jp/isa/applications/procedures/16-3.html
+      authority: Immigration Control and Refugee Recognition Act (Article 5 & 24)
+      title: Statutory Continuity of Residence & Good Conduct Review Standards
+      url: https://www.isa.go.jp/en/applications/procedures/index.html
 eligibility:
   rules:
   - key: has_school_acceptance
