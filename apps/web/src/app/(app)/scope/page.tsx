@@ -95,13 +95,9 @@ export default function ScopePage() {
     void (async () => {
       try {
         setLoadingOptions(true);
-        const [vTypes, aTypes] = await Promise.all([
-          getVisaTypes(selectedDestination.code),
-          getApplicationTypes(selectedDestination.code),
-        ]);
+        const vTypes = await getVisaTypes(selectedDestination.code);
         if (cancelled) return;
         setDynamicVisaTypes(vTypes);
-        setDynamicAppTypes(aTypes);
       } catch {
         // Fallback to static geoData options
       } finally {
@@ -112,6 +108,29 @@ export default function ScopePage() {
       cancelled = true;
     };
   }, [selectedDestination]);
+
+  useEffect(() => {
+    if (!selectedDestination || !selectedVisaType) {
+      setDynamicAppTypes(null);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        setLoadingOptions(true);
+        const aTypes = await getApplicationTypes(selectedDestination.code, selectedVisaType.code);
+        if (cancelled) return;
+        setDynamicAppTypes(aTypes);
+      } catch {
+        // Fallback to static geoData options
+      } finally {
+        if (!cancelled) setLoadingOptions(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedDestination, selectedVisaType]);
 
   function goBack() {
     setError(null);
@@ -152,6 +171,7 @@ export default function ScopePage() {
 
   function selectVisaType(v: VisaType) {
     setSelectedVisaType(v);
+    setSelectedAppType(null);
     setStep("app_type");
   }
 
@@ -443,7 +463,7 @@ export default function ScopePage() {
             <ArrowLeft className="size-3.5" /> Back
           </button>
           <h3 className="text-sm font-medium text-muted-foreground">
-            Application type for <strong>{selectedDestination?.flag} {selectedDestination?.name}</strong>
+            Application type for <strong>{selectedDestination?.flag} {selectedDestination?.name} — {selectedVisaType?.name}</strong>
           </h3>
           {loadingOptions ? (
             <div className="py-8 text-center">

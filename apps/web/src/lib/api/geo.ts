@@ -84,8 +84,11 @@ export function getNationalities() {
   return request<Nationality[]>("/nationalities", { method: "GET" });
 }
 
-export function getApplicationTypes(destination?: string) {
-  const query = destination ? `?destination=${encodeURIComponent(destination)}` : "";
+export function getApplicationTypes(destination?: string, visaType?: string) {
+  const params = new URLSearchParams();
+  if (destination) params.append("destination", destination);
+  if (visaType) params.append("visa_type", visaType);
+  const query = params.toString() ? `?${params.toString()}` : "";
   return request<ApplicationType[]>(`/application-types${query}`, { method: "GET" });
 }
 

@@ -8,7 +8,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 
 from torii_api.auth.deps import CurrentUserDep, SessionDep
-from torii_api.db.models import CaseAction, Jurisdiction, VisaCategory
+from torii_api.db.models import CaseAction, IntakeDefinition, Jurisdiction, VisaCategory
 from torii_api.services.geolocation import (
     detect_country_from_ip,
     get_application_types,
@@ -157,25 +157,59 @@ async def list_nationalities() -> list[DestinationOut]:
 @router.get("/application-types", response_model=list[ApplicationTypeOut])
 async def list_application_types(
     destination: str | None = None,
+    visa_type: str | None = None,
     session: SessionDep = None,
 ) -> list[ApplicationTypeOut]:
-    """List application types, dynamically tailored if destination is given."""
+    """List application types, dynamically tailored if destination and visa_type are given."""
     if destination and session:
         jurisdiction = await session.scalar(
             select(Jurisdiction).where(Jurisdiction.code == destination.upper())
         )
         if jurisdiction:
-            actions = await session.scalars(
-                select(CaseAction)
-                .where(CaseAction.jurisdiction_id == jurisdiction.id)
-                .where(CaseAction.is_live.is_(True) | CaseAction.research_enabled.is_(True))
-                .order_by(CaseAction.code)
-            )
-            action_list = list(actions.all())
+            v_code = (visa_type or "").lower().strip()
+
+            # Check if a specific visa category was requested
+            visa_cat = None
+            if v_code:
+                visa_cat = await session.scalar(
+                    select(VisaCategory)
+                    .where(VisaCategory.jurisdiction_id == jurisdiction.id)
+                    .where(VisaCategory.code == v_code)
+                )
+
+            # Query actions associated with this visa category
+            action_list: list[CaseAction] = []
+            if visa_cat:
+                intake_actions = await session.scalars(
+                    select(CaseAction)
+                    .join(IntakeDefinition, IntakeDefinition.case_action_id == CaseAction.id)
+                    .where(IntakeDefinition.jurisdiction_id == jurisdiction.id)
+                    .where(IntakeDefinition.visa_category_id == visa_cat.id)
+                    .distinct()
+                )
+                action_list = list(intake_actions.all())
+
+            # Fallback to jurisdiction actions with statutory domain filtering
+            if not action_list:
+                actions = await session.scalars(
+                    select(CaseAction)
+                    .where(CaseAction.jurisdiction_id == jurisdiction.id)
+                    .where(CaseAction.is_live.is_(True) | CaseAction.research_enabled.is_(True))
+                    .order_by(CaseAction.code)
+                )
+                action_list = list(actions.all())
+
+                # Apply domain rules:
+                # 1. Tourist / Short-term / Visitor visas only support New Visa (Entry Visa)
+                if v_code in ("tourist", "visitor", "b1b2", "short_term"):
+                    action_list = [a for a in action_list if a.code in ("new", "new_application")]
+                # 2. Permanent Resident only supports Permanent Residence Application
+                elif v_code in ("permanent_resident", "pr", "ilr"):
+                    action_list = [a for a in action_list if a.code in ("new", "new_application")]
+
             if action_list:
                 result = []
                 seen_codes = set()
-                # Deduplicate aliases: if 'new' is present, don't repeat 'new_application'
                 has_new = any(a.code == "new" for a in action_list)
                 for a in action_list:
                     if a.code == "new_application" and has_new:
@@ -183,16 +217,30 @@ async def list_application_types(
                     if a.code in seen_codes:
                         continue
                     seen_codes.add(a.code)
-                    desc = (
-                        "First-time application"
-                        if a.code in ("new", "new_application")
-                        else "Extend or renew existing visa"
-                        if a.code == "renewal"
-                        else "Switch to a different status (e.g. student to work)"
-                        if a.code == "change_of_status"
-                        else a.name
-                    )
-                    result.append(ApplicationTypeOut(code=a.code, name=a.name, description=desc))
+
+                    name = a.name
+                    desc = a.name
+                    if v_code in ("permanent_resident", "pr", "ilr"):
+                        name = "Permanent Residence Application"
+                        desc = "Apply for permanent resident status (永住許可申請)"
+                    elif v_code in ("tourist", "visitor", "b1b2"):
+                        name = "Tourist / Entry Visa"
+                        desc = "First-time short-term entry visa application"
+                    elif a.code in ("new", "new_application"):
+                        name = "New Visa"
+                        desc = (
+                            "First-time application / Certificate of Eligibility (COE)"
+                            if jurisdiction.code == "JP"
+                            else "First-time visa application"
+                        )
+                    elif a.code == "renewal":
+                        name = "Renewal / Extension"
+                        desc = "Extend or renew existing visa before expiration"
+                    elif a.code == "change_of_status":
+                        name = "Change of status"
+                        desc = "Switch to a different visa status inside the country"
+
+                    result.append(ApplicationTypeOut(code=a.code, name=name, description=desc))
                 return result
 
     app_types = get_application_types()
