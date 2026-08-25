@@ -165,6 +165,7 @@ function getProfileValueForQuestion(key: string, prompt: string, profile: User):
 
 export function IntakeStep({ state, profile, onAnswer, onProceedToEligibility, targetKey }: IntakeStepProps) {
   const [drafts, setDrafts] = useState<Record<string, unknown>>({});
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string | null>>({});
   const [activeSection, setActiveSection] = useState<string | null>(null);
   const [enumSearch, setEnumSearch] = useState<Record<string, string>>({});
   const [openSelectorKey, setOpenSelectorKey] = useState<string | null>(null);
@@ -174,6 +175,60 @@ export function IntakeStep({ state, profile, onAnswer, onProceedToEligibility, t
   const onAnswerRef = useRef(onAnswer);
   onAnswerRef.current = onAnswer;
   const autoSubmittedRef = useRef<Set<string>>(new Set());
+
+  function validateField(q: (typeof state.questions)[number], value: unknown): string | null {
+    const isOptional = q.required === false;
+    if (value === undefined || value === null || (typeof value === "string" && value.trim() === "")) {
+      return isOptional ? null : "This field is required.";
+    }
+
+    if (q.type === "integer") {
+      const num = typeof value === "number" ? value : Number(value);
+      if (isNaN(num) || !Number.isInteger(num)) {
+        return "Please enter a valid whole number.";
+      }
+      if (q.min_value !== undefined && q.min_value !== null && num < q.min_value) {
+        return `Value must be at least ${q.min_value}.`;
+      }
+      if (q.max_value !== undefined && q.max_value !== null && num > q.max_value) {
+        return `Value must be at most ${q.max_value}.`;
+      }
+      return null;
+    }
+
+    if (q.type === "string") {
+      const str = String(value).trim();
+      if (q.min_length !== undefined && q.min_length !== null && str.length < q.min_length) {
+        return `Must be at least ${q.min_length} characters.`;
+      }
+      if (q.max_length !== undefined && q.max_length !== null && str.length > q.max_length) {
+        return `Must be at most ${q.max_length} characters.`;
+      }
+      return null;
+    }
+
+    if (q.type === "date") {
+      const str = String(value).trim();
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(str)) {
+        return "Please enter a valid date in YYYY-MM-DD format.";
+      }
+      const d = new Date(str);
+      if (isNaN(d.getTime())) {
+        return "Please enter a valid calendar date.";
+      }
+      return null;
+    }
+
+    if (q.type === "enum" && q.options && q.options.length > 0) {
+      const str = String(value).trim();
+      if (!q.options.includes(str)) {
+        return "Please choose a valid option.";
+      }
+      return null;
+    }
+
+    return null;
+  }
 
   useEffect(() => {
     if (!profile) return;
@@ -191,7 +246,7 @@ export function IntakeStep({ state, profile, onAnswer, onProceedToEligibility, t
       for (const [key, val] of Object.entries(toAutoFill)) {
         if (val !== undefined) {
           autoSubmittedRef.current.add(key);
-          onAnswerRef.current(key, val);
+          void onAnswerRef.current(key, val);
         }
       }
     }
@@ -242,22 +297,64 @@ export function IntakeStep({ state, profile, onAnswer, onProceedToEligibility, t
 
   function handleChange(key: string, value: unknown) {
     setDrafts((prev) => ({ ...prev, [key]: value }));
+    if (fieldErrors[key]) {
+      const q = state.questions.find((item) => item.key === key);
+      if (q) {
+        const err = validateField(q, value);
+        setFieldErrors((prev) => ({ ...prev, [key]: err }));
+      }
+    }
   }
 
-  function handleSubmit(key: string) {
+  async function handleSubmit(key: string) {
     if (drafts[key] !== undefined) {
       const raw = drafts[key];
       const q = state.questions.find((item) => item.key === key);
-      if (q?.type === "integer" && typeof raw === "string") {
-        const parsed = Number.parseInt(raw, 10);
-        if (!Number.isNaN(parsed)) {
-          onAnswer(key, parsed);
-        } else if (raw.trim() === "") {
-          onAnswer(key, null);
+      if (!q) return;
+
+      let valToSend: unknown = raw;
+      if (q.type === "integer") {
+        if (typeof raw === "string") {
+          if (raw.trim() === "") {
+            valToSend = q.required === false ? null : "";
+          } else {
+            const parsed = Number.parseInt(raw, 10);
+            valToSend = Number.isNaN(parsed) ? raw : parsed;
+          }
         }
-      } else {
-        onAnswer(key, raw);
+      } else if (typeof raw === "string" && raw.trim() === "") {
+        valToSend = q.required === false ? null : "";
       }
+
+      const clientError = validateField(q, valToSend);
+      if (clientError) {
+        setFieldErrors((prev) => ({ ...prev, [key]: clientError }));
+        return;
+      }
+
+      setFieldErrors((prev) => ({ ...prev, [key]: null }));
+
+      try {
+        await onAnswer(key, valToSend);
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : "Invalid answer provided.";
+        setFieldErrors((prev) => ({ ...prev, [key]: msg }));
+      }
+    }
+  }
+
+  async function handleDirectAnswer(key: string, value: unknown) {
+    setDrafts((prev) => {
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+    setFieldErrors((prev) => ({ ...prev, [key]: null }));
+    try {
+      await onAnswer(key, value);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Invalid selection.";
+      setFieldErrors((prev) => ({ ...prev, [key]: msg }));
     }
   }
 
@@ -377,6 +474,8 @@ export function IntakeStep({ state, profile, onAnswer, onProceedToEligibility, t
 
     const isOptional = q.required === false;
 
+    const fieldError = fieldErrors[q.key];
+
     return (
       <Card
         key={q.key}
@@ -384,17 +483,19 @@ export function IntakeStep({ state, profile, onAnswer, onProceedToEligibility, t
         className={`p-4 flex flex-col justify-between transition-all hover:border-primary/40 bg-card shadow-sm ${
           isFullWidth ? "col-span-1 md:col-span-2" : "col-span-1"
         } ${
-          isHighlighted
-            ? "ring-2 ring-blue-500 border-blue-500 bg-blue-500/5 shadow-md"
-            : state.answers[q.key] === undefined && !isOptional
-              ? "border-amber-500/30 ring-1 ring-amber-500/10"
-              : ""
+          fieldError
+            ? "border-rose-500 ring-2 ring-rose-500/20 bg-rose-500/[0.02] shadow-sm"
+            : isHighlighted
+              ? "ring-2 ring-blue-500 border-blue-500 bg-blue-500/5 shadow-md"
+              : state.answers[q.key] === undefined && !isOptional
+                ? "border-amber-500/30 ring-1 ring-amber-500/10"
+                : ""
         }`}
       >
         <div className="space-y-2">
           <div className="flex items-start justify-between gap-2">
             <div className="flex items-center gap-1.5 flex-wrap">
-              <label className="text-xs font-semibold leading-snug text-foreground">
+              <label className={`text-xs font-semibold leading-snug ${fieldError ? "text-rose-700 dark:text-rose-400" : "text-foreground"}`}>
                 {q.prompt}
                 {!isOptional && <span className="ml-1 text-[var(--color-danger)] font-bold">*</span>}
               </label>
@@ -428,7 +529,7 @@ export function IntakeStep({ state, profile, onAnswer, onProceedToEligibility, t
                     ? { flag: "🌐", name: "Other / Not Listed", code: "other" }
                     : matchCountry(currentStr);
                   return (
-                    <div className="flex items-center justify-between rounded-lg border border-primary/30 bg-primary/5 p-3 text-xs shadow-xs">
+                    <div className={`flex items-center justify-between rounded-lg border p-3 text-xs shadow-xs ${fieldError ? "border-rose-500 bg-rose-500/5" : "border-primary/30 bg-primary/5"}`}>
                       <div className="flex items-center gap-3 min-w-0">
                         <span className="text-2xl shrink-0">{cMeta.flag}</span>
                         <div className="min-w-0">
@@ -463,7 +564,7 @@ export function IntakeStep({ state, profile, onAnswer, onProceedToEligibility, t
                         onChange={(e) => setEnumSearch((prev) => ({ ...prev, [q.key]: e.target.value }))}
                         placeholder="Search country name or code (e.g. Japan, US, Bangladesh)..."
                         autoFocus={isEditing}
-                        className="h-8 w-full rounded-md border bg-background pl-8 pr-3 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring font-normal"
+                        className={`h-8 w-full rounded-md border bg-background pl-8 pr-3 text-xs outline-none focus-visible:ring-2 font-normal ${fieldError ? "border-rose-500 focus-visible:ring-rose-500/50" : "focus-visible:ring-ring"}`}
                       />
                     </div>
 
@@ -487,7 +588,7 @@ export function IntakeStep({ state, profile, onAnswer, onProceedToEligibility, t
                             key={opt}
                             type="button"
                             onClick={() => {
-                              onAnswer(q.key, opt);
+                              void handleDirectAnswer(q.key, opt);
                               setOpenSelectorKey(null);
                               setEnumSearch((prev) => ({ ...prev, [q.key]: "" }));
                             }}
@@ -516,14 +617,7 @@ export function IntakeStep({ state, profile, onAnswer, onProceedToEligibility, t
                       <button
                         key={opt}
                         type="button"
-                        onClick={() => {
-                          onAnswer(q.key, opt);
-                          setDrafts((prev) => {
-                            const next = { ...prev };
-                            delete next[q.key];
-                            return next;
-                          });
-                        }}
+                        onClick={() => void handleDirectAnswer(q.key, opt)}
                         className={`rounded-md border px-3 py-1.5 text-xs transition-all ${
                           current === opt
                             ? "border-primary bg-primary/10 text-primary font-semibold shadow-sm ring-1 ring-primary/40"
@@ -540,7 +634,7 @@ export function IntakeStep({ state, profile, onAnswer, onProceedToEligibility, t
               // General large enum (> 4 options)
               if (hasSelected && !isEditing) {
                 return (
-                  <div className="flex items-center justify-between rounded-lg border border-primary/30 bg-primary/5 p-2.5 text-xs shadow-xs">
+                  <div className={`flex items-center justify-between rounded-lg border p-2.5 text-xs shadow-xs ${fieldError ? "border-rose-500 bg-rose-500/5" : "border-primary/30 bg-primary/5"}`}>
                     <span className="font-semibold text-foreground truncate">{String(current).replaceAll("_", " ")}</span>
                     <button
                       type="button"
@@ -566,7 +660,7 @@ export function IntakeStep({ state, profile, onAnswer, onProceedToEligibility, t
                       onChange={(e) => setEnumSearch((prev) => ({ ...prev, [q.key]: e.target.value }))}
                       placeholder={`Search ${optionsCount} options...`}
                       autoFocus={isEditing}
-                      className="h-8 w-full rounded-md border bg-background pl-8 pr-3 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring font-normal"
+                      className={`h-8 w-full rounded-md border bg-background pl-8 pr-3 text-xs outline-none focus-visible:ring-2 font-normal ${fieldError ? "border-rose-500 focus-visible:ring-rose-500/50" : "focus-visible:ring-ring"}`}
                     />
                   </div>
 
@@ -576,14 +670,9 @@ export function IntakeStep({ state, profile, onAnswer, onProceedToEligibility, t
                         key={opt}
                         type="button"
                         onClick={() => {
-                          onAnswer(q.key, opt);
+                          void handleDirectAnswer(q.key, opt);
                           setOpenSelectorKey(null);
                           setEnumSearch((prev) => ({ ...prev, [q.key]: "" }));
-                          setDrafts((prev) => {
-                            const next = { ...prev };
-                            delete next[q.key];
-                            return next;
-                          });
                         }}
                         className={`rounded-md border px-2.5 py-1 text-xs transition-all ${
                           current === opt
@@ -605,14 +694,7 @@ export function IntakeStep({ state, profile, onAnswer, onProceedToEligibility, t
             <div className="flex gap-2 pt-1">
               <button
                 type="button"
-                onClick={() => {
-                  onAnswer(q.key, true);
-                  setDrafts((prev) => {
-                    const next = { ...prev };
-                    delete next[q.key];
-                    return next;
-                  });
-                }}
+                onClick={() => void handleDirectAnswer(q.key, true)}
                 className={`flex-1 rounded-md border py-2 text-xs font-medium transition-all ${
                   current === true
                     ? "border-emerald-500 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 font-bold shadow-sm ring-1 ring-emerald-500/40"
@@ -623,14 +705,7 @@ export function IntakeStep({ state, profile, onAnswer, onProceedToEligibility, t
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  onAnswer(q.key, false);
-                  setDrafts((prev) => {
-                    const next = { ...prev };
-                    delete next[q.key];
-                    return next;
-                  });
-                }}
+                onClick={() => void handleDirectAnswer(q.key, false)}
                 className={`flex-1 rounded-md border py-2 text-xs font-medium transition-all ${
                   current === false
                     ? "border-rose-500 bg-rose-500/10 text-rose-700 dark:text-rose-300 font-bold shadow-sm ring-1 ring-rose-500/40"
@@ -646,22 +721,33 @@ export function IntakeStep({ state, profile, onAnswer, onProceedToEligibility, t
                 type={q.type === "integer" ? "number" : isDateInput ? "date" : "text"}
                 value={String(current ?? "")}
                 onChange={(e) => handleChange(q.key, e.target.value)}
-                onBlur={() => handleSubmit(q.key)}
+                onBlur={() => void handleSubmit(q.key)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") {
                     e.preventDefault();
-                    handleSubmit(q.key);
+                    void handleSubmit(q.key);
                     (e.target as HTMLInputElement).blur();
                   }
                 }}
                 placeholder={`Enter ${q.key.replaceAll("_", " ")}...`}
-                className="h-9 w-full rounded-md border bg-background px-3 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring font-normal transition-colors"
+                className={`h-9 w-full rounded-md border bg-background px-3 text-xs outline-none focus-visible:ring-2 font-normal transition-colors ${
+                  fieldError
+                    ? "border-rose-500 focus-visible:ring-rose-500/50 bg-rose-500/[0.02]"
+                    : "focus-visible:ring-ring"
+                }`}
               />
             </div>
           )}
         </div>
 
-        {state.answers[q.key] !== undefined && (
+        {fieldError && (
+          <div className="flex items-center gap-1.5 text-xs text-rose-600 dark:text-rose-400 font-medium pt-2 animate-in fade-in duration-200">
+            <AlertCircle className="size-3.5 shrink-0 text-rose-500" />
+            <span>{fieldError}</span>
+          </div>
+        )}
+
+        {!fieldError && state.answers[q.key] !== undefined && (
           <div className="flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-400 font-medium pt-2">
             <Check className="size-3.5 shrink-0" />
             <span>Answer Saved</span>

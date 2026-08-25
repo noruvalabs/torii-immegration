@@ -179,7 +179,7 @@ export default function CaseDetailPage() {
       await refreshGuidance();
       // Do not auto-advance when intake completes — user clicks next.
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Answer failed");
+      throw e;
     }
   }
 
