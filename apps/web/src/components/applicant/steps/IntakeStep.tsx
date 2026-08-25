@@ -252,12 +252,29 @@ export function IntakeStep({ state, profile, onAnswer, onProceedToEligibility, t
         const parsed = Number.parseInt(raw, 10);
         if (!Number.isNaN(parsed)) {
           onAnswer(key, parsed);
+        } else if (raw.trim() === "") {
+          onAnswer(key, null);
         }
       } else {
         onAnswer(key, raw);
       }
     }
   }
+
+  // Clear drafts that have successfully synced to state.answers
+  useEffect(() => {
+    setDrafts((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      for (const k of Object.keys(next)) {
+        if (state.answers[k] !== undefined && state.answers[k] === next[k]) {
+          delete next[k];
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [state.answers]);
 
   const pct = state.progress.total > 0
     ? Math.round((state.progress.answered / state.progress.total) * 100)
@@ -334,7 +351,7 @@ export function IntakeStep({ state, profile, onAnswer, onProceedToEligibility, t
   }
 
   function renderQuestion(q: (typeof state.questions)[number]) {
-    const current = (state.answers[q.key] ?? drafts[q.key]) as string | number | boolean | undefined;
+    const current = (drafts[q.key] !== undefined ? drafts[q.key] : state.answers[q.key]) as string | number | boolean | undefined;
     const hasOptions = q.type === "enum" && q.options && q.options.length > 0;
     const optionsCount = q.options?.length ?? 0;
     const isLongEnum = hasOptions && optionsCount > 5;
@@ -499,7 +516,14 @@ export function IntakeStep({ state, profile, onAnswer, onProceedToEligibility, t
                       <button
                         key={opt}
                         type="button"
-                        onClick={() => onAnswer(q.key, opt)}
+                        onClick={() => {
+                          onAnswer(q.key, opt);
+                          setDrafts((prev) => {
+                            const next = { ...prev };
+                            delete next[q.key];
+                            return next;
+                          });
+                        }}
                         className={`rounded-md border px-3 py-1.5 text-xs transition-all ${
                           current === opt
                             ? "border-primary bg-primary/10 text-primary font-semibold shadow-sm ring-1 ring-primary/40"
@@ -555,6 +579,11 @@ export function IntakeStep({ state, profile, onAnswer, onProceedToEligibility, t
                           onAnswer(q.key, opt);
                           setOpenSelectorKey(null);
                           setEnumSearch((prev) => ({ ...prev, [q.key]: "" }));
+                          setDrafts((prev) => {
+                            const next = { ...prev };
+                            delete next[q.key];
+                            return next;
+                          });
                         }}
                         className={`rounded-md border px-2.5 py-1 text-xs transition-all ${
                           current === opt
@@ -576,7 +605,14 @@ export function IntakeStep({ state, profile, onAnswer, onProceedToEligibility, t
             <div className="flex gap-2 pt-1">
               <button
                 type="button"
-                onClick={() => onAnswer(q.key, true)}
+                onClick={() => {
+                  onAnswer(q.key, true);
+                  setDrafts((prev) => {
+                    const next = { ...prev };
+                    delete next[q.key];
+                    return next;
+                  });
+                }}
                 className={`flex-1 rounded-md border py-2 text-xs font-medium transition-all ${
                   current === true
                     ? "border-emerald-500 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 font-bold shadow-sm ring-1 ring-emerald-500/40"
@@ -587,7 +623,14 @@ export function IntakeStep({ state, profile, onAnswer, onProceedToEligibility, t
               </button>
               <button
                 type="button"
-                onClick={() => onAnswer(q.key, false)}
+                onClick={() => {
+                  onAnswer(q.key, false);
+                  setDrafts((prev) => {
+                    const next = { ...prev };
+                    delete next[q.key];
+                    return next;
+                  });
+                }}
                 className={`flex-1 rounded-md border py-2 text-xs font-medium transition-all ${
                   current === false
                     ? "border-rose-500 bg-rose-500/10 text-rose-700 dark:text-rose-300 font-bold shadow-sm ring-1 ring-rose-500/40"
