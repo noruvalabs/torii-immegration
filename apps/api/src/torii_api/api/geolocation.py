@@ -189,7 +189,7 @@ async def list_application_types(
                 )
                 action_list = list(intake_actions.all())
 
-            # Fallback to jurisdiction actions with statutory domain filtering
+            # Fallback to jurisdiction actions if no specific intake actions
             if not action_list:
                 actions = await session.scalars(
                     select(CaseAction)
@@ -199,13 +199,13 @@ async def list_application_types(
                 )
                 action_list = list(actions.all())
 
-                # Apply domain rules:
-                # 1. Tourist / Short-term / Visitor visas only support New Visa (Entry Visa)
-                if v_code in ("tourist", "visitor", "b1b2", "short_term"):
-                    action_list = [a for a in action_list if a.code in ("new", "new_application")]
-                # 2. Permanent Resident only supports Permanent Residence Application
-                elif v_code in ("permanent_resident", "pr", "ilr"):
-                    action_list = [a for a in action_list if a.code in ("new", "new_application")]
+            # Always apply statutory domain rules to filter valid actions:
+            # 1. Tourist / Short-term / Visitor visas only support New Visa (Entry Visa)
+            if v_code in ("tourist", "visitor", "b1b2", "short_term"):
+                action_list = [a for a in action_list if a.code in ("new", "new_application")]
+            # 2. Permanent Resident only supports Permanent Residence Application
+            elif v_code in ("permanent_resident", "pr", "ilr"):
+                action_list = [a for a in action_list if a.code in ("new", "new_application")]
 
             if action_list:
                 result = []
