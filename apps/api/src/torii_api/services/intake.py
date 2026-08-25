@@ -63,7 +63,7 @@ def visible_questions(
 
 def validate_answer(question: IntakeQuestion, value: Any) -> str | None:
     """Return an error message if ``value`` is invalid for ``question``, else ``None`` (US-02.3)."""
-    if value is None:
+    if value is None or (isinstance(value, str) and value.strip() == ""):
         return "answer is required" if question.required else None
 
     if question.type == "boolean":
@@ -87,8 +87,6 @@ def validate_answer(question: IntakeQuestion, value: Any) -> str | None:
             return f"must be at least {question.min_length} characters"
         if question.max_length is not None and len(value) > question.max_length:
             return f"must be at most {question.max_length} characters"
-        if question.required and value.strip() == "":
-            return "answer is required"
         return None
 
     if question.type == "enum":
@@ -125,9 +123,24 @@ def prune_answers(questions: list[IntakeQuestion], answers: dict[str, Any]) -> d
 def progress_for(questions: list[IntakeQuestion], answers: dict[str, Any]) -> IntakeProgress:
     """Count answered vs visible questions for progress UI (US-02.4)."""
     visible = visible_questions(questions, answers)
-    answered = sum(1 for q in visible if q.key in answers and answers[q.key] is not None)
-    total = len(visible)
-    return IntakeProgress(answered=answered, total=total, complete=total > 0 and answered == total)
+    required_visible = [q for q in visible if q.required]
+
+    answered_required = sum(
+        1
+        for q in required_visible
+        if q.key in answers and answers[q.key] not in (None, "")
+    )
+    total_required = len(required_visible)
+
+    answered_all = sum(
+        1
+        for q in visible
+        if q.key in answers and answers[q.key] not in (None, "")
+    )
+    total_all = len(visible)
+
+    is_complete = total_required > 0 and answered_required >= total_required
+    return IntakeProgress(answered=answered_all, total=total_all, complete=is_complete)
 
 
 def _default_citation_for_question(

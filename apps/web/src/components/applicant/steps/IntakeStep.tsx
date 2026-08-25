@@ -264,9 +264,15 @@ export function IntakeStep({ state, profile, onAnswer, onProceedToEligibility, t
     : 0;
 
   const currentQuestions = sectionsMap.get(currentSectionKey) || state.questions;
-  const currentAnsweredCount = currentQuestions.filter((q) => state.answers[q.key] !== undefined).length;
-  const isCurrentSectionComplete = currentQuestions.length > 0 && currentAnsweredCount === currentQuestions.length;
-  const remainingInCurrent = currentQuestions.length - currentAnsweredCount;
+  const currentRequired = currentQuestions.filter((q) => q.required !== false);
+  const currentAnsweredCount = currentQuestions.filter((q) => state.answers[q.key] !== undefined && state.answers[q.key] !== "").length;
+  const currentAnsweredRequired = currentRequired.filter((q) => state.answers[q.key] !== undefined && state.answers[q.key] !== "").length;
+  const isCurrentSectionComplete = currentRequired.length > 0
+    ? currentAnsweredRequired >= currentRequired.length
+    : currentQuestions.every((q) => state.answers[q.key] !== undefined);
+  const remainingInCurrent = currentRequired.length > 0
+    ? Math.max(0, currentRequired.length - currentAnsweredRequired)
+    : Math.max(0, currentQuestions.length - currentAnsweredCount);
 
   function SectionSourceBanner({ questions }: { questions: (typeof state.questions) }) {
     const sources = useMemo(() => {
@@ -352,6 +358,8 @@ export function IntakeStep({ state, profile, onAnswer, onProceedToEligibility, t
 
     const isHighlighted = q.key === highlightedKey;
 
+    const isOptional = q.required === false;
+
     return (
       <Card
         key={q.key}
@@ -361,17 +369,24 @@ export function IntakeStep({ state, profile, onAnswer, onProceedToEligibility, t
         } ${
           isHighlighted
             ? "ring-2 ring-blue-500 border-blue-500 bg-blue-500/5 shadow-md"
-            : state.answers[q.key] === undefined
+            : state.answers[q.key] === undefined && !isOptional
               ? "border-amber-500/30 ring-1 ring-amber-500/10"
               : ""
         }`}
       >
         <div className="space-y-2">
           <div className="flex items-start justify-between gap-2">
-            <label className="text-xs font-semibold leading-snug text-foreground">
-              {q.prompt}
-              {q.required !== false && <span className="ml-1 text-[var(--color-danger)] font-bold">*</span>}
-            </label>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <label className="text-xs font-semibold leading-snug text-foreground">
+                {q.prompt}
+                {!isOptional && <span className="ml-1 text-[var(--color-danger)] font-bold">*</span>}
+              </label>
+              {isOptional && (
+                <span className="text-[10px] font-medium text-muted-foreground bg-muted/80 px-1.5 py-0.5 rounded border border-border/50">
+                  Optional
+                </span>
+              )}
+            </div>
           </div>
 
           {q.type === "enum" && q.options ? (
@@ -654,8 +669,12 @@ export function IntakeStep({ state, profile, onAnswer, onProceedToEligibility, t
         <div className="flex flex-wrap gap-2 border-b pb-3">
           {sectionKeys.map((secName) => {
             const secQuestions = sectionsMap.get(secName) || [];
-            const answeredInSec = secQuestions.filter((q) => state.answers[q.key] !== undefined).length;
-            const isSecComplete = secQuestions.length > 0 && answeredInSec === secQuestions.length;
+            const reqQuestions = secQuestions.filter((q) => q.required !== false);
+            const answeredInSec = secQuestions.filter((q) => state.answers[q.key] !== undefined && state.answers[q.key] !== "").length;
+            const answeredReqInSec = reqQuestions.filter((q) => state.answers[q.key] !== undefined && state.answers[q.key] !== "").length;
+            const isSecComplete = reqQuestions.length > 0
+              ? answeredReqInSec >= reqQuestions.length
+              : answeredInSec === secQuestions.length;
             const isActive = secName === currentSectionKey;
 
             return (
@@ -693,8 +712,12 @@ export function IntakeStep({ state, profile, onAnswer, onProceedToEligibility, t
         <div className="space-y-8">
           {sectionKeys.map((secName) => {
             const secQuestions = sectionsMap.get(secName) || [];
-            const secAnswered = secQuestions.filter((q) => state.answers[q.key] !== undefined).length;
-            const isComplete = secQuestions.length > 0 && secAnswered === secQuestions.length;
+            const reqQuestions = secQuestions.filter((q) => q.required !== false);
+            const secAnswered = secQuestions.filter((q) => state.answers[q.key] !== undefined && state.answers[q.key] !== "").length;
+            const secReqAnswered = reqQuestions.filter((q) => state.answers[q.key] !== undefined && state.answers[q.key] !== "").length;
+            const isComplete = reqQuestions.length > 0
+              ? secReqAnswered >= reqQuestions.length
+              : secAnswered === secQuestions.length;
 
             return (
               <div key={secName} className="space-y-3">
@@ -702,7 +725,7 @@ export function IntakeStep({ state, profile, onAnswer, onProceedToEligibility, t
                   <h4 className="text-sm font-bold text-foreground flex items-center gap-2">
                     <span>{secName}</span>
                     <Badge tone={isComplete ? "success" : "warning"} className="text-[10px]">
-                      {secAnswered} / {secQuestions.length} completed
+                      {secAnswered} / {secQuestions.length} answered
                     </Badge>
                   </h4>
                 </div>
@@ -720,8 +743,8 @@ export function IntakeStep({ state, profile, onAnswer, onProceedToEligibility, t
           <div className="rounded-[var(--radius)] border p-4 bg-muted/30 flex flex-col sm:flex-row items-center justify-between gap-3">
             <div className="text-xs text-muted-foreground">
               {state.progress.complete
-                ? "All questions answered across all modules."
-                : `${state.progress.total - state.progress.answered} required question(s) remaining.`}
+                ? "All required questions answered across all modules."
+                : `${state.progress.total - state.progress.answered} question(s) remaining.`}
             </div>
             {state.progress.complete && onProceedToEligibility && (
               <Button onClick={onProceedToEligibility} className="gap-2 text-xs bg-emerald-600 hover:bg-emerald-700 text-white">
@@ -737,7 +760,7 @@ export function IntakeStep({ state, profile, onAnswer, onProceedToEligibility, t
             <h4 className="text-sm font-semibold text-foreground flex items-center gap-2">
               <span>{currentSectionKey}</span>
               <Badge tone={isCurrentSectionComplete ? "success" : "warning"} className="text-[10px] font-normal">
-                {currentAnsweredCount} / {currentQuestions.length} completed
+                {currentAnsweredCount} / {currentQuestions.length} answered
               </Badge>
             </h4>
           </div>
