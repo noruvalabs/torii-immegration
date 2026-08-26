@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Any, Literal
-from fastapi import APIRouter, Depends, HTTPException, status
+from typing import Any, Literal
+
+from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
-from sqlalchemy import select, desc
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import desc, select
 
 from torii_api.auth.deps import CurrentUserDep, SessionDep
 from torii_api.db.models import Case, CreditTransaction, User

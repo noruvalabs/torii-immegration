@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
-
 from sqlalchemy import select
 
 from torii_api.auth.deps import CurrentUserDep, SessionDep
