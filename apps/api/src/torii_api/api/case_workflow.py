@@ -30,8 +30,9 @@ from torii_api.db.models import (
     User,
 )
 from torii_api.db.session import get_session
-from torii_api.services.citations import resolve_official_citation
 from torii_api.services.checklist import ChecklistStatus, update_status, visible_requirement_items
+from torii_api.services.citations import resolve_official_citation
+from torii_api.services.content_packs import load_jurisdiction_meta
 from torii_api.services.eligibility import (
     EligibilityResult,
     evaluate_eligibility_with_ai,
@@ -39,8 +40,15 @@ from torii_api.services.eligibility import (
 from torii_api.services.forms import fill_form
 from torii_api.services.guidance import next_status_for_phase
 from torii_api.services.i18n import localized
+from torii_api.services.jp_official_forms import forms_for_scope
+from torii_api.services.official_form_service import (
+    describe_scope_forms,
+    render_form,
+    render_primary_form,
+)
 from torii_api.services.packet import assemble_packet
 from torii_api.services.payment import case_has_packet_entitlement
+from torii_api.services.portal_pack import build_portal_pack
 from torii_api.services.research import (
     research_documents,
     research_forms,
@@ -751,6 +759,65 @@ async def get_packet(case_id: int, session: SessionDep, user: CurrentUserDep) ->
     return case.packet_snapshot
 
 
+def _jurisdiction_meta(jurisdiction_code: str | None) -> Any:
+    """Pack metadata for a jurisdiction, or ``None`` when it has no pack."""
+    if not jurisdiction_code:
+        return None
+    try:
+        return load_jurisdiction_meta(jurisdiction_code)
+    except (FileNotFoundError, ValueError):
+        return None
+
+
+def _filing_mode(jurisdiction_code: str | None) -> str:
+    """How this country is filed with — declared in its ``_jurisdiction.yml``."""
+    meta = _jurisdiction_meta(jurisdiction_code)
+    return getattr(meta, "filing_mode", "official_form_pdf") if meta else "official_form_pdf"
+
+
+def _apply_url(jurisdiction_code: str | None) -> str | None:
+    meta = _jurisdiction_meta(jurisdiction_code)
+    return getattr(meta, "apply_url", None) if meta else None
+
+
+def _photo_bytes(photo_data: Any) -> bytes | None:
+    """Decode whatever the case is carrying as a photo (data URL, base64, raw bytes)."""
+    from torii_api.services.pdf_generator import _extract_image_bytes
+
+    return _extract_image_bytes(photo_data)
+
+
+def _pdf_response(
+    content: bytes,
+    filename: str,
+    request: Request,
+    response_format: str | None,
+    metadata: dict[str, Any] | None = None,
+) -> Response:
+    """Serve a PDF, as a download or as the base64 envelope the web client asks for."""
+    wants_json = response_format in ("base64", "json") or "application/json" in request.headers.get(
+        "accept", ""
+    )
+    if wants_json:
+        payload: dict[str, Any] = {
+            "filename": filename,
+            "media_type": "application/pdf",
+            "data_base64": base64.b64encode(content).decode("ascii"),
+            "size_bytes": len(content),
+        }
+        if metadata is not None:
+            payload["form"] = metadata
+        return JSONResponse(content=payload)
+    return Response(
+        content=content,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Content-Length": str(len(content)),
+        },
+    )
+
+
 @router.get("/{case_id}/export/application-form")
 @router.get("/{case_id}/pdf/application-form")
 async def download_application_form_pdf(
@@ -764,6 +831,7 @@ async def download_application_form_pdf(
         generate_generic_visa_application_pdf,
         generate_japan_work_renewal_pdf,
         generate_official_japan_visa_form_pdf,
+        generate_portal_application_pack_pdf,
         generate_uk_visa_application_pdf,
         generate_us_visa_application_pdf,
     )
@@ -779,6 +847,45 @@ async def download_application_form_pdf(
         c for c in (case.reference or f"CASE-{case.id}") if c.isalnum() or c in ("-", "_", ".")
     )
     filename = f"{safe_ref or f'Case-{case_id}'}_Application_Form.pdf"
+
+    if j_code_upper == "JP":
+        # Japan issues a different statutory sheet per (residence status, procedure).
+        # Resolve and fill that exact form; only fall back when it cannot be obtained.
+        rendered = await render_primary_form(
+            v_code or "",
+            a_code or "",
+            answers,
+            reference=case.reference,
+            case_id=case.id,
+            photo=_photo_bytes(photo_data),
+            applicant_email=case.applicant_email or user.email,
+            scope_label=scope_label or "Japan",
+        )
+        if rendered is not None:
+            return _pdf_response(rendered.content, rendered.filename, request, format)
+
+    if _filing_mode(j_code) == "online_portal":
+        # Nothing is submitted on paper for this jurisdiction, so a document styled as an
+        # application form would misrepresent the process. Give the applicant their
+        # answers in the order the online service asks for them instead.
+        templates = await _effective_templates(session, case)
+        pdf_bytes = generate_portal_application_pack_pdf(
+            case.reference or f"CASE-{case.id}",
+            answers,
+            [
+                {
+                    "code": descriptor.code,
+                    "citation": descriptor.citation,
+                    "field_mappings": descriptor.field_mappings,
+                }
+                for descriptor in templates
+            ],
+            jurisdiction=j_code_upper,
+            scope_label=scope_label or j_code_upper,
+            apply_url=_apply_url(j_code),
+        )
+        filename = f"{safe_ref or f'Case-{case_id}'}_Online_Application_Pack.pdf"
+        return _pdf_response(pdf_bytes, filename, request, format)
 
     if j_code_upper in ("UK", "GB"):
         pdf_bytes = generate_uk_visa_application_pdf(
@@ -822,23 +929,121 @@ async def download_application_form_pdf(
             photo_data=photo_data,
         )
 
-    if format in ("base64", "json") or "application/json" in request.headers.get("accept", ""):
-        return JSONResponse(
-            content={
-                "filename": filename,
-                "media_type": "application/pdf",
-                "data_base64": base64.b64encode(pdf_bytes).decode("ascii"),
-                "size_bytes": len(pdf_bytes),
-            }
+    return _pdf_response(pdf_bytes, filename, request, format)
+
+
+@router.get("/{case_id}/filing")
+async def get_filing_mode(
+    case_id: int, session: SessionDep, user: CurrentUserDep
+) -> dict[str, Any]:
+    """How this case is filed, and the pack that goes with it.
+
+    ``official_form_pdf`` means the government publishes a form to fill in and hand over.
+    ``online_portal`` means there is nothing to submit on paper — the answer pack is what
+    the applicant works from while completing the government's own website.
+    """
+    case = await _owned_case(session, case_id, user)
+    answers = dict(case.intake_answers or {})
+    j_code, _v_code, _a_code, scope_label = await _scope_label(session, case)
+    mode = _filing_mode(j_code)
+    payload: dict[str, Any] = {
+        "case_id": case.id,
+        "jurisdiction": j_code,
+        "scope_label": scope_label,
+        "filing_mode": mode,
+        "apply_url": _apply_url(j_code),
+    }
+    if mode == "online_portal":
+        templates = await _effective_templates(session, case)
+        pack = build_portal_pack(
+            [
+                {
+                    "code": descriptor.code,
+                    "citation": descriptor.citation,
+                    "field_mappings": descriptor.field_mappings,
+                }
+                for descriptor in templates
+            ],
+            answers,
+            jurisdiction=(j_code or "").upper(),
+            scope_label=scope_label or (j_code or ""),
+            apply_url=_apply_url(j_code),
         )
-    return Response(
-        content=pdf_bytes,
-        media_type="application/pdf",
-        headers={
-            "Content-Disposition": f'attachment; filename="{filename}"',
-            "Content-Length": str(len(pdf_bytes)),
-        },
+        payload["portal_pack"] = pack.as_dict()
+    return payload
+
+
+@router.get("/{case_id}/official-forms")
+async def get_official_forms(
+    case_id: int, session: SessionDep, user: CurrentUserDep
+) -> dict[str, Any]:
+    """Which official government forms this application type requires, and their state.
+
+    Lets the applicant see the exact sheet — form series, issuing ministry, source page —
+    before downloading it, and which of their answers each one is still waiting on.
+    """
+    case = await _owned_case(session, case_id, user)
+    answers = dict(case.intake_answers or {})
+    j_code, v_code, a_code, scope_label = await _scope_label(session, case)
+    if (j_code or "").upper() != "JP":
+        return {"jurisdiction": j_code, "scope_label": scope_label, "forms": []}
+    return {
+        "jurisdiction": "JP",
+        "visa_category": v_code,
+        "action": a_code,
+        "scope_label": scope_label,
+        "forms": describe_scope_forms(v_code or "", a_code or "", answers),
+    }
+
+
+@router.get("/{case_id}/export/official-form/{form_code}")
+async def download_official_form_pdf(
+    case_id: int,
+    form_code: str,
+    session: SessionDep,
+    user: CurrentUserDep,
+    request: Request,
+    format: str | None = Query(default=None),
+) -> Response:
+    """Download one specific official form for the case, filled from its intake answers."""
+    case = await _owned_case(session, case_id, user)
+    answers = dict(case.intake_answers or {})
+    _j_code, v_code, a_code, scope_label = await _scope_label(session, case)
+
+    form = next(
+        (item for item in forms_for_scope(v_code or "", a_code or "") if item.code == form_code),
+        None,
     )
+    if form is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"'{form_code}' is not an official form for this application type",
+        )
+
+    photo_data = (
+        user.avatar_url
+        or answers.get("photo")
+        or answers.get("applicant_photo")
+        or answers.get("passport_photo")
+    )
+    rendered = await render_form(
+        form,
+        answers,
+        reference=case.reference,
+        case_id=case.id,
+        photo=_photo_bytes(photo_data),
+        applicant_email=case.applicant_email or user.email,
+        scope_label=scope_label or "Japan",
+    )
+    if rendered is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                f"the official template for '{form_code}' could not be retrieved from "
+                f"{form.authority}; try again shortly"
+            ),
+        )
+    return _pdf_response(rendered.content, rendered.filename, request, format, rendered.metadata)
 
 
 @router.get("/{case_id}/export/cover-letter")
