@@ -37,13 +37,9 @@ FORM_ANSWER_KEY_ALIASES: dict[str, list[str]] = {
     "stay_duration_days": ["intended_length_of_stay_days", "duration_of_stay", "duration"],
     "arrival_date": ["planned_arrival_date", "intended_arrival_date"],
     "planned_arrival_date": ["arrival_date", "intended_arrival_date"],
-    "visitor_has_sufficient_funds": [
-        "has_sufficient_funds",
-        "estimated_savings_available",
-        "savings",
-        "trip_payer",
-        "financial_support_type",
-    ],
+    # Only the same question asked another way. A savings figure or a choice of payer is
+    # evidence a human weighs, not a declaration that funds are sufficient.
+    "visitor_has_sufficient_funds": ["has_sufficient_funds"],
     "relationship_to_visitor": ["relationship", "sponsor_relationship", "relationship_to_applicant"],
     "relationship": ["relationship_to_visitor", "sponsor_relationship", "relationship_to_applicant"],
     "current_residence_country": ["residence_country", "current_location_country", "country_of_residence"],
@@ -60,42 +56,25 @@ FORM_ANSWER_KEY_ALIASES: dict[str, list[str]] = {
 }
 
 
-def _resolve_form_field_value(answer_key: str, form_field: str, answers: dict[str, Any]) -> Any:
-    # 1. Exact match
-    if answer_key in answers and answers[answer_key] is not None and answers[answer_key] != "":
-        return answers[answer_key]
+def _resolve_form_field_value(answer_key: str, answers: dict[str, Any]) -> Any:
+    """The applicant's answer for a form field, or ``None`` when they have not given one.
 
-    # 2. Aliases match
+    Resolution is limited to what the applicant actually said: their own answer, or one of
+    the aliases the packs use for the same fact. It never derives one fact from another —
+    a savings figure is not a declaration of sufficient funds, and self-funding is not a
+    statement that no guarantor exists. Those are findings the eligibility engine makes
+    from stated answers, not values a form filler may assert on the applicant's behalf.
+    """
+    # 1. The answer itself.
+    value = answers.get(answer_key)
+    if value is not None and value != "":
+        return value
+
+    # 2. An alias the packs use for the same fact.
     for alias in FORM_ANSWER_KEY_ALIASES.get(answer_key, []):
-        if alias in answers and answers[alias] is not None and answers[alias] != "":
-            val = answers[alias]
-            if answer_key == "visitor_has_sufficient_funds":
-                if alias == "trip_payer":
-                    return "Self-funded" if str(val).lower() == "self_funded" else "Sponsored"
-                if alias == "estimated_savings_available":
-                    return True
-            return val
-
-    # 3. Contextual defaults for guarantor/sponsor fields when travel is self-funded / independent
-    trip_payer = str(answers.get("trip_payer") or "").lower()
-    is_self_funded = (
-        trip_payer in ("self_funded", "self", "applicant", "self-funded")
-        or bool(answers.get("estimated_savings_available"))
-    )
-
-    if is_self_funded:
-        if answer_key == "residence_card_number" and (
-            "guarantor" in form_field.lower() or "guarantor" in answer_key.lower()
-        ):
-            return "N/A (Self-Funded / No Japan Guarantor)"
-        if answer_key in ("relationship_to_visitor", "relationship", "sponsor_relationship"):
-            return "Self (Direct Applicant)"
-        if answer_key == "visitor_has_sufficient_funds":
-            return "Self-funded (Personal savings & bank solvency)"
-        if "guarantor" in form_field.lower() or "sponsor" in form_field.lower():
-            if "name" in form_field.lower() or "name" in answer_key.lower():
-                return answers.get("full_name") or "Self-funded Applicant"
-            return "N/A (Self-Funded)"
+        candidate = answers.get(alias)
+        if candidate is not None and candidate != "":
+            return candidate
 
     return None
 
@@ -118,7 +97,7 @@ def fill_form(field_mappings: list[dict[str, Any]], answers: dict[str, Any]) -> 
             continue
         form_field = str(raw_field)
         answer_key = str(raw_key)
-        value = _resolve_form_field_value(answer_key, form_field, normalized_answers)
+        value = _resolve_form_field_value(answer_key, normalized_answers)
         if value is not None and value != "":
             filled[form_field] = value
         elif bool(mapping.get("required", False)):

@@ -21,7 +21,6 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.platypus import (
     HRFlowable,
-    Image as RLImage,
     PageBreak,
     Paragraph,
     SimpleDocTemplate,
@@ -29,6 +28,18 @@ from reportlab.platypus import (
     Table,
     TableStyle,
 )
+from reportlab.platypus import (
+    Image as RLImage,
+)
+
+# Printed in place of an answer the applicant has not given.
+#
+# These documents accompany a sworn immigration application, so an unanswered field is
+# printed blank — never filled with a plausible-looking guess. A blank line asks the
+# applicant a question; an invented "Passed approved SELT test at CEFR B1" or
+# "Category 3 (Listed / Standard)" makes a false statement to a government on their
+# behalf. ``test_no_fabricated_defaults`` enforces this across the whole module.
+NOT_PROVIDED = "—"
 
 
 def _extract_image_bytes(photo_data: bytes | str | None) -> bytes | None:
@@ -344,31 +355,31 @@ def generate_japan_work_renewal_pdf(
     sec1_rows = [
         (
             "Full Name (as in Passport)",
-            str(answers.get("full_name") or answers.get("applicant_name") or "—"),
+            str(answers.get("full_name") or answers.get("applicant_name") or NOT_PROVIDED),
         ),
-        ("Nationality / Citizenship", str(answers.get("nationality") or "—")),
-        ("Date of Birth", str(answers.get("date_of_birth") or "—")),
-        ("Sex / Gender", str(answers.get("sex") or "Male")),
-        ("Place of Birth", str(answers.get("place_of_birth") or answers.get("nationality") or "—")),
-        ("Marital Status", str(answers.get("marital_status") or "Single")),
-        ("Passport Number", str(answers.get("passport_number") or "—")),
+        ("Nationality / Citizenship", str(answers.get("nationality") or NOT_PROVIDED)),
+        ("Date of Birth", str(answers.get("date_of_birth") or NOT_PROVIDED)),
+        ("Sex / Gender", str(answers.get("sex") or NOT_PROVIDED)),
+        ("Place of Birth", str(answers.get("place_of_birth") or NOT_PROVIDED)),
+        ("Marital Status", str(answers.get("marital_status") or NOT_PROVIDED)),
+        ("Passport Number", str(answers.get("passport_number") or NOT_PROVIDED)),
         (
             "Passport Expiration Date",
-            str(answers.get("passport_expiry_date") or answers.get("passport_expiry") or "—"),
+            str(answers.get("passport_expiry_date") or answers.get("passport_expiry") or NOT_PROVIDED),
         ),
         (
             "Current Country of Residence",
-            str(answers.get("current_residence_country") or answers.get("residence_country") or answers.get("nationality") or "—"),
+            str(answers.get("current_residence_country") or answers.get("residence_country") or answers.get("nationality") or NOT_PROVIDED),
         ),
         (
             "Residential Address",
             str(
-                answers.get("address_in_japan") or answers.get("registered_address_japan") or answers.get("current_address") or answers.get("accommodation_address") or "—"
+                answers.get("address_in_japan") or answers.get("registered_address_japan") or answers.get("current_address") or answers.get("accommodation_address") or NOT_PROVIDED
             ),
         ),
         (
             "Contact Telephone / Mobile",
-            str(answers.get("phone_number") or answers.get("telephone") or "—"),
+            str(answers.get("phone_number") or answers.get("telephone") or NOT_PROVIDED),
         ),
     ]
     if not is_tourist and answers.get("residence_card_number"):
@@ -389,7 +400,7 @@ def generate_japan_work_renewal_pdf(
         sec2_rows = [
             (
                 "Purpose of Visit",
-                str(answers.get("purpose_of_visit") or answers.get("main_purpose") or "Tourism / Sightseeing"),
+                str(answers.get("purpose_of_visit") or answers.get("main_purpose") or NOT_PROVIDED),
             ),
             (
                 "Intended Length of Stay",
@@ -397,27 +408,27 @@ def generate_japan_work_renewal_pdf(
             ),
             (
                 "Planned Arrival Date",
-                str(answers.get("planned_arrival_date") or answers.get("arrival_date") or "—"),
+                str(answers.get("planned_arrival_date") or answers.get("arrival_date") or NOT_PROVIDED),
             ),
             (
                 "Hotel / Accommodation Name",
-                str(answers.get("accommodation_name") or "Hotel / Reserved Lodging"),
+                str(answers.get("accommodation_name") or NOT_PROVIDED),
             ),
             (
                 "Accommodation Address in Japan",
-                str(answers.get("accommodation_address") or "Tokyo, Japan"),
+                str(answers.get("accommodation_address") or NOT_PROVIDED),
             ),
             (
                 "Funding Source / Trip Payer",
-                str(answers.get("trip_payer") or "Self-Funded").replace("_", " ").title(),
+                str(answers.get("trip_payer") or NOT_PROVIDED).replace("_", " ").title(),
             ),
             (
                 "Available Funds / Savings",
-                str(answers.get("estimated_savings_available") or "Verified via Bank Solvency Certificate"),
+                str(answers.get("estimated_savings_available") or NOT_PROVIDED),
             ),
             (
                 "Current Profession / Occupation",
-                str(answers.get("occupation") or "Employed Professional"),
+                str(answers.get("occupation") or NOT_PROVIDED),
             ),
         ]
         story.append(_build_key_value_table(sec2_rows, styles))
@@ -451,7 +462,7 @@ def generate_japan_work_renewal_pdf(
                 styles["section_heading"],
             )
         )
-        salary_val = answers.get("annual_salary_jpy") or answers.get("monthly_salary") or "—"
+        salary_val = answers.get("annual_salary_jpy") or answers.get("monthly_salary") or NOT_PROVIDED
         if str(salary_val).isdigit():
             salary_display = f"¥{int(salary_val):,} JPY / Year" if int(salary_val) > 1000000 else f"¥{int(salary_val):,} JPY / Month"
         else:
@@ -460,11 +471,11 @@ def generate_japan_work_renewal_pdf(
         sec2_rows = [
             (
                 "Current / Graduating Educational Institution",
-                str(answers.get("school_name") or "—"),
+                str(answers.get("school_name") or NOT_PROVIDED),
             ),
             (
                 "Program of Study / Degree",
-                str(answers.get("study_program_type") or "University Undergraduate").replace("_", " ").title(),
+                str(answers.get("study_program_type") or NOT_PROVIDED).replace("_", " ").title(),
             ),
             (
                 "Program Completion / Graduation Status",
@@ -472,15 +483,15 @@ def generate_japan_work_renewal_pdf(
             ),
             (
                 "Expected / Actual Graduation Date",
-                str(answers.get("expected_graduation_date") or "—"),
+                str(answers.get("expected_graduation_date") or NOT_PROVIDED),
             ),
             (
                 "Future Sponsoring Employer Name",
-                str(answers.get("employer_name") or answers.get("company_name") or "—"),
+                str(answers.get("employer_name") or answers.get("company_name") or NOT_PROVIDED),
             ),
             (
                 "Employer Corporate Number (法人番号)",
-                str(answers.get("employer_corporate_number") or answers.get("corporate_number") or "—"),
+                str(answers.get("employer_corporate_number") or answers.get("corporate_number") or NOT_PROVIDED),
             ),
             (
                 "Employer Category (所属機関区分)",
@@ -488,7 +499,7 @@ def generate_japan_work_renewal_pdf(
             ),
             (
                 "Offered Position Duties / Job Description",
-                str(answers.get("job_description") or "Specialist / Professional Activities"),
+                str(answers.get("job_description") or NOT_PROVIDED),
             ),
             ("Offered Remuneration (報酬額)", salary_display),
         ]
@@ -537,20 +548,20 @@ def generate_japan_work_renewal_pdf(
         sec2_rows = [
             (
                 "Educational Institution Name",
-                str(answers.get("school_name") or "—"),
+                str(answers.get("school_name") or NOT_PROVIDED),
             ),
             (
                 "Program of Study",
-                str(answers.get("study_program_type") or "University").replace("_", " ").title(),
+                str(answers.get("study_program_type") or NOT_PROVIDED).replace("_", " ").title(),
             ),
             ("Attendance Rate (出席率)", att_display),
             (
                 "Expected Course Completion Date",
-                str(answers.get("expected_graduation_date") or "—"),
+                str(answers.get("expected_graduation_date") or NOT_PROVIDED),
             ),
             (
                 "Financial Support Source",
-                str(answers.get("sponsor_type") or answers.get("financial_supporter") or "Self / Family Sponsor").replace("_", " ").title(),
+                str(answers.get("sponsor_type") or answers.get("financial_supporter") or NOT_PROVIDED).replace("_", " ").title(),
             ),
         ]
         story.append(_build_key_value_table(sec2_rows, styles))
@@ -575,7 +586,7 @@ def generate_japan_work_renewal_pdf(
             ),
             (
                 "Desired Extension Period",
-                str(answers.get("desired_period_years") or "2 Years / 1 Year"),
+                str(answers.get("desired_period_years") or NOT_PROVIDED),
             ),
             (
                 "Reason for Extension",
@@ -592,7 +603,7 @@ def generate_japan_work_renewal_pdf(
                 styles["section_heading"],
             )
         )
-        salary_val = answers.get("monthly_salary") or answers.get("monthly_income") or "—"
+        salary_val = answers.get("monthly_salary") or answers.get("monthly_income") or NOT_PROVIDED
         if str(salary_val).isdigit():
             salary_display = f"¥{int(salary_val):,} JPY / Month"
         else:
@@ -601,23 +612,23 @@ def generate_japan_work_renewal_pdf(
         sec2_rows = [
             (
                 "Employer / Organization Name",
-                str(answers.get("employer_name") or answers.get("company_name") or "—"),
+                str(answers.get("employer_name") or answers.get("company_name") or NOT_PROVIDED),
             ),
             (
                 "Corporate Number (法人番号)",
-                str(answers.get("corporate_number") or answers.get("employer_corporate_number") or "—"),
+                str(answers.get("corporate_number") or answers.get("employer_corporate_number") or NOT_PROVIDED),
             ),
             (
                 "Organization Category (所属機関区分)",
-                str(answers.get("employer_category") or "Category 3 (Listed / Standard)"),
+                str(answers.get("employer_category") or NOT_PROVIDED),
             ),
             (
                 "Workplace Address in Japan",
-                str(answers.get("employer_address") or answers.get("workplace_address") or "—"),
+                str(answers.get("employer_address") or answers.get("workplace_address") or NOT_PROVIDED),
             ),
             (
                 "Workplace Telephone",
-                str(answers.get("employer_telephone") or answers.get("workplace_phone") or "—"),
+                str(answers.get("employer_telephone") or answers.get("workplace_phone") or NOT_PROVIDED),
             ),
             (
                 "Occupation / Primary Duties",
@@ -630,7 +641,7 @@ def generate_japan_work_renewal_pdf(
             ("Monthly Remuneration (報酬額)", salary_display),
             (
                 "Contract Type & Duration",
-                str(answers.get("contract_type") or "Full-time (Seishain) / Permanent"),
+                str(answers.get("contract_type") or NOT_PROVIDED),
             ),
         ]
         story.append(_build_key_value_table(sec2_rows, styles))
@@ -659,7 +670,7 @@ def generate_japan_work_renewal_pdf(
             ),
             (
                 "Desired Period of Stay Extension",
-                str(answers.get("desired_period_years") or "3 Years / 5 Years"),
+                str(answers.get("desired_period_years") or NOT_PROVIDED),
             ),
             (
                 "Reason for Extension",
@@ -726,9 +737,9 @@ def generate_cover_letter_pdf(
     styles = _get_styles()
     story = []
 
-    full_name = str(answers.get("full_name") or answers.get("applicant_name") or "Applicant")
-    passport_no = str(answers.get("passport_number") or "—")
-    nationality = str(answers.get("nationality") or "—")
+    full_name = str(answers.get("full_name") or answers.get("applicant_name") or NOT_PROVIDED)
+    passport_no = str(answers.get("passport_number") or NOT_PROVIDED)
+    nationality = str(answers.get("nationality") or NOT_PROVIDED)
     date_str = datetime.now(UTC).strftime("%B %d, %Y")
 
     # Header
@@ -908,8 +919,8 @@ def generate_dossier_packet_pdf(
     styles = _get_styles()
     story = []
 
-    full_name = str(answers.get("full_name") or answers.get("applicant_name") or "Applicant")
-    passport_no = str(answers.get("passport_number") or "—")
+    full_name = str(answers.get("full_name") or answers.get("applicant_name") or NOT_PROVIDED)
+    passport_no = str(answers.get("passport_number") or NOT_PROVIDED)
     date_str = datetime.now(UTC).strftime("%B %d, %Y")
 
     # ==================== PAGE 1: COVER DOSSIER INDEX ====================
@@ -997,27 +1008,27 @@ def generate_dossier_packet_pdf(
     # Fill all captured form fields into clean table
     form_rows = [
         ("Applicant Name", full_name),
-        ("Nationality", str(answers.get("nationality") or "—")),
-        ("Date of Birth", str(answers.get("date_of_birth") or "—")),
+        ("Nationality", str(answers.get("nationality") or NOT_PROVIDED)),
+        ("Date of Birth", str(answers.get("date_of_birth") or NOT_PROVIDED)),
         ("Passport Number", passport_no),
-        ("Residence Card Number", str(answers.get("residence_card_number") or "—")),
+        ("Residence Card Number", str(answers.get("residence_card_number") or NOT_PROVIDED)),
         (
             "Current Status Expiry",
-            str(answers.get("residence_card_expiry") or answers.get("status_expiry_date") or "—"),
+            str(answers.get("residence_card_expiry") or answers.get("status_expiry_date") or NOT_PROVIDED),
         ),
         (
             "Employer / Sponsor Name",
-            str(answers.get("employer_name") or answers.get("company_name") or "—"),
+            str(answers.get("employer_name") or answers.get("company_name") or NOT_PROVIDED),
         ),
         (
             "Corporate Number",
-            str(answers.get("corporate_number") or answers.get("employer_corporate_number") or "—"),
+            str(answers.get("corporate_number") or answers.get("employer_corporate_number") or NOT_PROVIDED),
         ),
-        ("Employer Category", str(answers.get("employer_category") or "Category 3")),
-        ("Monthly Remuneration", str(answers.get("monthly_salary") or "—")),
+        ("Employer Category", str(answers.get("employer_category") or NOT_PROVIDED)),
+        ("Monthly Remuneration", str(answers.get("monthly_salary") or NOT_PROVIDED)),
         (
             "Occupation / Duties",
-            str(answers.get("job_description") or answers.get("occupation") or "—"),
+            str(answers.get("job_description") or answers.get("occupation") or NOT_PROVIDED),
         ),
         ("Tax / Pension Compliance", "Certified Compliant"),
     ]
@@ -1098,6 +1109,8 @@ def generate_official_japan_visa_form_pdf(
     """Fill the authentic official Ministry of Foreign Affairs (MOFA) Japan Visa Application Form template."""
     import pypdf
 
+    from torii_api.services.acroform_flatten import flatten_form_values
+
     # Path to official government template (MOFA 000124525.pdf)
     template_path = os.path.join(
         os.path.dirname(__file__), "..", "templates", "japan_visa_application_form_template.pdf"
@@ -1134,149 +1147,319 @@ def generate_official_japan_visa_form_pdf(
             except Exception as exc:
                 print(f"Warning: failed to build photo overlay for MOFA template: {exc}")
 
-        full_name = str(answers.get("full_name") or "").strip()
+        # Only what the applicant actually told us reaches the form. A Japanese visa
+        # application is a signed declaration, so an invented employer telephone or a
+        # guessed purpose of visit is a defect, not a convenience — every value below
+        # resolves to "" when unanswered and the consular officer sees a blank line.
+        def answer(*keys: str) -> str:
+            for key in keys:
+                value = answers.get(key)
+                if value not in (None, ""):
+                    return str(value).strip()
+            return ""
+
+        def consular_date(*keys: str) -> str:
+            """Dates on this form are printed (Day)/(Month)/(Year), not ISO."""
+            raw = answer(*keys)
+            if not raw:
+                return ""
+            for pattern in ("%Y-%m-%d", "%Y/%m/%d", "%d/%m/%Y", "%d-%m-%Y"):
+                try:
+                    return datetime.strptime(raw[:10], pattern).strftime("%d/%m/%Y")
+                except ValueError:
+                    continue
+            return raw
+
+        full_name = answer("full_name", "applicant_name", "visitor_full_name")
         parts = full_name.split()
         if len(parts) > 1:
             surname = parts[-1].upper()
             given_names = " ".join(parts[:-1]).upper()
         else:
             surname = full_name.upper()
-            given_names = full_name.upper()
+            given_names = ""
 
-        nationality = str(answers.get("nationality") or answers.get("visitor_nationality") or "Bangladesh")
-        passport_no = str(answers.get("passport_number") or answers.get("passport_no") or "")
-        dob = str(answers.get("date_of_birth") or answers.get("birth_date") or "")
-        passport_expiry = str(answers.get("passport_expiry") or answers.get("passport_expiry_date") or "")
-        passport_authority = str(
-            answers.get("passport_issuing_authority") or f"Government of {nationality}"
+        nationality = answer("nationality", "visitor_nationality", "country_of_citizenship")
+        passport_no = answer("passport_number", "passport_no", "visitor_passport_number")
+        dob = consular_date("date_of_birth", "birth_date")
+        passport_expiry = consular_date("passport_expiry_date", "passport_expiry")
+        passport_authority = answer("passport_issuing_authority")
+        purpose = answer("purpose_of_visit", "main_purpose", "purpose_of_stay")
+        stay_days = answer(
+            "intended_length_of_stay", "intended_length_of_stay_days", "stay_duration_days"
         )
-        purpose = str(
-            answers.get("purpose_of_visit")
-            or answers.get("main_purpose")
-            or "Engineer / Specialist in Humanities / International Services"
-        )
-        stay_days = str(answers.get("intended_length_of_stay_days") or answers.get("stay_duration_days") or "3 Years")
         if stay_days.isdigit():
             stay_days = f"{stay_days} Days"
 
-        curr_address = str(
-            answers.get("current_address")
-            or answers.get("current_residence_country")
-            or answers.get("residence_country")
-            or ""
+        current_address = answer(
+            "current_address",
+            "current_japan_address",
+            "home_town_city",
+            "current_residence_country",
+            "residence_country",
         )
-        tel = str(answers.get("phone_number") or answers.get("tel") or answers.get("mobile") or "")
-        email = str(answers.get("email") or applicant_email or "")
-        profession = str(answers.get("occupation") or answers.get("job_title") or "Professional / Specialist")
+        tel = answer("telephone_japan", "phone_number", "tel", "mobile")
+        mobile = answer("mobile_phone", "phone_number", "mobile", "tel")
+        email = answer("email") or (applicant_email or "")
+        profession = answer("occupation", "job_title")
 
-        employer_name = str(
-            answers.get("employer_name")
-            or answers.get("sponsor_name")
-            or answers.get("company_name")
-            or ""
-        )
-        employer_tel = str(answers.get("employer_tel") or answers.get("sponsor_tel") or "+81-3-1234-5678")
-        employer_address = str(
-            answers.get("employer_address")
-            or answers.get("sponsor_address")
-            or answers.get("registered_address_japan")
-            or "Tokyo, Japan"
-        )
-        corp_no = str(answers.get("employer_corporate_number") or answers.get("corporate_number") or "")
+        employer_name = answer("employer_name", "sponsor_name", "company_name")
+        employer_tel = answer("employer_tel", "sponsor_tel")
+        employer_address = answer("employer_address", "sponsor_address", "registered_address_japan")
 
-        sex_val = str(answers.get("sex") or answers.get("gender") or "male").lower()
-        sex_radio = "/1" if "fem" in sex_val else "/0"
+        # Host / accommodation in Japan (item: "Address in Japan"), distinct from the
+        # applicant's employer at home.
+        host_name = answer("accommodation_name", "resident_guarantor_name", "supporter_name")
+        host_tel = answer("accommodation_tel", "guarantor_telephone")
+        host_address = answer("accommodation_address", "current_japan_address")
 
-        marital_val = str(answers.get("marital_status") or "single").lower()
-        if "marr" in marital_val:
-            marital_radio = "/1"
-        elif "wido" in marital_val:
-            marital_radio = "/2"
-        elif "divo" in marital_val:
-            marital_radio = "/3"
+        # Guarantor block on page 2 — only a real guarantor goes here.
+        guarantor_name = answer("resident_guarantor_name", "supporter_name", "sponsor_name")
+        guarantor_tel = answer("guarantor_telephone", "sponsor_tel")
+        guarantor_address = answer("guarantor_address", "sponsor_address")
+        guarantor_relationship = answer("relationship_to_supporter", "relationship_to_visitor")
+
+        sex_val = answer("sex", "gender").lower()
+        if sex_val.startswith("f") or sex_val == "女":
+            sex_radio: str | None = "/1"
+        elif sex_val.startswith("m") or sex_val == "男":
+            sex_radio = "/0"
         else:
-            marital_radio = "/0"
+            sex_radio = None
 
-        passport_type = str(answers.get("passport_type") or "ordinary").lower()
+        marital_val = answer("marital_status").lower()
+        if marital_val.startswith("marri"):
+            marital_radio: str | None = "/1"
+        elif marital_val.startswith("wido"):
+            marital_radio = "/3"
+        elif marital_val.startswith("divo"):
+            marital_radio = "/2"
+        elif marital_val.startswith(("single", "unmarried")):
+            marital_radio = "/0"
+        else:
+            marital_radio = None
+
+        passport_type = answer("passport_type").lower()
         if "diplo" in passport_type:
-            passport_radio = "/0"
+            passport_radio: str | None = "/0"
         elif "offi" in passport_type:
             passport_radio = "/1"
         elif "other" in passport_type:
             passport_radio = "/3"
-        else:
+        elif passport_type:
             passport_radio = "/2"
+        else:
+            passport_radio = None
+
+        def yes_no_radio(*keys: str) -> str | None:
+            """Page 2 declarations: "/0" is 有 (yes), "/1" is 無 (no)."""
+            for key in keys:
+                value = answers.get(key)
+                if isinstance(value, bool):
+                    return "/0" if value else "/1"
+                if isinstance(value, str) and value.strip():
+                    token = value.strip().lower()
+                    if token in ("true", "yes", "y", "1", "有"):
+                        return "/0"
+                    if token in ("false", "no", "n", "0", "無"):
+                        return "/1"
+            return None
+
+        # The six "Have you ever" declarations on page 2, in printed order. The field
+        # names do not follow that order, so they are bound by the widget position each
+        # one actually occupies on the sheet.
+        declaration_radios: dict[str, str | None] = {
+            "topmostSubform[0].Page2[0].#area[7].#area[8].RB5[3]": yes_no_radio(
+                "criminal_record", "criminal_record_any", "criminal_disclosures"
+            ),
+            "topmostSubform[0].Page2[0].#area[4].RB5[0]": yes_no_radio(
+                "imprisoned_one_year_or_more"
+            ),
+            "topmostSubform[0].Page2[0].#area[5].RB5[1]": yes_no_radio("prior_deportation"),
+            "topmostSubform[0].Page2[0].RB5[5]": yes_no_radio("drug_offence_conviction"),
+            "topmostSubform[0].Page2[0].#area[9].RB5[4]": yes_no_radio("prostitution_involvement"),
+            "topmostSubform[0].Page2[0].#area[6].RB5[2]": yes_no_radio(
+                "human_trafficking_involvement"
+            ),
+        }
 
         field_values: dict[str, str] = {
-            # Page 1: Personal Identification & Passport Details
+            # Page 1: Personal identification & passport details
             "topmostSubform[0].Page1[0].T2[0]": surname,
             "topmostSubform[0].Page1[0].T7[0]": given_names,
             "topmostSubform[0].Page1[0].#area[4].T14[0]": dob,
-            "topmostSubform[0].Page1[0].#area[4].T16[0]": str(answers.get("place_of_birth") or nationality),
+            "topmostSubform[0].Page1[0].#area[4].T16[0]": answer("place_of_birth"),
             "topmostSubform[0].Page1[0].T50[0]": nationality,
             "topmostSubform[0].Page1[0].T49[0]": passport_no,
             "topmostSubform[0].Page1[0].#area[0].T59[0]": passport_expiry,
             "topmostSubform[0].Page1[0].#area[0].T57[0]": passport_authority,
-            "topmostSubform[0].Page1[0].#area[9].T53[0]": str(answers.get("passport_issue_date") or ""),
-            "topmostSubform[0].Page1[0].#area[9].T57[1]": str(answers.get("passport_issue_place") or nationality),
-            "topmostSubform[0].Page1[0].#area[1].#area[2].RB3[0]": passport_radio,
-            "topmostSubform[0].Page1[0].#area[5].#area[6].#area[7].RB1[0]": sex_radio,
-            "topmostSubform[0].Page1[0].#area[8].RB2[0]": marital_radio,
+            "topmostSubform[0].Page1[0].#area[9].T53[0]": consular_date("passport_issue_date"),
+            "topmostSubform[0].Page1[0].#area[9].T57[1]": answer("passport_issue_place"),
             "topmostSubform[0].Page1[0].T68[2]": purpose,
             "topmostSubform[0].Page1[0].T68[3]": stay_days,
-            "topmostSubform[0].Page1[0].T66[0]": str(answers.get("planned_arrival_date") or answers.get("arrival_date") or ""),
-            "topmostSubform[0].Page1[0].#area[10].T68[0]": str(answers.get("port_of_entry") or "Tokyo Narita (NRT) / Haneda (HND)"),
-            "topmostSubform[0].Page1[0].#area[10].T68[1]": str(answers.get("airline_flight_no") or "Commercial Airline"),
-            "topmostSubform[0].Page1[0].emp_adr[0]": str(answers.get("accommodation_address") or employer_address),
-            "topmostSubform[0].Page1[0].#area[3].emp_name[0]": str(answers.get("accommodation_name") or employer_name),
-            "topmostSubform[0].Page1[0].#area[3].emp_tel[0]": str(answers.get("accommodation_tel") or employer_tel),
-            "topmostSubform[0].Page1[0].T0[1]": curr_address,
+            "topmostSubform[0].Page1[0].T66[0]": consular_date(
+                "planned_arrival_date", "intended_entry_date", "arrival_date"
+            ),
+            "topmostSubform[0].Page1[0].#area[10].T68[0]": answer("port_of_entry"),
+            "topmostSubform[0].Page1[0].#area[10].T68[1]": answer(
+                "airline_flight_no", "departure_airline_flight_no"
+            ),
+            "topmostSubform[0].Page1[0].emp_adr[0]": employer_address,
+            "topmostSubform[0].Page1[0].#area[3].emp_name[0]": employer_name,
+            "topmostSubform[0].Page1[0].#area[3].emp_tel[0]": employer_tel,
+            "topmostSubform[0].Page1[0].T0[1]": current_address,
             "topmostSubform[0].Page1[0].#area[11].T97[0]": tel,
-            "topmostSubform[0].Page1[0].#area[11].T3[0]": tel,
+            "topmostSubform[0].Page1[0].#area[11].T3[0]": mobile,
             "topmostSubform[0].Page1[0].T3[1]": email,
             "topmostSubform[0].Page1[0].T5[0]": profession,
-            "topmostSubform[0].Page1[0].#area[12].emp_name[1]": employer_name,
-            "topmostSubform[0].Page1[0].#area[12].emp_tel[1]": employer_tel,
-            "topmostSubform[0].Page1[0].emp_adr[1]": employer_address,
-
-            # Page 2: Guarantor / Inviting Sponsor in Japan & Application Metadata
-            "topmostSubform[0].Page2[0].#area[0].guarantor_name[0]": employer_name,
-            "topmostSubform[0].Page2[0].#area[0].guarantor_tel[0]": employer_tel,
-            "topmostSubform[0].Page2[0].guarantor_adr[0]": employer_address,
-            "topmostSubform[0].Page2[0].T25[0]": "Sponsoring Employer / Host Organization",
-            "topmostSubform[0].Page2[0].T5[0]": "Corporation / IT Enterprise",
-            "topmostSubform[0].Page2[0].T5[1]": f"Japan (Corporate No. {corp_no})" if corp_no else "Japan",
-            "topmostSubform[0].Page2[0].#area[2].T19[0]": employer_name,
-            "topmostSubform[0].Page2[0].#area[2].T10[0]": employer_tel,
-            "topmostSubform[0].Page2[0].T23[0]": employer_address,
-            "topmostSubform[0].Page2[0].T25[1]": "Sponsoring Employer",
-            "topmostSubform[0].Page2[0].#area[4].RB5[0]": "/1",  # No
-            "topmostSubform[0].Page2[0].#area[5].RB5[1]": "/1",  # No
-            "topmostSubform[0].Page2[0].#area[6].RB5[2]": "/1",  # No
-            "topmostSubform[0].Page2[0].#area[7].#area[8].RB5[3]": "/1",  # No
-            "topmostSubform[0].Page2[0].#area[9].RB5[4]": "/1",  # No
-            "topmostSubform[0].Page2[0].RB5[5]": "/1",  # No
-            "topmostSubform[0].Page2[0].T150[0]": datetime.now(UTC).strftime("%Y-%m-%d"),
+            "topmostSubform[0].Page1[0].#area[12].emp_name[1]": host_name,
+            "topmostSubform[0].Page1[0].#area[12].emp_tel[1]": host_tel,
+            "topmostSubform[0].Page1[0].emp_adr[1]": host_address,
+            # Page 2: Guarantor / inviting sponsor in Japan
+            "topmostSubform[0].Page2[0].#area[0].guarantor_name[0]": guarantor_name,
+            "topmostSubform[0].Page2[0].#area[0].guarantor_tel[0]": guarantor_tel,
+            "topmostSubform[0].Page2[0].guarantor_adr[0]": guarantor_address,
+            # T25[1] belongs to the guarantor block and T25[0] to the inviter block —
+            # the field indices do not follow the printed order on this sheet.
+            "topmostSubform[0].Page2[0].T25[1]": guarantor_relationship,
+            "topmostSubform[0].Page2[0].#area[2].T19[0]": answer("inviter_name"),
+            "topmostSubform[0].Page2[0].#area[2].T10[0]": answer("inviter_tel"),
+            "topmostSubform[0].Page2[0].T23[0]": answer("inviter_address"),
+            "topmostSubform[0].Page2[0].T25[0]": answer("relationship_to_inviter"),
+            "topmostSubform[0].Page2[0].T150[0]": datetime.now(UTC).strftime("%d/%m/%Y"),
         }
 
-        for page in writer.pages:
-            writer.update_page_form_field_values(page, field_values, auto_regenerate=False)
-
-        # Ensure visual appearance of filled fields in all browsers (Chrome, Edge, Safari, Mobile)
-        if "/AcroForm" in writer.root_object:
-            writer.root_object["/AcroForm"].update(
-                {pypdf.generic.NameObject("/NeedAppearances"): pypdf.generic.BooleanObject(True)}
-            )
+        # Radios are omitted entirely when unanswered — an unticked box asks a question,
+        # a wrongly ticked one makes a false declaration.
+        button_values: dict[str, str] = {
+            name: value
+            for name, value in {
+                "topmostSubform[0].Page1[0].#area[1].#area[2].RB3[0]": passport_radio,
+                "topmostSubform[0].Page1[0].#area[5].#area[6].#area[7].RB1[0]": sex_radio,
+                "topmostSubform[0].Page1[0].#area[8].RB2[0]": marital_radio,
+                **declaration_radios,
+            }.items()
+            if value is not None
+        }
+        field_values = {name: value for name, value in field_values.items() if value != ""}
 
         buf = io.BytesIO()
         writer.write(buf)
-        filled_bytes = buf.getvalue()
-        if len(filled_bytes) > 0:
-            return filled_bytes
+        # The template is an XFA form, so values written into its AcroForm layer are
+        # stored but never drawn — Acrobat paints the XFA layer and Chrome paints the
+        # AcroForm layer without appearances, and the applicant downloads a form that
+        # looks blank. Paint the values into the page instead and flatten.
+        flattened, unplaced = flatten_form_values(buf.getvalue(), field_values, button_values)
+        if unplaced:
+            print(f"Warning: MOFA template has no widget for: {', '.join(unplaced)}")
+        if flattened:
+            return flattened
     except Exception as exc:
         print(f"Warning: failed to fill official template: {exc}, using fallback generator")
 
     return generate_japan_work_renewal_pdf(case_reference, answers, destination_label, photo_data=photo_data)
+
+
+def generate_portal_application_pack_pdf(
+    case_reference: str,
+    answers: dict[str, Any],
+    forms: list[dict[str, Any]],
+    *,
+    jurisdiction: str = "UK",
+    scope_label: str = "United Kingdom",
+    apply_url: str | None = None,
+) -> bytes:
+    """Render the answer pack for a jurisdiction that is filed online.
+
+    This is deliberately *not* styled as a government form. The UK has no form to
+    submit — the application is typed into gov.uk — so the document says so on its face
+    and lays the applicant's answers out in the order the online service asks for them.
+    """
+    from torii_api.services.portal_pack import build_portal_pack
+
+    pack = build_portal_pack(
+        forms,
+        answers,
+        jurisdiction=jurisdiction,
+        scope_label=scope_label,
+        apply_url=apply_url,
+    )
+
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buffer, pagesize=A4, leftMargin=42, rightMargin=42, topMargin=40, bottomMargin=40
+    )
+    styles = _get_styles()
+    story: list[Any] = []
+
+    story.append(Paragraph("TORII ONLINE APPLICATION PACK", styles["jp_header"]))
+    story.append(Paragraph(scope_label, styles["title"]))
+    story.append(
+        Paragraph(
+            f"Reference: {case_reference} · Prepared {datetime.now(UTC).strftime('%d %B %Y')}",
+            styles["subtitle"],
+        )
+    )
+    story.append(Spacer(1, 10))
+
+    notice = (
+        "<b>This is not an application form.</b> There is no form to submit for this "
+        "route — the application is completed on the government's own website. Work "
+        "down the sections below as the online service asks for them, and copy each "
+        "answer across."
+    )
+    if pack.apply_url:
+        notice += f'<br/><br/><b>Apply at:</b> {pack.apply_url}'
+    story.append(Paragraph(notice, styles["body"]))
+    story.append(Spacer(1, 14))
+
+    total = len(pack.all_fields)
+    story.append(
+        Paragraph(
+            f"{len(pack.answered)} of {total} questions answered so far.",
+            styles["subtitle"],
+        )
+    )
+    story.append(Spacer(1, 10))
+
+    for index, section in enumerate(pack.sections, start=1):
+        story.append(
+            Paragraph(f"{index}. {section.title.upper()}", styles["section_heading"])
+        )
+        rows = [
+            (
+                item.label + (" *" if item.required else ""),
+                item.value if item.answered else NOT_PROVIDED,
+            )
+            for item in section.fields
+        ]
+        story.append(_build_key_value_table(rows, styles))
+        story.append(Spacer(1, 12))
+
+    if pack.outstanding:
+        story.append(Paragraph("STILL TO ANSWER", styles["section_heading"]))
+        story.append(
+            Paragraph(
+                "The online service will ask for these. Answer them in Torii and "
+                "download this pack again, or have them to hand before you start.",
+                styles["body"],
+            )
+        )
+        story.append(Spacer(1, 6))
+        for item in pack.outstanding:
+            story.append(Paragraph(f"&bull; {item.label}", styles["body"]))
+        story.append(Spacer(1, 12))
+
+    if pack.citations:
+        story.append(Paragraph("OFFICIAL SOURCES", styles["section_heading"]))
+        for citation in pack.citations:
+            authority = str(citation.get("authority") or "")
+            title = str(citation.get("title") or "")
+            url = str(citation.get("url") or "")
+            story.append(Paragraph(f"{authority} — {title}<br/>{url}", styles["body"]))
+
+    doc.build(story)
+    return buffer.getvalue()
 
 
 def generate_uk_visa_application_pdf(
@@ -1335,20 +1518,20 @@ def generate_uk_visa_application_pdf(
     story.append(
         Paragraph("1. APPLICANT PERSONAL IDENTIFICATION & TRAVEL DOCUMENT", styles["section_heading"])
     )
-    nationality = str(answers.get("nationality") or "—")
-    full_name = str(answers.get("full_name") or answers.get("applicant_name") or "—")
+    nationality = str(answers.get("nationality") or NOT_PROVIDED)
+    full_name = str(answers.get("full_name") or answers.get("applicant_name") or NOT_PROVIDED)
     sec1_rows = [
         ("Full Legal Name (as in passport)", full_name),
         ("Nationality / Country of Citizenship", nationality),
-        ("Date of Birth (YYYY-MM-DD)", str(answers.get("date_of_birth") or "—")),
-        ("Sex / Gender", str(answers.get("sex") or answers.get("gender") or "Male")),
-        ("Passport Number", str(answers.get("passport_number") or answers.get("passport_no") or "—")),
-        ("Passport Expiration Date", str(answers.get("passport_expiry") or answers.get("passport_expiry_date") or "—")),
+        ("Date of Birth (YYYY-MM-DD)", str(answers.get("date_of_birth") or NOT_PROVIDED)),
+        ("Sex / Gender", str(answers.get("sex") or answers.get("gender") or NOT_PROVIDED)),
+        ("Passport Number", str(answers.get("passport_number") or answers.get("passport_no") or NOT_PROVIDED)),
+        ("Passport Expiration Date", str(answers.get("passport_expiry") or answers.get("passport_expiry_date") or NOT_PROVIDED)),
         ("Passport Issuing Authority", str(answers.get("passport_issuing_authority") or f"Government of {nationality}")),
         ("Country of Current Residence", str(answers.get("residence_country") or answers.get("current_residence_country") or nationality)),
-        ("Residential Address", str(answers.get("current_address") or answers.get("residential_address") or "—")),
-        ("Contact Telephone", str(answers.get("phone_number") or answers.get("telephone") or "—")),
-        ("Applicant Email", str(answers.get("email") or applicant_email or "—")),
+        ("Residential Address", str(answers.get("current_address") or answers.get("residential_address") or NOT_PROVIDED)),
+        ("Contact Telephone", str(answers.get("phone_number") or answers.get("telephone") or NOT_PROVIDED)),
+        ("Applicant Email", str(answers.get("email") or applicant_email or NOT_PROVIDED)),
     ]
     story.append(_build_key_value_table(sec1_rows, styles))
     story.append(Spacer(1, 10))
@@ -1358,19 +1541,19 @@ def generate_uk_visa_application_pdf(
         story.append(
             Paragraph("2. SPONSORSHIP & EMPLOYMENT DETAILS (UK SPONSOR LICENCE)", styles["section_heading"])
         )
-        salary_val = answers.get("annual_salary_gbp") or answers.get("salary_gbp") or "—"
+        salary_val = answers.get("annual_salary_gbp") or answers.get("salary_gbp") or NOT_PROVIDED
         if str(salary_val).isdigit():
             salary_str = f"£{int(salary_val):,} GBP / Year"
         else:
             salary_str = str(salary_val)
 
         sec2_rows = [
-            ("Certificate of Sponsorship (CoS) Reference", str(answers.get("cos_reference") or answers.get("cos_number") or "—")),
-            ("UK Licensed Sponsor Employer", str(answers.get("sponsor_name") or answers.get("employer_name") or "—")),
-            ("Proposed Job Title in the UK", str(answers.get("job_title") or "Professional / Skilled Role")),
+            ("Certificate of Sponsorship (CoS) Reference", str(answers.get("cos_reference") or answers.get("cos_number") or NOT_PROVIDED)),
+            ("UK Licensed Sponsor Employer", str(answers.get("sponsor_name") or answers.get("employer_name") or NOT_PROVIDED)),
+            ("Proposed Job Title in the UK", str(answers.get("job_title") or NOT_PROVIDED)),
             ("Proposed Gross Annual Remuneration", salary_str),
-            ("Occupation Code (SOC 2020)", str(answers.get("soc_code") or "Standard SOC Eligible Code")),
-            ("Work Location / Office Address in UK", str(answers.get("workplace_address") or answers.get("employer_address") or "United Kingdom")),
+            ("Occupation Code (SOC 2020)", str(answers.get("soc_code") or NOT_PROVIDED)),
+            ("Work Location / Office Address in UK", str(answers.get("workplace_address") or answers.get("employer_address") or NOT_PROVIDED)),
         ]
         story.append(_build_key_value_table(sec2_rows, styles))
         story.append(Spacer(1, 10))
@@ -1379,7 +1562,7 @@ def generate_uk_visa_application_pdf(
         story.append(
             Paragraph("3. ENGLISH LANGUAGE & FINANCIAL MAINTENANCE COMPLIANCE", styles["section_heading"])
         )
-        eng_proof = str(answers.get("english_language_proof") or "Passed approved SELT test at CEFR B1").replace("_", " ").title()
+        eng_proof = str(answers.get("english_language_proof") or NOT_PROVIDED).replace("_", " ").title()
         maint_cert = "Certified by A-rated Sponsor on CoS" if answers.get("sponsor_certifies_maintenance", True) else "Personal Bank Statements Provided (£1,276 for 28 consecutive days)"
         sec3_rows = [
             ("English Language Assessment Criterion", eng_proof),
@@ -1394,10 +1577,10 @@ def generate_uk_visa_application_pdf(
             Paragraph("2. COURSE & LICENSED STUDENT SPONSOR (CAS DETAILS)", styles["section_heading"])
         )
         sec2_rows = [
-            ("Confirmation of Acceptance for Studies (CAS)", str(answers.get("cas_number") or answers.get("cas_reference") or "—")),
-            ("Licensed Student Sponsor / University", str(answers.get("institution_name") or answers.get("university_name") or "—")),
-            ("Course Title & Qualification Level", str(answers.get("course_title") or "Degree Programme / RQF Level 6+")),
-            ("Course Start & End Dates", str(answers.get("course_duration") or "Academic Year 2026/2027")),
+            ("Confirmation of Acceptance for Studies (CAS)", str(answers.get("cas_number") or answers.get("cas_reference") or NOT_PROVIDED)),
+            ("Licensed Student Sponsor / University", str(answers.get("institution_name") or answers.get("university_name") or NOT_PROVIDED)),
+            ("Course Title & Qualification Level", str(answers.get("course_title") or NOT_PROVIDED)),
+            ("Course Start & End Dates", str(answers.get("course_duration") or NOT_PROVIDED)),
         ]
         story.append(_build_key_value_table(sec2_rows, styles))
         story.append(Spacer(1, 10))
@@ -1406,7 +1589,7 @@ def generate_uk_visa_application_pdf(
             Paragraph("3. TUITION & MAINTENANCE FUNDS REQUIREMENTS", styles["section_heading"])
         )
         sec3_rows = [
-            ("English Language Proficiency", str(answers.get("english_language_proof") or "Verified via CAS Higher Education Assessment").replace("_", " ").title()),
+            ("English Language Proficiency", str(answers.get("english_language_proof") or NOT_PROVIDED).replace("_", " ").title()),
             ("Living Costs Maintenance Proof", "28-Day Bank Statement (£1,334/month in London, £1,023 outside)"),
             ("ATAS Certificate Required", "Not applicable / Exempt for this academic discipline" if not answers.get("atas_required", False) else "ATAS Clearance Certificate Attached"),
         ]
@@ -1417,11 +1600,11 @@ def generate_uk_visa_application_pdf(
             Paragraph("2. VISIT DETAILS & INTENDED ITINERARY", styles["section_heading"])
         )
         sec2_rows = [
-            ("Main Purpose of Visit", str(answers.get("purpose_of_visit") or answers.get("main_purpose") or "Tourism / Sightseeing / Family Visit")),
+            ("Main Purpose of Visit", str(answers.get("purpose_of_visit") or answers.get("main_purpose") or NOT_PROVIDED)),
             ("Intended Length of Stay", f"{answers.get('intended_length_of_stay_days') or 15} Days"),
-            ("Planned Travel / Arrival Date", str(answers.get("planned_arrival_date") or answers.get("arrival_date") or "—")),
-            ("Accommodation in the UK", str(answers.get("accommodation_name") or "Hotel / Host Residence")),
-            ("Financial Support for Visit", str(answers.get("trip_payer") or "Self-Funded via Personal Savings").replace("_", " ").title()),
+            ("Planned Travel / Arrival Date", str(answers.get("planned_arrival_date") or answers.get("arrival_date") or NOT_PROVIDED)),
+            ("Accommodation in the UK", str(answers.get("accommodation_name") or NOT_PROVIDED)),
+            ("Financial Support for Visit", str(answers.get("trip_payer") or NOT_PROVIDED).replace("_", " ").title()),
         ]
         story.append(_build_key_value_table(sec2_rows, styles))
         story.append(Spacer(1, 10))
@@ -1525,20 +1708,20 @@ def generate_us_visa_application_pdf(
     story.append(
         Paragraph("1. PERSONAL INFORMATION & TRAVEL DOCUMENT", styles["section_heading"])
     )
-    nationality = str(answers.get("nationality") or "—")
-    full_name = str(answers.get("full_name") or answers.get("applicant_name") or "—")
+    nationality = str(answers.get("nationality") or NOT_PROVIDED)
+    full_name = str(answers.get("full_name") or answers.get("applicant_name") or NOT_PROVIDED)
     sec1_rows = [
         ("Full Name (Surnames, Given Names)", full_name),
         ("Country of Citizenship / Nationality", nationality),
-        ("Date of Birth (YYYY-MM-DD)", str(answers.get("date_of_birth") or "—")),
-        ("Sex / Gender", str(answers.get("sex") or answers.get("gender") or "Male")),
-        ("Passport Number", str(answers.get("passport_number") or answers.get("passport_no") or "—")),
-        ("Passport Expiration Date", str(answers.get("passport_expiry") or answers.get("passport_expiry_date") or "—")),
+        ("Date of Birth (YYYY-MM-DD)", str(answers.get("date_of_birth") or NOT_PROVIDED)),
+        ("Sex / Gender", str(answers.get("sex") or answers.get("gender") or NOT_PROVIDED)),
+        ("Passport Number", str(answers.get("passport_number") or answers.get("passport_no") or NOT_PROVIDED)),
+        ("Passport Expiration Date", str(answers.get("passport_expiry") or answers.get("passport_expiry_date") or NOT_PROVIDED)),
         ("Passport Issuing Country", str(answers.get("passport_issuing_authority") or f"Government of {nationality}")),
         ("Current Country of Residence", str(answers.get("residence_country") or answers.get("current_residence_country") or nationality)),
-        ("Residential Address", str(answers.get("current_address") or "—")),
-        ("Telephone Number", str(answers.get("phone_number") or "—")),
-        ("Email Address", str(answers.get("email") or applicant_email or "—")),
+        ("Residential Address", str(answers.get("current_address") or NOT_PROVIDED)),
+        ("Telephone Number", str(answers.get("phone_number") or NOT_PROVIDED)),
+        ("Email Address", str(answers.get("email") or applicant_email or NOT_PROVIDED)),
     ]
     story.append(_build_key_value_table(sec1_rows, styles))
     story.append(Spacer(1, 10))
@@ -1549,10 +1732,10 @@ def generate_us_visa_application_pdf(
     )
     sec2_rows = [
         ("Purpose of Trip to the U.S.", visa_class),
-        ("Intended Length of Stay in U.S.", str(answers.get("intended_length_of_stay_days") or answers.get("stay_duration_days") or "3 Years")),
-        ("U.S. Employer / Institution / Sponsor", str(answers.get("employer_name") or answers.get("sponsor_name") or answers.get("institution_name") or "—")),
-        ("U.S. Contact Address", str(answers.get("workplace_address") or answers.get("us_address") or "United States")),
-        ("Petition / SEVIS Number", str(answers.get("petition_number") or answers.get("sevis_id") or answers.get("receipt_number") or "Filed / Attached in Dossier")),
+        ("Intended Length of Stay in U.S.", str(answers.get("intended_length_of_stay_days") or answers.get("stay_duration_days") or NOT_PROVIDED)),
+        ("U.S. Employer / Institution / Sponsor", str(answers.get("employer_name") or answers.get("sponsor_name") or answers.get("institution_name") or NOT_PROVIDED)),
+        ("U.S. Contact Address", str(answers.get("workplace_address") or answers.get("us_address") or NOT_PROVIDED)),
+        ("Petition / SEVIS Number", str(answers.get("petition_number") or answers.get("sevis_id") or answers.get("receipt_number") or NOT_PROVIDED)),
     ]
     story.append(_build_key_value_table(sec2_rows, styles))
     story.append(Spacer(1, 10))
@@ -1651,20 +1834,20 @@ def generate_generic_visa_application_pdf(
     story.append(
         Paragraph("1. APPLICANT PERSONAL IDENTIFICATION & PASSPORT DETAILS", styles["section_heading"])
     )
-    nationality = str(answers.get("nationality") or "—")
-    full_name = str(answers.get("full_name") or answers.get("applicant_name") or "—")
+    nationality = str(answers.get("nationality") or NOT_PROVIDED)
+    full_name = str(answers.get("full_name") or answers.get("applicant_name") or NOT_PROVIDED)
     sec1_rows = [
         ("Full Legal Name (as in passport)", full_name),
         ("Nationality / Country of Citizenship", nationality),
-        ("Date of Birth (YYYY-MM-DD)", str(answers.get("date_of_birth") or "—")),
-        ("Sex / Gender", str(answers.get("sex") or answers.get("gender") or "Male")),
-        ("Passport Number", str(answers.get("passport_number") or answers.get("passport_no") or "—")),
-        ("Passport Expiration Date", str(answers.get("passport_expiry") or answers.get("passport_expiry_date") or "—")),
+        ("Date of Birth (YYYY-MM-DD)", str(answers.get("date_of_birth") or NOT_PROVIDED)),
+        ("Sex / Gender", str(answers.get("sex") or answers.get("gender") or NOT_PROVIDED)),
+        ("Passport Number", str(answers.get("passport_number") or answers.get("passport_no") or NOT_PROVIDED)),
+        ("Passport Expiration Date", str(answers.get("passport_expiry") or answers.get("passport_expiry_date") or NOT_PROVIDED)),
         ("Passport Issuing Authority", str(answers.get("passport_issuing_authority") or f"Government of {nationality}")),
         ("Country of Current Residence", str(answers.get("residence_country") or answers.get("current_residence_country") or nationality)),
-        ("Residential Address", str(answers.get("current_address") or "—")),
-        ("Contact Telephone", str(answers.get("phone_number") or "—")),
-        ("Email Address", str(answers.get("email") or applicant_email or "—")),
+        ("Residential Address", str(answers.get("current_address") or NOT_PROVIDED)),
+        ("Contact Telephone", str(answers.get("phone_number") or NOT_PROVIDED)),
+        ("Email Address", str(answers.get("email") or applicant_email or NOT_PROVIDED)),
     ]
     story.append(_build_key_value_table(sec1_rows, styles))
     story.append(Spacer(1, 10))
@@ -1675,8 +1858,8 @@ def generate_generic_visa_application_pdf(
     sec2_rows = [
         ("Purpose of Visit / Category", str(answers.get("purpose_of_visit") or answers.get("main_purpose") or destination_label)),
         ("Intended Length of Stay", f"{answers.get('intended_length_of_stay_days') or answers.get('stay_duration_days') or 15} Days"),
-        ("Planned Travel / Arrival Date", str(answers.get("planned_arrival_date") or answers.get("arrival_date") or "—")),
-        ("Host Sponsor / Employer / Accommodation", str(answers.get("sponsor_name") or answers.get("employer_name") or answers.get("accommodation_name") or "—")),
+        ("Planned Travel / Arrival Date", str(answers.get("planned_arrival_date") or answers.get("arrival_date") or NOT_PROVIDED)),
+        ("Host Sponsor / Employer / Accommodation", str(answers.get("sponsor_name") or answers.get("employer_name") or answers.get("accommodation_name") or NOT_PROVIDED)),
         ("Address in Destination Country", str(answers.get("accommodation_address") or answers.get("workplace_address") or country_name)),
     ]
     story.append(_build_key_value_table(sec2_rows, styles))

@@ -344,9 +344,16 @@ def resolve_official_citation(
                 }
 
     selected = jur_map.get(topic) or jur_map.get("work") or jur_map.get("passport") or {}
+    url = selected.get("url", "")
+    if not url.startswith("http"):
+        # No citation is better than an invented one. A synthesised URL like
+        # "https://www.gov.jp/visa" reads as an official source and is not one, which
+        # is exactly what NF-2 exists to prevent. Callers render an item with an empty
+        # citation as uncited rather than showing a link that goes nowhere.
+        return {"authority": "", "title": "", "url": "", "source_version": default_version}
     return {
-        "authority": selected.get("authority", f"{jur} Immigration Authority"),
-        "title": selected.get("title", "Official Immigration Regulation"),
-        "url": selected.get("url", f"https://www.gov.{jur.lower()}/visa"),
+        "authority": selected.get("authority", ""),
+        "title": selected.get("title", ""),
+        "url": url,
         "source_version": default_version,
     }
