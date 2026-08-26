@@ -499,13 +499,22 @@ export function IntakeStep({ state, profile, onAnswer, onProceedToEligibility, t
                 {q.prompt}
                 {!isOptional && <span className="ml-1 text-[var(--color-danger)] font-bold">*</span>}
               </label>
-              {isOptional && (
+              {isOptional && !q.hint && (
                 <span className="text-[10px] font-medium text-muted-foreground bg-muted/80 px-1.5 py-0.5 rounded border border-border/50">
                   Optional
                 </span>
               )}
+              {q.hint && (
+                <span className="text-[10px] font-medium text-primary bg-primary/10 px-1.5 py-0.5 rounded border border-primary/20">
+                  On your form
+                </span>
+              )}
             </div>
           </div>
+
+          {/* Names the box this answer fills, so leaving it blank is a visible choice
+              rather than an invisible gap on a sheet the applicant signs. */}
+          {q.hint && <p className="text-[11px] leading-snug text-muted-foreground">{q.hint}</p>}
 
           {q.type === "enum" && q.options ? (
             (() => {

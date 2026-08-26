@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   FileText,
   Loader2,
@@ -18,7 +18,8 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth-context";
-import { answerIntake } from "@/lib/api/cases";
+import { answerIntake, downloadOfficialForm, getFiling, getOfficialForms } from "@/lib/api/cases";
+import type { FilingInfo, OfficialForm, PortalPack } from "@/lib/api/cases";
 import { toast } from "@/components/ui/sonner";
 import type { GeneratedForm } from "./types";
 
@@ -145,6 +146,66 @@ export function FormsStep({
   const [missingFieldInputs, setMissingFieldInputs] = useState<Record<string, string>>({});
   const [savingMissingField, setSavingMissingField] = useState<string | null>(null);
   const [quickSaveNotice, setQuickSaveNotice] = useState<string | null>(null);
+  const [officialForms, setOfficialForms] = useState<OfficialForm[]>([]);
+  const [filing, setFiling] = useState<FilingInfo | null>(null);
+
+  useEffect(() => {
+    if (!token || !caseId) return;
+    let cancelled = false;
+    Promise.allSettled([getOfficialForms(token, caseId), getFiling(token, caseId)]).then(
+      ([formsResult, filingResult]) => {
+        if (cancelled) return;
+        // Both are additive; the rest of the step stands without either.
+        setOfficialForms(formsResult.status === "fulfilled" ? formsResult.value.forms : []);
+        setFiling(filingResult.status === "fulfilled" ? filingResult.value : null);
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [token, caseId]);
+
+  const portalPack: PortalPack | undefined =
+    filing?.filing_mode === "online_portal" ? filing.portal_pack : undefined;
+
+  function saveBlob(bytes: Uint8Array<ArrayBuffer>, filename: string) {
+    const blob = new Blob([bytes], { type: "application/pdf" });
+    if (blob.size === 0) throw new Error("Generated PDF file is empty (0 bytes).");
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    setTimeout(() => {
+      link.remove();
+      URL.revokeObjectURL(url);
+    }, 10000);
+  }
+
+  function decodeBase64(data: string): Uint8Array<ArrayBuffer> {
+    const binary = atob(data);
+    const bytes = new Uint8Array(new ArrayBuffer(binary.length));
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    return bytes;
+  }
+
+  async function handleDownloadOfficialForm(formCode: string) {
+    const activeToken =
+      token || (typeof window !== "undefined" ? localStorage.getItem("torii_token") : null);
+    if (!caseId || !activeToken) return;
+    setDownloadingPdf(formCode);
+    try {
+      const data = await downloadOfficialForm(activeToken, caseId, formCode);
+      if (!data?.data_base64) throw new Error("Invalid server response: missing PDF data.");
+      saveBlob(decodeBase64(data.data_base64), data.filename);
+      toast.success("Official form downloaded.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Download failed. Please try again.");
+    } finally {
+      setDownloadingPdf(null);
+    }
+  }
 
   function handleCopy(key: string, value: string) {
     void navigator.clipboard.writeText(value);
@@ -247,6 +308,167 @@ export function FormsStep({
       {quickSaveNotice && (
         <div className="rounded-md border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs text-emerald-800 dark:text-emerald-300 font-medium">
           {quickSaveNotice}
+        </div>
+      )}
+
+      {portalPack && (
+        <div className="space-y-3">
+          <div className="rounded-[var(--radius)] border border-amber-500/30 bg-amber-500/5 p-4">
+            <p className="text-xs font-semibold uppercase tracking-wider text-amber-700 dark:text-amber-400">
+              Filed online — there is no form to submit
+            </p>
+            <p className="mt-1.5 text-xs text-muted-foreground">
+              {portalPack.scope_label} is completed on the government&apos;s own website.
+              Torii prepares your answers in the order the service asks for them so you can
+              work down the screen and copy each one across.
+            </p>
+            {filing?.apply_url && (
+              <a
+                href={filing.apply_url}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+              >
+                <ExternalLink className="size-3" />
+                Apply at {filing.apply_url.replace(/^https?:\/\//, "")}
+              </a>
+            )}
+          </div>
+
+          <div className="rounded-[var(--radius)] border bg-card p-4 space-y-4">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-sm font-semibold">
+                {portalPack.answered_count} of{" "}
+                {portalPack.answered_count + portalPack.outstanding_count} questions answered
+              </p>
+              <Button
+                onClick={() => handleDownloadPdf("portal-pack")}
+                disabled={downloadingPdf === "portal-pack"}
+                className="text-xs h-8 shrink-0"
+              >
+                {downloadingPdf === "portal-pack" ? (
+                  <Loader2 className="mr-1.5 size-3.5 animate-spin" />
+                ) : (
+                  <Download className="mr-1.5 size-3.5" />
+                )}
+                Download answer pack
+              </Button>
+            </div>
+
+            {portalPack.sections.map((section) => (
+              <div key={section.key} className="space-y-1.5">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  {section.title}
+                </p>
+                <div className="rounded-md border divide-y">
+                  {section.fields.map((field) => (
+                    <div
+                      key={field.field}
+                      className="flex items-baseline gap-3 px-3 py-1.5 text-xs"
+                    >
+                      <span className="w-1/2 shrink-0 text-muted-foreground">
+                        {field.label}
+                        {field.required && <span className="text-amber-600"> *</span>}
+                      </span>
+                      {field.answered ? (
+                        <span className="font-medium break-words">{field.value}</span>
+                      ) : (
+                        <span className="italic text-muted-foreground/60">not answered yet</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+
+            {portalPack.outstanding.length > 0 && (
+              <p className="text-xs text-amber-700 dark:text-amber-400">
+                <AlertCircle className="mr-1 inline size-3.5 align-text-bottom" />
+                The service will ask for {portalPack.outstanding.length} more:{" "}
+                {portalPack.outstanding.join(", ")}.
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {officialForms.length > 0 && (
+        <div className="space-y-3">
+          <div>
+            <h4 className="text-sm font-semibold text-foreground">
+              The official form{officialForms.length > 1 ? "s" : ""} for your application type
+            </h4>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Downloaded straight from the issuing ministry and filled with your answers — the
+              exact sheet your residence status and procedure require, not a copy of it.
+            </p>
+          </div>
+
+          {officialForms.map((form) => {
+            const missing = form.missing_answer_keys ?? [];
+            const total = form.total_items ?? 0;
+            const answered = Math.max(0, total - missing.length);
+            return (
+              <div key={form.code} className="rounded-[var(--radius)] border bg-card p-4 space-y-3">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold tracking-tight">{form.title_ja}</p>
+                    <p className="text-xs text-muted-foreground">{form.title_en}</p>
+                    <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                      {form.series && (
+                        <Badge tone="muted" className="text-[10px] font-normal">
+                          {form.series}
+                        </Badge>
+                      )}
+                      <Badge tone="muted" className="text-[10px] font-normal">
+                        {form.pages} page{form.pages > 1 ? "s" : ""}
+                      </Badge>
+                      {total > 0 && (
+                        <Badge
+                          tone={missing.length === 0 ? "success" : "warning"}
+                          className="text-[10px] font-normal"
+                        >
+                          {answered}/{total} items filled
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                  <Button
+                    onClick={() => handleDownloadOfficialForm(form.code)}
+                    disabled={downloadingPdf === form.code}
+                    className="text-xs h-8 shrink-0"
+                  >
+                    {downloadingPdf === form.code ? (
+                      <Loader2 className="mr-1.5 size-3.5 animate-spin" />
+                    ) : (
+                      <Download className="mr-1.5 size-3.5" />
+                    )}
+                    Download filled form
+                  </Button>
+                </div>
+
+                {missing.length > 0 && (
+                  <p className="text-xs text-amber-700 dark:text-amber-400">
+                    <AlertCircle className="mr-1 inline size-3.5 align-text-bottom" />
+                    Still blank on the form: {missing.map((key) => key.replace(/_/g, " ")).join(", ")}.
+                    Answer these in intake and download again.
+                  </p>
+                )}
+
+                {form.note && <p className="text-xs text-muted-foreground">{form.note}</p>}
+
+                <a
+                  href={form.source_page_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                >
+                  <ExternalLink className="size-3" />
+                  {form.authority}
+                </a>
+              </div>
+            );
+          })}
         </div>
       )}
 
