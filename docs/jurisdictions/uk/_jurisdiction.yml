@@ -4,6 +4,10 @@ host_locale: en
 is_live: true
 efile_enabled: false
 self_filing_allowed: true
+# UKVI publishes no downloadable application form; every route is completed on
+# gov.uk and biometrics are given at a visa application centre.
+filing_mode: online_portal
+apply_url: https://www.gov.uk/browse/visas-immigration
 notes: Official UK Visas and Immigration (UKVI / Home Office) immigration workflows.
 categories:
   - code: work

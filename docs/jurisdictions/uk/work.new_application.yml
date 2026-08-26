@@ -259,19 +259,43 @@ forms:
       authority: UK Visas and Immigration (UKVI / Home Office)
       title: Online Application Form & Guidance
       url: https://www.gov.uk/skilled-worker-visa/apply
+    # form_field is "<portal section>.<question>". The section prefix is what groups the
+    # answer pack into the order Access UK asks for things, so a new question needs a
+    # pack edit here and nothing in code.
     field_mappings:
-      - form_field: applicant_name
+      - form_field: personal.full_name
         answer_key: full_name
         required: true
-      - form_field: nationality
+      - form_field: personal.date_of_birth
+        answer_key: date_of_birth
+        required: true
+      - form_field: personal.nationality
         answer_key: nationality
         required: true
-      - form_field: passport_no
+      - form_field: passport.passport_number
         answer_key: passport_number
         required: true
-      - form_field: employer
+      - form_field: passport.passport_expiry
+        answer_key: passport_expiry
+        required: true
+      - form_field: sponsor.sponsor_name
         answer_key: sponsor_name
         required: true
-      - form_field: salary
+      - form_field: sponsor.certificate_of_sponsorship_reference
+        answer_key: cos_reference
+        required: true
+      - form_field: employment.job_title
+        answer_key: job_title
+        required: true
+      - form_field: employment.annual_salary_gbp
         answer_key: annual_salary_gbp
+        required: true
+      - form_field: employment.sponsor_certifies_maintenance
+        answer_key: sponsor_certifies_maintenance
+        required: false
+      - form_field: declarations.english_language_proof
+        answer_key: english_language_proof
+        required: true
+      - form_field: declarations.criminal_record
+        answer_key: criminal_record
         required: true

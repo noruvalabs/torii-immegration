@@ -22,6 +22,12 @@ StageCode = Literal["sponsor_petition", "applicant_filing", "school_completion"]
 StageActor = Literal["applicant", "sponsor", "institution"]
 HandoffArtifact = Literal["coe", "i20", "i129_approval"]
 
+# How a jurisdiction is filed with:
+#   official_form_pdf — the government publishes a form to fill in and hand over (Japan)
+#   online_portal     — the application is typed into a government website (the UK)
+#   hybrid            — an online application plus a separate form to print (some consulates)
+FilingMode = Literal["official_form_pdf", "online_portal", "hybrid"]
+
 EFFECTIVE_KEYS = ("effective_from", "effective_until")
 
 
@@ -188,6 +194,15 @@ class ContentPack(BaseModel):
 
 
 class JurisdictionMeta(BaseModel):
+    """How a country is filed with, not just what it requires.
+
+    ``filing_mode`` decides what the applicant is actually given. Japan publishes forms
+    to print, sign and hand in, so it gets a filled official PDF. The UK has no form to
+    submit at all — everything is typed into gov.uk — so producing a document that looks
+    like a UK application form would misrepresent the process. It gets a portal answer
+    pack instead: their answers in the order the online service asks for them.
+    """
+
     code: str
     name: str
     host_locale: str = "en"
@@ -195,6 +210,9 @@ class JurisdictionMeta(BaseModel):
     efile_enabled: bool = False
     self_filing_allowed: bool | None = None
     notes: str | None = None
+    filing_mode: FilingMode = "official_form_pdf"
+    # Where the applicant actually files, when filing is online.
+    apply_url: str | None = None
     categories: list[dict[str, Any]] = Field(default_factory=list)
     actions: list[dict[str, Any]] = Field(default_factory=list)
 

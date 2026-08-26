@@ -4,6 +4,7 @@ host_locale: ja
 is_live: true
 efile_enabled: false
 self_filing_allowed: true
+filing_mode: official_form_pdf
 notes: >
   Domestic filings (extension / change of status) may be self-filed by the
   resident via the ISA online system or a Regional Immigration Bureau. COE for
