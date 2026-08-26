@@ -91,6 +91,15 @@ class Settings(BaseSettings):
     # mount packs outside the package tree.
     jurisdictions_dir: str = ""
 
+    # --- Official government form templates -------------------------------------
+    # Where the exact published PDFs fetched from the issuing ministry are cached.
+    # Empty = ./var/official_forms relative to the working directory. Mount a shared
+    # volume in deploys so every task warms the same cache.
+    official_form_dir: str = ""
+    # Allow the request path to download a missing template from the ministry. Turn off
+    # for air-gapped environments; `torii-fetch-forms` pre-warms the cache instead.
+    official_form_fetch_enabled: bool = True
+
     # When true, GET /v1/cases/{id}/packet requires a completed payment
     # entitlement (US-22.2). Off in unit tests unless explicitly enabled.
     require_packet_entitlement: bool = True
