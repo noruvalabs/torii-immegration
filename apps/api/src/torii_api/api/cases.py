@@ -45,6 +45,7 @@ from torii_api.services.intake import (
     validate_answer,
     visible_questions,
 )
+from torii_api.services.jp_official_forms import merge_form_questions
 from torii_api.services.research import (
     find_research,
     research_documents,
@@ -555,18 +556,34 @@ async def _intake_questions_for_case(session: AsyncSession, case: Case) -> list[
         )
     )
     if definition is not None and definition.questions:
-        return list(definition.questions)
+        return await _with_official_form_questions(session, case, list(definition.questions))
 
     research = await _research_for_case(session, case)
     if research is not None and _effective_research_status(research) == "completed":
         questions = research_questions(research.payload)
         if questions:
-            return questions
+            return await _with_official_form_questions(session, case, questions)
 
     raise HTTPException(
         status_code=status.HTTP_404_NOT_FOUND,
         detail="no intake definition for this case scope",
     )
+
+
+async def _with_official_form_questions(
+    session: AsyncSession, case: Case, questions: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    """Extend a scope's intake with the items its official government form asks for.
+
+    The applicant signs a specific ministry sheet, so intake has to cover every box on
+    it — nationality, sex, residence card number, the 有/無 disclosures. Pack-authored
+    questions still win on any key they define; the rest are appended as optional so a
+    case in flight is never blocked by the new ones.
+    """
+    j_code, v_code, a_code, _label = await _scope_label(session, case)
+    if (j_code or "").upper() != "JP" or not v_code or not a_code:
+        return questions
+    return merge_form_questions(questions, v_code, a_code)
 
 
 def _intake_state(

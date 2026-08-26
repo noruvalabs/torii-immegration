@@ -37,6 +37,10 @@ class IntakeQuestion(BaseModel):
     min_value: int | None = None
     max_value: int | None = None
     section: str | None = None
+    # Why this question is being asked, shown under the prompt. Used where the answer
+    # feeds a specific box on an official form, so skipping it is a visible choice
+    # rather than an invisible blank on a signed sheet.
+    hint: str | None = None
     citation: dict[str, Any] | None = None
 
 
