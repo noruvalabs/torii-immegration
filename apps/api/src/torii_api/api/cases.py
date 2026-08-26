@@ -429,11 +429,17 @@ async def _enqueue_research_if_needed(
 ) -> str | None:
     """Link (and queue) a research snapshot for a research-driven scope.
 
-    Every scope is researched live via Tavily web search and LLM extraction.
+    Scopes without a live seeded content pack are researched live via Tavily web search
+    and LLM extraction. Scopes with verified live packs use their authoritative content.
     Fresh snapshots are reused; stale/failed ones are reset and re-queued via the
     transactional outbox (``case.research.queued``).
     """
     if case.visa_category_id is None or case.case_action_id is None:
+        return None
+
+    # Do not enqueue or link research if the scope has live seeded definitions
+    has_intake, has_eligibility, has_docs, _ = await _def_flags(session, case)
+    if has_intake and has_eligibility and has_docs:
         return None
 
     origin = _normalize_country_code(case.origin_country)
@@ -516,17 +522,12 @@ async def _owned_case(session: AsyncSession, case_id: int, user: User) -> Case:
 
 
 async def _intake_questions_for_case(session: AsyncSession, case: Case) -> list[dict[str, Any]]:
-    """Resolve intake questions for the case: research snapshot, else live definition fallback."""
+    """Resolve intake questions for the case: live definition if available, else research snapshot fallback."""
     if case.visa_category_id is None or case.case_action_id is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="case is not fully scoped for intake",
         )
-    research = await _research_for_case(session, case)
-    if research is not None and _effective_research_status(research) == "completed":
-        questions = research_questions(research.payload)
-        if questions:
-            return questions
     action_ids = [case.case_action_id]
     case_act = await session.get(CaseAction, case.case_action_id)
     if case_act is not None:
@@ -553,8 +554,15 @@ async def _intake_questions_for_case(session: AsyncSession, case: Case) -> list[
             IntakeDefinition.is_live.is_(True),
         )
     )
-    if definition is not None:
-        return list(definition.questions or [])
+    if definition is not None and definition.questions:
+        return list(definition.questions)
+
+    research = await _research_for_case(session, case)
+    if research is not None and _effective_research_status(research) == "completed":
+        questions = research_questions(research.payload)
+        if questions:
+            return questions
+
     raise HTTPException(
         status_code=status.HTTP_404_NOT_FOUND,
         detail="no intake definition for this case scope",
@@ -718,19 +726,40 @@ async def _case_guidance(session: AsyncSession, case: Case) -> GuidanceOut:
 
     intake_questions: list[dict[str, Any]] | None = None
     if has_intake:
-        if research is not None and research_questions(research.payload):
-            intake_questions = research_questions(research.payload)
-        else:
-            definition = await session.scalar(
-                select(IntakeDefinition).where(
-                    IntakeDefinition.jurisdiction_id == case.jurisdiction_id,
-                    IntakeDefinition.visa_category_id == case.visa_category_id,
-                    IntakeDefinition.case_action_id == case.case_action_id,
-                    IntakeDefinition.is_live.is_(True),
-                )
+        action_ids = [case.case_action_id] if case.case_action_id is not None else []
+        case_act = (
+            await session.get(CaseAction, case.case_action_id)
+            if case.case_action_id is not None
+            else None
+        )
+        if case_act is not None:
+            alt_code = (
+                "new_application"
+                if case_act.code == "new"
+                else ("new" if case_act.code == "new_application" else None)
             )
-            if definition is not None:
-                intake_questions = list(definition.questions or [])
+            if alt_code:
+                alt_act = await session.scalar(
+                    select(CaseAction).where(
+                        CaseAction.jurisdiction_id == case.jurisdiction_id,
+                        CaseAction.code == alt_code,
+                    )
+                )
+                if alt_act is not None:
+                    action_ids.append(alt_act.id)
+
+        definition = await session.scalar(
+            select(IntakeDefinition).where(
+                IntakeDefinition.jurisdiction_id == case.jurisdiction_id,
+                IntakeDefinition.visa_category_id == case.visa_category_id,
+                IntakeDefinition.case_action_id.in_(action_ids),
+                IntakeDefinition.is_live.is_(True),
+            )
+        )
+        if definition is not None and definition.questions:
+            intake_questions = list(definition.questions)
+        elif research is not None and research_questions(research.payload):
+            intake_questions = research_questions(research.payload)
 
     checklist = (
         (
