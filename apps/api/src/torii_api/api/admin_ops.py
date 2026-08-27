@@ -25,6 +25,7 @@ from torii_api.db.models import (
     VisaCategory,
 )
 from torii_api.db.session import get_session
+from torii_api.services.form_revisions import load_revisions, pending_reviews
 
 router = APIRouter(prefix="/v1/admin/ops", tags=["admin-ops"])
 
@@ -266,4 +267,45 @@ async def upsert_form_template(
     return {
         "status": "ok",
         "message": f"form template '{payload.code}' v{payload.version} stored as draft",
+    }
+
+
+# ── Official form revisions ────────────────────────────────────────────────────
+# A ministry revision is a review, not a break. `torii-check-form-revisions` records what
+# the Immigration Services Agency publishes today; this endpoint is the queue ops work
+# from. Nothing here adopts a revision: a revised sheet may have moved a field, so the
+# layout is re-verified by hand and the digest repinned in `jp_official_forms.py`. Until
+# then the fill gate leaves that page blank rather than writing into stale coordinates.
+
+
+@router.get("/form-revisions")
+async def list_form_revisions(_: AdminOpsDep) -> dict[str, Any]:
+    """Every form the last revision check recorded, with the queue called out."""
+    records = load_revisions()
+    queue = pending_reviews()
+    return {
+        "checked": len(records),
+        "needs_review": len(queue),
+        "queue": [
+            {
+                "code": record.code,
+                "status": record.status,
+                "pdf_url": record.pdf_url,
+                "published_sha256": record.sha256,
+                "verified_sha256": record.verified_sha256,
+                "pages": record.pages,
+                "note": record.note,
+            }
+            for record in queue
+        ],
+        "forms": {
+            code: {
+                "status": record.status,
+                "pdf_url": record.pdf_url,
+                "published_sha256": record.sha256,
+                "verified_sha256": record.verified_sha256,
+                "pages": record.pages,
+            }
+            for code, record in sorted(records.items())
+        },
     }

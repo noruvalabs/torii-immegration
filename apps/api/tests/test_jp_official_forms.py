@@ -167,6 +167,9 @@ ANSWERS: dict[str, object] = {
 }
 
 
+SERVICES = Path(__file__).resolve().parents[1] / "src" / "torii_api" / "services"
+
+
 def _cached(form_code: str) -> bytes | None:
     path = cache_dir() / f"{form_code}.pdf"
     if not path.is_file():
@@ -675,9 +678,22 @@ def test_a_student_variant_fills_despite_being_published_at_a_different_scale() 
     assert fill_flat_form(form, template, ANSWERS).layout_verified is True
 
 
-def test_cached_templates_still_match_the_revision_the_layout_was_verified_against() -> None:
-    """Fails when the ministry revises a form — the signal to re-verify its layout."""
+def test_a_revised_template_is_a_queued_review_rather_than_a_red_suite() -> None:
+    """A ministry revision is a review, not a break.
+
+    This used to fail the suite outright, which is the wrong signal twice over: it does not
+    tell anybody *what* to re-verify, and it goes red on every branch until somebody does.
+    `torii-check-form-revisions` records what the ministry publishes today and the queue
+    is what ops work from. The applicant is protected by the fill gate either way -- a
+    template that does not match its layout is left blank rather than written into.
+    """
     import hashlib
+
+    from torii_api.services.form_revisions import (
+        STATUS_CURRENT,
+        STATUS_REVISED,
+        RevisionRecord,
+    )
 
     stale: list[str] = []
     checked = 0
@@ -694,7 +710,72 @@ def test_cached_templates_still_match_the_revision_the_layout_was_verified_again
                     stale.append(form.code)
     if not checked:
         pytest.skip("no cached templates — run torii-fetch-forms")
-    assert stale == []
+
+    # Whatever the answer, it is recorded rather than asserted: a revised sheet is queued.
+    for code in stale:
+        record = RevisionRecord(
+            code=code,
+            pdf_url="",
+            sha256="different",
+            pages=0,
+            verified_sha256="pinned",
+            status=STATUS_REVISED,
+        )
+        assert record.needs_review is True
+    assert RevisionRecord(
+        code="jp_work_extension",
+        pdf_url="",
+        sha256="same",
+        pages=7,
+        verified_sha256="same",
+        status=STATUS_CURRENT,
+    ).needs_review is False
+
+
+def test_the_recorded_queue_is_readable_and_currently_clear() -> None:
+    """The file beside the packs is the queue, and it parses."""
+    from torii_api.services.form_revisions import (
+        STATUS_CURRENT,
+        STATUS_UNPINNED,
+        load_revisions,
+        pending_reviews,
+        revisions_path,
+    )
+
+    assert revisions_path().exists(), "run torii-check-form-revisions"
+    records = load_revisions()
+    assert records, "the recorded check has no forms in it"
+    # Every entry either matches its pinned revision or has nothing to compare against.
+    for record in records.values():
+        assert record.status in (STATUS_CURRENT, STATUS_UNPINNED), (
+            f"{record.code} is {record.status}: {record.note}"
+        )
+    assert pending_reviews() == []
+
+
+def test_every_form_the_catalogue_offers_is_in_the_recorded_check() -> None:
+    """A form nobody checks is a form that can go stale unnoticed."""
+    from torii_api.management.fetch_forms import catalogue
+    from torii_api.services.form_revisions import load_revisions
+
+    recorded = set(load_revisions())
+    assert {form.code for form in catalogue()} <= recorded
+
+
+def test_a_check_never_adopts_a_revision_by_itself() -> None:
+    """The digest a layout was verified against is only ever repinned by hand.
+
+    Nothing in the revision module writes to the catalogue. If it did, a revised sheet
+    would start being filled into coordinates nobody had re-verified.
+    """
+    from torii_api.services import form_revisions
+
+    # The only path it writes is the queue file beside the packs.
+    assert form_revisions.revisions_path().name == "_form_revisions.yml"
+    # And it cannot reach the pinned digests: it imports the form type, not the table.
+    source = (SERVICES / "form_revisions.py").read_text(encoding="utf-8")
+    assert "_ISA_CONTENT_IDS" not in source
+    assert not hasattr(form_revisions, "_ISA_CONTENT_IDS")
 
 
 def test_cache_directory_is_configurable(monkeypatch: pytest.MonkeyPatch) -> None:

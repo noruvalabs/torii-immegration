@@ -1,0 +1,133 @@
+# Written by `torii-check-form-revisions`. One entry per official form, saying
+# what the ministry publishes right now and whether it is the revision the
+# authored layout was verified against.
+#
+# A `revised` or `unreachable` entry is a review, not a break: the fill gate
+# leaves a page blank rather than writing into coordinates that may have moved,
+# so nothing reaches an applicant until somebody re-verifies the layout and
+# repins the digest in `jp_official_forms.py`.
+#
+# Do not hand-edit the digests. Re-run the check.
+checked_at: '2026-08-27T16:08:22.220888+00:00'
+forms:
+  jp_consular_visa:
+    pdf_url: ''
+    sha256: ''
+    pages: 0
+    verified_sha256: null
+    status: unpinned
+    note: Ships bundled; the ministry does not serve it to automated clients.
+  jp_dependent_change_of_status:
+    pdf_url: https://www.moj.go.jp/isa/content/930004080.pdf
+    sha256: 250ed51e349997009ba07c400bbb5aeefdec41e1c34ce88205adbd4b354e9e28
+    pages: 4
+    verified_sha256: 250ed51e349997009ba07c400bbb5aeefdec41e1c34ce88205adbd4b354e9e28
+    status: current
+  jp_dependent_coe:
+    pdf_url: https://www.moj.go.jp/isa/content/930004048.pdf
+    sha256: 8ea1915c90a4998767669dfac72f86eb1d78aefa7e8592940cc9aff4c767fef8
+    pages: 4
+    verified_sha256: 8ea1915c90a4998767669dfac72f86eb1d78aefa7e8592940cc9aff4c767fef8
+    status: current
+  jp_dependent_extension:
+    pdf_url: https://www.moj.go.jp/isa/content/930004110.pdf
+    sha256: d9e555e70774f8295403b76e0773309d92a69519a3f9ec0e1c9e5c737ab19276
+    pages: 4
+    verified_sha256: d9e555e70774f8295403b76e0773309d92a69519a3f9ec0e1c9e5c737ab19276
+    status: current
+  jp_designated_activities_change_of_status:
+    pdf_url: https://www.moj.go.jp/isa/content/930004088.pdf
+    sha256: 69e5b995a058aa7335b58636a1301f16497558e201e1ed87c94ac2aa573545c3
+    pages: 9
+    verified_sha256: 69e5b995a058aa7335b58636a1301f16497558e201e1ed87c94ac2aa573545c3
+    status: current
+  jp_designated_activities_coe:
+    pdf_url: https://www.moj.go.jp/isa/content/930004058.pdf
+    sha256: 90d14c4010c4fc252e261dae85c6f0eacff83be89256eee2f48a9ceca03ea372
+    pages: 10
+    verified_sha256: 90d14c4010c4fc252e261dae85c6f0eacff83be89256eee2f48a9ceca03ea372
+    status: current
+  jp_designated_activities_extension:
+    pdf_url: https://www.moj.go.jp/isa/content/930004118.pdf
+    sha256: e551aa918f4329480a53974a951aa31eac05296d0a50dbbcefae68faf4a05789
+    pages: 9
+    verified_sha256: e551aa918f4329480a53974a951aa31eac05296d0a50dbbcefae68faf4a05789
+    status: current
+  jp_hsp_change_of_status:
+    pdf_url: https://www.moj.go.jp/isa/content/930004066.pdf
+    sha256: 202f59ad3c0460c6d8234db7bad0b4de1fd9e052b21a7e01036d6ae1739d3124
+    pages: 6
+    verified_sha256: 202f59ad3c0460c6d8234db7bad0b4de1fd9e052b21a7e01036d6ae1739d3124
+    status: current
+  jp_hsp_coe:
+    pdf_url: https://www.moj.go.jp/isa/content/930004031.pdf
+    sha256: aa4a587dd8c40eb7f83839d991194b97e456a823b198d5fdc3ba0b926dd337f6
+    pages: 6
+    verified_sha256: aa4a587dd8c40eb7f83839d991194b97e456a823b198d5fdc3ba0b926dd337f6
+    status: current
+  jp_hsp_extension:
+    pdf_url: https://www.moj.go.jp/isa/content/930004096.pdf
+    sha256: 7310fb523b55b7871f1d5636733b7804bca1a81e83abaeb5155f51a799228197
+    pages: 6
+    verified_sha256: 7310fb523b55b7871f1d5636733b7804bca1a81e83abaeb5155f51a799228197
+    status: current
+  jp_permanent_residence:
+    pdf_url: https://www.moj.go.jp/isa/content/930002835.pdf
+    sha256: 5129c9636092d13538f25fab681d6730e7d5d871561ae34fab0542083b85da1f
+    pages: 2
+    verified_sha256: 5129c9636092d13538f25fab681d6730e7d5d871561ae34fab0542083b85da1f
+    status: current
+  jp_spouse_change_of_status:
+    pdf_url: https://www.moj.go.jp/isa/content/930004084.pdf
+    sha256: b0d5278410f2d10d1f090cdade0c86fbf91e51cb88f1735f6f32d5a262b62338
+    pages: 4
+    verified_sha256: b0d5278410f2d10d1f090cdade0c86fbf91e51cb88f1735f6f32d5a262b62338
+    status: current
+  jp_spouse_coe:
+    pdf_url: https://www.moj.go.jp/isa/content/930004054.pdf
+    sha256: d690116928bcaf345d3a93966617c85b253c4f4d7f9a7c4edd7b35129ed222fe
+    pages: 4
+    verified_sha256: d690116928bcaf345d3a93966617c85b253c4f4d7f9a7c4edd7b35129ed222fe
+    status: current
+  jp_spouse_extension:
+    pdf_url: https://www.moj.go.jp/isa/content/930004114.pdf
+    sha256: 8cce68867efbb2b915510efbca49ec4ee1917bbbb47013b57e566e45b2fac601
+    pages: 4
+    verified_sha256: 8cce68867efbb2b915510efbca49ec4ee1917bbbb47013b57e566e45b2fac601
+    status: current
+  jp_student_change_of_status:
+    pdf_url: https://www.moj.go.jp/isa/content/930004076.pdf
+    sha256: ae97f5e810444b43f8c74c0100bcc1d55ba7d7c3da6861e0ca502fc931f962af
+    pages: 6
+    verified_sha256: ae97f5e810444b43f8c74c0100bcc1d55ba7d7c3da6861e0ca502fc931f962af
+    status: current
+  jp_student_coe:
+    pdf_url: https://www.moj.go.jp/isa/content/930004044.pdf
+    sha256: 26d918bb9957527abe0f51fe0bba8c2b7000f89cb102985242475de8a22c5cd6
+    pages: 6
+    verified_sha256: 26d918bb9957527abe0f51fe0bba8c2b7000f89cb102985242475de8a22c5cd6
+    status: current
+  jp_student_extension:
+    pdf_url: https://www.moj.go.jp/isa/content/930004106.pdf
+    sha256: bb3bc66715506e1dcd209707d44f812a0230b928ebe097e2fd58101c8b8109ce
+    pages: 6
+    verified_sha256: bb3bc66715506e1dcd209707d44f812a0230b928ebe097e2fd58101c8b8109ce
+    status: current
+  jp_work_change_of_status:
+    pdf_url: https://www.moj.go.jp/isa/content/930004064.pdf
+    sha256: c27a6c3b3e3aa4e39905a660af455abcc14e41326b13bc9537c950d6b5dd3529
+    pages: 7
+    verified_sha256: c27a6c3b3e3aa4e39905a660af455abcc14e41326b13bc9537c950d6b5dd3529
+    status: current
+  jp_work_coe:
+    pdf_url: https://www.moj.go.jp/isa/content/930004029.pdf
+    sha256: 62384b4f04ac715c59a798d766cd8d92ba8b3c7bd895ba2c0a20d1d3dd939e81
+    pages: 7
+    verified_sha256: 62384b4f04ac715c59a798d766cd8d92ba8b3c7bd895ba2c0a20d1d3dd939e81
+    status: current
+  jp_work_extension:
+    pdf_url: https://www.moj.go.jp/isa/content/930004094.pdf
+    sha256: f4a84e52db12074d9e007d0228fc8116c9f522dd6d4ad3dde920c6ee2bbecab3
+    pages: 7
+    verified_sha256: f4a84e52db12074d9e007d0228fc8116c9f522dd6d4ad3dde920c6ee2bbecab3
+    status: current
