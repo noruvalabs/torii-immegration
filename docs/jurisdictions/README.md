@@ -129,6 +129,33 @@ signal to re-verify.
 Intake questions are extended from these forms at request time, so every box on the
 sheet is asked about; pack-authored questions still win on any key they define.
 
+### Editing those questions
+
+They live in `jp/_form_questions.yml`, not in Python — wording, section and gating are
+ops content:
+
+```yaml
+questions:
+  employer_name:
+    prompt: "What is the name of your employer?"
+    type: string
+    section: "Work & employer"
+    max_length: 160
+    show_when: { key: is_employed, equals: true }
+```
+
+`show_when` keeps intake short. A ministry form has whole blocks that most applicants
+never fill — the guarantor block, the inviter block, the employer block — and asking all
+of them of everyone is what made intake exhausting (a spouse applicant saw 74 questions,
+of which 7 were required). Gate them behind one cheap yes/no and they are asked only once
+they apply. The gate is emitted automatically just before the first question it controls,
+so a gate must never be left unasked — `test_every_gate_a_question_depends_on_is_itself_asked`
+enforces that.
+
+Filing from abroad is two stages, and intake asks only for the form filed **next**: the
+certificate of eligibility now, the consular visa once the certificate has been issued and
+the applicant actually knows their flight and port of entry.
+
 ## Loader
 
 ```python

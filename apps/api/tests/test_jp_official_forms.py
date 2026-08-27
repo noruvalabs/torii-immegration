@@ -675,3 +675,116 @@ def test_cache_directory_is_configurable(monkeypatch: pytest.MonkeyPatch) -> Non
     finally:
         monkeypatch.delenv("TORII_OFFICIAL_FORM_DIR", raising=False)
         get_settings.cache_clear()
+
+
+# ── Question volume ────────────────────────────────────────────────────────────────
+# Intake asked every question of every applicant regardless of whether it applied: a
+# spouse applicant saw 74 questions before answering anything, of which 7 were required.
+
+
+def _shown(scope: str, category: str, action: str, answers: dict | None = None):
+    merged = merge_form_questions(pack_questions(scope), category, action)
+    parsed = parse_questions(merged, jurisdiction_code="JP", visa_category=category)
+    from torii_api.services.intake import visible_questions
+
+    return visible_questions(parsed, answers or {})
+
+
+@pytest.mark.parametrize(
+    ("scope", "category", "action", "ceiling"),
+    [
+        ("jp/work.renewal", "work", "renewal", 36),
+        ("jp/student.renewal", "student", "renewal", 48),
+        ("jp/spouse.new_application", "spouse", "new_application", 42),
+        ("jp/tourist.new_application", "tourist", "new_application", 38),
+    ],
+)
+def test_a_new_applicant_is_not_shown_an_exhausting_questionnaire(
+    scope: str, category: str, action: str, ceiling: int
+) -> None:
+    assert len(_shown(scope, category, action)) <= ceiling
+
+
+def test_filing_from_abroad_does_not_ask_for_the_visa_stage_upfront() -> None:
+    """The consular form is filed months later, once the certificate has been issued."""
+    shown = {
+        question.key
+        for question in _shown("jp/spouse.new_application", "spouse", "new_application")
+    }
+    # Items that exist only on the consular form are not asked at the certificate stage.
+    # (port_of_entry is item 13 of the certificate itself, so it legitimately is.)
+    assert "airline_flight_no" not in shown
+    assert "passport_issuing_authority" not in shown
+    assert "inviter_name" not in shown
+    # But the whole set is still available where a caller genuinely wants it.
+    every = {
+        q["key"] for q in intake_questions_for_scope("spouse", "new_application", all_stages=True)
+    }
+    assert "airline_flight_no" in every
+
+
+@pytest.mark.parametrize(
+    ("gate", "gated_key"),
+    [
+        ("is_employed", "employer_name"),
+        ("has_financial_support", "supporter_name"),
+        ("has_guarantor_in_japan", "resident_guarantor_name"),
+        ("carries_cash_into_japan", "funds_carried_jpy"),
+    ],
+)
+def test_a_conditional_block_is_asked_only_once_it_applies(gate: str, gated_key: str) -> None:
+    scope, category, action = "jp/spouse.new_application", "spouse", "new_application"
+    if gated_key == "resident_guarantor_name":
+        # This block sits on the part-3 sheet, which the extension packet carries.
+        scope, action = "jp/spouse.new_application", "renewal"
+    before = {q.key for q in _shown(scope, category, action)}
+    after = {q.key for q in _shown(scope, category, action, {gate: True})}
+    assert gate in before, f"the gate {gate!r} itself must be asked"
+    assert gated_key not in before
+    assert gated_key in after
+
+
+def test_every_gate_a_question_depends_on_is_itself_asked() -> None:
+    """A gate nobody is asked leaves its block permanently hidden and its box blank."""
+    for scope, category, action in (
+        ("jp/work.renewal", "work", "renewal"),
+        ("jp/student.renewal", "student", "renewal"),
+        ("jp/spouse.new_application", "spouse", "new_application"),
+        ("jp/tourist.new_application", "tourist", "new_application"),
+    ):
+        merged = merge_form_questions(pack_questions(scope), category, action)
+        keys = {question["key"] for question in merged}
+        for question in merged:
+            gate = (question.get("show_when") or {}).get("key")
+            if gate:
+                assert gate in keys, f"{scope}: {question['key']} is gated on unasked {gate!r}"
+
+
+# ── Questions are ops-editable content, not code ───────────────────────────────────
+
+
+def test_questions_come_from_versioned_yaml_not_python() -> None:
+    """Wording, sections and gating change often; nobody should edit Python to do it."""
+    from torii_api.services.content_packs import resolve_packs_dir
+
+    path = resolve_packs_dir() / "jp" / "_form_questions.yml"
+    assert path.is_file(), "the intake questions must live in an ops-editable pack file"
+
+    import yaml
+
+    entries = (yaml.safe_load(path.read_text(encoding="utf-8")) or {}).get("questions") or {}
+    assert len(entries) == len(QUESTION_SPECS)
+    assert entries["sex"]["prompt"] == QUESTION_SPECS["sex"].prompt
+
+
+def test_every_authored_question_is_well_formed() -> None:
+    for key, spec in QUESTION_SPECS.items():
+        assert spec.prompt.strip(), f"{key} has no prompt"
+        assert spec.type in ("boolean", "string", "integer", "enum", "date"), key
+        assert spec.section.strip(), f"{key} has no section"
+        if spec.type == "enum":
+            assert spec.options, f"enum question {key} has no options"
+        if spec.show_when:
+            assert spec.show_when[0] in QUESTION_SPECS, (
+                f"{key} gated on unknown {spec.show_when[0]}"
+            )
