@@ -32,7 +32,7 @@ from torii_api.db.models import (
 from torii_api.db.session import get_session
 from torii_api.services.checklist import ChecklistStatus, update_status, visible_requirement_items
 from torii_api.services.citations import resolve_official_citation
-from torii_api.services.content_packs import load_jurisdiction_meta
+from torii_api.services.content_packs import load_jurisdiction_meta, load_pack_by_scope
 from torii_api.services.eligibility import (
     EligibilityResult,
     evaluate_eligibility_with_ai,
@@ -56,6 +56,7 @@ from torii_api.services.research import (
     research_rules,
 )
 from torii_api.services.review import ReviewResult, review_packet
+from torii_api.services.submission_kit import build_submission_kit
 
 router = APIRouter(prefix="/v1/cases", tags=["case-workflow"])
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
@@ -523,7 +524,14 @@ def _apply_extracted_fields_to_case_and_user(
         norm_key = key.lower().strip()
 
         # Update User global profile and intake aliases
-        if norm_key in ("full_name", "applicant_name", "name", "legal_name", "holder_name", "employee_name"):
+        if norm_key in (
+            "full_name",
+            "applicant_name",
+            "name",
+            "legal_name",
+            "holder_name",
+            "employee_name",
+        ):
             user.full_name = val_str
             answers["full_name"] = val_str
         elif norm_key in ("nationality", "citizenship", "country_of_citizenship"):
@@ -532,7 +540,12 @@ def _apply_extracted_fields_to_case_and_user(
         elif norm_key in ("passport_number", "passport_no", "passport_num"):
             user.passport_number = val_str
             answers["passport_number"] = val_str
-        elif norm_key in ("passport_expiry", "passport_expiry_date", "expiry_date", "passport_expiration_date"):
+        elif norm_key in (
+            "passport_expiry",
+            "passport_expiry_date",
+            "expiry_date",
+            "passport_expiration_date",
+        ):
             user.passport_expiry = val_str
             answers["passport_expiry"] = val_str
         elif norm_key in ("date_of_birth", "dob", "birth_date", "applicant_dob"):
@@ -710,7 +723,7 @@ async def build_packet(case_id: int, session: SessionDep, user: CurrentUserDep) 
         ChecklistItemOut.model_validate(item).model_dump(mode="json")
         for item in await _checklist(session, case.id)
     ]
-    j_code, _, _, scope_label = await _scope_label(session, case)
+    j_code, v_code, a_code, scope_label = await _scope_label(session, case)
     snapshot = assemble_packet(
         case.reference,
         forms,
@@ -718,6 +731,8 @@ async def build_packet(case_id: int, session: SessionDep, user: CurrentUserDep) 
         case.submission_reference,
         jurisdiction_code=j_code,
         scope_label=scope_label,
+        visa_category=v_code,
+        action=a_code,
     )
     case.packet_snapshot = snapshot
     case.status = "packet_ready"
@@ -744,7 +759,7 @@ async def get_packet(case_id: int, session: SessionDep, user: CurrentUserDep) ->
             ChecklistItemOut.model_validate(item).model_dump(mode="json")
             for item in await _checklist(session, case.id)
         ]
-        j_code, _, _, scope_label = await _scope_label(session, case)
+        j_code, v_code, a_code, scope_label = await _scope_label(session, case)
         snapshot = assemble_packet(
             case.reference,
             forms,
@@ -752,11 +767,39 @@ async def get_packet(case_id: int, session: SessionDep, user: CurrentUserDep) ->
             case.submission_reference,
             jurisdiction_code=j_code,
             scope_label=scope_label,
+            visa_category=v_code,
+            action=a_code,
         )
         case.packet_snapshot = snapshot
         case.status = "packet_ready"
         await session.flush()
     return case.packet_snapshot
+
+
+async def _submission_kit(session: AsyncSession, case: Case) -> Any | None:
+    """Filing instructions for this case's application type, or ``None`` if not modelled.
+
+    Fees come from the scope's own content pack so only published figures with a citation
+    reach the applicant (NF-2).
+    """
+    j_code, v_code, a_code, _label = await _scope_label(session, case)
+    fees: list[Any] = []
+    if j_code and v_code and a_code:
+        action = "new_application" if a_code == "new" else a_code
+        try:
+            fees = list(load_pack_by_scope(f"{j_code.lower()}/{v_code}.{action}").fees)
+        except (KeyError, FileNotFoundError):
+            fees = []
+    return build_submission_kit(
+        jurisdiction_code=j_code,
+        visa_category=v_code,
+        action=a_code,
+        checklist=[
+            ChecklistItemOut.model_validate(item).model_dump(mode="json")
+            for item in await _checklist(session, case.id)
+        ],
+        fees=fees,
+    )
 
 
 def _jurisdiction_meta(jurisdiction_code: str | None) -> Any:
@@ -841,7 +884,12 @@ async def download_application_form_pdf(
     j_code, v_code, a_code, scope_label = await _scope_label(session, case)
     j_code_upper = (j_code or (case.reference.split("-")[0] if case.reference else "JP")).upper()
 
-    photo_data = user.avatar_url or answers.get("photo") or answers.get("applicant_photo") or answers.get("passport_photo")
+    photo_data = (
+        user.avatar_url
+        or answers.get("photo")
+        or answers.get("applicant_photo")
+        or answers.get("passport_photo")
+    )
 
     safe_ref = "".join(
         c for c in (case.reference or f"CASE-{case.id}") if c.isalnum() or c in ("-", "_", ".")
@@ -904,7 +952,9 @@ async def download_application_form_pdf(
             photo_data=photo_data,
         )
     elif j_code_upper == "JP":
-        if a_code == "new_application" or (v_code == "tourist" and a_code not in ("renewal", "change_of_status")):
+        if a_code == "new_application" or (
+            v_code == "tourist" and a_code not in ("renewal", "change_of_status")
+        ):
             pdf_bytes = generate_official_japan_visa_form_pdf(
                 case.reference or f"JP-{case.id}",
                 answers,
@@ -1063,7 +1113,11 @@ async def download_cover_letter_pdf(
         ChecklistItemOut.model_validate(item).model_dump(mode="json")
         for item in await _checklist(session, case.id)
     ]
-    _, _, _, scope_label = await _scope_label(session, case)
+    j_code, v_code, a_code, scope_label = await _scope_label(session, case)
+    forms = [
+        GeneratedFormOut.model_validate(item).model_dump(mode="json")
+        for item in await _forms(session, case.id)
+    ]
     safe_ref = "".join(
         c for c in (case.reference or f"CASE-{case.id}") if c.isalnum() or c in ("-", "_", ".")
     )
@@ -1073,6 +1127,8 @@ async def download_cover_letter_pdf(
         answers,
         checklist,
         scope_label=scope_label or "Visa Submission Dossier",
+        submission_kit=await _submission_kit(session, case),
+        forms=forms,
     )
     if format in ("base64", "json") or "application/json" in request.headers.get("accept", ""):
         return JSONResponse(
@@ -1102,7 +1158,6 @@ async def download_dossier_packet_pdf(
     request: Request,
     format: str | None = Query(default=None),
 ) -> Response:
-    from torii_api.services.packet import resolve_jurisdiction_submission_kit
     from torii_api.services.pdf_generator import generate_dossier_packet_pdf
 
     case = await _owned_case(session, case_id, user)
@@ -1115,10 +1170,7 @@ async def download_dossier_packet_pdf(
         ChecklistItemOut.model_validate(item).model_dump(mode="json")
         for item in await _checklist(session, case.id)
     ]
-    j_code, _, _, scope_label = await _scope_label(session, case)
-    submission_kit = resolve_jurisdiction_submission_kit(
-        jurisdiction_code=j_code, scope_label=scope_label
-    )
+    _j_code, _v_code, _a_code, scope_label = await _scope_label(session, case)
     safe_ref = "".join(
         c for c in (case.reference or f"CASE-{case.id}") if c.isalnum() or c in ("-", "_", ".")
     )
@@ -1128,7 +1180,7 @@ async def download_dossier_packet_pdf(
         answers,
         forms,
         checklist,
-        submission_kit=submission_kit,
+        submission_kit=await _submission_kit(session, case),
         scope_label=scope_label or "Immigration Filing Dossier",
     )
     if format in ("base64", "json") or "application/json" in request.headers.get("accept", ""):

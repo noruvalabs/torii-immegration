@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from torii_api.services.submission_kit import build_submission_kit
+
 
 def resolve_jurisdiction_submission_kit(
     jurisdiction_code: str | None = None,
@@ -393,11 +395,30 @@ def assemble_packet(
     submission_reference: str | None = None,
     jurisdiction_code: str | None = None,
     scope_label: str | None = None,
+    visa_category: str | None = None,
+    action: str | None = None,
 ) -> dict[str, Any]:
-    steps, dossier_order = resolve_jurisdiction_submission_kit(
+    """The packet snapshot, with filing steps for this specific application type.
+
+    Steps come from :mod:`torii_api.services.submission_kit` when the scope codes are
+    known, which is what makes them procedure-specific rather than country-generic. The
+    legacy string-sniffing resolver remains only as a fallback for callers that have a
+    label but no codes.
+    """
+    kit = build_submission_kit(
         jurisdiction_code=jurisdiction_code,
-        scope_label=scope_label,
+        visa_category=visa_category,
+        action=action,
+        checklist=checklist,
     )
+    if kit is not None:
+        steps = [step.as_dict() for step in kit.steps]
+        dossier_order = list(kit.stacking_order)
+    else:
+        steps, dossier_order = resolve_jurisdiction_submission_kit(
+            jurisdiction_code=jurisdiction_code,
+            scope_label=scope_label,
+        )
     return {
         "case_reference": case_reference,
         "submission_reference": submission_reference,
