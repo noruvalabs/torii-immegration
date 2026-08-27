@@ -2,7 +2,7 @@ scope:
   jurisdiction: US
   visa_category: h1b
   action: renewal
-  is_live: true
+  is_live: false
   name: United States H-1B — extension / renewal
 stages:
 - sequence: 1

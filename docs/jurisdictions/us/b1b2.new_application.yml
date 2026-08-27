@@ -2,7 +2,7 @@ scope:
   jurisdiction: US
   visa_category: b1b2
   action: new_application
-  is_live: true
+  is_live: false
   name: United States B1/B2 tourist & business — new application (ESTA vs visa branch)
 stages:
 - sequence: 1

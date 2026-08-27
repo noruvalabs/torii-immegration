@@ -23,13 +23,24 @@ class GeoLocation(BaseModel):
     is_japan: bool = False
 
 
-# Supported countries for destination selection
-SUPPORTED_DESTINATIONS: dict[str, dict[str, str]] = {
+# Country metadata — name, currency and flag — for every country this service can label,
+# whether or not it is currently offered as a destination.
+COUNTRY_META: dict[str, dict[str, str]] = {
     "JP": {"name": "Japan", "currency": "JPY", "flag": "🇯🇵"},
     "US": {"name": "United States", "currency": "USD", "flag": "🇺🇸"},
     "UK": {"name": "United Kingdom", "currency": "GBP", "flag": "🇬🇧"},
     "GB": {"name": "United Kingdom", "currency": "GBP", "flag": "🇬🇧"},
 }
+
+# Which of those are actually offered. US is parked (see
+# docs/jurisdictions/us/_jurisdiction.yml); listing it here would put it back in the
+# destination picker even though no live content pack backs it, so the applicant would
+# pick a country and then hit an empty scope.
+OFFERED_DESTINATIONS: tuple[str, ...] = ("JP", "UK", "GB")
+
+# Retained under its original name for callers that only need the country labels.
+SUPPORTED_DESTINATIONS = COUNTRY_META
+
 
 def resolve_country_meta(code: str, name: str | None = None) -> dict[str, str]:
     """Resolve standard name, flag emoji, and currency for a country code."""
@@ -136,7 +147,8 @@ def get_supported_destinations() -> list[dict[str, str | bool]]:
             "currency": info["currency"],
             "flag": info["flag"],
         }
-        for code, info in SUPPORTED_DESTINATIONS.items()
+        for code, info in COUNTRY_META.items()
+        if code in OFFERED_DESTINATIONS
     ]
 
 
@@ -178,6 +190,6 @@ def get_destinations_excluding(exclude_code: str) -> list[dict[str, str]]:
             "currency": info["currency"],
             "flag": info["flag"],
         }
-        for code, info in SUPPORTED_DESTINATIONS.items()
-        if code != exclude_code
+        for code, info in COUNTRY_META.items()
+        if code in OFFERED_DESTINATIONS and code != exclude_code
     ]

@@ -2,7 +2,7 @@ scope:
   jurisdiction: US
   visa_category: f1
   action: new_application
-  is_live: true
+  is_live: false
   name: United States F-1/M-1 student — new application (I-20 → SEVIS → DS-160 → interview)
 stages:
 - sequence: 1

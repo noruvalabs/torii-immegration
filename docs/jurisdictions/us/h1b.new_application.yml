@@ -2,7 +2,7 @@ scope:
   jurisdiction: US
   visa_category: h1b
   action: new_application
-  is_live: true
+  is_live: false
   name: United States H-1B — new petition / consular path
 stages:
 - sequence: 1

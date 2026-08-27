@@ -1,7 +1,9 @@
 code: US
 name: United States
 host_locale: en
-is_live: true
+# Parked: only Japan and the United Kingdom are offered for now. Flip this back to
+# true to re-enable — the packs below are kept intact and describe what US offers.
+is_live: false
 efile_enabled: false
 self_filing_allowed: null
 notes: >

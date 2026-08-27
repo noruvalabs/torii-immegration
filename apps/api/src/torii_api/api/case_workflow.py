@@ -876,7 +876,6 @@ async def download_application_form_pdf(
         generate_official_japan_visa_form_pdf,
         generate_portal_application_pack_pdf,
         generate_uk_visa_application_pdf,
-        generate_us_visa_application_pdf,
     )
 
     case = await _owned_case(session, case_id, user)
@@ -940,14 +939,6 @@ async def download_application_form_pdf(
             case.reference or f"UK-{case.id}",
             answers,
             destination_label=scope_label or "United Kingdom",
-            applicant_email=case.applicant_email or user.email,
-            photo_data=photo_data,
-        )
-    elif j_code_upper == "US":
-        pdf_bytes = generate_us_visa_application_pdf(
-            case.reference or f"US-{case.id}",
-            answers,
-            destination_label=scope_label or "United States",
             applicant_email=case.applicant_email or user.email,
             photo_data=photo_data,
         )

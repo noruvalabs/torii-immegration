@@ -1913,6 +1913,10 @@ def generate_uk_visa_application_pdf(
     return buffer.getvalue()
 
 
+# Not wired into the download route: the US jurisdiction is parked (see
+# docs/jurisdictions/us/_jurisdiction.yml). Kept because it is covered by tests and will
+# be needed when US is re-enabled — but note that DS-160 is filed on the CEAC portal, so
+# US should then use the portal answer pack the UK uses, not a rendered look-alike form.
 def generate_us_visa_application_pdf(
     case_reference: str,
     answers: dict[str, Any],
