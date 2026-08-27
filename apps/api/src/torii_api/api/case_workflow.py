@@ -683,9 +683,7 @@ async def generate_forms(
     return await _forms_with_titles(session, case)
 
 
-async def _forms_with_titles(
-    session: AsyncSession, case: Case
-) -> list[dict[str, Any]]:
+async def _forms_with_titles(session: AsyncSession, case: Case) -> list[dict[str, Any]]:
     """Generated forms, each carrying the official title of the template behind it."""
     titles = {
         descriptor.code: descriptor.official_title

@@ -64,6 +64,8 @@ export type IntakeQuestion = {
   type: "boolean" | "string" | "integer" | "enum" | "date";
   required?: boolean;
   options?: string[] | null;
+  /** The official form's own wording per option, where the choice mirrors a tick-box group. */
+  option_labels?: Record<string, string> | null;
   show_when?: { key: string; equals: boolean | string | number } | null;
   min_length?: number | null;
   max_length?: number | null;

@@ -17,6 +17,7 @@ Two things read this catalogue:
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 import yaml
@@ -27,6 +28,8 @@ from torii_api.services.jp_form_layouts import (
     COE_LAYOUT,
     DEPENDENT_PART2_LAYOUT,
     EXTENSION_LAYOUT,
+    HSP_PART2_COE_LAYOUT,
+    HSP_PART2_LAYOUT,
     PERMANENT_RESIDENCE_LAYOUT,
     PROCEDURE_CONSULAR_VISA,
     SPOUSE_PART2_LAYOUT,
@@ -227,6 +230,9 @@ _EXTRA_LAYOUTS: dict[tuple[str, str], tuple[FormLayout, ...]] = {
     ("work", "coe"): (WORK_PART2_COE_LAYOUT,),
     ("work", "extension"): (WORK_PART2_LAYOUT,),
     ("work", "change_of_status"): (WORK_PART2_LAYOUT,),
+    ("hsp", "coe"): (HSP_PART2_COE_LAYOUT,),
+    ("hsp", "extension"): (HSP_PART2_LAYOUT,),
+    ("hsp", "change_of_status"): (HSP_PART2_LAYOUT,),
     ("student", "extension"): (STUDENT_PART2_LAYOUT, STUDENT_PART3_EXTENSION_LAYOUT),
     ("student", "change_of_status"): (STUDENT_PART2_LAYOUT,),
     ("dependent", "extension"): (DEPENDENT_PART2_LAYOUT,),
@@ -486,6 +492,11 @@ class QuestionSpec:
     type: str
     section: str
     options: tuple[str, ...] = ()
+    # What each option is called on the printed form, keyed by option value. A
+    # tick-box group on a ministry sheet offers up to thirty choices whose wording is
+    # the form's own ("Others (cultural / social science)"); deriving it from the value
+    # would put a paraphrase in front of the applicant where the form is exact.
+    option_labels: tuple[tuple[str, str], ...] = ()
     max_length: int | None = None
     min_length: int | None = None
     # Nothing derived from a form is intake-blocking: the packs decide what gates
@@ -500,6 +511,33 @@ class QuestionSpec:
     # at the point it becomes relevant, and the box it fills is left blank when it does
     # not apply — which is what the printed form expects too.
     show_when: tuple[str, bool | str] | None = None
+
+
+def _read_options(
+    path: Path, key: str, raw: Any
+) -> tuple[tuple[str, ...], tuple[tuple[str, str], ...]]:
+    """Read an ``options:`` list, which may carry the form's own wording per option.
+
+    Either form is accepted, so the short lists that read fine as values stay short::
+
+        options: [single, married]
+        options:
+          - {value: others_cultural_social_science, label: "Others (cultural / social science)"}
+    """
+    values: list[str] = []
+    labels: list[tuple[str, str]] = []
+    for option in raw or ():
+        if isinstance(option, dict):
+            if "value" not in option:
+                raise ValueError(f"{path}: question '{key}' has an option with no 'value'")
+            value = str(option["value"])
+            label = option.get("label")
+            if label:
+                labels.append((value, str(label)))
+        else:
+            value = str(option)
+        values.append(value)
+    return tuple(values), tuple(labels)
 
 
 def _load_question_specs() -> dict[str, QuestionSpec]:
@@ -521,6 +559,7 @@ def _load_question_specs() -> dict[str, QuestionSpec]:
     for key, entry in entries.items():
         if not isinstance(entry, dict):
             raise ValueError(f"{path}: question '{key}' must be a mapping")
+        options, option_labels = _read_options(path, key, entry.get("options"))
         gate = entry.get("show_when")
         show_when: tuple[str, bool | str] | None = None
         if isinstance(gate, dict) and gate.get("key") is not None:
@@ -529,7 +568,8 @@ def _load_question_specs() -> dict[str, QuestionSpec]:
             prompt=str(entry["prompt"]),
             type=str(entry.get("type", "string")),
             section=str(entry.get("section", "")),
-            options=tuple(str(option) for option in entry.get("options") or ()),
+            options=options,
+            option_labels=option_labels,
             min_length=entry.get("min_length"),
             max_length=entry.get("max_length"),
             required=bool(entry.get("required", False)),
@@ -583,6 +623,8 @@ def _question_dict(
     }
     if spec.options:
         question["options"] = list(spec.options)
+    if spec.option_labels:
+        question["option_labels"] = dict(spec.option_labels)
     if spec.min_length is not None:
         question["min_length"] = spec.min_length
     if spec.max_length is not None:

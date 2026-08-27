@@ -447,6 +447,11 @@ export function IntakeStep({ state, profile, onAnswer, onProceedToEligibility, t
     );
   }
 
+  function optionLabel(q: (typeof state.questions)[number], option: string): string {
+    // The printed wording where the form has one; otherwise the value made readable.
+    return q.option_labels?.[option] ?? option.replaceAll("_", " ");
+  }
+
   function renderQuestion(q: (typeof state.questions)[number]) {
     const current = (drafts[q.key] !== undefined ? drafts[q.key] : state.answers[q.key]) as string | number | boolean | undefined;
     const hasOptions = q.type === "enum" && q.options && q.options.length > 0;
@@ -454,7 +459,9 @@ export function IntakeStep({ state, profile, onAnswer, onProceedToEligibility, t
     const isLongEnum = hasOptions && optionsCount > 5;
     const searchVal = enumSearch[q.key] || "";
     const filteredOptions = isLongEnum && searchVal
-      ? q.options!.filter((opt) => opt.toLowerCase().includes(searchVal.toLowerCase()))
+      ? q.options!.filter((opt) =>
+          `${opt} ${q.option_labels?.[opt] ?? ""}`.toLowerCase().includes(searchVal.toLowerCase()),
+        )
       : q.options || [];
 
     const isDateInput =
@@ -633,7 +640,7 @@ export function IntakeStep({ state, profile, onAnswer, onProceedToEligibility, t
                             : "hover:bg-accent text-muted-foreground bg-background"
                         }`}
                       >
-                        {opt.replaceAll("_", " ")}
+                        {optionLabel(q, opt)}
                       </button>
                     ))}
                   </div>
@@ -644,7 +651,7 @@ export function IntakeStep({ state, profile, onAnswer, onProceedToEligibility, t
               if (hasSelected && !isEditing) {
                 return (
                   <div className={`flex items-center justify-between rounded-lg border p-2.5 text-xs shadow-xs ${fieldError ? "border-rose-500 bg-rose-500/5" : "border-primary/30 bg-primary/5"}`}>
-                    <span className="font-semibold text-foreground truncate">{String(current).replaceAll("_", " ")}</span>
+                    <span className="font-semibold text-foreground truncate">{optionLabel(q, String(current))}</span>
                     <button
                       type="button"
                       onClick={() => {
@@ -689,7 +696,7 @@ export function IntakeStep({ state, profile, onAnswer, onProceedToEligibility, t
                             : "hover:bg-accent text-muted-foreground bg-background"
                         }`}
                       >
-                        {opt.replaceAll("_", " ")}
+                        {optionLabel(q, opt)}
                       </button>
                     ))}
                     {filteredOptions.length === 0 && (

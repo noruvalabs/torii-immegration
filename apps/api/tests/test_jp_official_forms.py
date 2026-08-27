@@ -472,6 +472,8 @@ def test_filling_an_unfamiliar_pdf_returns_the_blank_form_untouched() -> None:
         "jp_dependent_coe",
         "jp_spouse_coe",
         "jp_hsp_change_of_status",
+        "jp_hsp_extension",
+        "jp_hsp_coe",
         "jp_permanent_residence",
     ],
 )
@@ -788,3 +790,91 @@ def test_every_authored_question_is_well_formed() -> None:
             assert spec.show_when[0] in QUESTION_SPECS, (
                 f"{key} gated on unknown {spec.show_when[0]}"
             )
+
+
+# ── Applicant part 2, form L — the transferee sheet ─────────────────────────────────
+# The Highly Skilled Professional / Journalist / Intra-company packets carry an L sheet
+# where the work packets carry an N sheet: it asks about the company the applicant is
+# posted from rather than about their education.
+
+_POSTED = {
+    "employer_name": "Aurora Systems K.K.",
+    "employer_branch_name": "Shinjuku Office",
+    "employer_address": "1-1-7 Nishi-Shinjuku, Shinjuku-ku, Tokyo",
+    "employer_tel": "03-5321-8800",
+    "is_posted_from_overseas_company": True,
+    "overseas_employer_name": "Aurora Systems Pte Ltd",
+    "overseas_employer_address": "8 Marina Boulevard, Singapore 018981",
+    "overseas_employer_relationship": "holding_company",
+}
+
+
+@pytest.mark.parametrize(
+    ("action", "form_code", "employer_item", "relationship_item"),
+    [
+        ("renewal", "jp_hsp_extension", "17(1)", "19"),
+        ("change_of_status", "jp_hsp_change_of_status", "17(1)", "19"),
+        ("new_application", "jp_hsp_coe", "22(1)", "24"),
+    ],
+)
+def test_the_transferee_sheet_fills_on_every_procedure(
+    action: str, form_code: str, employer_item: str, relationship_item: str
+) -> None:
+    template = _cached(form_code)
+    if template is None:
+        pytest.skip(f"{form_code} not cached — run torii-fetch-forms")
+    form = primary_form_for_scope("hsp", action)
+    assert form is not None and form.code == form_code
+    result = fill_flat_form(form, template, {**ANSWERS, **_POSTED})
+
+    assert result.layout_verified is True
+    assert result.filled_pages == [1, 3]
+    # The Certificate of Eligibility packet numbers the same sheet five items higher.
+    assert result.filled[f"{employer_item} Place of employment — name"] == "Aurora Systems K.K."
+    relationship = next(
+        k for k in result.filled if k.startswith(f"{relationship_item} Relationship")
+    )
+    assert result.filled[relationship] == "holding_company"
+    assert not [
+        item for item in result.missing if item.startswith(("17", "18", "19", "22", "23", "24"))
+    ]
+
+
+def test_the_posting_block_stays_blank_for_a_local_hire() -> None:
+    """Most applicants are hired in Japan; items 18 and 19 are then not theirs to fill."""
+    template = _cached("jp_hsp_extension")
+    if template is None:
+        pytest.skip("jp_hsp_extension not cached — run torii-fetch-forms")
+    form = primary_form_for_scope("hsp", "renewal")
+    assert form is not None
+    local = {**ANSWERS, **_POSTED, "is_posted_from_overseas_company": False}
+    result = fill_flat_form(form, template, local)
+    assert not [item for item in result.missing if item.startswith(("18", "19"))]
+    assert not [key for key in result.filled if key.startswith(("18", "19"))]
+
+
+def test_a_tick_box_group_is_matched_against_the_options_the_layout_declares() -> None:
+    """No per-key branch in the filler: a thirty-box group is layout work, not code work."""
+    from torii_api.services.jp_form_layouts import ChoiceField, Mark
+    from torii_api.services.official_form_filler import _choice_token
+
+    choice = ChoiceField(
+        "19",
+        "overseas_employer_relationship",
+        "Relationship",
+        (("holding_company", Mark(0, 1, 0)), ("branch_office", Mark(0, 1, 0))),
+        style="tick",
+    )
+    assert _choice_token(choice, "holding_company") == "holding_company"
+    assert _choice_token(choice, "Branch Office") == "branch_office"
+    assert _choice_token(choice, "Branch-office") == "branch_office"
+    # A value this group does not offer leaves the sheet unmarked rather than guessing.
+    assert _choice_token(choice, "subsidiary") is None
+    assert _choice_token(choice, "") is None
+
+
+def test_an_option_can_carry_the_forms_own_wording() -> None:
+    """Ops author the printed label beside the value, so intake reads what the sheet says."""
+    spec = QUESTION_SPECS["overseas_employer_relationship"]
+    assert "holding_company" in spec.options
+    assert dict(spec.option_labels)["holding_company"].startswith("Holding company")

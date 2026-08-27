@@ -670,3 +670,34 @@ questions:
     section: "Guarantor or inviter in Japan"
     max_length: 40
     show_when: { key: has_legal_representative, equals: true }
+  # ── Applicant part 2, form L (posted from an overseas company) ───────────────────
+  # Items 18/19 of the extension sheet, 23/24 of the Certificate of Eligibility sheet.
+  # Only the transferee statuses ask these, and only when the applicant says they are
+  # posted from a company abroad — otherwise the block is left blank, as the form expects.
+  is_posted_from_overseas_company:
+    prompt: "Are you being posted to Japan by a company or organisation outside Japan?"
+    type: boolean
+    section: "Work & employer"
+  overseas_employer_name:
+    prompt: "What is the name of the company or organisation posting you?"
+    type: string
+    section: "Work & employer"
+    max_length: 160
+    show_when: { key: is_posted_from_overseas_company, equals: true }
+  overseas_employer_address:
+    prompt: "What is its address?"
+    type: string
+    section: "Work & employer"
+    max_length: 200
+    show_when: { key: is_posted_from_overseas_company, equals: true }
+  overseas_employer_relationship:
+    prompt: "How does that company relate to where you will work in Japan?"
+    type: enum
+    section: "Work & employer"
+    show_when: { key: is_posted_from_overseas_company, equals: true }
+    options:
+      - { value: holding_company, label: "Holding company (親会社)" }
+      - { value: subsidiary, label: "Subsidiary (子会社)" }
+      - { value: main_office, label: "Main office (本部・本店)" }
+      - { value: branch_office, label: "Branch office (支部・支店)" }
+      - { value: other, label: "Other (その他) — write the detail on the form yourself" }

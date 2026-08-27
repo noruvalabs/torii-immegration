@@ -89,12 +89,25 @@ class LineField:
 
 @dataclass(frozen=True)
 class ChoiceField:
-    """A 有 / 無 style choice answered by circling one of the printed glyphs."""
+    """A choice answered by marking one of several printed positions.
+
+    Two kinds appear on these forms. A 有 / 無 pair is answered by ringing the printed
+    glyph (``style="circle"``); a run of □ boxes is answered by ticking one
+    (``style="tick"``). The option token is matched against the applicant's answer as
+    written, so a group of thirty boxes needs no code beyond its marks — the labels the
+    applicant chooses between live in ``_form_questions.yml``, where ops can correct one
+    without a release.
+    """
 
     item: str
     key: str
     label: str
     options: tuple[tuple[str, Mark], ...]
+    style: str = "circle"
+    # Only marked when another answer says the group applies, the same way a LineField
+    # is. A whole block of a ministry sheet is often conditional, and reporting its boxes
+    # as unfilled when the applicant has said the block does not apply is wrong.
+    depends_on: str | None = None
 
 
 @dataclass(frozen=True)
@@ -729,6 +742,25 @@ def _renumber(item: str, offset: int) -> str:
     return f"{int(match.group(1)) + offset}{match.group(2)}"
 
 
+def _shift_items(lines: tuple[LineField, ...], offset: int) -> tuple[LineField, ...]:
+    """Renumber a whole item map, leaving everything else about it alone."""
+    if not offset:
+        return lines
+    return tuple(
+        LineField(
+            _renumber(line.item, offset),
+            line.key,
+            line.label,
+            row=line.row,
+            column=line.column,
+            dates=line.dates,
+            names=line.names,
+            depends_on=line.depends_on,
+        )
+        for line in lines
+    )
+
+
 def _work_part2_lines(graduation: DateSlots, item_offset: int = 0) -> tuple[LineField, ...]:
     """The item map for applicant part 2 form N.
 
@@ -793,21 +825,7 @@ def _work_part2_lines(graduation: DateSlots, item_offset: int = 0) -> tuple[Line
             depends_on="has_legal_representative",
         ),
     )
-    if not item_offset:
-        return lines
-    return tuple(
-        LineField(
-            _renumber(line.item, item_offset),
-            line.key,
-            line.label,
-            row=line.row,
-            column=line.column,
-            dates=line.dates,
-            names=line.names,
-            depends_on=line.depends_on,
-        )
-        for line in lines
-    )
+    return _shift_items(lines, item_offset)
 
 
 WORK_PART2_LAYOUT = FormLayout(
@@ -876,6 +894,203 @@ WORK_PART2_COE_LAYOUT = FormLayout(
         ),
     ),
     unsupported_items=_work_part2_unsupported(item_offset=5),
+)
+
+
+# ── Applicant part 2, form L (HSP(i)(b) / Journalist / Researcher / Intra-company) ──
+# Reference: https://www.moj.go.jp/isa/content/930004094.pdf page 3 (extension) and
+# .../930004029.pdf page 3 (Certificate of Eligibility) — the L series, which is the
+# transferee sheet: where the N series asks about education, this one asks about the
+# company the applicant is posted from.
+
+_HSP_PART2_ROWS: NominalRows = (
+    (788.5, (17.8, 569.8)),
+    (747.1, (82.6, 257.5, 351.0, 538.3)),
+    (726.6, (98.2, 304.3, 413.4, 538.3)),
+    (686.1, (98.2, 538.3)),
+    (665.6, (98.2, 538.3)),
+    (580.8, (17.8, 569.8)),
+    (560.9, (17.8, 145.3, 289.0, 413.8)),
+    (540.9, (17.8, 569.8)),
+    (481.2, (17.8, 569.8)),
+    (450.7, (82.6, 273.1, 429.0, 538.3)),
+    (430.8, (98.2, 538.3)),
+    (409.3, (113.8, 273.1, 382.2, 538.3)),
+    (340.2, (33.0, 538.3)),
+    (338.6, (33.0, 538.3)),
+    (237.6, (82.6, 241.9, 304.2, 538.3)),
+    (195.0, (51.4, 366.7, 397.8, 538.3)),
+    (191.7, (17.8, 569.8)),
+    (174.9, (17.8, 569.8)),
+)
+
+_HSP_PART2_COE_ROWS: NominalRows = (
+    (776.6, (18.1, 577.1)),
+    (727.5, (83.4, 264.4, 362.9, 560.3)),
+    (701.7, (99.8, 330.1, 412.2, 560.3)),
+    (652.6, (99.8, 560.3)),
+    (624.3, (99.8, 560.3)),
+    (531.2, (18.1, 577.1)),
+    (506.7, (18.1, 149.6, 297.6, 429.1)),
+    (482.2, (18.1, 577.1)),
+    (408.8, (18.1, 577.1)),
+    (357.3, (99.8, 280.8, 445.1, 560.3)),
+    (330.9, (99.8, 560.3)),
+    (304.5, (116.3, 280.8, 395.8, 560.3)),
+    (240.3, (34.1, 560.3)),
+    (238.5, (34.1, 560.3)),
+    (134.5, (83.4, 215.0, 297.1, 560.3)),
+    (98.5, (50.5, 363.0, 379.3, 560.3)),
+    (91.4, (18.1, 577.1)),
+    (50.1, (18.1, 577.1)),
+)
+
+
+def _hsp_part2_lines(item_offset: int = 0) -> tuple[LineField, ...]:
+    """The item map for applicant part 2 form L, shared by all three procedures.
+
+    The Certificate of Eligibility sheet asks the same items in the same order, five
+    numbers higher, because page 1 of that packet carries five more items.
+    """
+    lines = (
+        LineField("17(1)", "employer_name", "Place of employment — name", row=1, column=0),
+        LineField("17(1)", "employer_branch_name", "Name of branch", row=1, column=1),
+        LineField("17(2)", "employer_address", "Place of employment — address", row=2, column=0),
+        LineField("17(3)", "employer_tel", "Place of employment — telephone", row=2, column=1),
+        LineField(
+            "18(1)",
+            "overseas_employer_name",
+            "Company you are posted from — name",
+            row=3,
+            depends_on="is_posted_from_overseas_company",
+        ),
+        LineField(
+            "18(2)",
+            "overseas_employer_address",
+            "Company you are posted from — address",
+            row=4,
+            depends_on="is_posted_from_overseas_company",
+        ),
+        LineField(
+            "21(1)",
+            "legal_representative_name",
+            "Legal representative — name",
+            row=9,
+            column=0,
+            depends_on="has_legal_representative",
+        ),
+        LineField(
+            "21(2)",
+            "legal_representative_relationship",
+            "Legal representative — relationship",
+            row=9,
+            column=1,
+            depends_on="has_legal_representative",
+        ),
+        LineField(
+            "21(3)",
+            "legal_representative_address",
+            "Legal representative — address",
+            row=10,
+            depends_on="has_legal_representative",
+        ),
+        LineField(
+            "21(3)",
+            "legal_representative_tel",
+            "Legal representative — telephone",
+            row=11,
+            column=0,
+            depends_on="has_legal_representative",
+        ),
+        LineField(
+            "21(3)",
+            "legal_representative_mobile",
+            "Legal representative — mobile telephone",
+            row=11,
+            column=1,
+            depends_on="has_legal_representative",
+        ),
+    )
+    return _shift_items(lines, item_offset)
+
+
+def _hsp_part2_relationship(marks: tuple[Mark, ...], item: str) -> ChoiceField:
+    """Item 19 — how the overseas company relates to the workplace in Japan.
+
+    Five printed □ boxes. The option tokens are the answer values the intake question
+    offers, so the box that gets ticked follows from the answer alone.
+    """
+    return ChoiceField(
+        item,
+        "overseas_employer_relationship",
+        "Relationship between the overseas company and the workplace in Japan",
+        (
+            ("holding_company", marks[0]),
+            ("subsidiary", marks[1]),
+            ("main_office", marks[2]),
+            ("branch_office", marks[3]),
+            ("other", marks[4]),
+        ),
+        style="tick",
+        depends_on="is_posted_from_overseas_company",
+    )
+
+
+def _hsp_part2_unsupported(item_offset: int = 0) -> tuple[str, ...]:
+    return tuple(
+        _renumber(item.split(" ", 1)[0], item_offset) + " " + item.split(" ", 1)[1]
+        for item in (
+            "19 Relationship — the free-text box beside その他 (Others), if you tick it",
+            "20 Work experience (table)",
+        )
+    )
+
+
+HSP_PART2_LAYOUT = FormLayout(
+    code="moj_hsp_applicant_p2",
+    series="別記第三十号の二様式 申請人等作成用 ２（Ｌ）",
+    procedure=PROCEDURE_EXTENSION,
+    reference="930004094.pdf p3",
+    page=2,
+    rows=_HSP_PART2_ROWS,
+    lines=_hsp_part2_lines(),
+    choices=(
+        _hsp_part2_relationship(
+            (
+                Mark(39.4, 45.8, 624.7),
+                Mark(151.6, 158.0, 624.7),
+                Mark(262.5, 268.9, 624.7),
+                Mark(39.4, 45.8, 604.3),
+                Mark(151.6, 158.0, 604.3),
+            ),
+            "19",
+        ),
+    ),
+    unsupported_items=_hsp_part2_unsupported(),
+)
+
+
+HSP_PART2_COE_LAYOUT = FormLayout(
+    code="moj_hsp_applicant_p2_coe",
+    series="別記第六号の三様式 申請人等作成用 ２（Ｌ）",
+    procedure=PROCEDURE_COE,
+    reference="930004029.pdf p3",
+    page=2,
+    rows=_HSP_PART2_COE_ROWS,
+    lines=_hsp_part2_lines(item_offset=5),
+    choices=(
+        _hsp_part2_relationship(
+            (
+                Mark(38.9, 46.6, 580.1),
+                Mark(154.0, 161.7, 580.1),
+                Mark(269.1, 276.8, 580.1),
+                Mark(38.9, 46.6, 556.8),
+                Mark(154.0, 161.7, 556.8),
+            ),
+            "24",
+        ),
+    ),
+    unsupported_items=_hsp_part2_unsupported(item_offset=5),
 )
 
 

@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import io
 import os
+import re
 import tempfile
 from dataclasses import dataclass, field
 from datetime import date, datetime
@@ -233,34 +234,59 @@ def resolve_answer(key: str, answers: dict[str, Any]) -> Any:
     return None
 
 
-def _is_dormant(line: LineField, answers: dict[str, Any]) -> bool:
-    """True when this line is only asked for if another answer is affirmative, and is not."""
-    if line.depends_on is None:
+def _is_dormant(field: LineField | ChoiceField, answers: dict[str, Any]) -> bool:
+    """True when this field is only asked for if another answer is affirmative, and is not."""
+    if field.depends_on is None:
         return False
-    return _as_bool(resolve_answer(line.depends_on, answers)) is not True
+    return _as_bool(resolve_answer(field.depends_on, answers)) is not True
 
 
-def _choice_token(field_key: str, value: Any) -> str | None:
-    """Map an answer onto the printed glyph to circle."""
+def _choice_token(choice: ChoiceField, value: Any) -> str | None:
+    """Map an answer onto one of this choice's printed positions.
+
+    Matching is against the tokens the layout itself declares, so adding a thirty-box
+    group is layout work rather than code work. `_CHOICE_ALIASES` only covers wordings a
+    question may already have been answered in; anything it does not recognise is left
+    unmarked and reported as still needing the applicant's hand.
+    """
+    options = {option for option, _ in choice.options}
+    raw = _text(value).strip().lower()
+    if raw:
+        token = re.sub(r"[\s\-/]+", "_", raw)
+        if token in options:
+            return token
+        alias = _CHOICE_ALIASES.get(token)
+        if alias in options:
+            return alias
     flag = _as_bool(value)
     if flag is not None:
-        return "yes" if flag else "no"
-    token = _text(value).lower()
-    if not token:
-        return None
-    if field_key == "sex":
-        if token.startswith("m") or token in ("男", "male"):
-            return "male"
-        if token.startswith("f") or token in ("女", "female"):
-            return "female"
-        return None
-    if field_key == "marital_status":
-        if token.startswith("marri") or token in ("既婚", "有"):
-            return "married"
-        if token.startswith(("single", "unmarried", "divorc", "widow")) or token in ("未婚", "無"):
-            return "single"
-        return None
-    return token if token in ("yes", "no") else None
+        candidate = "yes" if flag else "no"
+        if candidate in options:
+            return candidate
+    return None
+
+
+# Wordings an answer may arrive in that are not the token printed on the form. Ops-facing
+# option labels belong in `_form_questions.yml`; this is only the tolerance around them.
+_CHOICE_ALIASES: dict[str, str] = {
+    "m": "male",
+    "男": "male",
+    "男性": "male",
+    "f": "female",
+    "女": "female",
+    "女性": "female",
+    "既婚": "married",
+    "有": "married",
+    "unmarried": "single",
+    "divorced": "single",
+    "widowed": "single",
+    "未婚": "single",
+    "無": "single",
+    "true": "yes",
+    "false": "no",
+    "あり": "yes",
+    "なし": "no",
+}
 
 
 # ── Drawing ────────────────────────────────────────────────────────────────────────
@@ -356,12 +382,15 @@ def _draw_tick(pdf: canvas.Canvas, fit: LayoutFit, mark: Mark) -> None:
 
 
 def _draw_choice(pdf: canvas.Canvas, fit: LayoutFit, choice: ChoiceField, value: Any) -> str | None:
-    token = _choice_token(choice.key, value)
+    token = _choice_token(choice, value)
     if token is None:
         return None
     for option, mark in choice.options:
         if option == token:
-            _draw_circle(pdf, fit, mark)
+            if choice.style == "tick":
+                _draw_tick(pdf, fit, mark)
+            else:
+                _draw_circle(pdf, fit, mark)
             return option
     return None
 
@@ -456,19 +485,25 @@ def fill_flat_form(
         pdf.setStrokeColor(INK)
         pdf.setFillColor(INK)
 
+        # A dormant field is not drawn at all. Suppressing only its missing-report would
+        # leave a retracted answer printed on the sheet: an applicant who answers the gate,
+        # fills the block and then changes the gate to "no" would still sign a form
+        # asserting the block. The blank is the correct output, and the form expects it.
         for line in sheet.lines:
-            value = resolve_answer(line.key, answers)
-            written = _draw_line_field(pdf, sheet_fit, line, value)
             label = f"{line.item} {line.label}"
+            if _is_dormant(line, answers):
+                continue
+            written = _draw_line_field(pdf, sheet_fit, line, resolve_answer(line.key, answers))
             if written:
                 filled[label] = written
-            elif not _is_dormant(line, answers):
+            else:
                 missing.append(label)
 
         for choice in sheet.choices:
-            value = resolve_answer(choice.key, answers)
-            written = _draw_choice(pdf, sheet_fit, choice, value)
             label = f"{choice.item} {choice.label}"
+            if _is_dormant(choice, answers):
+                continue
+            written = _draw_choice(pdf, sheet_fit, choice, resolve_answer(choice.key, answers))
             if written:
                 filled[label] = written
             else:

@@ -30,6 +30,10 @@ class IntakeQuestion(BaseModel):
     prompt: str = Field(min_length=1, max_length=512)
     type: QuestionType
     options: list[str] | None = None
+    # The form's own wording for each option, keyed by option value. Set where the
+    # choice mirrors a printed tick-box group, so the applicant reads what the sheet
+    # says rather than a value derived from it.
+    option_labels: dict[str, str] | None = None
     required: bool = True
     show_when: ShowWhen | None = None
     min_length: int | None = None
@@ -130,17 +134,11 @@ def progress_for(questions: list[IntakeQuestion], answers: dict[str, Any]) -> In
     required_visible = [q for q in visible if q.required]
 
     answered_required = sum(
-        1
-        for q in required_visible
-        if q.key in answers and answers[q.key] not in (None, "")
+        1 for q in required_visible if q.key in answers and answers[q.key] not in (None, "")
     )
     total_required = len(required_visible)
 
-    answered_all = sum(
-        1
-        for q in visible
-        if q.key in answers and answers[q.key] not in (None, "")
-    )
+    answered_all = sum(1 for q in visible if q.key in answers and answers[q.key] not in (None, ""))
     total_all = len(visible)
 
     is_complete = total_required > 0 and answered_required >= total_required
