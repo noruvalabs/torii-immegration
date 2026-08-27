@@ -66,7 +66,12 @@ export type IntakeQuestion = {
   options?: string[] | null;
   /** The official form's own wording per option, where the choice mirrors a tick-box group. */
   option_labels?: Record<string, string> | null;
-  show_when?: { key: string; equals: boolean | string | number } | null;
+  /** Revealed by another answer: `equals` for one value, `one_of` for any of several. */
+  show_when?: {
+    key: string;
+    equals?: boolean | string | number | null;
+    one_of?: string[] | null;
+  } | null;
   min_length?: number | null;
   max_length?: number | null;
   min_value?: number | null;

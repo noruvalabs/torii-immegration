@@ -83,8 +83,21 @@ class LineField:
     names: NameSlots | None = None
     # Only expected when this other answer is affirmative — the 具体的内容 detail line
     # under a 有 / 無 question stays blank when the answer is 無, and reporting it as an
-    # unfilled item would be wrong.
-    depends_on: str | None = None
+    # unfilled item would be wrong. A ``Gate`` narrows that to particular values.
+    depends_on: str | Gate | None = None
+
+
+@dataclass(frozen=True)
+class Gate:
+    """Only expected when another answer is one of ``values``.
+
+    A boolean gate covers "fill this in if you answered yes"; this covers the other kind
+    the ministry prints, "fill in questions 18, 19 and 27 if you selected (2)". Values are
+    the option tokens the gating question declares.
+    """
+
+    key: str
+    values: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -103,6 +116,10 @@ class Flag:
     key: str
     label: str
     mark: Mark
+    # Conditional the same way a LineField is. Without this the box could be ticked on a
+    # sheet whose line beside it is deliberately blank, which reads as a claim the form
+    # does not make.
+    depends_on: str | Gate | None = None
 
 
 @dataclass(frozen=True)
@@ -125,7 +142,7 @@ class ChoiceField:
     # Only marked when another answer says the group applies, the same way a LineField
     # is. A whole block of a ministry sheet is often conditional, and reporting its boxes
     # as unfilled when the applicant has said the block does not apply is wrong.
-    depends_on: str | None = None
+    depends_on: str | Gate | None = None
 
 
 @dataclass(frozen=True)
@@ -741,13 +758,138 @@ _WORK_PART2_ROWS: NominalRows = (
 # The Certificate of Eligibility packet asks the same items in the same order as the
 # extension packet, at different coordinates, so the field map is shared and only the
 # ruled-line geometry and the 有/無 glyph differ.
+def _education_country(
+    item: str, marks: tuple[Mark, ...], *, depends_on: str | Gate | None = None
+) -> ChoiceField:
+    """Whether the last school attended was in Japan or abroad."""
+    return ChoiceField(
+        item,
+        "education_country",
+        "Education — in Japan or abroad",
+        (("japan", marks[0]), ("foreign_country", marks[1])),
+        style="tick",
+        depends_on=depends_on,
+    )
+
+
+def _education_level_eight(
+    item: str, marks: tuple[Mark, ...], *, depends_on: str | Gate | None = None
+) -> ChoiceField:
+    """The level of the last school attended, on the sheets that print eight boxes.
+
+    The student sheet prints nine (it includes elementary school); this one stops at
+    junior high. Same answer key, so an applicant answers once either way.
+    """
+    return ChoiceField(
+        item,
+        "education_level",
+        "Education — level of the last school attended",
+        (
+            ("doctor", marks[0]),
+            ("master", marks[1]),
+            ("bachelor", marks[2]),
+            ("junior_college", marks[3]),
+            ("college_of_technology", marks[4]),
+            ("senior_high_school", marks[5]),
+            ("junior_high_school", marks[6]),
+            ("other", marks[7]),
+        ),
+        style="tick",
+        depends_on=depends_on,
+    )
+
+
+# The two field-of-study groups are each printed under their own condition, naming the
+# education level they follow from: "check one of the followings when the answer to
+# question 19 is from doctor to junior college", and "when the answer is college of
+# technology". Gating on the level is what the sheet asks for.
+_LEVEL_UNIVERSITY = Gate(
+    "education_level", ("doctor", "master", "bachelor", "junior_college")
+)
+_LEVEL_VOCATIONAL = Gate("education_level", ("college_of_technology",))
+
+
+def _major_field_of_study(
+    item: str, marks: tuple[Mark, ...], *, nursing_care: bool = False
+) -> ChoiceField:
+    """Asked when the last school was a university.
+
+    Twenty-four boxes on the U series, twenty-five on the N series: the work forms print
+    介護福祉 (nursing care and welfare) between 体育学 and その他, because that status covers
+    care work and the 特定活動 one does not.
+    """
+    fields = (
+        "law",
+        "economics",
+        "politics",
+        "commercial_science",
+        "business_administration",
+        "literature",
+        "linguistics",
+        "sociology",
+        "history",
+        "psychology",
+        "education",
+        "science_of_art",
+        "other_cultural_or_social_science",
+        "science",
+        "chemistry",
+        "engineering",
+        "agriculture",
+        "fisheries",
+        "pharmacy",
+        "medicine",
+        "dentistry",
+        "other_natural_science",
+        "sports_science",
+        *(("nursing_care_and_welfare",) if nursing_care else ()),
+        "other",
+    )
+    return ChoiceField(
+        item,
+        "major_field_of_study",
+        "Major field of study",
+        tuple(zip(fields, marks, strict=True)),
+        style="tick",
+        depends_on=_LEVEL_UNIVERSITY,
+    )
+
+
+def _vocational_field_of_study(
+    item: str, marks: tuple[Mark, ...], *, nursing_care: bool = False
+) -> ChoiceField:
+    """Asked instead when the last school was a college of technology.
+
+    Nine boxes on the U series, ten on the N series, for the same reason.
+    """
+    fields = (
+        "industry",
+        "agriculture",
+        "medical_services_and_hygienics",
+        "education_and_social_welfare",
+        "law",
+        "practical_commercial_business",
+        "dress_design_and_home_economics",
+        "culture_and_education",
+        *(("nursing_care_and_welfare",) if nursing_care else ()),
+        "other",
+    )
+    return ChoiceField(
+        item,
+        "vocational_field_of_study",
+        "Field of study at a college of technology",
+        tuple(zip(fields, marks, strict=True)),
+        style="tick",
+        depends_on=_LEVEL_VOCATIONAL,
+    )
+
+
 def _work_part2_unsupported(item_offset: int = 0) -> tuple[str, ...]:
     """Items on this sheet that still need filling by hand, numbered for the packet."""
     return tuple(
         f"{_renumber(item.split(' ', 1)[0], item_offset)} {item.split(' ', 1)[1]}"
         for item in (
-            "18(1)(2) Final education — country and level (tick boxes)",
-            "19 Major field of study (tick boxes)",
+            "19 The free-text box beside その他 (Others), if you tick it",
             "21 Work experience (table)",
         )
     )
@@ -763,6 +905,13 @@ def _renumber(item: str, offset: int) -> str:
     if not match or not offset:
         return item
     return f"{int(match.group(1)) + offset}{match.group(2)}"
+
+
+def gate_key(depends_on: str | Gate | None) -> str | None:
+    """The answer key a dependency watches, whichever kind of dependency it is."""
+    if depends_on is None:
+        return None
+    return depends_on.key if isinstance(depends_on, Gate) else depends_on
 
 
 def _shift_items(lines: tuple[LineField, ...], offset: int) -> tuple[LineField, ...]:
@@ -851,6 +1000,23 @@ def _work_part2_lines(graduation: DateSlots, item_offset: int = 0) -> tuple[Line
     return _shift_items(lines, item_offset)
 
 
+def _work_part2_education_groups(
+    education_item: str,
+    field_item: str,
+    country: tuple[Mark, Mark],
+    level: tuple[Mark, ...],
+    major: tuple[Mark, ...],
+    vocational: tuple[Mark, ...],
+) -> tuple[ChoiceField, ...]:
+    """Items 18 and 19 of the N sheet — the final education block and its field of study."""
+    return (
+        _education_country(f"{education_item}(1)", country),
+        _education_level_eight(f"{education_item}(2)", level),
+        _major_field_of_study(field_item, major, nursing_care=True),
+        _vocational_field_of_study(field_item, vocational, nursing_care=True),
+    )
+
+
 WORK_PART2_LAYOUT = FormLayout(
     code="moj_work_applicant_p2",
     series="別記第三十号の二様式 申請人等作成用 ２（Ｎ）",
@@ -867,6 +1033,60 @@ WORK_PART2_LAYOUT = FormLayout(
             (
                 ("yes", Mark(434.6, 443.7, 434.1)),
                 ("no", Mark(455.1, 464.1, 434.6)),
+            ),
+        ),
+        *_work_part2_education_groups(
+            "18",
+            "19",
+            (Mark(81.7, 88.9, 692.2), Mark(133.5, 140.8, 692.2)),
+            (
+                Mark(81.7, 88.9, 670.3),
+                Mark(172.4, 179.7, 670.3),
+                Mark(263.1, 270.4, 670.3),
+                Mark(327.9, 335.2, 670.3),
+                Mark(405.7, 412.9, 670.3),
+                Mark(81.7, 88.9, 648.9),
+                Mark(172.4, 179.7, 648.9),
+                Mark(263.1, 270.4, 648.9),
+            ),
+            (
+                Mark(69.0, 76.2, 588.1),
+                Mark(133.8, 141.0, 588.1),
+                Mark(211.5, 218.8, 588.1),
+                Mark(276.3, 283.6, 588.1),
+                Mark(341.1, 348.4, 588.1),
+                Mark(433.1, 440.3, 588.1),
+                Mark(69.0, 76.2, 567.7),
+                Mark(133.8, 141.0, 567.7),
+                Mark(211.5, 218.8, 567.7),
+                Mark(276.3, 283.6, 567.7),
+                Mark(341.1, 348.4, 567.7),
+                Mark(406.2, 413.4, 567.7),
+                Mark(69.0, 76.2, 547.3),
+                Mark(276.3, 283.6, 547.3),
+                Mark(341.1, 348.4, 547.3),
+                Mark(406.2, 413.4, 547.3),
+                Mark(69.0, 76.2, 526.9),
+                Mark(133.8, 141.0, 526.9),
+                Mark(211.5, 218.8, 526.9),
+                Mark(276.3, 283.6, 526.9),
+                Mark(341.1, 348.4, 526.9),
+                Mark(69.0, 76.2, 506.5),
+                Mark(237.5, 244.7, 506.5),
+                Mark(289.3, 296.5, 506.5),
+                Mark(354.1, 361.3, 506.5),
+            ),
+            (
+                Mark(69.0, 76.2, 475.9),
+                Mark(133.8, 141.0, 475.9),
+                Mark(211.5, 218.8, 475.9),
+                Mark(315.2, 322.5, 475.9),
+                Mark(433.1, 440.3, 475.9),
+                Mark(69.0, 76.2, 455.5),
+                Mark(159.7, 166.9, 455.5),
+                Mark(263.4, 270.6, 455.5),
+                Mark(328.2, 335.4, 455.5),
+                Mark(406.2, 413.4, 455.5),
             ),
         ),
     ),
@@ -913,6 +1133,60 @@ WORK_PART2_COE_LAYOUT = FormLayout(
             (
                 ("yes", Mark(459.8, 469.1, 447.0)),
                 ("no", Mark(525.2, 534.3, 447.5)),
+            ),
+        ),
+        *_work_part2_education_groups(
+            "23",
+            "24",
+            (Mark(52.0, 59.3, 696.3), Mark(114.8, 122.2, 696.3)),
+            (
+                Mark(52.0, 59.3, 676.6),
+                Mark(162.0, 169.3, 676.6),
+                Mark(272.0, 279.4, 676.6),
+                Mark(350.6, 358.0, 676.6),
+                Mark(445.0, 452.3, 676.6),
+                Mark(52.0, 59.3, 656.9),
+                Mark(162.0, 169.3, 656.9),
+                Mark(272.0, 279.4, 656.9),
+            ),
+            (
+                Mark(36.2, 43.6, 595.5),
+                Mark(130.6, 137.9, 595.5),
+                Mark(209.2, 216.5, 595.5),
+                Mark(287.8, 295.1, 595.5),
+                Mark(366.4, 373.7, 595.5),
+                Mark(492.1, 499.4, 595.5),
+                Mark(36.2, 43.6, 575.8),
+                Mark(130.6, 137.9, 575.8),
+                Mark(209.2, 216.5, 575.8),
+                Mark(287.8, 295.1, 575.8),
+                Mark(366.4, 373.7, 575.8),
+                Mark(492.1, 499.4, 575.8),
+                Mark(36.2, 43.6, 556.1),
+                Mark(287.8, 295.1, 556.1),
+                Mark(366.4, 373.7, 556.1),
+                Mark(492.1, 499.4, 556.1),
+                Mark(36.2, 43.6, 536.4),
+                Mark(130.6, 137.9, 536.4),
+                Mark(209.2, 216.5, 536.4),
+                Mark(287.8, 295.1, 536.4),
+                Mark(366.4, 373.7, 536.4),
+                Mark(36.2, 43.6, 516.7),
+                Mark(240.6, 247.9, 516.7),
+                Mark(303.5, 310.8, 516.7),
+                Mark(397.8, 405.1, 516.7),
+            ),
+            (
+                Mark(36.2, 43.6, 487.2),
+                Mark(114.8, 122.2, 487.2),
+                Mark(193.4, 200.8, 487.2),
+                Mark(319.2, 326.5, 487.2),
+                Mark(445.0, 452.3, 487.2),
+                Mark(36.2, 43.6, 467.5),
+                Mark(146.3, 153.6, 467.5),
+                Mark(256.3, 263.6, 467.5),
+                Mark(350.6, 358.0, 467.5),
+                Mark(445.0, 452.3, 467.5),
             ),
         ),
     ),
@@ -1062,9 +1336,818 @@ PERMANENT_RESIDENCE_P2_LAYOUT = FormLayout(
 )
 
 
+
+# ── Designated Activities (特定活動), form U — 申請人等作成用 ２ / ３ / ４ ─────────────
+# Reference: https://www.moj.go.jp/isa/content/930004120.pdf pages 3-5 (extension; the
+# change-of-status packet ships the same three sheets byte for byte) and
+# .../930004058.pdf pages 3-5 (Certificate of Eligibility).
+
+# The professions in groups ① and ② are the same on both packets.
+_DA_PROFESSIONS = (
+    "diplomat",
+    "official",
+    "lawyer",
+    "judicial_scrivener",
+    "land_and_building_investigator",
+    "registered_foreign_qualified_lawyer",
+    "public_accountant",
+    "foreign_qualified_certified_public_accountant",
+    "certified_tax_accountant",
+    "public_consultant_on_social_and_labor_insurance",
+    "patent_attorney",
+    "maritime_procedure_agent",
+    "certified_administrative_procedures_legal_specialist",
+)
+_DA_MEDICAL = (
+    "doctor",
+    "dentist",
+    "pharmacist",
+    "public_health_nurse",
+    "midwife",
+    "nurse",
+    "assistant_nurse",
+    "dental_hygienist",
+    "radiology_technician",
+    "physical_therapist",
+    "occupational_therapist",
+    "orthoptist",
+    "clinical_engineer",
+    "prosthetist",
+)
+_DA_FAMILY = ("housekeeper", "living_with_family")
+_DA_YOUTH = ("working_holiday", "foreign_lawyer")
+_DA_ATHLETE = ("amateur_sports_athlete",)
+_DA_EPA = (
+    "epa_nurse",
+    "epa_certified_careworker",
+    "epa_nurse_candidate",
+    "epa_careworker_candidate",
+    "epa_student_careworker_candidate",
+)
+_DA_SPECIAL_ZONE = (
+    "manufacturing_worker",
+    "domestic_worker_strategic_zone",
+    "crop_farming_worker_strategic_zone",
+    "livestock_farming_worker_strategic_zone",
+)
+_DA_DESCENT = ("fourth_generation_japanese_descent",)
+_DA_ENTREPRENEUR_ACTIVITY = ("entrepreneurial_activities",)
+_DA_OTHER = ("other",)
+
+# The extension and change-of-status packets offer an EPA group and a bare internship.
+_DA_INTERNSHIP_EXTENSION = ("internship",)
+_DA_ACTIVITIES_EXTENSION = (
+    _DA_PROFESSIONS
+    + _DA_MEDICAL
+    + _DA_FAMILY
+    + _DA_YOUTH
+    + _DA_ATHLETE
+    + _DA_INTERNSHIP_EXTENSION
+    + _DA_EPA
+    + _DA_SPECIAL_ZONE
+    + _DA_DESCENT
+    + _DA_ENTREPRENEUR_ACTIVITY
+    + _DA_OTHER
+)
+
+# The Certificate of Eligibility packet has no EPA group, and widens the internship group.
+_DA_INTERNSHIP_COE = ("internship", "summer_job", "international_cultural_exchange")
+_DA_ACTIVITIES_COE = (
+    _DA_PROFESSIONS
+    + _DA_MEDICAL
+    + _DA_FAMILY
+    + _DA_YOUTH
+    + _DA_ATHLETE
+    + _DA_INTERNSHIP_COE
+    + _DA_SPECIAL_ZONE
+    + _DA_DESCENT
+    + _DA_ENTREPRENEUR_ACTIVITY
+    + _DA_OTHER
+)
+
+
+def _designated_activity(
+    item: str, activities: tuple[str, ...], marks: tuple[Mark, ...]
+) -> ChoiceField:
+    """Item 17 (22 on the Certificate of Eligibility sheet) — which activity is applied for.
+
+    The 特定活動 status covers unrelated things -- a diplomat's housekeeper, a working
+    holiday, an EPA nurse candidate, an entrepreneur -- and the ticked box is what makes
+    this otherwise generic sheet a specific application.
+    """
+    if len(activities) != len(marks):
+        raise ValueError(f"{item}: {len(activities)} activities but {len(marks)} boxes")
+    return ChoiceField(
+        item,
+        "designated_activity",
+        "Type of activity",
+        tuple(zip(activities, marks, strict=True)),
+        style="tick",
+    )
+
+
+def _da_part3_lines(
+    workplace: str,
+    education: str,
+    record: str,
+    university: str,
+    graduation: DateSlots,
+    *,
+    workplace_gate: Gate,
+    education_gate: Gate,
+    record_gate: Gate,
+    university_gate: Gate,
+) -> tuple[LineField, ...]:
+    """Part 3's item map. The same items on both packets, numbered and routed differently."""
+    return (
+        LineField(
+            f"{workplace}(1)",
+            "employer_name",
+            "Place of employment or school — name",
+            row=1,
+            column=0,
+            depends_on=workplace_gate,
+        ),
+        LineField(
+            f"{workplace}(1)",
+            "employer_branch_name",
+            "Name of branch",
+            row=1,
+            column=1,
+            depends_on=workplace_gate,
+        ),
+        LineField(
+            f"{workplace}(2)",
+            "employer_address",
+            "Place of employment or school — address",
+            row=2,
+            depends_on=workplace_gate,
+        ),
+        LineField(
+            f"{workplace}(3)",
+            "employer_tel",
+            "Place of employment or school — telephone",
+            row=3,
+            depends_on=workplace_gate,
+        ),
+        LineField(
+            f"{education}(3)",
+            "final_school_name",
+            "Name of school",
+            row=4,
+            depends_on=education_gate,
+        ),
+        LineField(
+            f"{education}(4)",
+            "final_school_department",
+            "Name of the department or course of study",
+            row=5,
+            depends_on=education_gate,
+        ),
+        LineField(
+            f"{education}(5)",
+            "graduation_date",
+            "Date of graduation",
+            row=6,
+            dates=graduation,
+            depends_on=education_gate,
+        ),
+        LineField(
+            record,
+            "olympics_year",
+            "Year of Olympic participation",
+            row=7,
+            depends_on=record_gate,
+        ),
+        LineField(
+            record,
+            "world_championship_year",
+            "Year of world-championship participation",
+            row=8,
+            depends_on=record_gate,
+        ),
+        LineField(
+            record,
+            "other_competition_year",
+            "Year of other international competition",
+            row=9,
+            depends_on=record_gate,
+        ),
+        LineField(
+            university,
+            "current_university_name",
+            "University you attend — name and faculty",
+            row=10,
+            depends_on=university_gate,
+        ),
+        LineField(
+            university,
+            "current_university_course",
+            "University you attend — course",
+            row=11,
+            depends_on=university_gate,
+        ),
+    )
+
+
+def _da_part4_lines(
+    managing_years: str,
+    work_years: str,
+    representative: str,
+    entrepreneur: Gate,
+    *,
+    first_representative_row: int,
+) -> tuple[LineField, ...]:
+    """Part 4's item map. The representative block sits at a different row per packet,
+    because the work-experience table above it is ruled with a different number of lines.
+    """
+    return (
+        LineField(
+            managing_years,
+            "entrepreneur_managing_experience_years",
+            "Years of experience managing a related business abroad",
+            row=1,
+            depends_on=entrepreneur,
+        ),
+        LineField(
+            work_years,
+            "entrepreneur_work_experience_years",
+            "Years of experience in work related to the intended business",
+            row=2,
+            depends_on=entrepreneur,
+        ),
+        LineField(
+            f"{representative}(1)",
+            "legal_representative_name",
+            "Legal representative — name",
+            row=first_representative_row,
+            column=0,
+            depends_on="has_legal_representative",
+        ),
+        LineField(
+            f"{representative}(2)",
+            "legal_representative_relationship",
+            "Legal representative — relationship",
+            row=first_representative_row,
+            column=1,
+            depends_on="has_legal_representative",
+        ),
+        LineField(
+            f"{representative}(3)",
+            "legal_representative_address",
+            "Legal representative — address",
+            row=first_representative_row + 1,
+            depends_on="has_legal_representative",
+        ),
+        LineField(
+            f"{representative}(3)",
+            "legal_representative_tel",
+            "Legal representative — telephone",
+            row=first_representative_row + 2,
+            column=0,
+            depends_on="has_legal_representative",
+        ),
+        LineField(
+            f"{representative}(3)",
+            "legal_representative_mobile",
+            "Legal representative — mobile",
+            row=first_representative_row + 2,
+            column=1,
+            depends_on="has_legal_representative",
+        ),
+    )
+
+
+# Which activities each item is printed for, read off the routing table on each sheet.
+# Extension / change of status: (1)(2)(5)(7)(8) fill 18; (2)(7)(10) fill 19; (5) fills 20;
+# (6) fills 21; (10) fills 19 and 23-27.
+_DA_EXT_WORKPLACE = Gate(
+    "designated_activity",
+    _DA_PROFESSIONS + _DA_MEDICAL + _DA_ATHLETE + _DA_EPA + _DA_SPECIAL_ZONE,
+)
+_DA_EXT_EDUCATION = Gate(
+    "designated_activity", _DA_MEDICAL + _DA_EPA + _DA_ENTREPRENEUR_ACTIVITY
+)
+_DA_EXT_RECORD = Gate("designated_activity", _DA_ATHLETE)
+_DA_EXT_UNIVERSITY = Gate("designated_activity", _DA_INTERNSHIP_EXTENSION)
+_DA_EXT_ENTREPRENEUR = Gate("designated_activity", _DA_ENTREPRENEUR_ACTIVITY)
+
+# Certificate of Eligibility: (1)(2)(5)(7) fill 23; (2)(9) fill 24; (5) fills 25;
+# (6) fills 26; (9) fills 24 and 28-32.
+_DA_COE_WORKPLACE = Gate(
+    "designated_activity",
+    _DA_PROFESSIONS + _DA_MEDICAL + _DA_ATHLETE + _DA_SPECIAL_ZONE,
+)
+_DA_COE_EDUCATION = Gate("designated_activity", _DA_MEDICAL + _DA_ENTREPRENEUR_ACTIVITY)
+_DA_COE_RECORD = Gate("designated_activity", _DA_ATHLETE)
+_DA_COE_UNIVERSITY = Gate("designated_activity", _DA_INTERNSHIP_COE)
+_DA_COE_ENTREPRENEUR = Gate("designated_activity", _DA_ENTREPRENEUR_ACTIVITY)
+
+
+# ── Part 2 — the activity sheet ────────────────────────────────────────────────────
+
+_DA_PART2_ROWS: NominalRows = (
+    (803.2, (53.0, 528.0)),
+    (26.4, (53.0, 528.0)),
+)
+
+DA_PART2_LAYOUT = FormLayout(
+    code="moj_designated_activities_applicant_p2",
+    series="別記第三十号の二様式 申請人等作成用 ２（Ｕ その他）",
+    procedure=PROCEDURE_EXTENSION,
+    reference="930004120.pdf p3",
+    page=2,
+    rows=_DA_PART2_ROWS,
+    lines=(),
+    choices=(
+        _designated_activity(
+            "17",
+            _DA_ACTIVITIES_EXTENSION,
+            (
+                Mark(97.9, 105.5, 777.4),
+                Mark(154.0, 161.7, 777.4),
+                Mark(207.8, 215.5, 777.4),
+                Mark(278.0, 285.7, 777.4),
+                Mark(362.2, 369.9, 777.4),
+                Mark(97.9, 105.5, 752.3),
+                Mark(221.8, 229.5, 752.3),
+                Mark(320.1, 327.8, 752.3),
+                Mark(460.5, 468.2, 752.3),
+                Mark(97.9, 105.5, 727.3),
+                Mark(221.8, 229.5, 727.3),
+                Mark(292.0, 299.7, 727.3),
+                Mark(376.3, 383.9, 727.3),
+                Mark(97.9, 105.5, 689.8),
+                Mark(154.0, 161.7, 689.8),
+                Mark(235.9, 243.5, 689.8),
+                Mark(306.1, 313.7, 689.8),
+                Mark(390.3, 398.0, 689.8),
+                Mark(97.9, 105.5, 666.1),
+                Mark(278.0, 285.7, 666.1),
+                Mark(376.3, 383.9, 666.1),
+                Mark(97.9, 105.5, 639.7),
+                Mark(207.8, 215.5, 639.7),
+                Mark(306.1, 313.7, 639.7),
+                Mark(404.3, 412.0, 639.7),
+                Mark(97.9, 105.5, 613.3),
+                Mark(207.8, 215.5, 613.3),
+                Mark(97.9, 105.5, 586.9),
+                Mark(221.8, 229.5, 586.9),
+                Mark(97.9, 105.5, 563.3),
+                Mark(221.8, 229.5, 563.3),
+                Mark(97.9, 105.5, 542.1),
+                Mark(97.9, 105.5, 517.9),
+                Mark(97.9, 105.5, 496.6),
+                Mark(221.8, 229.5, 496.6),
+                Mark(362.2, 369.9, 496.6),
+                Mark(97.9, 105.5, 470.2),
+                Mark(292.0, 299.7, 470.2),
+                Mark(97.9, 105.5, 446.5),
+                Mark(306.1, 313.7, 446.5),
+                Mark(97.9, 105.5, 421.6),
+                Mark(306.1, 313.7, 421.6),
+                Mark(97.9, 105.5, 399.1),
+                Mark(97.9, 105.5, 374.3),
+                Mark(97.9, 105.5, 349.6),
+            ),
+        ),
+    ),
+    unsupported_items=("17 The free-text box beside その他 (Others), if you tick it",),
+)
+
+_DA_PART2_COE_ROWS: NominalRows = (
+    (803.0, (18.1, 577.1)),
+    (56.2, (18.1, 577.1)),
+)
+
+DA_PART2_COE_LAYOUT = FormLayout(
+    code="moj_designated_activities_applicant_p2_coe",
+    series="別記第六号の三様式 申請人等作成用 ２（Ｕ その他）",
+    procedure=PROCEDURE_COE,
+    reference="930004058.pdf p3",
+    page=2,
+    rows=_DA_PART2_COE_ROWS,
+    lines=(),
+    choices=(
+        _designated_activity(
+            "22",
+            _DA_ACTIVITIES_COE,
+            (
+                Mark(70.2, 77.9, 776.9),
+                Mark(135.9, 143.7, 776.9),
+                Mark(201.7, 209.4, 776.9),
+                Mark(283.9, 291.6, 776.9),
+                Mark(382.5, 390.3, 776.9),
+                Mark(70.2, 77.9, 750.3),
+                Mark(218.1, 225.9, 750.3),
+                Mark(333.2, 341.0, 750.3),
+                Mark(497.6, 505.4, 750.3),
+                Mark(70.2, 77.9, 723.6),
+                Mark(218.1, 225.9, 723.6),
+                Mark(300.3, 308.1, 723.6),
+                Mark(399.0, 406.7, 723.6),
+                Mark(70.2, 77.9, 683.7),
+                Mark(135.9, 143.7, 683.7),
+                Mark(234.6, 242.3, 683.7),
+                Mark(316.8, 324.5, 683.7),
+                Mark(415.4, 423.2, 683.7),
+                Mark(70.2, 77.9, 657.0),
+                Mark(283.9, 291.6, 657.0),
+                Mark(399.0, 406.7, 657.0),
+                Mark(70.2, 77.9, 630.4),
+                Mark(201.7, 209.4, 630.4),
+                Mark(316.8, 324.5, 630.4),
+                Mark(431.8, 439.6, 630.4),
+                Mark(70.2, 77.9, 603.7),
+                Mark(201.7, 209.4, 603.7),
+                Mark(70.2, 77.9, 577.1),
+                Mark(218.1, 225.9, 577.1),
+                Mark(70.2, 77.9, 550.5),
+                Mark(218.1, 225.9, 550.5),
+                Mark(70.2, 77.9, 523.8),
+                Mark(70.2, 77.9, 497.2),
+                Mark(218.1, 225.9, 497.2),
+                Mark(366.1, 373.8, 497.2),
+                Mark(70.2, 77.9, 470.5),
+                Mark(316.8, 324.5, 470.5),
+                Mark(70.2, 77.9, 443.9),
+                Mark(316.8, 324.5, 443.9),
+                Mark(70.2, 77.9, 417.3),
+                Mark(70.2, 77.9, 390.6),
+                Mark(70.2, 77.9, 364.0),
+            ),
+        ),
+    ),
+    unsupported_items=("22 The free-text box beside その他 (Others), if you tick it",),
+)
+
+
+# ── Part 3 — workplace, education, sporting record, university, major field ────────
+
+_DA_PART3_ROWS: NominalRows = (
+    (803.7, (59.3, 522.1)),
+    (762.3, (127.2, 261.8, 343.8, 508.1)),
+    (733.9, (127.2, 508.1)),
+    (705.5, (154.6, 302.9)),
+    (586.4, (140.9, 439.7)),
+    (552.2, (261.7, 439.7)),
+    (516.7, (140.9, 289.2)),
+    (471.3, (330.1, 412.3)),
+    (442.9, (330.1, 412.3)),
+    (414.4, (330.1, 412.3)),
+    (357.6, (166.0, 398.6)),
+    (329.1, (179.6, 398.6)),
+    (313.6, (73.0, 508.4)),
+    (235.9, (73.0, 508.4)),
+    (26.7, (59.3, 522.1)),
+)
+
+DA_PART3_LAYOUT = FormLayout(
+    code="moj_designated_activities_applicant_p3",
+    series="別記第三十号の二様式 申請人等作成用 ３（Ｕ その他）",
+    procedure=PROCEDURE_EXTENSION,
+    reference="930004120.pdf p4",
+    page=3,
+    rows=_DA_PART3_ROWS,
+    lines=_da_part3_lines(
+        "18",
+        "19",
+        "20",
+        "21",
+        DateSlots(year=199.6, month=268.2),
+        workplace_gate=_DA_EXT_WORKPLACE,
+        education_gate=_DA_EXT_EDUCATION,
+        record_gate=_DA_EXT_RECORD,
+        university_gate=_DA_EXT_UNIVERSITY,
+    ),
+    choices=(
+        _education_country(
+            "19(1)",
+            (Mark(89.3, 96.8, 680.2), Mark(144.0, 151.5, 680.2)),
+            depends_on=_DA_EXT_EDUCATION,
+        ),
+        _education_level_eight(
+            "19(2)",
+            (
+                Mark(89.3, 96.8, 654.3),
+                Mark(182.8, 190.3, 654.3),
+                Mark(278.6, 286.0, 654.3),
+                Mark(347.0, 354.4, 654.3),
+                Mark(429.0, 436.5, 654.3),
+                Mark(89.3, 96.8, 628.3),
+                Mark(182.8, 190.3, 628.3),
+                Mark(278.6, 286.0, 628.3),
+            ),
+            depends_on=_DA_EXT_EDUCATION,
+        ),
+        _major_field_of_study(
+            "23",
+            (
+                Mark(75.6, 83.1, 198.4),
+                Mark(144.0, 151.5, 198.4),
+                Mark(210.2, 217.6, 198.4),
+                Mark(278.6, 286.0, 198.4),
+                Mark(360.6, 368.1, 198.4),
+                Mark(456.4, 463.9, 198.4),
+                Mark(75.6, 83.1, 175.6),
+                Mark(144.0, 151.5, 175.6),
+                Mark(210.2, 217.6, 175.6),
+                Mark(278.6, 286.0, 175.6),
+                Mark(360.6, 368.1, 175.6),
+                Mark(429.0, 436.5, 175.6),
+                Mark(75.6, 83.1, 152.8),
+                Mark(278.6, 286.0, 152.8),
+                Mark(347.0, 354.4, 152.8),
+                Mark(415.4, 422.8, 152.8),
+                Mark(75.6, 83.1, 130.0),
+                Mark(144.0, 151.5, 130.0),
+                Mark(210.2, 217.6, 130.0),
+                Mark(278.6, 286.0, 130.0),
+                Mark(347.0, 354.4, 130.0),
+                Mark(75.6, 83.1, 107.2),
+                Mark(251.2, 258.7, 107.2),
+                Mark(333.3, 340.8, 107.2),
+            ),
+        ),
+        _vocational_field_of_study(
+            "23",
+            (
+                Mark(75.6, 83.1, 73.0),
+                Mark(144.0, 151.5, 73.0),
+                Mark(210.2, 217.6, 73.0),
+                Mark(319.6, 327.1, 73.0),
+                Mark(429.0, 436.5, 73.0),
+                Mark(75.6, 83.1, 50.2),
+                Mark(169.1, 176.6, 50.2),
+                Mark(278.6, 286.0, 50.2),
+                Mark(360.6, 368.1, 50.2),
+            ),
+        ),
+    ),
+    flags=(
+        Flag(
+            "20",
+            "olympics_year",
+            "Competed at the Olympic Games",
+            Mark(75.6, 83.1, 487.5),
+            depends_on=_DA_EXT_RECORD,
+        ),
+        Flag(
+            "20",
+            "world_championship_year",
+            "Competed at a world championship",
+            Mark(75.6, 83.1, 459.0),
+            depends_on=_DA_EXT_RECORD,
+        ),
+        Flag(
+            "20",
+            "other_competition_year",
+            "Competed at another international competition",
+            Mark(75.6, 83.1, 430.6),
+            depends_on=_DA_EXT_RECORD,
+        ),
+    ),
+    unsupported_items=(
+        "22 Purpose of staying in detail, including how it is paid for (free-text box)",
+    ),
+)
+
+DA_PART3_COE_LAYOUT = FormLayout(
+    code="moj_designated_activities_applicant_p3_coe",
+    series="別記第六号の三様式 申請人等作成用 ３（Ｕ その他）",
+    procedure=PROCEDURE_COE,
+    reference="930004058.pdf p4",
+    page=3,
+    rows=(
+        (801.3, (25.7, 556.1)),
+        (760.6, (103.2, 259.3, 352.8, 540.1)),
+        (732.7, (103.2, 540.1)),
+        (704.7, (134.4, 306.1)),
+        (585.2, (118.8, 462.1)),
+        (557.2, (259.2, 462.1)),
+        (529.3, (118.8, 290.5)),
+        (488.6, (337.2, 430.9)),
+        (460.6, (337.2, 430.9)),
+        (432.7, (337.2, 430.9)),
+        (376.8, (150.0, 415.3)),
+        (348.8, (165.6, 415.3)),
+        (333.6, (41.3, 540.5)),
+        (231.8, (41.3, 540.5)),
+        (25.3, (25.7, 556.1)),
+    ),
+    lines=_da_part3_lines(
+        "23",
+        "24",
+        "25",
+        "26",
+        DateSlots(year=189.5, month=267.7),
+        workplace_gate=_DA_COE_WORKPLACE,
+        education_gate=_DA_COE_EDUCATION,
+        record_gate=_DA_COE_RECORD,
+        university_gate=_DA_COE_UNIVERSITY,
+    ),
+    choices=(
+        _education_country(
+            "24(1)",
+            (Mark(59.5, 66.8, 679.9), Mark(121.9, 129.2, 679.9)),
+            depends_on=_DA_COE_EDUCATION,
+        ),
+        _education_level_eight(
+            "24(2)",
+            (
+                Mark(59.5, 66.8, 654.5),
+                Mark(168.7, 176.0, 654.5),
+                Mark(277.9, 285.2, 654.5),
+                Mark(355.9, 363.2, 654.5),
+                Mark(449.5, 456.8, 654.5),
+                Mark(59.5, 66.8, 629.1),
+                Mark(168.7, 176.0, 629.1),
+                Mark(277.9, 285.2, 629.1),
+            ),
+            depends_on=_DA_COE_EDUCATION,
+        ),
+        _major_field_of_study(
+            "28",
+            (
+                Mark(43.9, 51.2, 195.0),
+                Mark(121.9, 129.2, 195.0),
+                Mark(199.9, 207.2, 195.0),
+                Mark(277.9, 285.2, 195.0),
+                Mark(371.5, 378.8, 195.0),
+                Mark(480.7, 488.0, 195.0),
+                Mark(43.9, 51.2, 172.7),
+                Mark(121.9, 129.2, 172.7),
+                Mark(199.9, 207.2, 172.7),
+                Mark(277.9, 285.2, 172.7),
+                Mark(371.5, 378.8, 172.7),
+                Mark(449.5, 456.8, 172.7),
+                Mark(43.9, 51.2, 150.4),
+                Mark(277.9, 285.2, 150.4),
+                Mark(355.9, 363.2, 150.4),
+                Mark(433.9, 441.2, 150.4),
+                Mark(43.9, 51.2, 128.1),
+                Mark(121.9, 129.2, 128.1),
+                Mark(199.9, 207.2, 128.1),
+                Mark(277.9, 285.2, 128.1),
+                Mark(355.9, 363.2, 128.1),
+                Mark(43.9, 51.2, 105.7),
+                Mark(246.7, 254.0, 105.7),
+                Mark(340.3, 347.6, 105.7),
+            ),
+        ),
+        _vocational_field_of_study(
+            "28",
+            (
+                Mark(43.9, 51.2, 72.3),
+                Mark(121.9, 129.2, 72.3),
+                Mark(199.9, 207.2, 72.3),
+                Mark(324.7, 332.0, 72.3),
+                Mark(449.5, 456.8, 72.3),
+                Mark(43.9, 51.2, 49.9),
+                Mark(153.1, 160.4, 49.9),
+                Mark(277.9, 285.2, 49.9),
+                Mark(371.5, 378.8, 49.9),
+            ),
+        ),
+    ),
+    flags=(
+        Flag(
+            "25",
+            "olympics_year",
+            "Competed at the Olympic Games",
+            Mark(43.9, 51.2, 504.5),
+            depends_on=_DA_COE_RECORD,
+        ),
+        Flag(
+            "25",
+            "world_championship_year",
+            "Competed at a world championship",
+            Mark(43.9, 51.2, 476.5),
+            depends_on=_DA_COE_RECORD,
+        ),
+        Flag(
+            "25",
+            "other_competition_year",
+            "Competed at another international competition",
+            Mark(43.9, 51.2, 448.6),
+            depends_on=_DA_COE_RECORD,
+        ),
+    ),
+    unsupported_items=(
+        "27 Purpose of staying in detail, including how it is paid for (free-text box)",
+    ),
+)
+
+
+# ── Part 4 — entrepreneur experience, work history, representative ─────────────────
+
+DA_PART4_LAYOUT = FormLayout(
+    code="moj_designated_activities_applicant_p4",
+    series="別記第三十号の二様式 申請人等作成用 ４（Ｕ その他）",
+    procedure=PROCEDURE_EXTENSION,
+    reference="930004120.pdf p5",
+    page=4,
+    rows=(
+        (801.8, (46.1, 549.0)),
+        (771.2, (489.5, 519.1)),
+        (726.7, (430.4, 460.1)),
+        (710.0, (46.1, 549.0)),
+        (682.2, (46.1, 161.6, 294.5, 416.2)),
+        (654.3, (46.1, 549.0)),
+        (
+            626.5,
+            (46.1, 104.2, 105.1, 160.7, 161.6, 293.5, 294.5, 356.2, 357.1, 415.2, 416.2, 548.0),
+        ),
+        (
+            598.6,
+            (46.1, 104.2, 105.1, 160.7, 161.6, 293.5, 294.5, 356.2, 357.1, 415.2, 416.2, 548.0),
+        ),
+        (
+            570.8,
+            (46.1, 104.2, 105.1, 160.7, 161.6, 293.5, 294.5, 356.2, 357.1, 415.2, 416.2, 548.0),
+        ),
+        (543.0, (46.1, 549.0)),
+        (497.9, (104.6, 279.4, 415.7, 533.9)),
+        (459.0, (119.4, 533.9)),
+        (428.4, (134.2, 279.4, 386.2, 533.9)),
+        (357.0, (60.4, 533.9)),
+        (355.1, (60.4, 533.9)),
+        (222.4, (104.6, 220.3, 294.0, 533.9)),
+        (177.9, (75.1, 371.5, 415.7, 533.9)),
+        (164.0, (46.1, 549.0)),
+        (38.2, (46.1, 549.0)),
+    ),
+    lines=_da_part4_lines(
+        "24", "25", "27", _DA_EXT_ENTREPRENEUR, first_representative_row=10
+    ),
+    unsupported_items=("26 Work experience (table)",),
+)
+
+DA_PART4_CHANGE_LAYOUT = FormLayout(
+    code="moj_designated_activities_applicant_p4_change",
+    series="別記第三十号の二様式 申請人等作成用 ４（Ｕ その他）",
+    procedure=PROCEDURE_CHANGE,
+    reference="930004088.pdf p5",
+    page=4,
+    rows=(
+        (785.0, (48.2, 547.0)),
+        (754.6, (487.9, 517.3)),
+        (710.5, (429.4, 458.8)),
+        (693.9, (48.2, 547.0)),
+        (666.3, (48.2, 162.8, 294.6, 415.2)),
+        (638.7, (48.2, 547.0)),
+        (528.3, (48.2, 547.0)),
+        (483.6, (106.3, 279.6, 414.7, 532.0)),
+        (445.1, (121.0, 532.0)),
+        (414.7, (135.6, 279.6, 385.4, 532.0)),
+        (343.9, (62.4, 532.0)),
+        (342.0, (62.4, 532.0)),
+        (210.4, (106.3, 221.0, 294.1, 532.0)),
+        (166.3, (77.0, 370.9, 414.7, 532.0)),
+        (152.5, (48.2, 547.0)),
+        (27.9, (48.2, 547.0)),
+    ),
+    lines=_da_part4_lines(
+        "24", "25", "27", _DA_EXT_ENTREPRENEUR, first_representative_row=7
+    ),
+    unsupported_items=("26 Work experience (table)",),
+)
+
+
+DA_PART4_COE_LAYOUT = FormLayout(
+    code="moj_designated_activities_applicant_p4_coe",
+    series="別記第六号の三様式 申請人等作成用 ４（Ｕ その他）",
+    procedure=PROCEDURE_COE,
+    reference="930004058.pdf p5",
+    page=4,
+    rows=(
+        (803.7, (19.4, 562.1)),
+        (775.3, (497.8, 529.8)),
+        (733.9, (433.9, 466.0)),
+        (718.4, (19.4, 562.1)),
+        (692.5, (19.4, 147.1, 290.8, 418.4)),
+        (666.6, (19.4, 562.1)),
+        (562.9, (19.4, 562.1)),
+        (508.5, (82.8, 274.4, 418.0, 545.8)),
+        (480.1, (98.8, 545.8)),
+        (451.6, (114.7, 274.4, 386.0, 545.8)),
+        (366.0, (34.9, 545.8)),
+        (364.2, (34.9, 545.8)),
+        (232.4, (82.8, 210.6, 290.3, 545.8)),
+        (191.0, (50.9, 370.2, 418.0, 545.8)),
+        (178.1, (19.4, 562.1)),
+        (60.9, (19.4, 562.1)),
+    ),
+    lines=_da_part4_lines(
+        "29", "30", "32", _DA_COE_ENTREPRENEUR, first_representative_row=7
+    ),
+    unsupported_items=("31 Work experience (table)",),
+)
+
+
 # ── Applicant part 2, form L (HSP(i)(b) / Journalist / Researcher / Intra-company) ──
-# Reference: https://www.moj.go.jp/isa/content/930004094.pdf page 3 (extension) and
-# .../930004029.pdf page 3 (Certificate of Eligibility) — the L series, which is the
+# Reference: https://www.moj.go.jp/isa/content/930004096.pdf page 3 (extension) and
+# .../930004031.pdf page 3 (Certificate of Eligibility) — the L series, which is the
 # transferee sheet: where the N series asks about education, this one asks about the
 # company the applicant is posted from.
 
@@ -1215,7 +2298,7 @@ HSP_PART2_LAYOUT = FormLayout(
     code="moj_hsp_applicant_p2",
     series="別記第三十号の二様式 申請人等作成用 ２（Ｌ）",
     procedure=PROCEDURE_EXTENSION,
-    reference="930004094.pdf p3",
+    reference="930004096.pdf p3",
     page=2,
     rows=_HSP_PART2_ROWS,
     lines=_hsp_part2_lines(),
@@ -1239,7 +2322,7 @@ HSP_PART2_COE_LAYOUT = FormLayout(
     code="moj_hsp_applicant_p2_coe",
     series="別記第六号の三様式 申請人等作成用 ２（Ｌ）",
     procedure=PROCEDURE_COE,
-    reference="930004029.pdf p3",
+    reference="930004031.pdf p3",
     page=2,
     rows=_HSP_PART2_COE_ROWS,
     lines=_hsp_part2_lines(item_offset=5),
@@ -1280,7 +2363,7 @@ def _method_of_support(item: str, marks: tuple[Mark, ...]) -> ChoiceField:
 
 
 # ── Applicant part 2, form R (Dependent) — Certificate of Eligibility variant ──────
-# Reference: https://www.moj.go.jp/isa/content/930004036.pdf page 3. The applicant is
+# Reference: https://www.moj.go.jp/isa/content/930004048.pdf page 3. The applicant is
 # still abroad, so this sheet drops the 資格外活動 block the extension sheet carries and
 # keeps only the registration, the method of support and the representative.
 
@@ -1307,7 +2390,7 @@ DEPENDENT_PART2_COE_LAYOUT = FormLayout(
     code="moj_dependent_applicant_p2_coe",
     series="別記第六号の三様式 申請人等作成用 ２（Ｒ 家族滞在）",
     procedure=PROCEDURE_COE,
-    reference="930004036.pdf p3",
+    reference="930004048.pdf p3",
     page=2,
     rows=_DEPENDENT_PART2_COE_ROWS,
     lines=(
@@ -1683,7 +2766,7 @@ SPOUSE_PART3_LAYOUT = FormLayout(
 
 
 # ── Applicant part 3, form T (Spouse) — Certificate of Eligibility variant ─────────
-# Reference: https://www.moj.go.jp/isa/content/930004035.pdf page 4. The same three
+# Reference: https://www.moj.go.jp/isa/content/930004054.pdf page 4. The same three
 # blocks — supporter, guarantor, representative — numbered 26 to 28 rather than 21 to
 # 23, with the supporter's status, period and expiry printed on one line rather than two.
 
@@ -1713,7 +2796,7 @@ SPOUSE_PART3_COE_LAYOUT = FormLayout(
     code="moj_spouse_applicant_p3_coe",
     series="別記第六号の三様式 申請人等作成用 ３（Ｔ 日本人の配偶者等）",
     procedure=PROCEDURE_COE,
-    reference="930004035.pdf p4",
+    reference="930004054.pdf p4",
     page=3,
     rows=_SPOUSE_PART3_COE_ROWS,
     lines=(
@@ -2075,7 +3158,7 @@ def _japanese_ability_flags(item: str, marks: dict[str, Mark]) -> tuple[Flag, ..
 
 
 # ── Applicant part 2, form P (Student) — Certificate of Eligibility variant ────────
-# Reference: https://www.moj.go.jp/isa/content/930004031.pdf page 3. Items 22 to 28.
+# Reference: https://www.moj.go.jp/isa/content/930004044.pdf page 3. Items 22 to 28.
 # The applicant is still abroad, so where the extension sheet asks how much money is
 # being carried in and remitted, this one asks only how the stay will be funded.
 
@@ -2114,7 +3197,7 @@ STUDENT_PART2_COE_LAYOUT = FormLayout(
     code="moj_student_applicant_p2_coe",
     series="別記第六号の三様式 申請人等作成用 ２（Ｐ 留学）",
     procedure=PROCEDURE_COE,
-    reference="930004031.pdf p3",
+    reference="930004044.pdf p3",
     page=2,
     rows=_STUDENT_PART2_COE_ROWS,
     lines=(
@@ -2762,7 +3845,7 @@ def _student_guardian_and_representative(
 
 
 # ── Applicant part 3, form P (Student) — Certificate of Eligibility variant ────────
-# Reference: https://www.moj.go.jp/isa/content/930004031.pdf page 4. Items 28(3) to 31.
+# Reference: https://www.moj.go.jp/isa/content/930004044.pdf page 4. Items 28(3) to 31.
 # The applicant is still abroad, so this sheet has no 資格外活動 block: the whole page is
 # the tail of the support question, the plan after graduation, and who is signing.
 
@@ -2786,7 +3869,7 @@ STUDENT_PART3_COE_LAYOUT = FormLayout(
     code="moj_student_applicant_p3_coe",
     series="別記第六号の三様式 申請人等作成用 ３（Ｐ 留学）",
     procedure=PROCEDURE_COE,
-    reference="930004031.pdf p4",
+    reference="930004044.pdf p4",
     page=3,
     rows=_STUDENT_PART3_COE_ROWS,
     lines=_student_guardian_and_representative("30", "31", first_row=1),
@@ -2836,7 +3919,7 @@ STUDENT_PART3_COE_LAYOUT = FormLayout(
 
 
 # ── Applicant part 3, form P (Student) — change of status variant ──────────────────
-# Reference: https://www.moj.go.jp/isa/content/930004107.pdf page 4. Items 22(4) to 26.
+# Reference: https://www.moj.go.jp/isa/content/930004076.pdf page 4. Items 22(4) to 26.
 # Same shape as the extension sheet but one row shorter: a change-of-status applicant is
 # asked their 資格外活動 on three lines rather than four.
 
@@ -2861,7 +3944,7 @@ STUDENT_PART3_CHANGE_LAYOUT = FormLayout(
     code="moj_student_applicant_p3_change",
     series="別記第三十号の二様式 申請人等作成用 ３（Ｐ 留学）",
     procedure=PROCEDURE_CHANGE,
-    reference="930004107.pdf p4",
+    reference="930004076.pdf p4",
     page=3,
     rows=_STUDENT_PART3_CHANGE_ROWS,
     lines=(

@@ -26,6 +26,13 @@ from torii_api.services.content_packs import resolve_packs_dir
 from torii_api.services.jp_form_layouts import (
     CHANGE_LAYOUT,
     COE_LAYOUT,
+    DA_PART2_COE_LAYOUT,
+    DA_PART2_LAYOUT,
+    DA_PART3_COE_LAYOUT,
+    DA_PART3_LAYOUT,
+    DA_PART4_CHANGE_LAYOUT,
+    DA_PART4_COE_LAYOUT,
+    DA_PART4_LAYOUT,
     DEPENDENT_PART2_COE_LAYOUT,
     DEPENDENT_PART2_LAYOUT,
     EXTENSION_LAYOUT,
@@ -45,7 +52,9 @@ from torii_api.services.jp_form_layouts import (
     WORK_PART2_COE_LAYOUT,
     WORK_PART2_LAYOUT,
     FormLayout,
+    Gate,
     Mark,
+    gate_key,
 )
 
 ISA_CONTENT_BASE = "https://www.moj.go.jp/isa/content"
@@ -236,6 +245,21 @@ _EXTRA_LAYOUTS: dict[tuple[str, str], tuple[FormLayout, ...]] = {
     ("work", "coe"): (WORK_PART2_COE_LAYOUT,),
     ("work", "extension"): (WORK_PART2_LAYOUT,),
     ("work", "change_of_status"): (WORK_PART2_LAYOUT,),
+    ("designated_activities", "coe"): (
+        DA_PART2_COE_LAYOUT,
+        DA_PART3_COE_LAYOUT,
+        DA_PART4_COE_LAYOUT,
+    ),
+    ("designated_activities", "extension"): (
+        DA_PART2_LAYOUT,
+        DA_PART3_LAYOUT,
+        DA_PART4_LAYOUT,
+    ),
+    ("designated_activities", "change_of_status"): (
+        DA_PART2_LAYOUT,
+        DA_PART3_LAYOUT,
+        DA_PART4_CHANGE_LAYOUT,
+    ),
     ("hsp", "coe"): (HSP_PART2_COE_LAYOUT,),
     ("hsp", "extension"): (HSP_PART2_LAYOUT,),
     ("hsp", "change_of_status"): (HSP_PART2_LAYOUT,),
@@ -607,7 +631,7 @@ def _question_dict(
     form: OfficialForm,
     item: str,
     label: str,
-    depends_on: str | None = None,
+    depends_on: Any = None,
 ) -> dict[str, Any] | None:
     spec = QUESTION_SPECS.get(key)
     if spec is None:
@@ -642,9 +666,15 @@ def _question_dict(
     # `show_when` pointing at the key the scope's intake actually uses for that fact.
     # The layout's own `depends_on` wins where both exist, since that one is tied to the
     # printed box rather than to the question.
-    gate = depends_on or (spec.show_when[0] if spec.show_when else None)
+    gate = gate_key(depends_on) or (spec.show_when[0] if spec.show_when else None)
     if gate:
         question["_depends_on"] = gate
+        # A value gate carries which answers satisfy it, because "fill in questions 18, 19
+        # and 27 if you selected (2)" cannot be expressed as "if the answer is yes".
+        if isinstance(depends_on, Gate):
+            question["_depends_on_values"] = list(depends_on.values)
+        elif spec.show_when and not isinstance(spec.show_when[1], bool):
+            question["_depends_on_values"] = [str(spec.show_when[1])]
     return question
 
 
@@ -652,13 +682,13 @@ def intake_questions_for_form(form: OfficialForm) -> list[dict[str, Any]]:
     """The intake questions needed to fill every item of ``form``, in form order."""
     questions: list[dict[str, Any]] = []
     seen: set[str] = set()
-    ordered: list[tuple[str, str, str, str | None]] = []
+    ordered: list[tuple[str, str, str, Any]] = []
     if form.layout is not None:
         for layout in (form.layout, *form.extra_layouts):
             ordered.extend(
                 (line.key, line.item, line.label, line.depends_on) for line in layout.lines
             )
-            ordered.extend((c.key, c.item, c.label, None) for c in layout.choices)
+            ordered.extend((c.key, c.item, c.label, c.depends_on) for c in layout.choices)
     else:
         ordered = [(key, "", label, None) for label, key in form.acroform_items]
     for key, item, label, depends_on in ordered:
@@ -674,11 +704,11 @@ def intake_questions_for_form(form: OfficialForm) -> list[dict[str, Any]]:
         # This applies to a layout-level `depends_on` too — item 22's legal-representative
         # block was gated that way and was unreachable for exactly this reason.
         spec = QUESTION_SPECS[key]
-        gate_key = depends_on or (spec.show_when[0] if spec.show_when else None)
-        if gate_key:
-            if gate_key not in seen:
-                seen.add(gate_key)
-                gate = _question_dict(gate_key, form, "", GATE_LABELS.get(gate_key, ""))
+        watched = gate_key(depends_on) or (spec.show_when[0] if spec.show_when else None)
+        if watched:
+            if watched not in seen:
+                seen.add(watched)
+                gate = _question_dict(watched, form, "", GATE_LABELS.get(watched, ""))
                 if gate is not None:
                     gate.pop("hint", None)
                     questions.append(gate)
@@ -796,11 +826,17 @@ def merge_form_questions(
         placed = dict(question)
         placed["section"] = target
         dependency = placed.pop("_depends_on", None)
+        values = placed.pop("_depends_on_values", None)
         if dependency:
-            # Show the follow-up only when the disclosure it belongs to is affirmative,
+            # Show the follow-up only when the disclosure it belongs to is satisfied,
             # against whichever key this scope's intake uses for it. Without this the
             # "if you answered yes above" question appears even after a "no".
-            placed["show_when"] = {"key": _asked_as(str(dependency), pack_keys), "equals": True}
+            gate: dict[str, Any] = {"key": _asked_as(str(dependency), pack_keys)}
+            if values:
+                gate["one_of"] = list(values)
+            else:
+                gate["equals"] = True
+            placed["show_when"] = gate
         by_section.setdefault(target, []).append(placed)
 
     if not by_section:

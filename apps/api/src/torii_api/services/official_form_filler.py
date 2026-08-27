@@ -35,7 +35,9 @@ from reportlab.pdfgen import canvas
 from torii_api.services.jp_form_layouts import (
     Box,
     ChoiceField,
+    Flag,
     FormLayout,
+    Gate,
     LineField,
     Mark,
 )
@@ -245,11 +247,20 @@ def resolve_answer(key: str, answers: dict[str, Any]) -> Any:
     return None
 
 
-def _is_dormant(field: LineField | ChoiceField, answers: dict[str, Any]) -> bool:
-    """True when this field is only asked for if another answer is affirmative, and is not."""
-    if field.depends_on is None:
+def _is_dormant(field: LineField | ChoiceField | Flag, answers: dict[str, Any]) -> bool:
+    """True when this field is conditional on another answer that does not satisfy it."""
+    dependency = field.depends_on
+    if dependency is None:
         return False
-    return _as_bool(resolve_answer(field.depends_on, answers)) is not True
+    if isinstance(dependency, Gate):
+        token = _normalise_token(resolve_answer(dependency.key, answers))
+        return token not in dependency.values
+    return _as_bool(resolve_answer(dependency, answers)) is not True
+
+
+def _normalise_token(value: Any) -> str:
+    """An answer reduced to the shape an option token is written in."""
+    return re.sub(r"[\s\-/]+", "_", _text(value).strip().lower())
 
 
 def _choice_token(choice: ChoiceField, value: Any) -> str | None:
@@ -261,9 +272,8 @@ def _choice_token(choice: ChoiceField, value: Any) -> str | None:
     unmarked and reported as still needing the applicant's hand.
     """
     options = {option for option, _ in choice.options}
-    raw = _text(value).strip().lower()
-    if raw:
-        token = re.sub(r"[\s\-/]+", "_", raw)
+    token = _normalise_token(value)
+    if token:
         if token in options:
             return token
         alias = _CHOICE_ALIASES.get(token)
@@ -537,6 +547,8 @@ def fill_flat_form(
 
         # Multi-select boxes, each restating a value already written on this sheet.
         for flag in sheet.flags:
+            if _is_dormant(flag, answers):
+                continue
             if _is_stated(resolve_answer(flag.key, answers)):
                 _draw_tick(pdf, sheet_fit, flag.mark)
                 filled[f"{flag.item} {flag.label}"] = "ticked"

@@ -108,9 +108,11 @@ ANSWERS: dict[str, object] = {
     "householder_annual_income_jpy": 7400000,
     "guarantor_nationality": "JAPAN",
     "guarantor_relationship": "employer",
-    # Applicant part 2, form P (Student) — education and Japanese-language blocks.
+    # The education block, shared by the work, student and designated-activities sheets.
     "education_enrollment_status": "graduated",
     "education_level": "bachelor",
+    "education_country": "foreign_country",
+    "major_field_of_study": "engineering",
     "japanese_ability_other": "Two years of self-study with a private tutor",
     "japanese_high_school_name": "Dhaka Japanese Language Centre",
     "japanese_high_school_from": "2023-04",
@@ -596,10 +598,14 @@ def test_the_work_packet_fills_both_of_its_applicant_sheets() -> None:
     assert "Shinjuku Office" in text
     assert "Applied Information Technology Engineer" in text
 
-    # The tick-box matrices and the work-history grid are not authored, and the applicant
-    # is told so rather than left to find the gap at the counter.
+    # What is still the applicant's own hand is named on the sheet rather than left for
+    # them to find at the counter: the work-history grid needs a row per employer, which
+    # intake has no list-valued answer for, and 「その他」 asks for written detail beside
+    # the box. The tick-box matrices themselves are authored and marked from the answers.
     combined = " ".join(result.notes)
-    assert "19 Major field of study" in combined
+    assert "21 Work experience (table)" in combined
+    assert "その他" in combined
+    assert "19 Major field of study" not in combined
     assert "21 Work experience" in combined
 
 
@@ -719,7 +725,11 @@ def _shown(scope: str, category: str, action: str, answers: dict | None = None):
 @pytest.mark.parametrize(
     ("scope", "category", "action", "ceiling"),
     [
-        ("jp/work.renewal", "work", "renewal", 36),
+        # 37, not 36: authoring item 18(1) made "was your last school in Japan or
+        # abroad" askable. It is a printed box and only the applicant knows the answer.
+        # The field-of-study matrices behind it cost nothing here -- they are gated on
+        # the education level, so they appear only once that is answered.
+        ("jp/work.renewal", "work", "renewal", 37),
         # 50, not 48: authoring item 22(4)(5) and item 24 of the student part 3 sheet made
         # the scholarship and the plan after graduation askable. Both are printed on a
         # sheet the applicant signs and neither is conditional on the form, so the honest
@@ -906,3 +916,154 @@ def test_an_option_can_carry_the_forms_own_wording() -> None:
     spec = QUESTION_SPECS["overseas_employer_relationship"]
     assert "holding_company" in spec.options
     assert dict(spec.option_labels)["holding_company"].startswith("Holding company")
+
+
+# ── Designated Activities: the sheet routes by which activity was ticked ────────────
+# Item 17 lists forty-five activities in eleven bracketed groups, and the sheet prints
+# which items behind it each group has to fill. Nothing else in the catalogue does this.
+
+_ENTREPRENEUR = {
+    **ANSWERS,
+    "designated_activity": "entrepreneurial_activities",
+    "education_country": "foreign_country",
+    "education_level": "bachelor",
+    "major_field_of_study": "engineering",
+    "final_school_department": "Department of Computer Science",
+    "entrepreneur_managing_experience_years": "4",
+    "entrepreneur_work_experience_years": "7",
+    "olympics_year": "2021",
+    "current_university_name": "Waseda University",
+}
+
+_ATHLETE = {
+    **_ENTREPRENEUR,
+    "designated_activity": "amateur_sports_athlete",
+}
+
+
+@pytest.mark.parametrize(
+    ("action", "form_code", "workplace_item", "record_item"),
+    [
+        ("renewal", "jp_designated_activities_extension", "18(1)", "20"),
+        ("change_of_status", "jp_designated_activities_change_of_status", "18(1)", "20"),
+        ("new_application", "jp_designated_activities_coe", "23(1)", "25"),
+    ],
+)
+def test_designated_activities_fills_every_applicant_sheet(
+    action: str, form_code: str, workplace_item: str, record_item: str
+) -> None:
+    template = _cached(form_code)
+    if template is None:
+        pytest.skip(f"{form_code} not cached — run torii-fetch-forms")
+    form = primary_form_for_scope("designated_activities", action)
+    assert form is not None and form.code == form_code
+
+    athlete = fill_flat_form(form, template, _ATHLETE)
+    assert athlete.layout_verified is True
+    assert athlete.summary["unfilled_applicant_pages"] == []
+    # An athlete is asked where they train and what they have competed in.
+    assert athlete.filled[f"{workplace_item} Place of employment or school — name"]
+    assert athlete.filled[f"{record_item} Year of Olympic participation"] == "2021"
+
+
+def test_an_item_the_sheet_does_not_route_to_this_activity_stays_blank() -> None:
+    """The routing is the point: an entrepreneur is not asked an athlete's questions.
+
+    The sheet prints "if you selected (5), fill in questions 18, 20, 27 and the
+    signature". Filling item 20 for an entrepreneur would put a competition record on a
+    form that never asked for one, and reporting it as missing would tell them to.
+    """
+    template = _cached("jp_designated_activities_extension")
+    if template is None:
+        pytest.skip("jp_designated_activities_extension not cached")
+    form = primary_form_for_scope("designated_activities", "renewal")
+    assert form is not None
+
+    result = fill_flat_form(form, template, _ENTREPRENEUR)
+    assert result.layout_verified is True
+    assert result.filled["17 Type of activity"] == "entrepreneurial_activities"
+    # Item 18 is for groups 1, 2, 5, 7 and 8; item 20 for group 5; item 21 for group 6.
+    assert not [key for key in result.filled if key.startswith(("18", "20", "21"))]
+    assert not [item for item in result.missing if item.startswith(("18", "20", "21"))]
+    # Item 19 and item 23 are for group 10, so they do fill.
+    assert result.filled["19(3) Name of school"]
+    assert result.filled["23 Major field of study"] == "engineering"
+
+
+def test_a_flag_is_not_ticked_when_its_own_block_is_not_routed_here() -> None:
+    """A ticked box beside a blank line reads as a claim the form did not make."""
+    template = _cached("jp_designated_activities_extension")
+    if template is None:
+        pytest.skip("jp_designated_activities_extension not cached")
+    form = primary_form_for_scope("designated_activities", "renewal")
+    assert form is not None
+    result = fill_flat_form(form, template, _ENTREPRENEUR)
+    assert "20 Competed at the Olympic Games" not in result.filled
+
+
+def test_the_two_packets_do_not_offer_the_same_activities() -> None:
+    """The EPA group is extension-only; summer job and cultural exchange are new-only."""
+    from torii_api.services.jp_form_layouts import DA_PART2_COE_LAYOUT, DA_PART2_LAYOUT
+
+    def tokens(layout: object) -> set[str]:
+        choice = next(c for c in layout.choices if c.key == "designated_activity")  # type: ignore[attr-defined]
+        return {option for option, _ in choice.options}
+
+    extension, coe = tokens(DA_PART2_LAYOUT), tokens(DA_PART2_COE_LAYOUT)
+    assert "epa_nurse" in extension and "epa_nurse" not in coe
+    assert "summer_job" in coe and "summer_job" not in extension
+    # Every token either sheet declares is an option ops actually offer, so a box can be
+    # reached; and a box that cannot be reached would never be ticked.
+    offered = set(QUESTION_SPECS["designated_activity"].options)
+    assert extension <= offered and coe <= offered
+
+
+def test_a_value_gate_reaches_intake_as_a_one_of_condition() -> None:
+    """A boolean show_when cannot say "if you selected (2)"."""
+    questions = intake_questions_for_scope("designated_activities", "change_of_status")
+    by_key = {question["key"]: question for question in questions}
+    assert "designated_activity" in by_key
+
+    merged = merge_form_questions(
+        pack_questions("jp/designated_activities.change_of_status"),
+        "designated_activities",
+        "change_of_status",
+    )
+    employer = next(q for q in merged if q["key"] == "employer_name")
+    gate = employer["show_when"]
+    assert gate["key"] == "designated_activity"
+    assert "doctor" in gate["one_of"]
+    assert "entrepreneurial_activities" not in gate["one_of"]
+
+
+def test_one_of_hides_the_question_until_a_listed_answer_is_given() -> None:
+    from torii_api.services.intake import IntakeQuestion, is_visible
+
+    question = IntakeQuestion(
+        key="employer_name",
+        prompt="Where do you work?",
+        type="string",
+        show_when={"key": "designated_activity", "one_of": ["doctor", "nurse"]},
+    )
+    assert is_visible(question, {"designated_activity": "doctor"}) is True
+    assert is_visible(question, {"designated_activity": "Nurse"}) is True
+    assert is_visible(question, {"designated_activity": "entrepreneurial_activities"}) is False
+    assert is_visible(question, {}) is False
+
+
+def test_a_multi_select_box_follows_the_amount_beside_it() -> None:
+    """Item 22(1) of the student sheet is 複数選択可; zero is not a statement of support."""
+    template = _cached("jp_student_extension")
+    if template is None:
+        pytest.skip("jp_student_extension not cached")
+    form = primary_form_for_scope("student", "renewal")
+    assert form is not None
+
+    answers = {
+        **ANSWERS,
+        "support_self_monthly_jpy": 40000,
+        "scholarship_monthly_jpy": 0,
+    }
+    result = fill_flat_form(form, template, answers)
+    assert result.filled["22(1) Support is partly self-funded"] == "ticked"
+    assert "22(1) Support from a scholarship" not in result.filled

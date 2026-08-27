@@ -5,6 +5,7 @@ Framework-free so routers, seeds, and tests share the same deterministic rules (
 
 from __future__ import annotations
 
+import re
 from datetime import date
 from typing import Any, Literal
 
@@ -17,10 +18,16 @@ QuestionType = Literal["boolean", "string", "integer", "enum", "date"]
 
 
 class ShowWhen(BaseModel):
-    """Reveal this question only when another answer equals ``equals``."""
+    """Reveal this question only when another answer matches.
+
+    ``equals`` is the single-value form. ``one_of`` is for the branching the ministry
+    forms print -- "fill in questions 18, 19 and 27 if you selected (2)" -- where one
+    item follows from any of several answers. Exactly one of the two is set.
+    """
 
     key: str
-    equals: bool | str | int
+    equals: bool | str | int | None = None
+    one_of: list[str] | None = None
 
 
 class IntakeQuestion(BaseModel):
@@ -54,12 +61,23 @@ class IntakeProgress(BaseModel):
     complete: bool
 
 
+def _matches_token(given: Any, allowed: list[str]) -> bool:
+    """Whether an answer is one of ``allowed``, compared the way option tokens are written."""
+    if given is None:
+        return False
+    token = re.sub(r"[\s\-/]+", "_", str(given).strip().lower())
+    return token in {option.strip().lower() for option in allowed}
+
+
 def is_visible(question: IntakeQuestion, answers: dict[str, Any]) -> bool:
     """Whether ``question`` applies given current ``answers`` (US-02.2)."""
     rule = question.show_when
     if rule is None:
         return True
-    return answers.get(rule.key) == rule.equals
+    given = answers.get(rule.key)
+    if rule.one_of is not None:
+        return _matches_token(given, rule.one_of)
+    return given == rule.equals
 
 
 def visible_questions(

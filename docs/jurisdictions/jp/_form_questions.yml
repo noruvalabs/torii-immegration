@@ -886,3 +886,154 @@ questions:
       - { value: higher_education_in_japan, label: "Go on to further study in Japan (日本での進学)" }
       - { value: work_in_japan, label: "Find work in Japan (日本での就職)" }
       - { value: other, label: "Other (その他) — write the detail on the form yourself" }
+  # ── Designated Activities (特定活動), form U ───────────────────────────────────────
+  # Item 17 of the extension sheet, 22 of the Certificate of Eligibility sheet. The
+  # activity chosen here decides which of the items behind it the applicant has to fill,
+  # so every later question on those sheets is gated on this answer. Not every activity
+  # appears in every packet; one that has no printed box on the sheet in hand leaves that
+  # box clear and is reported as still needing the applicant's hand.
+  designated_activity:
+    prompt: "Which designated activity are you applying under?"
+    type: enum
+    section: "What you are applying for"
+    options:
+      - { value: diplomat, label: "Diplomat (外交)" }
+      - { value: official, label: "Official (公用)" }
+      - { value: lawyer, label: "Lawyer (弁護士)" }
+      - { value: judicial_scrivener, label: "Judicial scrivener (司法書士)" }
+      - { value: land_and_building_investigator, label: "Land and building investigator (土地家屋調査士)" }
+      - { value: registered_foreign_qualified_lawyer, label: "Registered foreign-qualified lawyer (外国法事務弁護士)" }
+      - { value: public_accountant, label: "Public accountant (公認会計士)" }
+      - { value: foreign_qualified_certified_public_accountant, label: "Foreign-qualified certified public accountant (外国公認会計士)" }
+      - { value: certified_tax_accountant, label: "Certified tax accountant (税理士)" }
+      - { value: public_consultant_on_social_and_labor_insurance, label: "Public consultant on social and labour insurance (社会保険労務士)" }
+      - { value: patent_attorney, label: "Patent attorney (弁理士)" }
+      - { value: maritime_procedure_agent, label: "Maritime procedure agent (海事代理士)" }
+      - { value: certified_administrative_procedures_legal_specialist, label: "Certified administrative procedures legal specialist (行政書士)" }
+      - { value: doctor, label: "Doctor (医師)" }
+      - { value: dentist, label: "Dentist (歯科医師)" }
+      - { value: pharmacist, label: "Pharmacist (薬剤師)" }
+      - { value: public_health_nurse, label: "Public health nurse (保健師)" }
+      - { value: midwife, label: "Midwife (助産師)" }
+      - { value: nurse, label: "Nurse, not under EPA (看護師)" }
+      - { value: assistant_nurse, label: "Assistant nurse (准看護師)" }
+      - { value: dental_hygienist, label: "Dental hygienist (歯科衛生士)" }
+      - { value: radiology_technician, label: "Radiology technician (診療放射線技師)" }
+      - { value: physical_therapist, label: "Physical therapist (理学療法士)" }
+      - { value: occupational_therapist, label: "Occupational therapist (作業療法士)" }
+      - { value: orthoptist, label: "Orthoptist (視能訓練士)" }
+      - { value: clinical_engineer, label: "Clinical engineer (臨床工学技士)" }
+      - { value: prosthetist, label: "Prosthetist (義肢装具士)" }
+      - { value: housekeeper, label: "Housekeeper (家事使用人)" }
+      - { value: living_with_family, label: "Living with my family, a diplomat's family included (家族と同居)" }
+      - { value: working_holiday, label: "Working holiday (ワーキング・ホリデー)" }
+      - { value: foreign_lawyer, label: "Foreign lawyer (外国弁護士)" }
+      - { value: amateur_sports_athlete, label: "Amateur sports athlete (アマチュアスポーツ選手)" }
+      - { value: internship, label: "Internship (インターンシップ)" }
+      - { value: summer_job, label: "Summer job (サマージョブ) — new applications only" }
+      - { value: international_cultural_exchange, label: "International cultural exchange (国際文化交流) — new applications only" }
+      - { value: epa_nurse, label: "Nurse under EPA (EPA看護師) — extension or change of status only" }
+      - { value: epa_certified_careworker, label: "Certified careworker under EPA (EPA介護福祉士) — extension or change of status only" }
+      - { value: epa_nurse_candidate, label: "Nurse candidate under EPA (EPA看護師候補者) — extension or change of status only" }
+      - { value: epa_careworker_candidate, label: "Careworker candidate under EPA (EPA介護福祉士候補者) — extension or change of status only" }
+      - { value: epa_student_careworker_candidate, label: "Student careworker candidate under EPA (EPA就学介護福祉士候補者) — extension or change of status only" }
+      - { value: manufacturing_worker, label: "Foreign worker in manufacturing (製造業外国従業員)" }
+      - { value: domestic_worker_strategic_zone, label: "Domestic worker, national strategic zone (家事支援者)" }
+      - { value: crop_farming_worker_strategic_zone, label: "Crop farming worker, national strategic zone (耕種農業支援者)" }
+      - { value: livestock_farming_worker_strategic_zone, label: "Livestock farming worker, national strategic zone (畜産農業支援者)" }
+      - { value: fourth_generation_japanese_descent, label: "Fourth-generation foreign national of Japanese descent (日系四世)" }
+      - { value: entrepreneurial_activities, label: "Entrepreneurial activities (起業活動)" }
+      - { value: other, label: "Other (その他) — write the detail on the form yourself" }
+  education_country:
+    prompt: "Was the last school you attended in Japan or abroad?"
+    type: enum
+    section: "Education & qualifications"
+    options:
+      - { value: japan, label: "In Japan (本邦)" }
+      - { value: foreign_country, label: "Abroad (外国)" }
+  final_school_department:
+    prompt: "What department, course or specialised course did you study?"
+    type: string
+    section: "Education & qualifications"
+    max_length: 160
+  major_field_of_study:
+    prompt: "What was your major field of study?"
+    type: enum
+    section: "Education & qualifications"
+    options:
+      - { value: law, label: "Law (法学)" }
+      - { value: economics, label: "Economics (経済学)" }
+      - { value: politics, label: "Politics (政治学)" }
+      - { value: commercial_science, label: "Commercial science (商学)" }
+      - { value: business_administration, label: "Business administration (経営学)" }
+      - { value: literature, label: "Literature (文学)" }
+      - { value: linguistics, label: "Linguistics (語学)" }
+      - { value: sociology, label: "Sociology (社会学)" }
+      - { value: history, label: "History (歴史学)" }
+      - { value: psychology, label: "Psychology (心理学)" }
+      - { value: education, label: "Education (教育学)" }
+      - { value: science_of_art, label: "Science of art (芸術学)" }
+      - { value: other_cultural_or_social_science, label: "Other cultural or social science (その他人文・社会科学)" }
+      - { value: science, label: "Science (理学)" }
+      - { value: chemistry, label: "Chemistry (化学)" }
+      - { value: engineering, label: "Engineering (工学)" }
+      - { value: agriculture, label: "Agriculture (農学)" }
+      - { value: fisheries, label: "Fisheries (水産学)" }
+      - { value: pharmacy, label: "Pharmacy (薬学)" }
+      - { value: medicine, label: "Medicine (医学)" }
+      - { value: dentistry, label: "Dentistry (歯学)" }
+      - { value: other_natural_science, label: "Other natural science (その他自然科学)" }
+      - { value: sports_science, label: "Sports science (体育学)" }
+      - { value: nursing_care_and_welfare, label: "Nursing care and welfare (介護福祉)" }
+      - { value: other, label: "Other (その他) — write the detail on the form yourself" }
+  vocational_field_of_study:
+    prompt: "What field did you study at your college of technology?"
+    type: enum
+    section: "Education & qualifications"
+    show_when: { key: education_level, equals: college_of_technology }
+    options:
+      - { value: industry, label: "Industry / engineering (工業)" }
+      - { value: agriculture, label: "Agriculture (農業)" }
+      - { value: medical_services_and_hygienics, label: "Medical services and hygienics (医療・衛生)" }
+      - { value: education_and_social_welfare, label: "Education and social welfare (教育・社会福祉)" }
+      - { value: law, label: "Law (法律)" }
+      - { value: practical_commercial_business, label: "Practical commercial business (商業実務)" }
+      - { value: dress_design_and_home_economics, label: "Dress design and home economics (服飾・家政)" }
+      - { value: culture_and_education, label: "Culture and education (文化・教養)" }
+      - { value: nursing_care_and_welfare, label: "Nursing care and welfare (介護福祉)" }
+      - { value: other, label: "Other (その他) — write the detail on the form yourself" }
+  olympics_year:
+    prompt: "In which year did you compete at the Olympic Games?"
+    type: string
+    section: "Education & qualifications"
+    max_length: 12
+  world_championship_year:
+    prompt: "In which year did you compete at a world championship?"
+    type: string
+    section: "Education & qualifications"
+    max_length: 12
+  other_competition_year:
+    prompt: "In which year did you compete at another international competition?"
+    type: string
+    section: "Education & qualifications"
+    max_length: 12
+  current_university_name:
+    prompt: "Which university and faculty do you currently attend?"
+    type: string
+    section: "Education & qualifications"
+    max_length: 160
+  current_university_course:
+    prompt: "Which course do you attend there?"
+    type: string
+    section: "Education & qualifications"
+    max_length: 160
+  entrepreneur_managing_experience_years:
+    prompt: "How many years have you spent managing or supervising a business abroad in the field you intend to start in?"
+    type: string
+    section: "Work & employer"
+    max_length: 12
+  entrepreneur_work_experience_years:
+    prompt: "How many years of work experience do you have in that field?"
+    type: string
+    section: "Work & employer"
+    max_length: 12
