@@ -99,6 +99,10 @@ ANSWERS: dict[str, object] = {
     "supporter_occupation": "Business owner",
     "supporter_employer_tel": "+880-2-2222",
     "supporter_annual_income_jpy": 3500000,
+    # Tick-box groups, answered with the token the layout declares.
+    "method_of_support": "guarantor",
+    "supporter_relationship": "father",
+    "part_time_salary_period": "monthly",
     "works_outside_status": True,
     "part_time_work_type": "Convenience store clerk",
     "part_time_employer_name": "Seven-Eleven Shinjuku",

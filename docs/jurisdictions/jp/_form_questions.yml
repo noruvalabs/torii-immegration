@@ -701,3 +701,36 @@ questions:
       - { value: main_office, label: "Main office (本部・本店)" }
       - { value: branch_office, label: "Branch office (支部・支店)" }
       - { value: other, label: "Other (その他) — write the detail on the form yourself" }
+  # ── Applicant part 2, form R (Dependent) ────────────────────────────────────────
+  # Item 18 of the extension sheet, 23 of the Certificate of Eligibility sheet.
+  method_of_support:
+    prompt: "How will your stay in Japan be paid for?"
+    type: enum
+    section: "Funds & support"
+    options:
+      - { value: relatives, label: "By relatives (親族負担)" }
+      - { value: remittances_from_abroad, label: "Remittances from abroad (外国からの送金)" }
+      - { value: guarantor, label: "By a guarantor (身元保証人負担)" }
+      - { value: other, label: "Other (その他) — write the detail on the form yourself" }
+  part_time_salary_period:
+    prompt: "Is that pay a monthly or a daily amount?"
+    type: enum
+    section: "Work & employer"
+    show_when: { key: works_outside_status, equals: true }
+    options:
+      - { value: monthly, label: "Monthly (月額)" }
+      - { value: daily, label: "Daily (日額)" }
+  # ── Applicant part 3, form T (Spouse / Long-term resident) ───────────────────────
+  # Item 21(8) of the extension sheet, 26(8) of the Certificate of Eligibility sheet.
+  supporter_relationship:
+    prompt: "How is the person supporting you related to you?"
+    type: enum
+    section: "Funds & support"
+    options:
+      - { value: husband, label: "Husband (夫)" }
+      - { value: wife, label: "Wife (妻)" }
+      - { value: father, label: "Father (父)" }
+      - { value: mother, label: "Mother (母)" }
+      - { value: foster_father, label: "Foster father (養父)" }
+      - { value: foster_mother, label: "Foster mother (養母)" }
+      - { value: other, label: "Other (その他) — write the detail on the form yourself" }

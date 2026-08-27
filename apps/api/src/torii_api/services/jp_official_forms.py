@@ -26,6 +26,7 @@ from torii_api.services.content_packs import resolve_packs_dir
 from torii_api.services.jp_form_layouts import (
     CHANGE_LAYOUT,
     COE_LAYOUT,
+    DEPENDENT_PART2_COE_LAYOUT,
     DEPENDENT_PART2_LAYOUT,
     EXTENSION_LAYOUT,
     HSP_PART2_COE_LAYOUT,
@@ -33,6 +34,7 @@ from torii_api.services.jp_form_layouts import (
     PERMANENT_RESIDENCE_LAYOUT,
     PROCEDURE_CONSULAR_VISA,
     SPOUSE_PART2_LAYOUT,
+    SPOUSE_PART3_COE_LAYOUT,
     SPOUSE_PART3_LAYOUT,
     STUDENT_PART2_LAYOUT,
     STUDENT_PART3_EXTENSION_LAYOUT,
@@ -235,9 +237,10 @@ _EXTRA_LAYOUTS: dict[tuple[str, str], tuple[FormLayout, ...]] = {
     ("hsp", "change_of_status"): (HSP_PART2_LAYOUT,),
     ("student", "extension"): (STUDENT_PART2_LAYOUT, STUDENT_PART3_EXTENSION_LAYOUT),
     ("student", "change_of_status"): (STUDENT_PART2_LAYOUT,),
+    ("dependent", "coe"): (DEPENDENT_PART2_COE_LAYOUT,),
     ("dependent", "extension"): (DEPENDENT_PART2_LAYOUT,),
     ("dependent", "change_of_status"): (DEPENDENT_PART2_LAYOUT,),
-    ("spouse", "coe"): (SPOUSE_PART2_LAYOUT,),
+    ("spouse", "coe"): (SPOUSE_PART2_LAYOUT, SPOUSE_PART3_COE_LAYOUT),
     ("spouse", "extension"): (SPOUSE_PART2_LAYOUT, SPOUSE_PART3_LAYOUT),
     ("spouse", "change_of_status"): (SPOUSE_PART2_LAYOUT, SPOUSE_PART3_LAYOUT),
 }

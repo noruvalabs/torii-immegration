@@ -1094,6 +1094,138 @@ HSP_PART2_COE_LAYOUT = FormLayout(
 )
 
 
+def _method_of_support(item: str, marks: tuple[Mark, ...]) -> ChoiceField:
+    """How the applicant's stay is paid for — four printed □ boxes.
+
+    Present on every Ｒ (Dependent) sheet, extension and Certificate of Eligibility
+    alike, and asked with the same four options in both.
+    """
+    return ChoiceField(
+        item,
+        "method_of_support",
+        "Method of support",
+        (
+            ("relatives", marks[0]),
+            ("remittances_from_abroad", marks[1]),
+            ("guarantor", marks[2]),
+            ("other", marks[3]),
+        ),
+        style="tick",
+    )
+
+
+# ── Applicant part 2, form R (Dependent) — Certificate of Eligibility variant ──────
+# Reference: https://www.moj.go.jp/isa/content/930004036.pdf page 3. The applicant is
+# still abroad, so this sheet drops the 資格外活動 block the extension sheet carries and
+# keeps only the registration, the method of support and the representative.
+
+_DEPENDENT_PART2_COE_ROWS: NominalRows = (
+    (794.4, (18.0, 564.0)),
+    (746.5, (142.3, 392.0)),
+    (722.0, (142.3, 345.2)),
+    (697.5, (142.3, 392.0)),
+    (673.0, (142.3, 345.2)),
+    (557.9, (95.5, 267.2, 407.5, 548.0)),
+    (533.4, (95.5, 548.0)),
+    (508.9, (111.1, 267.2, 376.3, 548.0)),
+    (429.3, (33.1, 548.0)),
+    (427.5, (33.1, 548.0)),
+    (326.4, (79.9, 236.0, 298.3, 548.0)),
+    (291.4, (48.7, 345.2, 376.3, 548.0)),
+    (287.7, (18.0, 564.0)),
+    (83.6, (18.0, 564.0)),
+)
+
+_DEPENDENT_COE_REGISTRATION_DATE = DateSlots(year=213.0, month=275.6, day=332.4)
+
+DEPENDENT_PART2_COE_LAYOUT = FormLayout(
+    code="moj_dependent_applicant_p2_coe",
+    series="別記第六号の三様式 申請人等作成用 ２（Ｒ 家族滞在）",
+    procedure=PROCEDURE_COE,
+    reference="930004036.pdf p3",
+    page=2,
+    rows=_DEPENDENT_PART2_COE_ROWS,
+    lines=(
+        LineField(
+            "22(1)",
+            "family_notification_place_japan",
+            "Marriage or birth registered with — Japanese authorities",
+            row=1,
+        ),
+        LineField(
+            "22(1)",
+            "family_notification_date_japan",
+            "Date registered in Japan",
+            row=2,
+            dates=_DEPENDENT_COE_REGISTRATION_DATE,
+        ),
+        LineField(
+            "22(2)",
+            "family_notification_place_home",
+            "Marriage or birth registered with — home-country authorities",
+            row=3,
+        ),
+        LineField(
+            "22(2)",
+            "family_notification_date_home",
+            "Date registered in your home country",
+            row=4,
+            dates=_DEPENDENT_COE_REGISTRATION_DATE,
+        ),
+        LineField(
+            "24(1)",
+            "legal_representative_name",
+            "Legal representative — name",
+            row=5,
+            column=0,
+            depends_on="has_legal_representative",
+        ),
+        LineField(
+            "24(2)",
+            "legal_representative_relationship",
+            "Legal representative — relationship",
+            row=5,
+            column=1,
+            depends_on="has_legal_representative",
+        ),
+        LineField(
+            "24(3)",
+            "legal_representative_address",
+            "Legal representative — address",
+            row=6,
+            depends_on="has_legal_representative",
+        ),
+        LineField(
+            "24(3)",
+            "legal_representative_tel",
+            "Legal representative — telephone",
+            row=7,
+            column=0,
+            depends_on="has_legal_representative",
+        ),
+        LineField(
+            "24(3)",
+            "legal_representative_mobile",
+            "Legal representative — mobile",
+            row=7,
+            column=1,
+            depends_on="has_legal_representative",
+        ),
+    ),
+    choices=(
+        _method_of_support(
+            "23",
+            (
+                Mark(37.7, 45.0, 639.9),
+                Mark(178.1, 185.4, 639.9),
+                Mark(349.7, 357.0, 639.9),
+                Mark(37.7, 45.0, 617.8),
+            ),
+        ),
+    ),
+)
+
+
 # ── Applicant part 2, form T (Spouse / Long-term resident) — 申請人等作成用 ２ ─────────
 # Reference: https://www.moj.go.jp/isa/content/930004114.pdf page 3.
 # One layout serves all three procedures for this status.
@@ -1240,6 +1372,30 @@ _SPOUSE_PART3_ROWS: NominalRows = (
     (51.4, (42.5, 539.5)),
 )
 
+def _supporter_relationship(item: str, marks: tuple[Mark, ...]) -> ChoiceField:
+    """Item (8) of the supporter block - how the supporter is related to the applicant.
+
+    Seven printed boxes, the same seven on the extension and Certificate of Eligibility
+    sheets. Ticking the last one also asks for a written detail beside it, which stays
+    the applicant's to write.
+    """
+    return ChoiceField(
+        item,
+        "supporter_relationship",
+        "Supporter — relationship to you",
+        (
+            ("husband", marks[0]),
+            ("wife", marks[1]),
+            ("father", marks[2]),
+            ("mother", marks[3]),
+            ("foster_father", marks[4]),
+            ("foster_mother", marks[5]),
+            ("other", marks[6]),
+        ),
+        style="tick",
+    )
+
+
 SPOUSE_PART3_LAYOUT = FormLayout(
     code="moj_spouse_applicant_p3",
     series="別記第三十号の二様式 申請人等作成用 ３（Ｔ 日本人の配偶者等）",
@@ -1343,7 +1499,170 @@ SPOUSE_PART3_LAYOUT = FormLayout(
             depends_on="has_legal_representative",
         ),
     ),
-    unsupported_items=("21(8) Supporter's relationship to you (tick boxes)",),
+    choices=(
+        _supporter_relationship(
+            "21(8)",
+            (
+                Mark(71.5, 78.9, 635.7),
+                Mark(150.0, 157.4, 635.7),
+                Mark(215.4, 222.8, 635.7),
+                Mark(280.8, 288.2, 635.7),
+                Mark(71.5, 78.9, 612.5),
+                Mark(150.0, 157.4, 612.5),
+                Mark(215.4, 222.8, 612.5),
+            ),
+        ),
+    ),
+    unsupported_items=("21(8) The free-text box beside その他 (Others), if you tick it",),
+)
+
+
+# ── Applicant part 3, form T (Spouse) — Certificate of Eligibility variant ─────────
+# Reference: https://www.moj.go.jp/isa/content/930004035.pdf page 4. The same three
+# blocks — supporter, guarantor, representative — numbered 26 to 28 rather than 21 to
+# 23, with the supporter's status, period and expiry printed on one line rather than two.
+
+_SPOUSE_PART3_COE_ROWS: NominalRows = (
+    (806.6, (19.4, 575.8)),
+    (770.7, (106.8, 385.1)),
+    (748.2, (106.8, 282.6, 385.0, 531.5)),
+    (725.6, (311.8, 531.5)),
+    (703.0, (106.8, 180.1, 238.6, 297.2, 399.6, 560.8)),
+    (624.5, (136.1, 297.2, 370.3, 560.8)),
+    (601.9, (121.4, 341.2, 414.2, 560.8)),
+    (579.3, (121.4, 209.4)),
+    (544.6, (92.2, 297.2, 399.6, 560.8)),
+    (522.7, (92.2, 560.8)),
+    (501.3, (121.4, 282.6, 385.0, 560.8)),
+    (456.8, (92.2, 268.0, 414.2, 560.8)),
+    (434.2, (92.2, 560.8)),
+    (411.7, (121.4, 282.6, 385.0, 560.8)),
+    (338.2, (33.6, 560.8, 33.6, 560.8)),
+    (250.1, (77.5, 224.0, 297.1, 560.8)),
+    (219.4, (48.2, 341.2, 414.2, 560.8)),
+    (214.3, (19.4, 575.8)),
+    (121.9, (19.4, 575.8)),
+)
+
+SPOUSE_PART3_COE_LAYOUT = FormLayout(
+    code="moj_spouse_applicant_p3_coe",
+    series="別記第六号の三様式 申請人等作成用 ３（Ｔ 日本人の配偶者等）",
+    procedure=PROCEDURE_COE,
+    reference="930004035.pdf p4",
+    page=3,
+    rows=_SPOUSE_PART3_COE_ROWS,
+    lines=(
+        LineField("26(1)", "supporter_name", "Supporter — name", row=1),
+        LineField(
+            "26(2)",
+            "supporter_date_of_birth",
+            "Supporter — date of birth",
+            row=2,
+            column=0,
+            dates=DateSlots(year=158.4, month=217.2, day=270.4),
+        ),
+        LineField("26(3)", "supporter_nationality", "Supporter — nationality", row=2, column=1),
+        LineField(
+            "26(4)",
+            "supporter_residence_card_number",
+            "Supporter — residence card number",
+            row=3,
+        ),
+        LineField(
+            "26(5)",
+            "supporter_status_of_residence",
+            "Supporter — status of residence",
+            row=4,
+            column=0,
+        ),
+        LineField(
+            "26(6)", "supporter_period_of_stay", "Supporter — period of stay", row=4, column=1
+        ),
+        LineField(
+            "26(7)",
+            "supporter_status_expiry_date",
+            "Supporter — date of expiration",
+            row=4,
+            column=2,
+            dates=DateSlots(year=443.9, month=495.3, day=548.6),
+        ),
+        LineField("26(9)", "supporter_employer_name", "Supporter — employer", row=5, column=0),
+        LineField(
+            "26(9)", "supporter_employer_branch", "Supporter — employer branch", row=5, column=1
+        ),
+        LineField(
+            "26(10)", "supporter_employer_address", "Supporter — employer address", row=6, column=0
+        ),
+        LineField(
+            "26(10)", "supporter_employer_tel", "Supporter — employer telephone", row=6, column=1
+        ),
+        LineField(
+            "26(11)", "supporter_annual_income_jpy", "Supporter — annual income (yen)", row=7
+        ),
+        LineField("27(1)", "resident_guarantor_name", "Guarantor in Japan — name", row=8, column=0),
+        LineField(
+            "27(2)", "guarantor_occupation", "Guarantor in Japan — occupation", row=8, column=1
+        ),
+        LineField("27(3)", "guarantor_address", "Guarantor in Japan — address", row=9),
+        LineField(
+            "27(3)", "guarantor_telephone", "Guarantor in Japan — telephone", row=10, column=0
+        ),
+        LineField("27(3)", "guarantor_mobile", "Guarantor in Japan — mobile", row=10, column=1),
+        LineField(
+            "28(1)",
+            "legal_representative_name",
+            "Legal representative — name",
+            row=11,
+            column=0,
+            depends_on="has_legal_representative",
+        ),
+        LineField(
+            "28(2)",
+            "legal_representative_relationship",
+            "Legal representative — relationship",
+            row=11,
+            column=1,
+            depends_on="has_legal_representative",
+        ),
+        LineField(
+            "28(3)",
+            "legal_representative_address",
+            "Legal representative — address",
+            row=12,
+            depends_on="has_legal_representative",
+        ),
+        LineField(
+            "28(3)",
+            "legal_representative_tel",
+            "Legal representative — telephone",
+            row=13,
+            column=0,
+            depends_on="has_legal_representative",
+        ),
+        LineField(
+            "28(3)",
+            "legal_representative_mobile",
+            "Legal representative — mobile",
+            row=13,
+            column=1,
+            depends_on="has_legal_representative",
+        ),
+    ),
+    choices=(
+        _supporter_relationship(
+            "26(8)",
+            (
+                Mark(52.6, 59.5, 680.4),
+                Mark(140.4, 147.3, 680.4),
+                Mark(213.6, 220.5, 680.4),
+                Mark(286.8, 293.7, 680.4),
+                Mark(52.6, 59.5, 658.5),
+                Mark(140.4, 147.3, 658.5),
+                Mark(213.6, 220.5, 658.5),
+            ),
+        ),
+    ),
+    unsupported_items=("26(8) The free-text box beside その他 (Others), if you tick it",),
 )
 
 
@@ -1502,8 +1821,27 @@ DEPENDENT_PART2_LAYOUT = FormLayout(
                 ("no", Mark(455.2, 464.4, 564.0)),
             ),
         ),
+        _method_of_support(
+            "18",
+            (
+                Mark(72.6, 80.1, 614.6),
+                Mark(205.8, 213.3, 614.6),
+                Mark(365.6, 373.1, 614.6),
+                Mark(72.6, 80.1, 589.6),
+            ),
+        ),
+        ChoiceField(
+            "19(4)",
+            "part_time_salary_period",
+            "Work outside status — salary is monthly or daily",
+            (
+                ("monthly", Mark(392.3, 399.8, 430.5)),
+                ("daily", Mark(432.2, 439.7, 430.5)),
+            ),
+            style="tick",
+            depends_on="works_outside_status",
+        ),
     ),
-    unsupported_items=("18 Method of support (tick boxes)",),
 )
 
 
