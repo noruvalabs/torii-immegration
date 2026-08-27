@@ -326,7 +326,6 @@ def evaluate_eligibility(
         citation = resolve_official_citation(
             jurisdiction_code=jur_code,
             visa_category=visa_cat,
-            item_key_or_code=key,
             existing_citation=rule.get("citation"),
         )
         if answer is None or str(answer).strip() == "":

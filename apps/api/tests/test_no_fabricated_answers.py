@@ -162,7 +162,7 @@ def test_place_of_birth_is_not_filled_from_nationality() -> None:
 
 def test_an_unresolvable_citation_is_empty_not_invented() -> None:
     """It used to synthesise 'https://www.gov.xx/visa', which reads as an official source."""
-    citation = resolve_official_citation(jurisdiction_code="ZZ", item_key_or_code="mystery_key")
+    citation = resolve_official_citation(jurisdiction_code="ZZ", visa_category="mystery")
     assert citation["url"] in ("", None) or citation["url"].startswith("http")
     assert "www.gov.zz" not in str(citation["url"])
 
@@ -242,3 +242,71 @@ def test_the_itinerary_is_left_for_the_applicant_to_write() -> None:
     code = _packet_step_code()
     assert "day % 3" not in code
     assert "Plan for the day" in code
+
+
+# ── An item's own citation is the accurate one ─────────────────────────────────────
+# The resolver used to override an authored citation whenever its URL looked "generic"
+# to a heuristic, and to derive one from words in an answer key otherwise.
+
+
+def test_an_items_own_citation_wins_over_the_fallback() -> None:
+    authored = {
+        "authority": "Immigration Services Agency of Japan",
+        "title": "Application for Extension of Period of Stay",
+        "url": "https://www.moj.go.jp/isa/applications/procedures/16-3.html",
+        "source_version": "2026-04",
+    }
+    resolved = resolve_official_citation(
+        jurisdiction_code="JP", visa_category="work", existing_citation=authored
+    )
+    assert resolved["url"] == authored["url"]
+    assert resolved["title"] == authored["title"]
+    assert resolved["authority"] == authored["authority"]
+
+
+def test_a_generic_looking_url_is_still_the_items_own_citation() -> None:
+    """16-3.html is the real page for an extension; the heuristic used to replace it."""
+    authored = {
+        "authority": "Immigration Services Agency of Japan",
+        "title": "Resident tax certificate",
+        "url": "https://www.moj.go.jp/isa/applications/procedures/16-3.html",
+    }
+    resolved = resolve_official_citation(
+        jurisdiction_code="JP", visa_category="student", existing_citation=authored
+    )
+    assert resolved["url"] == authored["url"]
+
+
+def test_an_incomplete_citation_falls_back_to_the_scope_not_to_a_keyword() -> None:
+    """A work case gets the work page, whatever words the item's key happens to contain."""
+    for partial in ({}, {"url": "https://x.example"}, {"authority": "Somebody"}, None):
+        resolved = resolve_official_citation(
+            jurisdiction_code="JP",
+            visa_category="work",
+            existing_citation=partial,  # type: ignore[arg-type]
+        )
+        assert resolved["url"].endswith("/status/gijinkoku.html")
+
+
+def test_an_unknown_jurisdiction_resolves_to_nothing_rather_than_a_guess() -> None:
+    resolved = resolve_official_citation(jurisdiction_code="ZZ", visa_category="work")
+    assert resolved["url"] == ""
+    assert resolved["authority"] == ""
+
+
+def test_the_resolver_cannot_be_handed_an_item_key() -> None:
+    """Deriving a source from words in a key is what the rewrite exists to stop."""
+    import inspect
+
+    parameters = inspect.signature(resolve_official_citation).parameters
+    assert "item_key_or_code" not in parameters
+    # No substring sniffing anywhere in the module either. Checked on the parse tree, so
+    # the docstring quoting the removed branches does not count as one.
+    tree = ast.parse((SERVICES / "citations.py").read_text(encoding="utf-8"))
+    membership = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Compare)
+        and any(isinstance(op, ast.In) for op in node.ops)
+    ]
+    assert membership == []

@@ -169,17 +169,12 @@ def _default_citation_for_question(
     visa_category: str = "",
 ) -> dict[str, str]:
     """Provide an official statutory citation for an intake question."""
-    k = q.key.lower()
-    detected_jur = jurisdiction_code
-    if "cos" in k or "sponsor_licence" in k or "cas" in k:
-        detected_jur = "UK"
-    elif "sevis" in k or "i20" in k or "ds160" in k or "lca" in k:
-        detected_jur = "US"
-
+    # The jurisdiction is the case's, not a guess from words in the question key. The
+    # replaced version read "cas" out of any key containing those letters and cited the
+    # UK for it, so a Japanese applicant could be shown a gov.uk page.
     cit = resolve_official_citation(
-        jurisdiction_code=detected_jur,
+        jurisdiction_code=jurisdiction_code,
         visa_category=visa_category,
-        item_key_or_code=q.key,
         existing_citation=q.citation if isinstance(q.citation, dict) else None,
     )
     return {

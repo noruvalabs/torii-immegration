@@ -447,7 +447,6 @@ async def refresh_checklist(
         specific_citation = resolve_official_citation(
             jurisdiction_code=j_code or "JP",
             visa_category=v_code or "",
-            item_key_or_code=item.code,
             existing_citation=item.citation,
         )
         created = CaseChecklistItem(

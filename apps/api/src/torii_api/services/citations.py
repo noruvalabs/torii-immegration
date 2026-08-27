@@ -1,359 +1,143 @@
-"""Specific official source citation resolver for immigration requirements.
+"""Fallback official citation for a pack item that does not carry one of its own.
 
-Ensures each eligibility finding, checklist document, and question has its own
-distinct official government authority, statutory regulation title, and official URL
-rather than reusing a single generic link for all items.
+Every rule, document and form the research agent discovers arrives with the citation it
+was discovered from, and the packs author one per item. That citation is the accurate one
+and it always wins here.
+
+This module used to do the opposite. It derived a citation by sniffing substrings out of
+an answer key -- ``"tax" in key``, ``"pension" in key``, thirty-odd branches -- against a
+table of thirty-six URLs, and then *overrode* the item's own citation whenever the
+authored URL looked "generic" to a heuristic. So a pack that cited
+``procedures/16-3.html`` for an extension item had that citation replaced by a guess from
+the key, and the applicant was shown a source the item was never checked against.
+
+What is left is a fallback of last resort, keyed on the scope the case is actually in
+rather than on words that happen to appear in an item's key. A work-renewal item with no
+citation of its own cites the work-renewal procedure page; it does not cite the National
+Tax Agency because its key contains "tax". An unmatched item resolves to nothing, and
+callers render an uncited item as uncited -- a synthesised URL reads as an official source
+and is not one, which is what NF-2 exists to prevent.
 """
 
 from __future__ import annotations
 
 from typing import Any
 
-# Specific statutory citation mappings per jurisdiction and topic
-_SPECIFIC_CITATIONS: dict[str, dict[str, dict[str, str]]] = {
+# The official page for a residence status or visa category, per jurisdiction. Ops extend
+# this when a pack gains a category; it is a starting point for an item nobody has
+# researched yet, not a substitute for the item's own source.
+_SCOPE_CITATIONS: dict[str, dict[str, dict[str, str]]] = {
     "JP": {
-        "passport": {
-            "authority": "Ministry of Foreign Affairs of Japan (MOFA)",
-            "title": "Statutory Passport & Identity Verification Standards (旅券・身元確認要領)",
-            "url": "https://www.mofa.go.jp/j_info/visit/visa/index.html",
-        },
-        "residence_card": {
-            "authority": "Immigration Services Agency of Japan (ISA)",
-            "title": "Residence Card Registry & Continuity Verification (在留カード等確認)",
-            "url": "https://www.isa.go.jp/en/applications/guide/residencecard.html",
-        },
-        "tax": {
-            "authority": "National Tax Agency of Japan (国税庁) & Municipal Taxation",
-            "title": "Individual Resident Tax (住民税) & Income Tax Compliance Guidelines",
-            "url": "https://www.nta.go.jp/english/index.htm",
-        },
-        "pension": {
-            "authority": "Japan Pension Service (日本年金機構) & MHLW",
-            "title": "Employees' Pension & National Health Insurance Contribution Requirements",
-            "url": "https://www.nenkin.go.jp/international/index.html",
+        "": {
+            "authority": "Immigration Services Agency of Japan (出入国在留管理庁)",
+            "title": "Procedures for residence applications",
+            "url": "https://www.moj.go.jp/isa/applications/procedures/index.html",
         },
         "work": {
-            "authority": "Immigration Services Agency of Japan (ISA)",
-            "title": "Status of Residence: Engineer / Specialist in Humanities / International Services (技術・人文知識・国際業務)",
-            "url": "https://www.isa.go.jp/en/applications/procedures/nyuukokukanri07_00093.html",
-        },
-        "student": {
-            "authority": "Immigration Services Agency of Japan (ISA)",
-            "title": "Status of Residence: Student (留学資格基準・在留資格認定)",
-            "url": "https://www.isa.go.jp/en/applications/procedures/zairyu_shikaku10.html",
-        },
-        "tourist": {
-            "authority": "Ministry of Foreign Affairs of Japan (MOFA)",
-            "title": "Temporary Visitor (Tourism/Visit) Visa Application Procedures (短期滞在ビザ基準)",
-            "url": "https://www.mofa.go.jp/j_info/visit/visa/short/novisa.html",
-        },
-        "funds": {
-            "authority": "Immigration Services Agency of Japan (ISA)",
-            "title": "Verification Standards for Living Expenses & Financial Capacity (経費支弁能力審査基準)",
-            "url": "https://www.isa.go.jp/en/applications/procedures/zairyu_shikaku10.html",
-        },
-        "criminal": {
-            "authority": "Immigration Control and Refugee Recognition Act (Article 5 & 24)",
-            "title": "Statutory Grounds for Refusal of Landing & Deportation Review (上陸拒否・退去強制事由審査)",
-            "url": "https://www.isa.go.jp/en/applications/procedures/index.html",
-        },
-        "company_registry": {
-            "authority": "Ministry of Justice Legal Affairs Bureau (法務省民事局)",
-            "title": "Commercial and Corporate Registration Certification (商業・法人登記)",
-            "url": "https://www.moj.go.jp/MINJI/minji06.html",
+            "authority": "Immigration Services Agency of Japan (出入国在留管理庁)",
+            "title": "Engineer / Specialist in Humanities / International Services (技術・人文知識・国際業務)",
+            "url": "https://www.moj.go.jp/isa/applications/status/gijinkoku.html",
         },
         "hsp": {
-            "authority": "Immigration Services Agency of Japan (ISA)",
-            "title": "Points-Based Preferential Treatment for Highly Skilled Foreign Professionals (高度人材ポイント制)",
-            "url": "https://www.isa.go.jp/en/applications/procedures/nyuukokukanri07_00037.html",
-        },
-        "permanent_resident": {
-            "authority": "Immigration Services Agency of Japan (ISA)",
-            "title": "Guidelines for Permission for Permanent Residence (永住許可に関するガイドライン)",
-            "url": "https://www.isa.go.jp/en/applications/procedures/nyuukokukanri07_00115.html",
-        },
-        "spouse": {
-            "authority": "Immigration Services Agency of Japan (ISA)",
-            "title": "Status of Residence: Spouse or Child of Japanese National / PR (日本人の配偶者等)",
-            "url": "https://www.isa.go.jp/en/applications/procedures/zairyu_shikaku01.html",
-        },
-        "dependent": {
-            "authority": "Immigration Services Agency of Japan (ISA)",
-            "title": "Status of Residence: Dependent (家族滞在)",
-            "url": "https://www.isa.go.jp/en/applications/procedures/zairyu_shikaku23.html",
-        },
-        "designated_activities": {
-            "authority": "Immigration Services Agency of Japan (ISA)",
-            "title": "Status of Residence: Designated Activities (特定活動 - 46号・就職活動)",
-            "url": "https://www.isa.go.jp/en/applications/procedures/nyuukokukanri07_00038.html",
-        },
-        "guarantor": {
-            "authority": "Immigration Services Agency of Japan (ISA)",
-            "title": "Letter of Guarantee Regulations (身元保証書要領)",
-            "url": "https://www.isa.go.jp/en/applications/procedures/nyuukokukanri07_00115.html",
-        },
-        "extension": {
-            "authority": "Immigration Services Agency of Japan (ISA)",
-            "title": "Guidelines for Permission for Extension of Period of Stay (在留期間更新許可のガイドライン)",
-            "url": "https://www.moj.go.jp/isa/applications/procedures/16-3.html",
-        },
-        "change_of_status": {
-            "authority": "Immigration Services Agency of Japan (ISA)",
-            "title": "Guidelines for Permission for Change of Status of Residence (在留資格変更許可のガイドライン)",
-            "url": "https://www.moj.go.jp/isa/applications/procedures/16-2.html",
-        },
-    },
-    "US": {
-        "passport": {
-            "authority": "U.S. Department of State (Bureau of Consular Affairs)",
-            "title": "Form DS-160 Online Nonimmigrant Visa Application & Passport Standards",
-            "url": "https://travel.state.gov/content/travel/en/us-visas/visa-information-resources/forms/ds-160-online-nonimmigrant-visa-application.html",
-        },
-        "work": {
-            "authority": "U.S. Citizenship and Immigration Services (USCIS)",
-            "title": "H-1B Specialty Occupations & Form I-129 Nonimmigrant Worker Regulations",
-            "url": "https://www.uscis.gov/working-in-the-united-states/temporary-workers/h-1b-specialty-occupations",
-        },
-        "lca": {
-            "authority": "U.S. Department of Labor (Employment & Training Administration)",
-            "title": "Office of Foreign Labor Certification: Form ETA-9035 LCA Compliance",
-            "url": "https://www.dol.gov/agencies/eta/foreign-labor/programs/h-1b",
+            "authority": "Immigration Services Agency of Japan (出入国在留管理庁)",
+            "title": "Highly Skilled Professional (高度専門職)",
+            "url": "https://www.moj.go.jp/isa/applications/status/designatedactivities02_00004.html",
         },
         "student": {
-            "authority": "U.S. Department of State & SEVP",
-            "title": "Student Visa (F-1/M-1) & Form I-20 Eligibility Certificate Guidelines",
-            "url": "https://travel.state.gov/content/travel/en/us-visas/study/student-visa.html",
+            "authority": "Immigration Services Agency of Japan (出入国在留管理庁)",
+            "title": "Student (留学)",
+            "url": "https://www.moj.go.jp/isa/applications/status/student.html",
+        },
+        "dependent": {
+            "authority": "Immigration Services Agency of Japan (出入国在留管理庁)",
+            "title": "Dependent (家族滞在)",
+            "url": "https://www.moj.go.jp/isa/applications/status/dependent.html",
+        },
+        "spouse": {
+            "authority": "Immigration Services Agency of Japan (出入国在留管理庁)",
+            "title": "Spouse or Child of Japanese National (日本人の配偶者等)",
+            "url": "https://www.moj.go.jp/isa/applications/status/spouseorchildofjapanese01.html",
+        },
+        "designated_activities": {
+            "authority": "Immigration Services Agency of Japan (出入国在留管理庁)",
+            "title": "Designated Activities (特定活動)",
+            "url": "https://www.moj.go.jp/isa/applications/status/designatedactivities02.html",
+        },
+        "permanent_resident": {
+            "authority": "Immigration Services Agency of Japan (出入国在留管理庁)",
+            "title": "Permission for permanent residence (永住許可)",
+            "url": "https://www.moj.go.jp/isa/applications/procedures/16-4.html",
         },
         "tourist": {
-            "authority": "U.S. Department of State (Bureau of Consular Affairs)",
-            "title": "Visitor Visa (B-1/B-2) & INA Section 214(b) Nonimmigrant Intent",
-            "url": "https://travel.state.gov/content/travel/en/us-visas/tourism-visit/visitor.html",
-        },
-        "funds": {
-            "authority": "U.S. Citizenship and Immigration Services (USCIS)",
-            "title": "Form I-134 Declaration of Financial Support Requirements",
-            "url": "https://www.uscis.gov/i-134",
-        },
-        "criminal": {
-            "authority": "Immigration and Nationality Act (INA Section 212(a))",
-            "title": "Statutory Inadmissibility Grounds under 8 U.S.C. 1182 (INA § 212)",
-            "url": "https://www.uscis.gov/laws-and-policy/legislation/immigration-and-nationality-act",
+            "authority": "Ministry of Foreign Affairs of Japan (外務省)",
+            "title": "Short-stay visa (短期滞在)",
+            "url": "https://www.mofa.go.jp/j_info/visit/visa/short/index.html",
         },
     },
     "UK": {
-        "passport": {
-            "authority": "UK Visas and Immigration (UKVI / Home Office)",
-            "title": "Identity and Passport Verification Guidelines",
-            "url": "https://www.gov.uk/government/publications/biometric-information-enrolment-guidance",
+        "": {
+            "authority": "UK Visas and Immigration",
+            "title": "Visas and immigration",
+            "url": "https://www.gov.uk/browse/visas-immigration",
         },
         "work": {
-            "authority": "UK Visas and Immigration (UKVI / Home Office)",
-            "title": "Skilled Worker Visa: Overview, CoS & Eligibility Requirements",
+            "authority": "UK Visas and Immigration",
+            "title": "Skilled Worker visa",
             "url": "https://www.gov.uk/skilled-worker-visa",
         },
-        "sponsor": {
-            "authority": "UK Visas and Immigration (UKVI / Home Office)",
-            "title": "UK Visa Sponsorship for Employers: Eligibility and Verification",
-            "url": "https://www.gov.uk/uk-visa-sponsorship-employers",
-        },
-        "salary": {
-            "authority": "UK Visas and Immigration (UKVI / Home Office)",
-            "title": "Skilled Worker Visa: Eligible Occupations, Going Rates & Salary Thresholds",
-            "url": "https://www.gov.uk/government/publications/skilled-worker-visa-going-rates-for-eligible-occupations",
-        },
         "student": {
-            "authority": "UK Visas and Immigration (UKVI / Home Office)",
-            "title": "Student Visa: Confirmation of Acceptance for Studies (CAS) Requirements",
+            "authority": "UK Visas and Immigration",
+            "title": "Student visa",
             "url": "https://www.gov.uk/student-visa",
         },
         "tourist": {
-            "authority": "UK Visas and Immigration (UKVI / Home Office)",
-            "title": "Standard Visitor Visa: Eligibility, Purpose & Permitted Activities",
+            "authority": "UK Visas and Immigration",
+            "title": "Standard Visitor visa",
             "url": "https://www.gov.uk/standard-visitor",
-        },
-        "funds": {
-            "authority": "UK Visas and Immigration (UKVI / Home Office)",
-            "title": "Financial Evidence for Sponsored Routes & 28-day Maintenance Rule",
-            "url": "https://www.gov.uk/guidance/financial-evidence-for-sponsored-or-endorsed-work-routes",
-        },
-        "english": {
-            "authority": "UK Visas and Immigration (UKVI / Home Office)",
-            "title": "Knowledge of English: Approved Secure English Language Tests (SELT)",
-            "url": "https://www.gov.uk/skilled-worker-visa/knowledge-of-english",
-        },
-        "tb": {
-            "authority": "UK Visas and Immigration (UKVI / Home Office)",
-            "title": "Tuberculosis (TB) Testing for UK Visa Applicants",
-            "url": "https://www.gov.uk/tb-test-visa",
-        },
-        "criminal": {
-            "authority": "UK Immigration Rules (Part 9: Grounds for Refusal)",
-            "title": "Immigration Rules Part 9: General Grounds for Refusal & Suitability",
-            "url": "https://www.gov.uk/guidance/immigration-rules/immigration-rules-part-9-grounds-for-refusal",
         },
     },
 }
 
-_SPECIFIC_CITATIONS["GB"] = _SPECIFIC_CITATIONS["UK"]
+# The UK is published under both codes.
+_SCOPE_CITATIONS["GB"] = _SCOPE_CITATIONS["UK"]
+
+
+def _is_complete(citation: Any) -> bool:
+    """Whether a citation says who published it, what it is, and where to read it."""
+    if not isinstance(citation, dict):
+        return False
+    url = str(citation.get("url") or "")
+    return bool(
+        citation.get("authority") and citation.get("title") and url.startswith("http")
+    )
 
 
 def resolve_official_citation(
     jurisdiction_code: str,
     visa_category: str = "",
-    item_key_or_code: str = "",
     existing_citation: dict[str, Any] | None = None,
     default_version: str = "2026-04",
 ) -> dict[str, Any]:
-    """Resolve a specific, accurate official citation for a given rule/document key."""
-    jur = (jurisdiction_code or "JP").upper()
-    cat = (visa_category or "").lower()
-    key = (item_key_or_code or "").lower()
+    """The citation to show for one item.
 
-    jur_map = _SPECIFIC_CITATIONS.get(jur, _SPECIFIC_CITATIONS["JP"])
+    The item's own citation wins whenever it is complete. There is deliberately no way to
+    pass an item key: deriving a source from words in a key is what this module was
+    rewritten to stop doing.
+    """
+    if _is_complete(existing_citation):
+        assert existing_citation is not None  # narrowed by _is_complete
+        return {
+            "authority": str(existing_citation["authority"]),
+            "title": str(existing_citation["title"]),
+            "url": str(existing_citation["url"]),
+            "source_version": existing_citation.get("source_version") or default_version,
+        }
 
-    # Determine topic key
-    topic = "passport"
-    if (
-        "residence_card" in key
-        or "zairyu" in key
-        or "address" in key
-        or "registered_address" in key
-        or "period_of_stay" in key
-        or "years_in_japan" in key
-    ):
-        topic = "residence_card"
-    elif "tax" in key or "withholding" in key or "resident_tax" in key or "juminzei" in key or "shotokuzei" in key:
-        topic = "tax"
-    elif "pension" in key or "insurance" in key or "health" in key or "nenkin" in key:
-        topic = "pension"
-    elif "corporate" in key or "registry" in key or "registration" in key or "shogyo" in key or "touhon" in key:
-        topic = "company_registry" if jur == "JP" else "sponsor"
-    elif "hsp" in key or "point" in key or cat == "hsp":
-        topic = "hsp"
-    elif "permanent" in key or "eiju" in key or cat in ("permanent_resident", "pr"):
-        topic = "permanent_resident"
-    elif "spouse" in key or "koseki" in key or "shitsumonsho" in key or cat == "spouse":
-        topic = "spouse"
-    elif "dependent" in key or "supporter" in key or "kazoku" in key or cat == "dependent":
-        topic = "dependent"
-    elif "designated" in key or "article_46" in key or "tokutei" in key or cat == "designated_activities":
-        topic = "designated_activities"
-    elif "guarantor" in key or "hosho" in key:
-        topic = "guarantor"
-    elif "lca" in key or "labor" in key or "prevailing_wage" in key:
-        topic = "lca" if jur == "US" else "work"
-    elif "cos" in key or "sponsor" in key:
-        topic = "sponsor" if jur in ("UK", "GB") else "work"
-    elif "salary" in key or "soc" in key or "rate" in key or "monthly_salary" in key:
-        topic = "salary" if jur in ("UK", "GB") else "work"
-    elif "english" in key or "selt" in key or "language" in key or "jlpt" in key:
-        topic = "english" if jur in ("UK", "GB") else "student"
-    elif "tb" in key or "tuberculosis" in key:
-        topic = "tb"
-    elif (
-        "student" in key
-        or "school" in key
-        or "study" in key
-        or "major" in key
-        or "program" in key
-        or "gpa" in key
-        or "attendance" in key
-        or "cas" in key
-        or "i20" in key
-        or "university" in key
-        or "institution" in key
-        or cat == "student"
-    ):
-        topic = "student"
-    elif "tourist" in key or "visitor" in key or "itinerary" in key or cat in ("tourist", "b1b2", "visitor"):
-        topic = "tourist"
-    elif (
-        "fund" in key
-        or "bank" in key
-        or "saving" in key
-        or "financial" in key
-        or "maintenance" in key
-        or "expense" in key
-    ):
-        topic = "funds"
-    elif (
-        "criminal" in key
-        or "violation" in key
-        or "overstay" in key
-        or "deportation" in key
-        or "refusal" in key
-        or "suitability" in key
-    ):
-        topic = "criminal"
-    elif (
-        "work" in key
-        or "job" in key
-        or "h1b" in key
-        or "employed" in key
-        or "employer" in key
-        or "contract" in key
-        or "organization" in key
-        or cat in ("work", "h1b")
-    ):
-        topic = "work"
-    elif (
-        "passport" in key
-        or "nationality" in key
-        or "name" in key
-        or "full_name" in key
-        or "birth" in key
-        or "dob" in key
-        or "gender" in key
-    ):
-        topic = "passport"
-    elif "change" in key:
-        topic = "change_of_status"
-    elif "extension" in key or "renew" in key:
-        topic = "extension"
-    elif cat == "student":
-        topic = "student"
-    elif cat in ("work", "engineer"):
-        topic = "work"
-
-    # If existing citation is already specific (not generic 16-3 for everything), preserve it
-    if existing_citation and isinstance(existing_citation, dict):
-        url = existing_citation.get("url")
-        auth = existing_citation.get("authority")
-        title = existing_citation.get("title")
-        if url and auth and title:
-            # Check if it's the duplicate 16-3.html or generic procedure link on specific topics
-            is_generic_jp = (
-                jur == "JP"
-                and (
-                    (str(url).endswith("16-3.html") and topic != "extension")
-                    or (str(url).endswith("16-2.html") and topic != "change_of_status")
-                    or (str(url).endswith("16-1.html") and topic != "coe")
-                )
-            )
-            is_generic_us = (
-                jur == "US"
-                and "visitor.html" in str(url)
-                and topic != "tourist"
-            )
-            if not is_generic_jp and not is_generic_us:
-                return {
-                    "authority": auth,
-                    "title": title,
-                    "url": url,
-                    "source_version": existing_citation.get("source_version") or default_version,
-                }
-
-    selected = jur_map.get(topic) or jur_map.get("work") or jur_map.get("passport") or {}
-    url = selected.get("url", "")
-    if not url.startswith("http"):
-        # No citation is better than an invented one. A synthesised URL like
-        # "https://www.gov.jp/visa" reads as an official source and is not one, which
-        # is exactly what NF-2 exists to prevent. Callers render an item with an empty
-        # citation as uncited rather than showing a link that goes nowhere.
+    jurisdiction = _SCOPE_CITATIONS.get((jurisdiction_code or "").upper())
+    if jurisdiction is None:
         return {"authority": "", "title": "", "url": "", "source_version": default_version}
-    return {
-        "authority": selected.get("authority", ""),
-        "title": selected.get("title", ""),
-        "url": url,
-        "source_version": default_version,
-    }
+
+    fallback = jurisdiction.get((visa_category or "").lower()) or jurisdiction.get("")
+    if fallback is None:
+        return {"authority": "", "title": "", "url": "", "source_version": default_version}
+    return {**fallback, "source_version": default_version}
