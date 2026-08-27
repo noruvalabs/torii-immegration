@@ -22,6 +22,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { PaginationBar } from "@/components/ui/pagination";
+import { AppBreadcrumb } from "@/components/breadcrumb-nav";
 import { useAuth } from "@/lib/auth-context";
 import { listCases, deleteCase, type Case } from "@/lib/api/cases";
 
@@ -106,6 +107,8 @@ export default function CasesListPage() {
 
   return (
     <div className="w-full max-w-7xl mx-auto space-y-6">
+      <AppBreadcrumb />
+
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Your Cases</h1>

@@ -26,6 +26,7 @@ import { useAuth } from "@/lib/auth-context";
 import { useI18n } from "@/lib/i18n";
 import { getProfile, updateProfile, uploadAvatar, type ProfileUpdate } from "@/lib/api/auth";
 import { CountrySelector } from "@/components/ui/country-selector";
+import { AppBreadcrumb } from "@/components/breadcrumb-nav";
 
 export default function ProfilePage() {
   const { user, token, setAuth } = useAuth();
@@ -123,6 +124,8 @@ export default function ProfilePage() {
 
   return (
     <div className="w-full max-w-7xl mx-auto space-y-6">
+      <AppBreadcrumb />
+
       {/* ── HEADER ───────────────────────────────────────────────────────────── */}
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
