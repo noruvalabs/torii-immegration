@@ -734,3 +734,120 @@ questions:
       - { value: foster_father, label: "Foster father (養父)" }
       - { value: foster_mother, label: "Foster mother (養母)" }
       - { value: other, label: "Other (その他) — write the detail on the form yourself" }
+  # ── Permanent residence, page 2 ─────────────────────────────────────────────────
+  # Items 17 and 19. Asked only of a permanent-residence applicant.
+  householder_relationship:
+    prompt: "Who is the main person supporting your household?"
+    type: enum
+    section: "Funds & support"
+    options:
+      - { value: self, label: "Myself (本人)" }
+      - { value: husband, label: "My husband (夫)" }
+      - { value: wife, label: "My wife (妻)" }
+      - { value: father, label: "My father (父)" }
+      - { value: mother, label: "My mother (母)" }
+      - { value: child, label: "My child (子)" }
+      - { value: other, label: "Someone else (その他) — write the detail on the form yourself" }
+  householder_employer_name:
+    prompt: "Where does that person work?"
+    type: string
+    section: "Funds & support"
+    max_length: 160
+  householder_employer_branch:
+    prompt: "Which branch or office, if not the head office?"
+    type: string
+    section: "Funds & support"
+    max_length: 160
+  householder_employer_address:
+    prompt: "What is their workplace address?"
+    type: string
+    section: "Funds & support"
+    max_length: 200
+  householder_employer_tel:
+    prompt: "What is their workplace telephone number?"
+    type: string
+    section: "Funds & support"
+    max_length: 40
+  householder_annual_income_jpy:
+    prompt: "What is that person's annual income in yen?"
+    type: integer
+    section: "Funds & support"
+  guarantor_nationality:
+    prompt: "What is your guarantor's nationality or region?"
+    type: string
+    section: "Guarantor or inviter in Japan"
+    max_length: 80
+    show_when: { key: has_guarantor_in_japan, equals: true }
+  guarantor_relationship:
+    prompt: "How is your guarantor in Japan related to you?"
+    type: enum
+    section: "Guarantor or inviter in Japan"
+    show_when: { key: has_guarantor_in_japan, equals: true }
+    options:
+      - { value: husband, label: "Husband (夫)" }
+      - { value: wife, label: "Wife (妻)" }
+      - { value: father, label: "Father (父)" }
+      - { value: mother, label: "Mother (母)" }
+      - { value: child, label: "Child (子)" }
+      - { value: grandfather, label: "Grandfather (祖父)" }
+      - { value: grandmother, label: "Grandmother (祖母)" }
+      - { value: grandchild, label: "Grandchild (孫)" }
+      - { value: foster_father, label: "Foster father (養父)" }
+      - { value: foster_mother, label: "Foster mother (養母)" }
+      - { value: adopted_child, label: "Adopted child (養子)" }
+      - { value: child_of_spouse, label: "Child of my spouse (配偶者の子)" }
+      - { value: employer, label: "My employer (雇用主)" }
+      - { value: guarantor, label: "Person who took me in (身元引受人)" }
+      - { value: other, label: "Other (その他) — write the detail on the form yourself" }
+  # ── Applicant part 2, form P (Student) — education and Japanese-language blocks ──
+  education_enrollment_status:
+    prompt: "What is your status at the last school you attended?"
+    type: enum
+    section: "Education & qualifications"
+    options:
+      - { value: graduated, label: "Graduated (卒業)" }
+      - { value: in_school, label: "Currently enrolled (在学中)" }
+      - { value: temporary_absence, label: "On temporary leave (休学中)" }
+      - { value: withdrawal, label: "Withdrew (中退)" }
+  education_level:
+    prompt: "What level was that school?"
+    type: enum
+    section: "Education & qualifications"
+    options:
+      - { value: doctor, label: "Doctorate (大学院・博士)" }
+      - { value: master, label: "Master's (大学院・修士)" }
+      - { value: bachelor, label: "Bachelor's / university (大学)" }
+      - { value: junior_college, label: "Junior college (短期大学)" }
+      - { value: college_of_technology, label: "College of technology (専門学校)" }
+      - { value: senior_high_school, label: "Senior high school (高等学校)" }
+      - { value: junior_high_school, label: "Junior high school (中学校)" }
+      - { value: elementary_school, label: "Elementary school (小学校)" }
+      - { value: other, label: "Other (その他) — write the detail on the form yourself" }
+  japanese_ability_other:
+    prompt: "If your Japanese is evidenced some other way, describe it."
+    type: string
+    section: "Education & qualifications"
+    max_length: 200
+    show_when: { key: studied_japanese_formally, equals: true }
+  japanese_high_school_name:
+    prompt: "If you will study at a Japanese high school, which school taught you Japanese?"
+    type: string
+    section: "Education & qualifications"
+    max_length: 160
+    show_when: { key: studies_at_japanese_high_school, equals: true }
+  japanese_high_school_from:
+    prompt: "When did that Japanese-language education start (YYYY-MM)?"
+    type: date
+    section: "Education & qualifications"
+    show_when: { key: studies_at_japanese_high_school, equals: true }
+  japanese_high_school_to:
+    prompt: "When did it end (YYYY-MM)?"
+    type: date
+    section: "Education & qualifications"
+    show_when: { key: studies_at_japanese_high_school, equals: true }
+  # Item 21/27 is printed under "fill in the followings when the applicant plans to study
+  # in high school", so it is asked only of an applicant who says they will.
+  studies_at_japanese_high_school:
+    prompt: "Will you study at a Japanese high school?"
+    type: boolean
+    section: "Education & qualifications"

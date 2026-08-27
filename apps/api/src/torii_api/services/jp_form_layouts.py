@@ -88,6 +88,24 @@ class LineField:
 
 
 @dataclass(frozen=True)
+class Flag:
+    """A □ ticked because an answer elsewhere on the same sheet was given.
+
+    Some groups on these forms are multi-select — item 28(1) of the student sheet is
+    marked ※複数選択可 — and each box has its own amount line beside it. The box follows
+    from the amount rather than from a choice: it is ticked when the applicant has given
+    one and left clear when they have not, so the tick only ever restates a value already
+    printed on the sheet. Nothing is inferred, and a Flag is never reported as missing —
+    the line it follows is.
+    """
+
+    item: str
+    key: str
+    label: str
+    mark: Mark
+
+
+@dataclass(frozen=True)
 class ChoiceField:
     """A choice answered by marking one of several printed positions.
 
@@ -119,6 +137,7 @@ class FormLayout:
     rows: NominalRows
     lines: tuple[LineField, ...]
     choices: tuple[ChoiceField, ...] = ()
+    flags: tuple[Flag, ...] = ()
     photo: Box | None = None
     # Which sheet of the packet this describes. A ministry form staples several forms
     # together: page 1 is 申請人等作成用 1 and shares one layout across every residence
@@ -134,7 +153,11 @@ class FormLayout:
     @property
     def keys(self) -> tuple[str, ...]:
         return tuple(
-            dict.fromkeys([line.key for line in self.lines] + [c.key for c in self.choices])
+            dict.fromkeys(
+                [line.key for line in self.lines]
+                + [choice.key for choice in self.choices]
+                + [flag.key for flag in self.flags]
+            )
         )
 
 
@@ -894,6 +917,148 @@ WORK_PART2_COE_LAYOUT = FormLayout(
         ),
     ),
     unsupported_items=_work_part2_unsupported(item_offset=5),
+)
+
+
+# ── Permanent residence, page 2 — 永住許可申請書 その２ ─────────────────────────────
+# Reference: https://www.moj.go.jp/isa/content/930002835.pdf page 2. Two blocks the
+# ministry asks only of a permanent-residence applicant: who the main householder is,
+# and who stands as guarantor in Japan. Both name a relationship from a printed list.
+
+_PERMANENT_RESIDENCE_P2_ROWS: NominalRows = (
+    (766.4, (74.7, 527.6)),
+    (683.0, (135.4, 282.4, 355.8, 515.0)),
+    (660.8, (135.4, 368.1, 429.2, 515.0)),
+    (638.6, (147.6, 270.2)),
+    (615.9, (74.7, 527.6)),
+    (581.9, (74.7, 527.6)),
+    (478.6, (74.7, 527.6)),
+    (446.1, (135.4, 306.9, 392.5, 515.0)),
+    (423.9, (135.4, 515.0)),
+    (401.7, (147.6, 294.6, 380.2, 515.0)),
+    (379.5, (147.6, 294.6)),
+    (274.4, (135.4, 294.6, 404.7, 515.0)),
+    (254.3, (135.4, 515.0)),
+    (232.1, (147.6, 306.9, 380.2, 515.0)),
+    (161.2, (86.4, 515.0)),
+    (159.6, (86.4, 515.0)),
+    (62.5, (123.1, 257.9, 306.8, 515.0)),
+    (21.6, (98.7, 368.1, 404.7, 515.0)),
+    (19.4, (74.7, 527.6)),
+)
+
+PERMANENT_RESIDENCE_P2_LAYOUT = FormLayout(
+    code="moj_permanent_residence_p2",
+    series="永住許可申請書 その２",
+    procedure=PROCEDURE_PERMANENT_RESIDENCE,
+    reference="930002835.pdf p2",
+    page=1,
+    rows=_PERMANENT_RESIDENCE_P2_ROWS,
+    lines=(
+        LineField("17(2)", "householder_employer_name", "Householder — employer", row=1, column=0),
+        LineField(
+            "17(2)", "householder_employer_branch", "Householder — branch", row=1, column=1
+        ),
+        LineField(
+            "17(2)", "householder_employer_address", "Householder — employer address", row=2, column=0
+        ),
+        LineField(
+            "17(2)", "householder_employer_tel", "Householder — employer telephone", row=2, column=1
+        ),
+        LineField("17(3)", "householder_annual_income_jpy", "Householder — annual income (yen)", row=3),
+        LineField("19(1)", "resident_guarantor_name", "Guarantor in Japan — name", row=7, column=0),
+        LineField(
+            "19(2)", "guarantor_nationality", "Guarantor in Japan — nationality", row=7, column=1
+        ),
+        LineField("19(3)", "guarantor_address", "Guarantor in Japan — address", row=8),
+        LineField(
+            "19(3)", "guarantor_telephone", "Guarantor in Japan — telephone", row=9, column=0
+        ),
+        LineField("19(3)", "guarantor_mobile", "Guarantor in Japan — mobile", row=9, column=1),
+        LineField("19(4)", "guarantor_occupation", "Guarantor in Japan — occupation", row=10),
+        LineField(
+            "20(1)",
+            "legal_representative_name",
+            "Legal representative — name",
+            row=11,
+            column=0,
+            depends_on="has_legal_representative",
+        ),
+        LineField(
+            "20(2)",
+            "legal_representative_relationship",
+            "Legal representative — relationship",
+            row=11,
+            column=1,
+            depends_on="has_legal_representative",
+        ),
+        LineField(
+            "20(3)",
+            "legal_representative_address",
+            "Legal representative — address",
+            row=12,
+            depends_on="has_legal_representative",
+        ),
+        LineField(
+            "20(3)",
+            "legal_representative_tel",
+            "Legal representative — telephone",
+            row=13,
+            column=0,
+            depends_on="has_legal_representative",
+        ),
+        LineField(
+            "20(3)",
+            "legal_representative_mobile",
+            "Legal representative — mobile",
+            row=13,
+            column=1,
+            depends_on="has_legal_representative",
+        ),
+    ),
+    choices=(
+        ChoiceField(
+            "17(1)",
+            "householder_relationship",
+            "Main householder — relationship to you",
+            (
+                ("self", Mark(199.8, 206.5, 745.4)),
+                ("husband", Mark(248.7, 255.5, 745.4)),
+                ("wife", Mark(309.9, 316.7, 745.4)),
+                ("father", Mark(358.9, 365.7, 745.4)),
+                ("mother", Mark(407.9, 414.6, 745.4)),
+                ("child", Mark(456.8, 463.6, 745.4)),
+                ("other", Mark(199.8, 206.5, 725.3)),
+            ),
+            style="tick",
+        ),
+        ChoiceField(
+            "19(5)",
+            "guarantor_relationship",
+            "Guarantor in Japan — relationship to you",
+            (
+                ("husband", Mark(114.0, 120.8, 358.9)),
+                ("wife", Mark(175.2, 182.0, 358.9)),
+                ("father", Mark(248.7, 255.5, 358.9)),
+                ("mother", Mark(309.9, 316.7, 358.9)),
+                ("child", Mark(383.4, 390.2, 358.9)),
+                ("grandfather", Mark(114.0, 120.8, 338.9)),
+                ("grandmother", Mark(175.2, 182.0, 338.9)),
+                ("grandchild", Mark(248.7, 255.5, 338.9)),
+                ("foster_father", Mark(309.9, 316.7, 338.9)),
+                ("foster_mother", Mark(383.4, 390.2, 338.9)),
+                ("adopted_child", Mark(114.0, 120.8, 318.8)),
+                ("child_of_spouse", Mark(175.2, 182.0, 318.8)),
+                ("employer", Mark(248.7, 255.5, 318.8)),
+                ("guarantor", Mark(309.9, 316.7, 318.8)),
+                ("other", Mark(383.4, 390.2, 318.8)),
+            ),
+            style="tick",
+        ),
+    ),
+    unsupported_items=(
+        "18 Family in Japan and anyone you reside with (table, one row per person)",
+    ),
 )
 
 
@@ -1845,6 +2010,267 @@ DEPENDENT_PART2_LAYOUT = FormLayout(
 )
 
 
+def _enrollment_status(item: str, marks: tuple[Mark, ...]) -> ChoiceField:
+    """Item (1) of the education block — where the applicant stands at that school."""
+    return ChoiceField(
+        item,
+        "education_enrollment_status",
+        "Education — registered enrollment",
+        (
+            ("graduated", marks[0]),
+            ("in_school", marks[1]),
+            ("temporary_absence", marks[2]),
+            ("withdrawal", marks[3]),
+        ),
+        style="tick",
+    )
+
+
+def _education_level(item: str, marks: tuple[Mark, ...]) -> ChoiceField:
+    """The level of the last school attended — nine printed □ boxes."""
+    return ChoiceField(
+        item,
+        "education_level",
+        "Education — level of the last school attended",
+        (
+            ("doctor", marks[0]),
+            ("master", marks[1]),
+            ("bachelor", marks[2]),
+            ("junior_college", marks[3]),
+            ("college_of_technology", marks[4]),
+            ("senior_high_school", marks[5]),
+            ("junior_high_school", marks[6]),
+            ("elementary_school", marks[7]),
+            ("other", marks[8]),
+        ),
+        style="tick",
+    )
+
+
+def _support_flags(item: str, marks: dict[str, Mark]) -> tuple[Flag, ...]:
+    """Item (1) of the method-of-support block, which is explicitly multi-select.
+
+    Each box has its own monthly amount beside it, so the box is ticked when the
+    applicant has given that amount. Keys are the same ones the amount lines use.
+    """
+    labels = {
+        "support_self_monthly_jpy": "Support is partly self-funded",
+        "support_overseas_supporter_monthly_jpy": "Support from a supporter living abroad",
+        "support_japan_supporter_monthly_jpy": "Support from a supporter in Japan",
+        "scholarship_monthly_jpy": "Support from a scholarship",
+        "support_other_monthly_jpy": "Support from another source",
+    }
+    return tuple(Flag(item, key, labels[key], mark) for key, mark in marks.items())
+
+
+def _japanese_ability_flags(item: str, marks: dict[str, Mark]) -> tuple[Flag, ...]:
+    """Item 26 of the student sheet — which kind of evidence of Japanese is being given."""
+    labels = {
+        "japanese_test_name": "Japanese ability shown by a test",
+        "japanese_school_name": "Japanese ability shown by a course attended",
+        "japanese_ability_other": "Japanese ability shown some other way",
+    }
+    return tuple(Flag(item, key, labels[key], mark) for key, mark in marks.items())
+
+
+
+# ── Applicant part 2, form P (Student) — Certificate of Eligibility variant ────────
+# Reference: https://www.moj.go.jp/isa/content/930004031.pdf page 3. Items 22 to 28.
+# The applicant is still abroad, so where the extension sheet asks how much money is
+# being carried in and remitted, this one asks only how the stay will be funded.
+
+_STUDENT_PART2_COE_ROWS: NominalRows = (
+    (817.0, (38.8, 532.4)),
+    (783.0, (125.4, 517.6)),
+    (760.3, (110.9, 314.3, 386.8, 517.6)),
+    (737.6, (343.2, 401.4)),
+    (641.2, (139.9, 241.7, 372.2, 517.6)),
+    (618.8, (38.8, 532.4)),
+    (597.5, (38.8, 154.9, 285.6, 401.8)),
+    (576.1, (38.8, 532.4)),
+    (512.0, (38.8, 532.4)),
+    (437.2, (96.4, 299.8, 343.2, 517.6)),
+    (403.7, (125.4, 328.8)),
+    (381.0, (125.4, 270.7, 299.6, 445.0)),
+    (358.9, (110.9, 517.6)),
+    (338.0, (110.9, 517.6)),
+    (274.0, (125.4, 328.8)),
+    (251.9, (125.4, 270.7, 299.6, 445.0)),
+    (197.5, (125.4, 241.7, 415.8, 503.0)),
+    (174.8, (169.0, 285.2, 415.8, 503.0)),
+    (151.7, (110.9, 227.2)),
+    (104.3, (125.4, 343.3)),
+    (82.8, (125.4, 343.3, 415.8, 517.6)),
+    (59.6, (198.0, 343.3, 415.8, 517.6)),
+    (36.5, (139.9, 241.7)),
+    (32.9, (38.8, 532.4)),
+)
+
+# 年月 only: these lines have no day box.
+_STUDENT_COE_PERIOD_FROM = DateSlots(year=191.1, month=249.3)
+_STUDENT_COE_PERIOD_TO = DateSlots(year=365.3, month=423.6)
+
+STUDENT_PART2_COE_LAYOUT = FormLayout(
+    code="moj_student_applicant_p2_coe",
+    series="別記第六号の三様式 申請人等作成用 ２（Ｐ 留学）",
+    procedure=PROCEDURE_COE,
+    reference="930004031.pdf p3",
+    page=2,
+    rows=_STUDENT_PART2_COE_ROWS,
+    lines=(
+        LineField("22(1)", "school_name", "Place of study — name", row=1),
+        LineField("22(2)", "school_address", "Place of study — address", row=2, column=0),
+        LineField("22(3)", "school_tel", "Place of study — telephone", row=2, column=1),
+        LineField("23", "total_years_of_education", "Total period of education (years)", row=3),
+        LineField("24(2)", "final_school_name", "Last school attended", row=4, column=0),
+        LineField(
+            "24(3)",
+            "graduation_date",
+            "Date of graduation or expected graduation",
+            row=4,
+            column=1,
+            dates=DateSlots(year=445.1, month=496.2),
+        ),
+        LineField("26(1)", "japanese_test_name", "Japanese language test — name", row=9, column=0),
+        LineField(
+            "26(2)",
+            "japanese_test_score",
+            "Japanese language test — level or score",
+            row=9,
+            column=1,
+        ),
+        LineField("26", "japanese_school_name", "Japanese language school — name", row=10),
+        LineField(
+            "26",
+            "japanese_study_from",
+            "Japanese language study — from",
+            row=11,
+            column=0,
+            dates=_STUDENT_COE_PERIOD_FROM,
+        ),
+        LineField(
+            "26",
+            "japanese_study_to",
+            "Japanese language study — to",
+            row=11,
+            column=1,
+            dates=_STUDENT_COE_PERIOD_TO,
+        ),
+        LineField(
+            "26",
+            "japanese_ability_other",
+            "Japanese language ability — other evidence",
+            row=12,
+        ),
+        LineField(
+            "27",
+            "japanese_high_school_name",
+            "Japanese-language education for high school — organisation",
+            row=14,
+        ),
+        LineField(
+            "27",
+            "japanese_high_school_from",
+            "Japanese-language education for high school — from",
+            row=15,
+            column=0,
+            dates=_STUDENT_COE_PERIOD_FROM,
+        ),
+        LineField(
+            "27",
+            "japanese_high_school_to",
+            "Japanese-language education for high school — to",
+            row=15,
+            column=1,
+            dates=_STUDENT_COE_PERIOD_TO,
+        ),
+        LineField(
+            "28(1)", "support_self_monthly_jpy", "Support — self (yen/month)", row=16, column=0
+        ),
+        LineField(
+            "28(1)",
+            "support_overseas_supporter_monthly_jpy",
+            "Support — supporter living abroad (yen/month)",
+            row=16,
+            column=1,
+        ),
+        LineField(
+            "28(1)",
+            "support_japan_supporter_monthly_jpy",
+            "Support — supporter in Japan (yen/month)",
+            row=17,
+            column=0,
+        ),
+        LineField(
+            "28(1)",
+            "scholarship_monthly_jpy",
+            "Support — scholarship (yen/month)",
+            row=17,
+            column=1,
+        ),
+        LineField("28(1)", "support_other_monthly_jpy", "Support — other (yen/month)", row=18),
+        LineField("28(2)", "supporter_name", "Supporter — name", row=19),
+        LineField("28(2)", "supporter_address", "Supporter — address", row=20, column=0),
+        LineField("28(2)", "supporter_tel", "Supporter — telephone", row=20, column=1),
+        LineField("28(2)", "supporter_occupation", "Supporter — occupation", row=21, column=0),
+        LineField(
+            "28(2)", "supporter_employer_tel", "Supporter — employer telephone", row=21, column=1
+        ),
+        LineField(
+            "28(2)", "supporter_annual_income_jpy", "Supporter — annual income (yen)", row=22
+        ),
+    ),
+    choices=(
+        _enrollment_status(
+            "24(1)",
+            (
+                Mark(144.2, 151.0, 716.7),
+                Mark(216.8, 223.6, 716.7),
+                Mark(289.4, 296.2, 716.7),
+                Mark(376.5, 383.3, 716.7),
+            ),
+        ),
+        _education_level(
+            "24(1)",
+            (
+                Mark(71.6, 78.4, 695.7),
+                Mark(173.2, 180.1, 695.7),
+                Mark(274.8, 281.7, 695.7),
+                Mark(347.4, 354.3, 695.7),
+                Mark(434.6, 441.4, 695.7),
+                Mark(71.6, 78.4, 674.7),
+                Mark(173.2, 180.1, 674.7),
+                Mark(260.3, 267.2, 674.7),
+                Mark(347.4, 354.3, 674.7),
+            ),
+        ),
+    ),
+    flags=(
+        *_japanese_ability_flags(
+            "26",
+            {
+                "japanese_test_name": Mark(57.0, 63.9, 470.7),
+                "japanese_school_name": Mark(57.0, 63.9, 427.0),
+                "japanese_ability_other": Mark(57.0, 63.9, 370.9),
+            },
+        ),
+        *_support_flags(
+            "28(1)",
+            {
+                "support_self_monthly_jpy": Mark(57.0, 63.9, 210.1),
+                "support_overseas_supporter_monthly_jpy": Mark(303.9, 310.7, 210.1),
+                "support_japan_supporter_monthly_jpy": Mark(57.0, 63.9, 187.4),
+                "scholarship_monthly_jpy": Mark(347.4, 354.3, 187.4),
+                "support_other_monthly_jpy": Mark(57.0, 63.9, 164.5),
+            },
+        ),
+    ),
+    unsupported_items=(
+        "25 Personal history for the last 5 years (table, one row per entry)",
+    ),
+)
+
+
 # ── Applicant part 2, form P (Student) — 申請人等作成用 ２ ────────────────────────────
 # Reference: https://www.moj.go.jp/isa/content/930004106.pdf page 3.
 # Serves extension and change of status; the Certificate of Eligibility has its own.
@@ -1921,6 +2347,34 @@ STUDENT_PART2_LAYOUT = FormLayout(
             dates=DateSlots(year=352.0, month=401.0),
         ),
         LineField(
+            "20",
+            "japanese_ability_other",
+            "Japanese language ability — other evidence",
+            row=8,
+        ),
+        LineField(
+            "21",
+            "japanese_high_school_name",
+            "Japanese-language education for high school — organisation",
+            row=10,
+        ),
+        LineField(
+            "21",
+            "japanese_high_school_from",
+            "Japanese-language education for high school — from",
+            row=11,
+            column=0,
+            dates=DateSlots(year=200.2, month=252.2),
+        ),
+        LineField(
+            "21",
+            "japanese_high_school_to",
+            "Japanese-language education for high school — to",
+            row=11,
+            column=1,
+            dates=DateSlots(year=355.7, month=407.7),
+        ),
+        LineField(
             "22(1)", "support_self_monthly_jpy", "Support — self (yen/month)", row=12, column=0
         ),
         LineField(
@@ -1965,10 +2419,63 @@ STUDENT_PART2_LAYOUT = FormLayout(
             "22(3)", "supporter_annual_income_jpy", "Supporter — annual income (yen)", row=20
         ),
     ),
-    unsupported_items=(
-        "19(1) Registered enrollment and school level (tick boxes)",
-        "21 Japanese education history (high-school applicants only)",
-        "22 Method-of-support tick boxes beside each amount",
+    choices=(
+        _enrollment_status(
+            "19(1)",
+            (
+                Mark(158.8, 166.2, 674.6),
+                Mark(223.6, 231.0, 674.6),
+                Mark(288.4, 295.8, 674.6),
+                Mark(366.2, 373.5, 674.6),
+            ),
+        ),
+        _education_level(
+            "19(1)",
+            (
+                Mark(94.0, 101.4, 652.7),
+                Mark(184.7, 192.1, 652.7),
+                Mark(275.5, 282.8, 652.7),
+                Mark(340.3, 347.6, 652.7),
+                Mark(418.0, 425.4, 652.7),
+                Mark(94.0, 101.4, 630.7),
+                Mark(184.8, 192.1, 630.7),
+                Mark(262.6, 269.8, 630.7),
+                Mark(340.3, 347.6, 630.7),
+            ),
+        ),
+    ),
+    flags=(
+        *_japanese_ability_flags(
+            "20",
+            {
+                "japanese_test_name": Mark(81.1, 88.4, 563.6),
+                "japanese_school_name": Mark(81.1, 88.4, 519.7),
+                "japanese_ability_other": Mark(81.1, 88.4, 462.7),
+            },
+        ),
+        *_support_flags(
+            "22(1)",
+            {
+                "support_self_monthly_jpy": Mark(81.1, 88.4, 291.7),
+                "support_overseas_supporter_monthly_jpy": Mark(301.4, 308.7, 291.7),
+                "support_japan_supporter_monthly_jpy": Mark(81.1, 88.4, 267.9),
+                "scholarship_monthly_jpy": Mark(340.3, 347.6, 267.9),
+                "support_other_monthly_jpy": Mark(81.1, 88.4, 243.9),
+            },
+        ),
+        Flag(
+            "22(2)",
+            "funds_carried_jpy",
+            "Funds carried in from abroad",
+            Mark(81.1, 88.4, 208.5),
+        ),
+        Flag(
+            "22(2)",
+            "funds_remitted_jpy",
+            "Funds remitted from abroad",
+            Mark(301.4, 308.7, 208.5),
+        ),
+        Flag("22(2)", "funds_other_jpy", "Funds from another source", Mark(353.2, 360.6, 184.8)),
     ),
 )
 

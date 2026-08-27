@@ -99,6 +99,22 @@ ANSWERS: dict[str, object] = {
     "supporter_occupation": "Business owner",
     "supporter_employer_tel": "+880-2-2222",
     "supporter_annual_income_jpy": 3500000,
+    # Applicant part 2 of the permanent-residence form.
+    "householder_relationship": "self",
+    "householder_employer_name": "Sakura Robotics K.K.",
+    "householder_employer_branch": "Head Office",
+    "householder_employer_address": "3-1-1 Toranomon, Minato-ku, Tokyo",
+    "householder_employer_tel": "03-4455-6677",
+    "householder_annual_income_jpy": 7400000,
+    "guarantor_nationality": "JAPAN",
+    "guarantor_relationship": "employer",
+    # Applicant part 2, form P (Student) — education and Japanese-language blocks.
+    "education_enrollment_status": "graduated",
+    "education_level": "bachelor",
+    "japanese_ability_other": "Two years of self-study with a private tutor",
+    "japanese_high_school_name": "Dhaka Japanese Language Centre",
+    "japanese_high_school_from": "2023-04",
+    "japanese_high_school_to": "2024-03",
     # Tick-box groups, answered with the token the layout declares.
     "method_of_support": "guarantor",
     "supporter_relationship": "father",

@@ -197,7 +197,12 @@ def _as_bool(value: Any) -> bool | None:
 
 
 def _split_date(value: Any) -> tuple[str, str, str] | None:
-    """Split an answer into (year, month, day) for a 年月日 line."""
+    """Split an answer into (year, month, day) for a 年月日 line.
+
+    A year-and-month answer is accepted with an empty day, because several lines on these
+    forms print only 年 and 月 -- a graduation month, a course period -- and are answered
+    that way. Rejecting it left those lines blank on a sheet the applicant had answered.
+    """
     raw = _text(value)
     if not raw:
         return None
@@ -207,6 +212,12 @@ def _split_date(value: Any) -> tuple[str, str, str] | None:
         except ValueError:
             continue
         return (str(parsed.year), str(parsed.month), str(parsed.day))
+    for pattern in ("%Y-%m", "%Y/%m", "%Y.%m"):
+        try:
+            parsed = datetime.strptime(raw[:7], pattern)
+        except ValueError:
+            continue
+        return (str(parsed.year), str(parsed.month), "")
     return None
 
 
@@ -381,6 +392,21 @@ def _draw_tick(pdf: canvas.Canvas, fit: LayoutFit, mark: Mark) -> None:
     pdf.drawPath(path, stroke=1, fill=0)
 
 
+def _is_stated(value: Any) -> bool:
+    """True when the applicant actually gave this value.
+
+    Zero is not a statement of support: an applicant who writes 0 yen of self-funding has
+    said that box does not apply, so it stays clear.
+    """
+    text = _text(value).strip()
+    if not text:
+        return False
+    try:
+        return float(text.replace(",", "")) != 0.0
+    except ValueError:
+        return True
+
+
 def _draw_choice(pdf: canvas.Canvas, fit: LayoutFit, choice: ChoiceField, value: Any) -> str | None:
     token = _choice_token(choice, value)
     if token is None:
@@ -508,6 +534,12 @@ def fill_flat_form(
                 filled[label] = written
             else:
                 missing.append(label)
+
+        # Multi-select boxes, each restating a value already written on this sheet.
+        for flag in sheet.flags:
+            if _is_stated(resolve_answer(flag.key, answers)):
+                _draw_tick(pdf, sheet_fit, flag.mark)
+                filled[f"{flag.item} {flag.label}"] = "ticked"
 
         if index == 0 and form.purpose_checkbox is not None:
             _draw_tick(pdf, sheet_fit, form.purpose_checkbox)
