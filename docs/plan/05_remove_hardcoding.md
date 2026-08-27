@@ -121,6 +121,16 @@ already fails on a revision. This turns that from a test failure into a queued r
 
 **Size:** ~2 days.
 
+**Done.** `torii-check-form-revisions` asks the ministry what it publishes today and writes
+`docs/jurisdictions/jp/_form_revisions.yml` — URL, digest, page count, and whether that is
+the revision the layout was verified against. `GET /v1/admin/ops/form-revisions` is the
+queue; `--queue-only` reads it without touching the network.
+
+It never adopts a revision, and a test asserts it cannot reach the pinned digests at all.
+The stale-template test no longer reddens the suite: that signal said nothing about *what*
+to re-verify and stayed red on every branch until somebody did. The applicant was never
+the one at risk — the fill gate leaves a page blank either way.
+
 ---
 
 ## Step 4 — UI metadata → the API already serves it
@@ -177,6 +187,18 @@ proposal is a rejected diff, not a live regression.
 
 **Size:** ~3 days, and it is the piece that makes steps 1–3 safe to run unattended.
 
+**Done.** `services/pack_proposals.py` plus four endpoints on the existing ops router. The
+agent posts either a change list or a whole researched pack — `diff_against_pack` reduces
+the latter to the lines it would actually change — and ops accept or reject. Accepting
+rewrites the pack file; rejecting leaves it alone.
+
+Two rules the store enforces rather than trusts: an uncited change is refused at write
+time, so no reviewer is ever shown a line with no source and asked to judge it; and
+applying touches only the proposal's own scope and only the paths that were reviewed. A
+scope id that would escape the packs directory is refused, and a proposal is decided once.
+Covered by 12 tests in `test_pack_proposals.py`, which work on a copy of the packs so a
+test run cannot edit the repo's content.
+
 ---
 
 ## Order and cost
@@ -187,10 +209,12 @@ proposal is a rejected diff, not a live regression.
 | ~~4. Delete `getFormMetadata()`~~ | **done** | 100 lines of guessed titles gone |
 | ~~2. Per-item citations~~ | **done** | 359 lines to 143, and an NF-2 hazard removed |
 | ~~5. Tick-box labels~~ | **done** | All 15 groups authored, labels in ops YAML |
-| 3. Form revision discovery | 2 days | Ministry revisions become a queued review, not a silent break |
-| 6. Propose/promote loop | 3 days | Makes 1–3 safe unattended |
+| ~~3. Form revision discovery~~ | **done** | Ministry revisions are a queued review, not a silent break |
+| ~~6. Propose/promote loop~~ | **done** | Makes 1–3 safe unattended |
 
-About **5 days** left. Tier C stays, deliberately.
+Every step of this plan is done. Tier C — the PDF geometry and the layout fit gate — stays
+in code, deliberately, for the reason given above: partial automation with silent failures
+is the wrong trade on a form somebody signs.
 
 ### Geometry: no longer outstanding
 
