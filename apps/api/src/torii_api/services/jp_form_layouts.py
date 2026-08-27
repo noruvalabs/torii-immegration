@@ -2603,9 +2603,426 @@ _STUDENT_PART3_CHOICES: tuple[ChoiceField, ...] = (
     ),
 )
 
-_STUDENT_PART3_UNSUPPORTED = (
-    "22(4)(5) Relationship of supporter and scholarship provider (tick boxes)",
-    "24 Plan after graduation (tick boxes)",
+def _supporter_relation_wide(item: str, marks: tuple[Mark, ...]) -> ChoiceField:
+    """Item (3) of the student support block — sixteen printed □ boxes.
+
+    Wider than the spouse sheet's seven, because a student may be funded by a school, a
+    friend or a business contact as well as by a relative.
+    """
+    return ChoiceField(
+        item,
+        "supporter_relationship",
+        "Supporter — relationship to you",
+        (
+            ("husband", marks[0]),
+            ("wife", marks[1]),
+            ("father", marks[2]),
+            ("mother", marks[3]),
+            ("grandfather", marks[4]),
+            ("grandmother", marks[5]),
+            ("foster_father", marks[6]),
+            ("foster_mother", marks[7]),
+            ("sibling", marks[8]),
+            ("uncle_or_aunt", marks[9]),
+            ("educational_institution", marks[10]),
+            ("friend", marks[11]),
+            ("relative_of_friend", marks[12]),
+            ("business_connection", marks[13]),
+            ("relative_of_business_connection", marks[14]),
+            ("other", marks[15]),
+        ),
+        style="tick",
+    )
+
+
+def _scholarship_provider(item: str, marks: tuple[Mark, ...]) -> ChoiceField:
+    """Item (4) — who pays the scholarship, when the applicant said they have one."""
+    return ChoiceField(
+        item,
+        "scholarship_provider",
+        "Scholarship — who provides it",
+        (
+            ("foreign_government", marks[0]),
+            ("japanese_government", marks[1]),
+            ("local_government", marks[2]),
+            ("public_interest_body", marks[3]),
+            ("other", marks[4]),
+        ),
+        style="tick",
+        depends_on="has_scholarship",
+    )
+
+
+def _plan_after_graduation(item: str, marks: tuple[Mark, ...]) -> ChoiceField:
+    """What the applicant intends to do once the course ends."""
+    return ChoiceField(
+        item,
+        "plan_after_graduation",
+        "Plan after graduation",
+        (
+            ("return_home", marks[0]),
+            ("higher_education_in_japan", marks[1]),
+            ("work_in_japan", marks[2]),
+            ("other", marks[3]),
+        ),
+        style="tick",
+    )
+
+
+def _student_guardian_and_representative(
+    guardian_item: str, representative_item: str, first_row: int
+) -> tuple[LineField, ...]:
+    """The guardian and representative blocks, which sit in the same shape on every P sheet.
+
+    The guardian block is printed under "fill in the following if the applicant is to
+    study at a junior high school or elementary school", so it is gated rather than
+    reported unfilled for the great majority of students.
+    """
+    return (
+        LineField(
+            f"{guardian_item}(1)",
+            "guardian_name",
+            "Guardian in Japan — name",
+            row=first_row,
+            column=0,
+            depends_on="has_guardian_in_japan",
+        ),
+        LineField(
+            f"{guardian_item}(2)",
+            "guardian_relationship",
+            "Guardian in Japan — relationship",
+            row=first_row,
+            column=1,
+            depends_on="has_guardian_in_japan",
+        ),
+        LineField(
+            f"{guardian_item}(3)",
+            "guardian_address",
+            "Guardian in Japan — address",
+            row=first_row + 1,
+            depends_on="has_guardian_in_japan",
+        ),
+        LineField(
+            f"{guardian_item}(3)",
+            "guardian_tel",
+            "Guardian in Japan — telephone",
+            row=first_row + 2,
+            column=0,
+            depends_on="has_guardian_in_japan",
+        ),
+        LineField(
+            f"{guardian_item}(3)",
+            "guardian_mobile",
+            "Guardian in Japan — mobile",
+            row=first_row + 2,
+            column=1,
+            depends_on="has_guardian_in_japan",
+        ),
+        LineField(
+            f"{representative_item}(1)",
+            "legal_representative_name",
+            "Legal representative — name",
+            row=first_row + 3,
+            column=0,
+            depends_on="has_legal_representative",
+        ),
+        LineField(
+            f"{representative_item}(2)",
+            "legal_representative_relationship",
+            "Legal representative — relationship",
+            row=first_row + 3,
+            column=1,
+            depends_on="has_legal_representative",
+        ),
+        LineField(
+            f"{representative_item}(3)",
+            "legal_representative_address",
+            "Legal representative — address",
+            row=first_row + 4,
+            depends_on="has_legal_representative",
+        ),
+        LineField(
+            f"{representative_item}(3)",
+            "legal_representative_tel",
+            "Legal representative — telephone",
+            row=first_row + 5,
+            column=0,
+            depends_on="has_legal_representative",
+        ),
+        LineField(
+            f"{representative_item}(3)",
+            "legal_representative_mobile",
+            "Legal representative — mobile",
+            row=first_row + 5,
+            column=1,
+            depends_on="has_legal_representative",
+        ),
+    )
+
+
+
+# ── Applicant part 3, form P (Student) — Certificate of Eligibility variant ────────
+# Reference: https://www.moj.go.jp/isa/content/930004031.pdf page 4. Items 28(3) to 31.
+# The applicant is still abroad, so this sheet has no 資格外活動 block: the whole page is
+# the tail of the support question, the plan after graduation, and who is signing.
+
+_STUDENT_PART3_COE_ROWS: NominalRows = (
+    (813.8, (8.2, 563.0)),
+    (467.9, (89.3, 268.9, 432.0, 546.4)),
+    (441.8, (89.3, 546.4)),
+    (415.6, (105.6, 268.9, 383.0, 546.4)),
+    (363.5, (89.3, 268.9, 432.0, 546.4)),
+    (337.4, (89.3, 546.4)),
+    (311.2, (105.6, 268.9, 383.0, 546.4)),
+    (234.4, (24.0, 546.4)),
+    (232.6, (24.0, 546.4)),
+    (123.2, (73.0, 203.6, 285.1, 546.4)),
+    (85.7, (40.3, 350.5, 366.7, 546.4)),
+    (79.6, (8.2, 563.0)),
+    (30.6, (8.2, 563.0)),
+)
+
+STUDENT_PART3_COE_LAYOUT = FormLayout(
+    code="moj_student_applicant_p3_coe",
+    series="別記第六号の三様式 申請人等作成用 ３（Ｐ 留学）",
+    procedure=PROCEDURE_COE,
+    reference="930004031.pdf p4",
+    page=3,
+    rows=_STUDENT_PART3_COE_ROWS,
+    lines=_student_guardian_and_representative("30", "31", first_row=1),
+    choices=(
+        _supporter_relation_wide(
+            "28(3)",
+            (
+                Mark(45.1, 52.8, 774.4),
+                Mark(94.1, 101.8, 774.4),
+                Mark(143.0, 150.8, 774.4),
+                Mark(192.0, 199.7, 774.4),
+                Mark(241.0, 248.7, 774.4),
+                Mark(306.2, 314.0, 774.4),
+                Mark(371.5, 379.3, 774.4),
+                Mark(436.8, 444.5, 774.4),
+                Mark(45.1, 52.8, 746.8),
+                Mark(143.0, 150.8, 746.8),
+                Mark(306.2, 314.0, 746.8),
+                Mark(436.8, 444.5, 746.8),
+                Mark(45.1, 52.8, 719.2),
+                Mark(192.0, 199.7, 719.2),
+                Mark(45.1, 52.8, 691.6),
+                Mark(306.2, 314.0, 691.6),
+            ),
+        ),
+        _scholarship_provider(
+            "28(4)",
+            (
+                Mark(45.1, 52.8, 636.4),
+                Mark(143.0, 150.8, 636.4),
+                Mark(257.2, 265.0, 636.4),
+                Mark(45.1, 52.8, 608.8),
+                Mark(371.5, 379.2, 608.8),
+            ),
+        ),
+        _plan_after_graduation(
+            "29",
+            (
+                Mark(28.8, 36.5, 559.2),
+                Mark(208.3, 216.0, 559.2),
+                Mark(28.8, 36.5, 532.8),
+                Mark(208.3, 216.0, 532.8),
+            ),
+        ),
+    ),
+)
+
+
+# ── Applicant part 3, form P (Student) — change of status variant ──────────────────
+# Reference: https://www.moj.go.jp/isa/content/930004107.pdf page 4. Items 22(4) to 26.
+# Same shape as the extension sheet but one row shorter: a change-of-status applicant is
+# asked their 資格外活動 on three lines rather than four.
+
+_STUDENT_PART3_CHANGE_ROWS: NominalRows = (
+    (803.6, (83.6, 487.6)),
+    (536.3, (166.3, 475.3)),
+    (513.8, (166.3, 309.0, 368.3, 475.3)),
+    (490.8, (166.3, 214.0, 285.1, 356.5)),
+    (390.5, (142.6, 273.4, 392.0, 475.3)),
+    (368.3, (142.6, 475.3)),
+    (345.8, (154.4, 273.4, 356.4, 475.3)),
+    (312.7, (142.6, 273.4, 392.0, 475.3)),
+    (290.5, (142.6, 475.3)),
+    (268.1, (154.4, 273.4, 356.4, 475.3)),
+    (190.3, (95.0, 475.3, 95.0, 475.3)),
+    (93.6, (130.7, 249.6, 297.0, 475.3)),
+    (47.8, (106.9, 344.6, 368.3, 475.3)),
+    (44.3, (83.6, 487.6)),
+)
+
+STUDENT_PART3_CHANGE_LAYOUT = FormLayout(
+    code="moj_student_applicant_p3_change",
+    series="別記第三十号の二様式 申請人等作成用 ３（Ｐ 留学）",
+    procedure=PROCEDURE_CHANGE,
+    reference="930004107.pdf p4",
+    page=3,
+    rows=_STUDENT_PART3_CHANGE_ROWS,
+    lines=(
+        LineField(
+            "23(1)",
+            "part_time_work_type",
+            "Work outside status — type of work",
+            row=1,
+            depends_on="works_outside_status",
+        ),
+        LineField(
+            "23(2)",
+            "part_time_employer_name",
+            "Work outside status — employer",
+            row=2,
+            column=0,
+            depends_on="works_outside_status",
+        ),
+        LineField(
+            "23(2)",
+            "part_time_employer_tel",
+            "Work outside status — telephone",
+            row=2,
+            column=1,
+            depends_on="works_outside_status",
+        ),
+        LineField(
+            "23(3)",
+            "part_time_weekly_hours",
+            "Work outside status — hours per week",
+            row=3,
+            column=0,
+            depends_on="works_outside_status",
+        ),
+        LineField(
+            "23(4)",
+            "part_time_salary_jpy",
+            "Work outside status — salary (yen)",
+            row=3,
+            column=1,
+            depends_on="works_outside_status",
+        ),
+        *_student_guardian_and_representative("25", "26", first_row=4),
+    ),
+    choices=(
+        _supporter_relation_wide(
+            "22(4)",
+            (
+                Mark(110.0, 116.7, 768.2),
+                Mark(145.6, 152.4, 768.2),
+                Mark(181.3, 188.0, 768.2),
+                Mark(216.9, 223.6, 768.2),
+                Mark(252.6, 259.3, 768.2),
+                Mark(300.1, 306.8, 768.2),
+                Mark(347.6, 354.3, 768.2),
+                Mark(395.1, 401.8, 768.2),
+                Mark(110.0, 116.7, 745.8),
+                Mark(181.3, 188.0, 745.8),
+                Mark(300.1, 306.8, 745.8),
+                Mark(395.1, 401.8, 745.8),
+                Mark(110.0, 116.7, 723.3),
+                Mark(205.0, 211.8, 723.3),
+                Mark(110.0, 116.7, 700.9),
+                Mark(300.1, 306.8, 700.9),
+            ),
+        ),
+        _scholarship_provider(
+            "22(5)",
+            (
+                Mark(110.0, 116.7, 653.9),
+                Mark(181.3, 188.0, 653.9),
+                Mark(264.4, 271.2, 653.9),
+                Mark(110.0, 116.7, 630.3),
+                Mark(347.6, 354.3, 630.3),
+            ),
+        ),
+        _plan_after_graduation(
+            "24",
+            (
+                Mark(98.1, 104.8, 468.0),
+                Mark(228.8, 235.5, 468.0),
+                Mark(98.1, 104.8, 445.5),
+                Mark(228.8, 235.5, 445.5),
+            ),
+        ),
+        ChoiceField(
+            "23(4)",
+            "part_time_salary_period",
+            "Work outside status — salary is monthly or daily",
+            (
+                ("monthly", Mark(383.2, 390.0, 503.1)),
+                ("daily", Mark(418.9, 425.6, 503.1)),
+            ),
+            style="tick",
+            depends_on="works_outside_status",
+        ),
+        ChoiceField(
+            "23",
+            "works_outside_status",
+            "Activities other than those permitted",
+            (
+                ("yes", Mark(420.4, 428.8, 599.3)),
+                ("no", Mark(439.2, 447.4, 599.8)),
+            ),
+        ),
+    ),
+)
+
+
+_STUDENT_PART3_EXTENSION_CHOICES = (
+    _supporter_relation_wide(
+        "22(4)",
+        (
+            Mark(102.8, 109.8, 782.6),
+            Mark(139.9, 146.9, 782.6),
+            Mark(177.0, 184.0, 782.6),
+            Mark(214.1, 221.1, 782.6),
+            Mark(251.2, 258.2, 782.6),
+            Mark(300.6, 307.6, 782.6),
+            Mark(350.1, 357.0, 782.6),
+            Mark(399.5, 406.5, 782.6),
+            Mark(102.8, 109.8, 759.5),
+            Mark(177.0, 184.0, 759.5),
+            Mark(300.6, 307.6, 759.5),
+            Mark(399.5, 406.5, 759.5),
+            Mark(102.8, 109.8, 736.3),
+            Mark(201.7, 208.7, 736.3),
+            Mark(102.8, 109.8, 713.1),
+            Mark(300.6, 307.6, 713.1),
+        ),
+    ),
+    _scholarship_provider(
+        "22(5)",
+        (
+            Mark(102.8, 109.8, 664.7),
+            Mark(177.0, 184.0, 664.7),
+            Mark(263.5, 270.5, 664.7),
+            Mark(102.8, 109.8, 640.4),
+            Mark(350.0, 357.0, 640.4),
+        ),
+    ),
+    _plan_after_graduation(
+        "24",
+        (
+            Mark(90.5, 97.5, 472.4),
+            Mark(226.5, 233.4, 472.4),
+            Mark(90.5, 97.5, 449.3),
+            Mark(226.5, 233.4, 449.3),
+        ),
+    ),
+    ChoiceField(
+        "23(4)",
+        "part_time_salary_period",
+        "Work outside status — salary is monthly or daily",
+        (
+            ("monthly", Mark(387.1, 394.1, 508.8)),
+            ("daily", Mark(424.2, 431.2, 508.8)),
+        ),
+        style="tick",
+        depends_on="works_outside_status",
+    ),
 )
 
 STUDENT_PART3_EXTENSION_LAYOUT = FormLayout(
@@ -2616,8 +3033,7 @@ STUDENT_PART3_EXTENSION_LAYOUT = FormLayout(
     page=3,
     rows=_STUDENT_PART3_EXT_ROWS,
     lines=_STUDENT_PART3_LINES,
-    choices=_STUDENT_PART3_CHOICES,
-    unsupported_items=_STUDENT_PART3_UNSUPPORTED,
+    choices=(*_STUDENT_PART3_CHOICES, *_STUDENT_PART3_EXTENSION_CHOICES),
 )
 
 

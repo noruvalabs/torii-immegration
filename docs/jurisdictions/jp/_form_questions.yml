@@ -726,13 +726,23 @@ questions:
     prompt: "How is the person supporting you related to you?"
     type: enum
     section: "Funds & support"
+    show_when: { key: has_financial_support, equals: true }
     options:
       - { value: husband, label: "Husband (夫)" }
       - { value: wife, label: "Wife (妻)" }
       - { value: father, label: "Father (父)" }
       - { value: mother, label: "Mother (母)" }
+      - { value: grandfather, label: "Grandfather (祖父)" }
+      - { value: grandmother, label: "Grandmother (祖母)" }
       - { value: foster_father, label: "Foster father (養父)" }
       - { value: foster_mother, label: "Foster mother (養母)" }
+      - { value: sibling, label: "Brother or sister (兄弟姉妹)" }
+      - { value: uncle_or_aunt, label: "Uncle or aunt (叔父・叔母)" }
+      - { value: educational_institution, label: "The school admitting me (受入教育機関)" }
+      - { value: friend, label: "A friend or acquaintance (友人・知人)" }
+      - { value: relative_of_friend, label: "A relative of a friend (友人・知人の親族)" }
+      - { value: business_connection, label: "A business contact (取引関係者・現地企業等職員)" }
+      - { value: relative_of_business_connection, label: "A relative of a business contact (取引関係者等の親族)" }
       - { value: other, label: "Other (その他) — write the detail on the form yourself" }
   # ── Permanent residence, page 2 ─────────────────────────────────────────────────
   # Items 17 and 19. Asked only of a permanent-residence applicant.
@@ -851,3 +861,28 @@ questions:
     prompt: "Will you study at a Japanese high school?"
     type: boolean
     section: "Education & qualifications"
+  # ── Applicant part 3, form P (Student) ──────────────────────────────────────────
+  has_scholarship:
+    prompt: "Will a scholarship pay for part of your stay?"
+    type: boolean
+    section: "Funds & support"
+  scholarship_provider:
+    prompt: "Who provides that scholarship?"
+    type: enum
+    section: "Funds & support"
+    show_when: { key: has_scholarship, equals: true }
+    options:
+      - { value: foreign_government, label: "A foreign government (外国政府)" }
+      - { value: japanese_government, label: "The Japanese government (日本国政府)" }
+      - { value: local_government, label: "A Japanese local government (地方公共団体)" }
+      - { value: public_interest_body, label: "A public interest association or foundation (公益社団法人・公益財団法人)" }
+      - { value: other, label: "Other (その他) — write the detail on the form yourself" }
+  plan_after_graduation:
+    prompt: "What do you plan to do after your course ends?"
+    type: enum
+    section: "Education & qualifications"
+    options:
+      - { value: return_home, label: "Return to my home country (帰国)" }
+      - { value: higher_education_in_japan, label: "Go on to further study in Japan (日本での進学)" }
+      - { value: work_in_japan, label: "Find work in Japan (日本での就職)" }
+      - { value: other, label: "Other (その他) — write the detail on the form yourself" }

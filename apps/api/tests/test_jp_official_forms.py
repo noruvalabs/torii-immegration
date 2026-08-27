@@ -115,6 +115,10 @@ ANSWERS: dict[str, object] = {
     "japanese_high_school_name": "Dhaka Japanese Language Centre",
     "japanese_high_school_from": "2023-04",
     "japanese_high_school_to": "2024-03",
+    # Applicant part 3, form P (Student).
+    "has_scholarship": True,
+    "scholarship_provider": "japanese_government",
+    "plan_after_graduation": "work_in_japan",
     # Tick-box groups, answered with the token the layout declares.
     "method_of_support": "guarantor",
     "supporter_relationship": "father",
@@ -716,7 +720,11 @@ def _shown(scope: str, category: str, action: str, answers: dict | None = None):
     ("scope", "category", "action", "ceiling"),
     [
         ("jp/work.renewal", "work", "renewal", 36),
-        ("jp/student.renewal", "student", "renewal", 48),
+        # 50, not 48: authoring item 22(4)(5) and item 24 of the student part 3 sheet made
+        # the scholarship and the plan after graduation askable. Both are printed on a
+        # sheet the applicant signs and neither is conditional on the form, so the honest
+        # move is a higher ceiling rather than leaving two boxes for them to find blank.
+        ("jp/student.renewal", "student", "renewal", 50),
         ("jp/spouse.new_application", "spouse", "new_application", 42),
         ("jp/tourist.new_application", "tourist", "new_application", 38),
     ],
