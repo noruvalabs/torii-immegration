@@ -187,3 +187,71 @@ async def test_application_form_download_serves_the_official_template(
     content = base64.b64decode(response.json()["data_base64"])
     assert content.startswith(b"%PDF-")
     assert response.json()["filename"].endswith("_jp_work_extension.pdf")
+
+
+# ── Cover letter and dossier through the real route ────────────────────────────────
+# The generator is unit-tested in test_submission_kit.py; these check the endpoint
+# actually wires the filing kit in, which is where the addressee comes from.
+
+
+def _pdf_text(content: bytes) -> str:
+    import io
+
+    import pypdf
+
+    reader = pypdf.PdfReader(io.BytesIO(content))
+    return " ".join(page.extract_text() or "" for page in reader.pages)
+
+
+async def test_cover_letter_endpoint_uses_this_cases_filing_route(
+    client: AsyncClient, engine: AsyncEngine
+) -> None:
+    await _seed_scope(engine)
+    token, case_id = await _register_and_scope(client, "letter@example.com")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    for key, value in (("full_name", "Md Hojayfa Rahman"), ("passport_number", "A05421997")):
+        answered = await client.put(
+            f"/v1/cases/{case_id}/intake/answer",
+            json={"key": key, "value": value},
+            headers=headers,
+        )
+        assert answered.status_code == 200, answered.text
+
+    response = await client.get(
+        f"/v1/cases/{case_id}/export/cover-letter?format=base64", headers=headers
+    )
+    assert response.status_code == 200
+    content = base64.b64decode(response.json()["data_base64"])
+    assert content.startswith(b"%PDF-")
+
+    text = _pdf_text(content)
+    # Addressed from the procedure, not a hedge across three possible offices.
+    assert "法務大臣殿" in text
+    assert "Regional Immigration Services Bureau" in text
+    assert "Visa & Resident Inspection Division" not in text
+    # The applicant's own answers, and no claim they never made.
+    assert "Md Hojayfa Rahman" in text
+    assert "full compliance with local immigration laws" not in text
+    assert "substantiates ongoing professional engagement" not in text
+
+
+async def test_dossier_endpoint_carries_the_procedure_roadmap(
+    client: AsyncClient, engine: AsyncEngine
+) -> None:
+    await _seed_scope(engine)
+    token, case_id = await _register_and_scope(client, "dossier@example.com")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    response = await client.get(
+        f"/v1/cases/{case_id}/export/dossier-packet?format=base64", headers=headers
+    )
+    assert response.status_code == 200
+    text = _pdf_text(base64.b64decode(response.json()["data_base64"]))
+
+    # Steps for an extension filed in Japan, and the fee from the pack.
+    assert "Regional Immigration Services Bureau" in text
+    assert "6,000 JPY" in text
+    # Never certifies compliance, and is not titled as somebody else's application.
+    assert "Certified Compliant" not in text
+    assert "APPLICATION FOR EXTENSION OF PERIOD OF STAY" not in text
