@@ -30,6 +30,7 @@ from torii_api.db.models import (
     User,
 )
 from torii_api.db.session import get_session
+from torii_api.services.agentic import find_admissibility, scope_key, stage_is_usable
 from torii_api.services.checklist import ChecklistStatus, update_status, visible_requirement_items
 from torii_api.services.citations import resolve_official_citation
 from torii_api.services.content_packs import load_jurisdiction_meta, load_pack_by_scope
@@ -56,7 +57,7 @@ from torii_api.services.research import (
     research_rules,
 )
 from torii_api.services.review import ReviewResult, review_packet
-from torii_api.services.submission_kit import build_submission_kit
+from torii_api.services.submission_kit import build_submission_kit, kit_from_research
 
 router = APIRouter(prefix="/v1/cases", tags=["case-workflow"])
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
@@ -790,16 +791,46 @@ async def _submission_kit(session: AsyncSession, case: Case) -> Any | None:
             fees = list(load_pack_by_scope(f"{j_code.lower()}/{v_code}.{action}").fees)
         except (KeyError, FileNotFoundError):
             fees = []
-    return build_submission_kit(
+    checklist = [
+        ChecklistItemOut.model_validate(item).model_dump(mode="json")
+        for item in await _checklist(session, case.id)
+    ]
+    authored = build_submission_kit(
         jurisdiction_code=j_code,
         visa_category=v_code,
         action=a_code,
-        checklist=[
-            ChecklistItemOut.model_validate(item).model_dump(mode="json")
-            for item in await _checklist(session, case.id)
-        ],
+        checklist=checklist,
         fees=fees,
     )
+
+    # Research wins where it exists, because the filing route is corridor-specific: Japan's
+    # own pages tell a Bangladeshi applicant to file through an accredited agency and quote
+    # the fee in taka, neither of which follows from the destination alone. The authored
+    # per-procedure facts stay as the fallback for a corridor nobody has researched yet.
+    admissibility = await _admissibility_research(session, case)
+    if admissibility is not None:
+        researched = kit_from_research(
+            admissibility.payload or {}, fallback=authored, checklist=checklist
+        )
+        if researched is not None:
+            return researched
+    return authored
+
+
+async def _admissibility_research(session: AsyncSession, case: Case) -> Any | None:
+    """The corridor's admissibility research, if a usable one has been cached."""
+    j_code, v_code, a_code, _label = await _scope_label(session, case)
+    if not (j_code and v_code and a_code):
+        return None
+    key = scope_key(
+        destination_code=j_code,
+        purpose_code=v_code,
+        action_code=a_code,
+        nationality=case.origin_country,
+        residence_country=case.residence_country,
+    )
+    research = await find_admissibility(session, key)
+    return research if stage_is_usable(research) else None
 
 
 def _jurisdiction_meta(jurisdiction_code: str | None) -> Any:

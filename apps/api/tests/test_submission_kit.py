@@ -269,3 +269,131 @@ def test_the_letter_prints_without_a_kit() -> None:
     letter = generate_cover_letter_pdf("X-1", ANSWERS, CHECKLIST)
     assert letter.startswith(b"%PDF-")
     assert "Md Hojayfa Rahman" in _pdf_text(letter)
+
+
+# ── The agent's research drives the filing route ───────────────────────────────────
+# agentic_research.py has always produced process steps, fees and the filing channel for a
+# corridor; the API consumed four of its five stages and hardcoded this one per country.
+# docs/plan/03_corridor_bd_jp.md records that as G2.
+
+_BD_CITATION = {
+    "authority": "Embassy of Japan in Bangladesh",
+    "title": "Visa section",
+    "url": "https://www.bd.emb-japan.go.jp/itpr_en/visa.html",
+}
+
+_BD_JP_PAYLOAD: dict = {
+    "admission": {
+        "visa_required": True,
+        "route": "consular_visa",
+        "max_stay_days": 90,
+        "citation": _BD_CITATION,
+    },
+    "filing_channel": {
+        "channel": "accredited_travel_agency",
+        "filer": "third_party",
+        "mission_name": "Embassy of Japan in Bangladesh",
+        "mission_url": "https://www.bd.emb-japan.go.jp/",
+        "citation": _BD_CITATION,
+    },
+    "process": {
+        "steps": [
+            {"order": 2, "title": "File through an accredited agency", "detail": "Not direct."},
+            {
+                "order": 1,
+                "title": "Complete the visa application form",
+                "detail": "Attach a photo.",
+            },
+        ],
+        "processing_time_days_min": 5,
+        "processing_time_days_max": 10,
+        "citation": _BD_CITATION,
+    },
+    "fees": [{"code": "single_entry", "amount": 3000, "currency": "BDT", "citation": _BD_CITATION}],
+}
+
+
+def test_research_supplies_the_corridor_specific_filing_route() -> None:
+    """Neither the agency channel nor a taka fee follows from the destination alone."""
+    from torii_api.services.submission_kit import kit_from_research
+
+    authored = _kit("tourist", "new_application")
+    kit = kit_from_research(_BD_JP_PAYLOAD, fallback=authored, checklist=CHECKLIST)
+    assert kit is not None
+
+    assert "Embassy of Japan in Bangladesh" in kit.office
+    assert "accredited" in kit.office
+    assert "not you directly" in kit.filed_by
+    assert kit.fee_note == "3,000 BDT"
+    assert any("5\u201310 working days" in note for note in kit.notes)
+
+    # Steps come back in the order the agent numbered them, not payload order.
+    assert [step.title for step in kit.steps] == [
+        "Complete the visa application form",
+        "File through an accredited agency",
+    ]
+    for step in kit.steps:
+        assert step.citation_url == _BD_CITATION["url"]
+
+
+def test_uncited_research_is_ignored_rather_than_shown() -> None:
+    """NF-2: a filing instruction nobody can check against a government page is dropped."""
+    from torii_api.services.submission_kit import kit_from_research
+
+    payload = {"process": {"steps": [{"order": 1, "title": "Trust me", "detail": "no source"}]}}
+    assert kit_from_research(payload, fallback=_kit("tourist", "new_application")) is None
+
+
+def test_a_fee_without_a_citation_never_reaches_the_applicant() -> None:
+    from torii_api.services.submission_kit import kit_from_research
+
+    payload = dict(_BD_JP_PAYLOAD)
+    payload["fees"] = [{"code": "guess", "amount": 9999, "currency": "BDT"}]
+    kit = kit_from_research(payload, fallback=_kit("tourist", "new_application"))
+    assert kit is not None
+    assert kit.fee_note != "9,999 BDT"
+
+
+def test_an_unresearched_corridor_keeps_the_authored_route() -> None:
+    """Falling back is the point: no research must not mean an empty roadmap."""
+    from torii_api.services.submission_kit import kit_from_research
+
+    authored = _kit("work", "renewal", "jp/work.renewal")
+    assert authored is not None
+    assert kit_from_research({}, fallback=authored) is None
+    # The caller keeps `authored`, which still names the bureau and the 6,000 JPY fee.
+    assert "Regional Immigration Services Bureau" in authored.office
+    assert authored.fee_note and "6,000 JPY" in authored.fee_note
+
+
+def test_visa_free_corridors_say_so() -> None:
+    from torii_api.services.submission_kit import kit_from_research
+
+    payload = dict(_BD_JP_PAYLOAD)
+    payload["admission"] = {**_BD_JP_PAYLOAD["admission"], "visa_required": False}
+    kit = kit_from_research(payload, fallback=_kit("tourist", "new_application"))
+    assert kit is not None
+    assert any("visa-free" in note for note in kit.notes)
+
+
+def test_research_accessors_gate_on_citations() -> None:
+    from torii_api.services.research import (
+        research_admission,
+        research_fees,
+        research_filing_channel,
+        research_process_steps,
+        research_processing_days,
+    )
+
+    assert research_process_steps(_BD_JP_PAYLOAD)
+    assert research_fees(_BD_JP_PAYLOAD)
+    assert research_filing_channel(_BD_JP_PAYLOAD)
+    assert research_admission(_BD_JP_PAYLOAD)
+    assert research_processing_days(_BD_JP_PAYLOAD) == (5, 10)
+
+    # Malformed or empty payloads return empty rather than raising.
+    for bad in ({}, {"process": None}, {"process": {"steps": "nope"}}, {"fees": "nope"}):
+        assert research_process_steps(bad) == []
+        assert research_fees(bad) == []
+        assert research_filing_channel(bad) is None
+        assert research_processing_days(bad) == (None, None)

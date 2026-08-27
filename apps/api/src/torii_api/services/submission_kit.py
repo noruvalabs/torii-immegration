@@ -25,6 +25,13 @@ from torii_api.services.jp_official_forms import (
     OfficialForm,
     forms_for_scope,
 )
+from torii_api.services.research import (
+    research_admission,
+    research_fees,
+    research_filing_channel,
+    research_process_steps,
+    research_processing_days,
+)
 
 # Step categories, reused by the UI to pick an icon.
 STEP_FORM = "form"
@@ -308,6 +315,94 @@ def _stacking_order(
         if name:
             stack.append(name)
     return tuple(f"{index}. {entry}" for index, entry in enumerate(stack, start=1))
+
+
+_CHANNEL_OFFICES: dict[str, str] = {
+    "embassy": "The embassy that covers where you live",
+    "consulate": "The consulate-general that covers where you live",
+    "visa_application_centre": "The visa application centre appointed for your country",
+    "accredited_travel_agency": "An accredited travel agency — this mission does not accept "
+    "applications directly from applicants",
+    "online_portal": "Filed online; nothing is handed in on paper",
+}
+
+_FILER_LABELS: dict[str, str] = {
+    "applicant": "You",
+    "third_party": "An accredited agency or visa application centre, not you directly",
+}
+
+
+def kit_from_research(
+    payload: dict[str, Any],
+    *,
+    fallback: SubmissionKit | None = None,
+    checklist: list[dict[str, Any]] | None = None,
+) -> SubmissionKit | None:
+    """Build the kit from what the agent researched for this corridor.
+
+    This is the corridor-specific answer: for a Bangladeshi applicant, Japan's own pages say
+    applications go through an accredited agency rather than over the embassy counter, and the
+    fee is in taka. Neither fact is derivable from the destination alone, which is why the
+    authored per-procedure facts are only a fallback.
+
+    Returns ``None`` when the research carries no cited steps, so the caller keeps the
+    authored kit rather than showing an empty roadmap.
+    """
+    steps_raw = research_process_steps(payload)
+    if not steps_raw:
+        return None
+
+    channel = research_filing_channel(payload) or {}
+    office = _CHANNEL_OFFICES.get(str(channel.get("channel") or ""), "")
+    mission = str(channel.get("mission_name") or "").strip()
+    if mission:
+        office = f"{mission}{f' — {office}' if office else ''}"
+    filed_by = _FILER_LABELS.get(str(channel.get("filer") or ""), "")
+
+    steps = tuple(
+        FilingStep(
+            order=index,
+            title=str(raw.get("title") or "").strip(),
+            detail=str(raw.get("detail") or "").strip(),
+            authority=str((raw.get("citation") or {}).get("authority") or ""),
+            category=STEP_SUBMIT,
+            citation_url=str((raw.get("citation") or {}).get("url") or "") or None,
+        )
+        for index, raw in enumerate(steps_raw, start=1)
+    )
+
+    # Only a published, cited figure reaches the applicant (NF-2).
+    fees = research_fees(payload)
+    fee_note: str | None = None
+    if fees:
+        fee = fees[0]
+        amount = fee["amount"]
+        rendered = f"{int(amount):,}" if float(amount).is_integer() else str(amount)
+        fee_note = f"{rendered} {fee.get('currency') or ''}".strip()
+
+    low, high = research_processing_days(payload)
+    notes: list[str] = []
+    if low and high:
+        notes.append(f"Processing normally takes {low}–{high} working days once complete.")
+    elif low:
+        notes.append(f"Processing normally takes at least {low} working days once complete.")
+    admission = research_admission(payload) or {}
+    if admission.get("visa_required") is False:
+        notes.append(
+            "This corridor is visa-free for your nationality — confirm the conditions on the "
+            "cited page before you travel."
+        )
+
+    return SubmissionKit(
+        addressee=(fallback.addressee if fallback else "") or mission or office,
+        office=office or (fallback.office if fallback else ""),
+        filed_by=filed_by or (fallback.filed_by if fallback else ""),
+        steps=steps,
+        stacking_order=(fallback.stacking_order if fallback else ())
+        or _stacking_order((), checklist or []),
+        fee_note=fee_note or (fallback.fee_note if fallback else None),
+        notes=tuple(notes) + (fallback.notes if fallback else ()),
+    )
 
 
 def build_submission_kit(
