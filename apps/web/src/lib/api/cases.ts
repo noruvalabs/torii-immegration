@@ -128,6 +128,8 @@ export type GeneratedForm = {
   filled_fields: Record<string, unknown>;
   missing_required_fields: string[];
   citation: Record<string, unknown>;
+  /** The form's own name, from the pack or the research behind it. */
+  official_title?: string | null;
 };
 
 export type ReviewResult = {

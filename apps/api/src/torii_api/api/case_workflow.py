@@ -127,6 +127,10 @@ class GeneratedFormOut(BaseModel):
     filled_fields: dict[str, Any]
     missing_required_fields: list[str]
     citation: dict[str, Any]
+    # The form's own name, from the pack or the research that produced it. Resolved at
+    # read time because the generated row stores only the code — without it the browser
+    # was guessing a title from the code, and guessing it wrongly.
+    official_title: str | None = None
 
 
 class EscalationIn(BaseModel):
@@ -628,7 +632,7 @@ async def get_documents(
 @router.post("/{case_id}/forms/generate", response_model=list[GeneratedFormOut])
 async def generate_forms(
     case_id: int, session: SessionDep, user: CurrentUserDep
-) -> list[CaseGeneratedForm]:
+) -> list[dict[str, Any]]:
     case = await _owned_case(session, case_id, user)
     templates = await _effective_templates(session, case)
     answers = dict(case.intake_answers or {})
@@ -676,15 +680,31 @@ async def generate_forms(
     if new_status is not None:
         case.status = new_status
     await session.flush()
-    return generated
+    return await _forms_with_titles(session, case)
+
+
+async def _forms_with_titles(
+    session: AsyncSession, case: Case
+) -> list[dict[str, Any]]:
+    """Generated forms, each carrying the official title of the template behind it."""
+    titles = {
+        descriptor.code: descriptor.official_title
+        for descriptor in await _effective_templates(session, case)
+    }
+    out: list[dict[str, Any]] = []
+    for row in await _forms(session, case.id):
+        item = GeneratedFormOut.model_validate(row).model_dump(mode="json")
+        item["official_title"] = titles.get(row.form_code)
+        out.append(item)
+    return out
 
 
 @router.get("/{case_id}/forms", response_model=list[GeneratedFormOut])
 async def get_forms(
     case_id: int, session: SessionDep, user: CurrentUserDep
-) -> list[CaseGeneratedForm]:
-    await _owned_case(session, case_id, user)
-    return await _forms(session, case_id)
+) -> list[dict[str, Any]]:
+    case = await _owned_case(session, case_id, user)
+    return await _forms_with_titles(session, case)
 
 
 @router.post("/{case_id}/review", response_model=ReviewResult)

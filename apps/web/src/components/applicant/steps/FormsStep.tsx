@@ -32,106 +32,6 @@ type FormsStepProps = {
   reference?: string;
 };
 
-function getFormMetadata(code: string, fallbackTitle?: string, fallbackUrl?: string): { title: string; purpose: string; officialUrl?: string } {
-  const c = code.toLowerCase();
-  if (c === "i901" || c.includes("i901") || c.includes("sevis_fee")) {
-    return {
-      title: "Form I-901 (SEVIS Fee Payment Confirmation)",
-      purpose: "Mandatory Student and Exchange Visitor Program (SEVP) fee payment filed online at FMJfee.com ($350 for F-1 / $220 for J-1). Required before consular interview.",
-      officialUrl: "https://www.fmjfee.com/i901fee/index.html",
-    };
-  }
-  if (c === "i20" || c.includes("i20") || c.includes("i-20")) {
-    return {
-      title: "Form I-20 (Certificate of Eligibility for F-1 Student Status)",
-      purpose: "Official Department of Homeland Security certificate issued by your SEVP-certified U.S. school confirming admission, SEVIS ID, degree level, and estimated cost.",
-      officialUrl: "https://www.ice.gov/sevis",
-    };
-  }
-  if (c === "i134" || c.includes("i134") || c.includes("i-134") || c.includes("affidavit")) {
-    return {
-      title: "Form I-134 (Declaration of Financial Support)",
-      purpose: "USCIS declaration executed by a sponsor (parent, relative, or employer) proving sufficient liquid funds and income to support the applicant without unauthorized work.",
-      officialUrl: "https://www.uscis.gov/i-134",
-    };
-  }
-  if (c.includes("appointment") || c.includes("mrv")) {
-    return {
-      title: "U.S. Visa Appointment Portal & MRV Fee Scheduling",
-      purpose: "Official U.S. Embassy scheduling profile generating the MRV fee payment slip ($185) and the in-person interview confirmation appointment letter.",
-      officialUrl: "https://travel.state.gov/content/travel/en/us-visas/visa-information-resources/policy-updates.html",
-    };
-  }
-  if (c.includes("ds_160") || c.includes("ds160") || c.includes("b1") || c.includes("b2") || c.includes("f1")) {
-    return {
-      title: "Online Nonimmigrant Visa Application (Form DS-160)",
-      purpose: "Official U.S. Department of State application submitted via CEAC. Collects biographical data, passport info, travel plans, SEVIS/educational records, and security screening.",
-      officialUrl: "https://ceac.state.gov/genniv/",
-    };
-  }
-  if (c === "change_of_status" || c.includes("change_of_status")) {
-    return {
-      title: "Application for Change of Status of Residence (在留資格変更許可申請書)",
-      purpose: "Official statutory application form submitted to the Immigration Services Agency of Japan (出入国在留管理庁) to change residence status.",
-      officialUrl: "https://www.moj.go.jp/isa/applications/procedures/16-2.html",
-    };
-  }
-  if (c === "extension_of_stay" || c.includes("extension")) {
-    return {
-      title: "Application for Extension of Period of Stay — Applicant Part (在留期間更新許可申請書)",
-      purpose: "Official statutory application form submitted to the Immigration Services Agency of Japan (出入国在留管理庁) to extend authorized stay.",
-      officialUrl: "https://www.moj.go.jp/isa/applications/procedures/16-1.html",
-    };
-  }
-  if (c === "student_visa_application" || c.includes("student_visa") || c.includes("mofa")) {
-    return {
-      title: "Visa Application Form to Enter Japan (日本国査証申請書)",
-      purpose: "Official Ministry of Foreign Affairs (MOFA) entry visa application filed with a Japanese Embassy or Consulate overseas.",
-      officialUrl: "https://www.mofa.go.jp/j_info/visit/visa/index.html",
-    };
-  }
-  if (c === "isa_application" || c.includes("isa") || c.includes("16-1") || c.includes("16-3")) {
-    return {
-      title: "Application for Certificate of Eligibility / Status (在留諸申請書)",
-      purpose: "Standard official application form submitted to the Immigration Services Agency of Japan (出入国在留管理庁).",
-      officialUrl: "https://www.moj.go.jp/isa/applications/procedures/16-1.html",
-    };
-  }
-  if (c.includes("institution") || c.includes("school")) {
-    return {
-      title: "Application — Educational Institution Part (所属機関等作成用)",
-      purpose: "Section completed and sealed by the sponsoring Japanese educational institution or university verifying enrollment and attendance.",
-      officialUrl: "https://www.moj.go.jp/isa/applications/procedures/16-1.html",
-    };
-  }
-  if (c.includes("organization") || c.includes("employer")) {
-    return {
-      title: "Application — Sponsoring Organization / Employer Part (所属機関等作成用)",
-      purpose: "Section completed by the sponsoring employer or host organization in Japan declaring corporate category, remuneration, and contract terms.",
-      officialUrl: "https://www.moj.go.jp/isa/applications/procedures/16-3.html",
-    };
-  }
-  if (c.includes("schengen")) {
-    return {
-      title: "Harmonised Schengen Visa Application Form",
-      purpose: "Uniform application form for entry and stay in the Schengen area for up to 90 days in any 180-day period.",
-      officialUrl: "https://home-affairs.ec.europa.eu/policies/schengen-borders-visa/visa-policy/applying-schengen-visa_en",
-    };
-  }
-  if (c.includes("uk") || c.includes("ukvi") || c.includes("visitor")) {
-    return {
-      title: "UK Visas and Immigration (UKVI) Application Form",
-      purpose: "Standard application schedule and declarations for UK entry clearance or further leave to remain.",
-      officialUrl: "https://www.gov.uk/browse/visas-immigration",
-    };
-  }
-  return {
-    title: fallbackTitle || `Official Application Form (${code})`,
-    purpose: "Official government immigration filing form required by published statutory regulations.",
-    officialUrl: fallbackUrl,
-  };
-}
-
 export function FormsStep({
   forms,
   loading,
@@ -500,11 +400,17 @@ export function FormsStep({
           </div>
 
           {forms.map((form) => {
-            const meta = getFormMetadata(
-              form.form_code,
-              typeof form.citation?.title === "string" ? form.citation.title : undefined,
-              typeof form.citation?.url === "string" ? form.citation.url : undefined,
-            );
+            // Title and source come from the form itself — the pack or the research that
+            // produced it — rather than being guessed from its code. The guesses were
+            // wrong for anything the chain did not anticipate, and silently so.
+            const citation = (form.citation ?? {}) as {
+              title?: string;
+              url?: string;
+              authority?: string;
+              source_version?: string;
+            };
+            const title = form.official_title || citation.title || form.form_code;
+            const officialUrl = typeof citation.url === "string" ? citation.url : undefined;
             const hasFilledFields = Object.keys(form.filled_fields).length > 0;
             const displayFields = hasFilledFields
               ? form.filled_fields
@@ -519,7 +425,7 @@ export function FormsStep({
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between border-b pb-4">
                   <div>
                     <div className="flex flex-wrap items-center gap-2">
-                      <h4 className="text-base font-bold tracking-tight">{meta.title}</h4>
+                      <h4 className="text-base font-bold tracking-tight">{title}</h4>
                       <Badge tone="muted" className="font-mono text-[10px]">
                         {form.form_code} v{form.form_version}
                       </Badge>
@@ -557,9 +463,9 @@ export function FormsStep({
                         Download Form (PDF)
                       </Button>
                     )}
-                    {meta.officialUrl && (
+                    {officialUrl && (
                       <a
-                        href={meta.officialUrl}
+                        href={officialUrl}
                         target="_blank"
                         rel="noreferrer"
                         className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
@@ -570,11 +476,19 @@ export function FormsStep({
                   </div>
                 </div>
 
-                {/* Form Purpose Guide */}
-                <div className="rounded bg-muted/40 p-3 flex items-start gap-2.5">
-                  <HelpCircle className="size-4 text-muted-foreground shrink-0 mt-0.5" />
-                  <p className="text-xs text-muted-foreground leading-relaxed">{meta.purpose}</p>
-                </div>
+                {/* Who publishes this form and which revision, from its citation. The
+                    replaced version described the form's purpose in prose invented from
+                    its code, which was wrong for every code the chain had not foreseen. */}
+                {citation.authority && (
+                  <div className="rounded bg-muted/40 p-3 flex items-start gap-2.5">
+                    <HelpCircle className="size-4 text-muted-foreground shrink-0 mt-0.5" />
+                    <p className="text-xs text-muted-foreground leading-relaxed">
+                      Published by {citation.authority}
+                      {citation.source_version ? ` (revision ${citation.source_version})` : ""}.
+                      Check your answers against the official form before you sign it.
+                    </p>
+                  </div>
+                )}
 
                 {/* Missing Fields Inline Quick-Fixer */}
                 {form.missing_required_fields.length > 0 && (
@@ -584,7 +498,9 @@ export function FormsStep({
                         <AlertCircle className="size-4 shrink-0 text-amber-600 dark:text-amber-400" />
                         <span>Missing Required Form Field{form.missing_required_fields.length > 1 ? "s" : ""}:</span>
                       </div>
-                      <span className="text-[10px] text-muted-foreground">Required by official Japanese Immigration Bureau form</span>
+                      <span className="text-[10px] text-muted-foreground">
+                        Required by {citation.authority || "the official form"}
+                      </span>
                     </div>
                     <p className="text-[11px] text-muted-foreground">
                       The official form template requires values for: <strong className="text-foreground">{form.missing_required_fields.join(", ")}</strong>. You can enter the missing value below and click Save:
