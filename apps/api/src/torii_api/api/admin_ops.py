@@ -26,6 +26,16 @@ from torii_api.db.models import (
 )
 from torii_api.db.session import get_session
 from torii_api.services.form_revisions import load_revisions, pending_reviews
+from torii_api.services.pack_proposals import (
+    Change,
+    Proposal,
+    ProposalError,
+    decide,
+    diff_against_pack,
+    list_proposals,
+    load_proposal,
+    propose,
+)
 
 router = APIRouter(prefix="/v1/admin/ops", tags=["admin-ops"])
 
@@ -106,6 +116,31 @@ async def _resolve_scope(
 
 
 # ── Endpoints ──────────────────────────────────────────────────────────────────
+
+
+class PackChangeIn(BaseModel):
+    """One line of a pack and what the agent found it should say."""
+
+    path: str = Field(min_length=1, max_length=200)
+    to: Any = None
+    citation: dict[str, Any] = Field(default_factory=dict)
+    reason: str = Field(default="", max_length=500)
+
+
+class PackProposalIn(BaseModel):
+    """Either an explicit set of changed lines, or a whole researched pack to diff."""
+
+    scope: str = Field(min_length=4, max_length=64)
+    source: str = Field(default="agentic_research", max_length=64)
+    summary: str = Field(default="", max_length=500)
+    changes: list[PackChangeIn] = Field(default_factory=list)
+    pack: dict[str, Any] | None = None
+
+
+class PackDecisionIn(BaseModel):
+    accept: bool
+    note: str = Field(default="", max_length=500)
+
 
 
 @router.post("/eligibility-rules")
@@ -309,3 +344,80 @@ async def list_form_revisions(_: AdminOpsDep) -> dict[str, Any]:
             for code, record in sorted(records.items())
         },
     }
+
+
+# ── Pack proposals: the agent proposes, ops promote ────────────────────────────
+# Research either went live automatically or not at all. That is right for a fee or a
+# filing channel, where the citation gate is the whole review; it is wrong for the wording
+# an applicant reads. A proposal is a diff against `docs/jurisdictions/**` with the source
+# for each changed line, so a bad one is a rejected diff rather than a live regression.
+
+
+def _proposal_out(proposal: Proposal) -> dict[str, Any]:
+    return proposal.as_dict()
+
+
+@router.post("/pack-proposals", status_code=201)
+async def create_pack_proposal(payload: PackProposalIn, _: AdminOpsDep) -> dict[str, Any]:
+    """Queue a proposed change for review. An uncited line is refused, not queued."""
+    changes = [
+        Change(
+            path=change.path,
+            to=change.to,
+            citation={str(k): str(v) for k, v in (change.citation or {}).items()},
+            reason=change.reason,
+        )
+        for change in payload.changes
+    ]
+    try:
+        if payload.pack is not None:
+            changes.extend(diff_against_pack(payload.scope, payload.pack))
+        proposal = propose(
+            scope=payload.scope,
+            changes=changes,
+            source=payload.source,
+            summary=payload.summary,
+        )
+    except ProposalError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return _proposal_out(proposal)
+
+
+@router.get("/pack-proposals")
+async def list_pack_proposals(
+    _: AdminOpsDep, status: str | None = None, scope: str | None = None
+) -> dict[str, Any]:
+    proposals = list_proposals(status=status, scope=scope)
+    return {
+        "count": len(proposals),
+        "pending": sum(1 for item in proposals if item.status == "pending"),
+        "proposals": [_proposal_out(item) for item in proposals],
+    }
+
+
+@router.get("/pack-proposals/{proposal_id}")
+async def get_pack_proposal(proposal_id: str, _: AdminOpsDep) -> dict[str, Any]:
+    try:
+        proposal = load_proposal(proposal_id)
+    except ProposalError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if proposal is None:
+        raise HTTPException(status_code=404, detail="no such proposal")
+    return _proposal_out(proposal)
+
+
+@router.post("/pack-proposals/{proposal_id}/decision")
+async def decide_pack_proposal(
+    proposal_id: str, payload: PackDecisionIn, user: AdminOpsDep
+) -> dict[str, Any]:
+    """Accept a proposal, rewriting its pack, or reject it. A decision is made once."""
+    try:
+        proposal = decide(
+            proposal_id,
+            accept=payload.accept,
+            reviewer=getattr(user, "email", None) or str(getattr(user, "id", "ops")),
+            note=payload.note,
+        )
+    except ProposalError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return _proposal_out(proposal)
