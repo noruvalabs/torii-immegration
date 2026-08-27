@@ -28,12 +28,15 @@ dependencies = [
     "python-multipart>=0.0.18",
     "pyyaml>=6.0.3",
     "reportlab>=5.0.0",
+    "pypdf>=6.0.0",
 ]
 
 [project.scripts]
 torii-createadmin = "torii_api.management.createadmin:main"
 torii-seed = "torii_api.management.seed:main"
 torii-scrape = "torii_api.management.scrape_gov:main"
+torii-fetch-forms = "torii_api.management.fetch_forms:main"
+torii-check-form-revisions = "torii_api.management.check_form_revisions:main"
 
 [dependency-groups]
 dev = [

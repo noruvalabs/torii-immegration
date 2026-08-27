@@ -4,574 +4,599 @@ scope:
   action: change_of_status
   is_live: true
   name: Japan 留学→技術・人文知識・国際業務 — change of status (在留資格変更許可申請)
-
 stages:
-  - sequence: 1
-    code: applicant_filing
-    actor: applicant
-  - sequence: 2
-    code: school_completion
-    actor: institution
-
+- sequence: 1
+  code: applicant_filing
+  actor: applicant
+- sequence: 2
+  code: school_completion
+  actor: institution
 intake:
   questions:
-    # --- Category 1: Personal & Passport Details ---
-    - key: full_name
-      section: Personal & Identity
-      prompt: What is your full name as it appears on your passport?
-      type: string
-      min_length: 2
-      max_length: 200
-      required: true
-      citation:
-        authority: Immigration Services Agency of Japan (MOJ)
-        title: Application for Change of Status of Residence
-        url: https://www.moj.go.jp/isa/applications/procedures/16-2.html
-
-    - key: nationality
-      section: Personal & Identity
-      prompt: What is your nationality (passport country)?
-      type: enum
-      options:
-        - US
-        - GB
-        - CA
-        - AU
-        - DE
-        - FR
-        - SG
-        - KR
-        - IN
-        - CN
-        - BD
-        - PH
-        - VN
-        - ID
-        - TH
-        - MY
-        - other
-      required: true
-
-    - key: passport_number
-      section: Personal & Identity
-      prompt: What is your passport number?
-      type: string
-      min_length: 5
-      max_length: 32
-      required: true
-
-    - key: passport_expiry
-      section: Personal & Identity
-      prompt: What is your passport expiration date (YYYY-MM-DD)?
-      type: date
-      required: true
-
-    # --- Category 2: Residence Card & Legal Status ---
-    - key: residence_card_number
-      section: Residence Card & Status
-      prompt: What is your 12-character Residence Card number (在留カード番号)?
-      type: string
-      min_length: 12
-      max_length: 12
-      required: true
-
-    - key: residence_card_expiry
-      section: Residence Card & Status
-      prompt: What is the current expiration date on your Residence Card (YYYY-MM-DD)?
-      type: date
-      required: true
-
-    - key: registered_address_japan
-      section: Residence Card & Status
-      prompt: What is your registered residential address in Japan?
-      type: string
-      min_length: 5
-      max_length: 300
-      required: true
-
-    # --- Category 3: School Record (graduation / completion) ---
-    - key: school_name
-      section: School & Study Record
-      prompt: What is the official legal name of your educational institution in Japan?
-      type: string
-      min_length: 2
-      max_length: 200
-      required: true
-
-    - key: study_program_type
-      section: School & Study Record
-      prompt: What is your program of study?
-      type: enum
-      options:
-        - university_undergraduate
-        - university_graduate_master_phd
-        - japanese_language_school
-        - vocational_college
-      required: true
-
-    - key: school_completed
-      section: School & Study Record
-      prompt: Have you completed your program at your current institution (graduation / course completion)?
-      type: boolean
-      required: true
-
-    - key: expected_graduation_date
-      section: School & Study Record
-      prompt: What is your expected or actual graduation / course-completion date (YYYY-MM-DD)?
-      type: date
-      required: true
-
-    - key: same_institution_as_last_application
-      section: School & Study Record
-      prompt: Are you enrolled at the same institution as in your last application for this status?
-      type: boolean
-      required: true
-
-    # --- Category 4: Job Offer & Employer Details ---
-    - key: has_job_offer
-      section: Job Offer & Employer
-      prompt: Do you have a formal job offer from an employer in Japan for after graduation?
-      type: boolean
-      required: true
-
-    - key: employer_name
-      section: Job Offer & Employer
-      prompt: What is the legal company name of your future employer?
-      type: string
-      min_length: 2
-      max_length: 200
-      show_when:
-        key: has_job_offer
-        equals: true
-
-    - key: employer_corporate_number
-      section: Job Offer & Employer
-      prompt: What is your future employer's 13-digit Corporate Number (法人番号)?
-      type: string
-      min_length: 13
-      max_length: 13
-      show_when:
-        key: has_job_offer
-        equals: true
-
-    - key: employer_category
-      section: Job Offer & Employer
-      prompt: >-
-        Which category does your future employer fall into? Category 1-2 are listed /
-        large / high-withholding employers; Category 3-4 are smaller companies and startups.
-      type: enum
-      options:
-        - "1"
-        - "2"
-        - "3"
-        - "4"
-      required: true
-      show_when:
-        key: has_job_offer
-        equals: true
-      citation:
-        authority: Immigration Services Agency of Japan
-        title: 技術・人文知識・国際業務 clarification guidance
-        url: https://www.moj.go.jp/isa/applications/procedures/16-2.html
-
-    - key: job_description
-      section: Job Offer & Employer
-      prompt: >-
-        Describe the duties of the offered role, and how they relate to your degree or
-        work experience (narrative that links the job to your qualifications).
-      type: string
-      min_length: 20
-      max_length: 4000
-      required: true
-      show_when:
-        key: has_job_offer
-        equals: true
-
-    - key: annual_salary_jpy
-      section: Job Offer & Employer
-      prompt: What is the offered annual gross salary in JPY?
-      type: integer
-      min_value: 0
-      max_value: 100000000
-      required: true
-      show_when:
-        key: has_job_offer
-        equals: true
-
-    - key: employer_sanctioned
-      section: Job Offer & Employer
-      prompt: >-
-        Has your future employer (the whole legal entity) been sanctioned under the
-        Specified Skilled Worker or Technical Intern regimes?
-      type: boolean
-      required: true
-      show_when:
-        key: has_job_offer
-        equals: true
-      citation:
-        authority: Immigration Services Agency of Japan
-        title: Linked sanctions guidance for 技術・人文知識・国際業務
-        url: https://www.moj.go.jp/isa/applications/procedures/16-2.html
-
-    # --- Category 5: Tax & Compliance ---
-    - key: resident_tax_status
-      section: Tax & Pension Compliance
-      prompt: Is your Resident Tax (住民税) fully paid to date with no outstanding arrears?
-      type: boolean
-      required: true
-
-    - key: pension_health_insurance
-      section: Tax & Pension Compliance
-      prompt: Are your National Pension / Health Insurance contributions fully paid?
-      type: boolean
-      required: true
-
-    # --- Category 6: Travel & Disclosures ---
-    - key: departures_past_year
-      section: Travel & Disclosures
-      prompt: How many days in total have you spent outside Japan in the past 12 months?
-      type: integer
-      min_value: 0
-      max_value: 365
-      required: true
-
-    - key: criminal_disclosures
-      section: Travel & Disclosures
-      prompt: Have you ever been convicted of any crime or fined for traffic violations in Japan or abroad?
-      type: boolean
-      required: true
-
+  - key: full_name
+    section: Personal & Identity
+    prompt: What is your full name as it appears on your passport?
+    type: string
+    min_length: 2
+    max_length: 200
+    required: true
+    citation:
+      authority: Immigration Services Agency of Japan (MOJ)
+      title: Application for Change of Status of Residence
+      url: https://www.moj.go.jp/isa/applications/procedures/16-2.html
+  - key: nationality
+    section: Personal & Identity
+    prompt: What is your nationality (passport country)?
+    type: enum
+    options:
+    - US
+    - GB
+    - CA
+    - AU
+    - DE
+    - FR
+    - SG
+    - KR
+    - IN
+    - CN
+    - BD
+    - PH
+    - VN
+    - ID
+    - TH
+    - MY
+    - other
+    required: true
+    citation:
+      authority: Ministry of Foreign Affairs of Japan (MOFA)
+      title: Statutory Passport & Identity Verification Standards (旅券・身元確認要領)
+      url: https://www.mofa.go.jp/j_info/visit/visa/index.html
+  - key: passport_number
+    section: Personal & Identity
+    prompt: What is your passport number?
+    type: string
+    min_length: 5
+    max_length: 32
+    required: true
+    citation:
+      authority: Ministry of Foreign Affairs of Japan (MOFA)
+      title: Statutory Passport & Identity Verification Standards (旅券・身元確認要領)
+      url: https://www.mofa.go.jp/j_info/visit/visa/index.html
+  - key: passport_expiry
+    section: Personal & Identity
+    prompt: What is your passport expiration date (YYYY-MM-DD)?
+    type: date
+    required: true
+    citation:
+      authority: Ministry of Foreign Affairs of Japan (MOFA)
+      title: Statutory Passport & Identity Verification Standards (旅券・身元確認要領)
+      url: https://www.mofa.go.jp/j_info/visit/visa/index.html
+  - key: residence_card_number
+    section: Residence Card & Status
+    prompt: What is your 12-character Residence Card number (在留カード番号)?
+    type: string
+    min_length: 12
+    max_length: 12
+    required: true
+    citation:
+      authority: Immigration Services Agency of Japan (ISA)
+      title: Residence Card Registry & Continuity Verification (在留カード等確認)
+      url: https://www.isa.go.jp/en/applications/guide/residencecard.html
+  - key: residence_card_expiry
+    section: Residence Card & Status
+    prompt: What is the current expiration date on your Residence Card (YYYY-MM-DD)?
+    type: date
+    required: true
+    citation:
+      authority: Immigration Services Agency of Japan (ISA)
+      title: Residence Card Registry & Continuity Verification (在留カード等確認)
+      url: https://www.isa.go.jp/en/applications/guide/residencecard.html
+  - key: registered_address_japan
+    section: Residence Card & Status
+    prompt: What is your registered residential address in Japan?
+    type: string
+    min_length: 5
+    max_length: 300
+    required: true
+    citation:
+      authority: Immigration Services Agency of Japan (ISA)
+      title: Residence Card Address Notification Procedures (住居地届出手続)
+      url: https://www.isa.go.jp/en/applications/guide/residencecard.html
+  - key: school_name
+    section: School & Study Record
+    prompt: What is the official legal name of your educational institution in Japan?
+    type: string
+    min_length: 2
+    max_length: 200
+    required: true
+    citation:
+      authority: Immigration Services Agency of Japan (ISA)
+      title: "Status of Residence: Student (留学資格審査基準)"
+      url: https://www.isa.go.jp/en/applications/procedures/zairyu_shikaku10.html
+  - key: study_program_type
+    section: School & Study Record
+    prompt: What is your program of study?
+    type: enum
+    options:
+    - university_undergraduate
+    - university_graduate_master_phd
+    - japanese_language_school
+    - vocational_college
+    required: true
+    citation:
+      authority: Immigration Services Agency of Japan (ISA)
+      title: "Status of Residence: Student (留学資格審査基準)"
+      url: https://www.isa.go.jp/en/applications/procedures/zairyu_shikaku10.html
+  - key: school_completed
+    section: School & Study Record
+    prompt: Have you completed your program at your current institution (graduation
+      / course completion)?
+    type: boolean
+    required: true
+    citation:
+      authority: Immigration Services Agency of Japan (ISA)
+      title: Educational Institution Status & Graduation Requirements
+      url: https://www.isa.go.jp/en/applications/procedures/zairyu_shikaku10.html
+  - key: expected_graduation_date
+    section: School & Study Record
+    prompt: What is your expected or actual graduation / course-completion date (YYYY-MM-DD)?
+    type: date
+    required: true
+    citation:
+      authority: Immigration Services Agency of Japan (ISA)
+      title: Educational Institution Status & Graduation Requirements
+      url: https://www.isa.go.jp/en/applications/procedures/zairyu_shikaku10.html
+  - key: same_institution_as_last_application
+    section: School & Study Record
+    prompt: Are you enrolled at the same institution as in your last application for
+      this status?
+    type: boolean
+    required: true
+    citation:
+      authority: Immigration Services Agency of Japan (ISA)
+      title: Educational Institution Status & Continuity Standards
+      url: https://www.isa.go.jp/en/applications/procedures/zairyu_shikaku10.html
+  - key: has_job_offer
+    section: Job Offer & Employer
+    prompt: Do you have a formal job offer from an employer in Japan for after graduation?
+    type: boolean
+    required: true
+    citation:
+      authority: Immigration Services Agency of Japan (ISA)
+      title: "Status of Residence: Engineer / Specialist in Humanities / International Services"
+      url: https://www.isa.go.jp/en/applications/procedures/nyuukokukanri07_00093.html
+  - key: employer_name
+    section: Job Offer & Employer
+    prompt: What is the legal company name of your future employer?
+    type: string
+    min_length: 2
+    max_length: 200
+    show_when:
+      key: has_job_offer
+      equals: true
+    citation:
+      authority: Immigration Services Agency of Japan (ISA)
+      title: Sponsoring Organization & Employment Contract Standards (所属機関・雇用契約審査)
+      url: https://www.isa.go.jp/en/applications/procedures/nyuukokukanri07_00093.html
+  - key: employer_corporate_number
+    section: Job Offer & Employer
+    prompt: What is your future employer's 13-digit Corporate Number (法人番号)?
+    type: string
+    min_length: 13
+    max_length: 13
+    show_when:
+      key: has_job_offer
+      equals: true
+    citation:
+      authority: Ministry of Justice Legal Affairs Bureau (法務省民事局)
+      title: Commercial and Corporate Registration Certification (商業・法人登記要件)
+      url: https://www.moj.go.jp/MINJI/minji06.html
+  - key: employer_category
+    section: Job Offer & Employer
+    prompt: Which category does your future employer fall into? Category 1-2 are listed
+      / large / high-withholding employers; Category 3-4 are smaller companies and
+      startups.
+    type: enum
+    options:
+    - '1'
+    - '2'
+    - '3'
+    - '4'
+    required: true
+    show_when:
+      key: has_job_offer
+      equals: true
+    citation:
+      authority: Immigration Services Agency of Japan (ISA)
+      title: Employer Categorization Guidelines for Engineer / Specialist in Humanities
+      url: https://www.isa.go.jp/en/applications/procedures/nyuukokukanri07_00093.html
+  - key: job_description
+    section: Job Offer & Employer
+    prompt: Describe the duties of the offered role, and how they relate to your degree
+      or work experience (narrative that links the job to your qualifications).
+    type: string
+    min_length: 20
+    max_length: 4000
+    required: true
+    show_when:
+      key: has_job_offer
+      equals: true
+    citation:
+      authority: Immigration Services Agency of Japan (ISA)
+      title: Professional Activity & Qualification Relevance Guidelines (業務内容適合性審査)
+      url: https://www.isa.go.jp/en/applications/procedures/nyuukokukanri07_00093.html
+  - key: annual_salary_jpy
+    section: Job Offer & Employer
+    prompt: What is the offered annual gross salary in JPY?
+    type: integer
+    min_value: 0
+    max_value: 100000000
+    required: true
+    show_when:
+      key: has_job_offer
+      equals: true
+    citation:
+      authority: Immigration Services Agency of Japan (ISA)
+      title: Remuneration Equal to or Greater than Japanese Nationals Standard (報酬等同等要件)
+      url: https://www.isa.go.jp/en/applications/procedures/nyuukokukanri07_00093.html
+  - key: employer_sanctioned
+    section: Job Offer & Employer
+    prompt: Has your future employer (the whole legal entity) been sanctioned under
+      the Specified Skilled Worker or Technical Intern regimes?
+    type: boolean
+    required: true
+    show_when:
+      key: has_job_offer
+      equals: true
+    citation:
+      authority: Immigration Services Agency of Japan (ISA)
+      title: Employer Compliance and Sanctions Review Standards (受入機関適格性審査)
+      url: https://www.isa.go.jp/en/applications/procedures/nyuukokukanri07_00093.html
+  - key: resident_tax_status
+    section: Tax & Pension Compliance
+    prompt: Is your Resident Tax (住民税) fully paid to date with no outstanding arrears?
+    type: boolean
+    required: true
+    citation:
+      authority: National Tax Agency of Japan (国税庁) & Municipal Taxation System
+      title: Individual Resident Tax & Income Tax Compliance Guidelines (住民税・所得税納付要件)
+      url: https://www.nta.go.jp/taxes/tetsuzuki/shinsei/annai/hotei/23100051.htm
+  - key: pension_health_insurance
+    section: Tax & Pension Compliance
+    prompt: Are your National Pension / Health Insurance contributions fully paid?
+    type: boolean
+    required: true
+    citation:
+      authority: Japan Pension Service (日本年金機構) & MHLW
+      title: Public Pension & National Health Insurance Contribution Standards (公的年金・健康保険納付要件)
+      url: https://www.nenkin.go.jp/international/index.html
+  - key: departures_past_year
+    section: Travel & Disclosures
+    prompt: How many days in total have you spent outside Japan in the past 12 months?
+    type: integer
+    min_value: 0
+    max_value: 365
+    required: true
+    citation:
+      authority: Immigration Control and Refugee Recognition Act (Article 5 & 24)
+      title: Statutory Continuity of Residence & Good Conduct Review Standards
+      url: https://www.isa.go.jp/en/applications/procedures/index.html
+  - key: criminal_disclosures
+    section: Travel & Disclosures
+    prompt: Have you ever been convicted of any crime or fined for traffic violations
+      in Japan or abroad?
+    type: boolean
+    required: true
+    citation:
+      authority: Immigration Control and Refugee Recognition Act (Article 5 & 24)
+      title: Statutory Grounds for Refusal of Landing & Good Conduct Review (入管法第5条・第24条審査基準)
+      url: https://www.isa.go.jp/en/applications/procedures/index.html
 eligibility:
   rules:
-    - key: school_completed
-      operator: equals
-      value: true
-      failure_status: fail
-      message: A 留学→技人国 change of status requires completion of your program at a Japanese educational institution.
-      citation:
-        authority: Immigration Services Agency of Japan
-        title: Change of Status to Work (Student)
-        url: https://www.moj.go.jp/isa/applications/procedures/16-2.html
-        source_version: "2026-04"
-
-    - key: has_job_offer
-      operator: equals
-      value: true
-      failure_status: fail
-      message: A formal job offer is required to change from 留学 to 技術・人文知識・国際業務.
-      citation:
-        authority: Immigration Services Agency of Japan
-        title: Change of Status to Work (Student)
-        url: https://www.moj.go.jp/isa/applications/procedures/16-2.html
-        source_version: "2026-04"
-
-    - key: employer_sanctioned
-      operator: equals
-      value: false
-      failure_status: fail
-      message: >-
-        A sanctioned employer (under Specified Skilled Worker or Technical Intern regimes)
-        blocks 技人国 applications for the whole legal entity. This requires human review.
-      citation:
-        authority: Immigration Services Agency of Japan
-        title: Linked sanctions guidance for 技術・人文知識・国際業務
-        url: https://www.moj.go.jp/isa/applications/procedures/16-2.html
-        source_version: "2026-04"
-
-    # The offered role must correspond to the degree (or to relevant work experience).
-    # Decided on a case-by-case basis; the narrative links degree to duties.
-    - key: job_description
-      operator: present
-      failure_status: review
-      message: >-
-        The role duties must correspond to your degree field or relevant experience.
-        The narrative must link the offered job to your qualifications; review needed
-        if the match is not direct (e.g. degree unrelated to the role).
-      citation:
-        authority: Immigration Services Agency of Japan
-        title: 技術・人文知識・国際業務 review standards
-        url: https://www.moj.go.jp/isa/applications/procedures/16-2.html
-        source_version: "2026-04"
-
-    - key: resident_tax_status
-      operator: equals
-      value: true
-      failure_status: warning
-      message: Tax arrears or unpaid Resident Tax (住民税) can lead to refusal or reduced period of stay.
-      citation:
-        authority: Immigration Services Agency of Japan
-        title: Guidelines for Permission for Change of Status
-        url: https://www.moj.go.jp/isa/applications/procedures/16-2.html
-        source_version: "2026-04"
-
-    - key: pension_health_insurance
-      operator: equals
-      value: true
-      failure_status: warning
-      message: Lapsed pension or social insurance contributions are a common quiet-refusal cause.
-      citation:
-        authority: Immigration Services Agency of Japan
-        title: Review Standards for Change of Status
-        url: https://www.moj.go.jp/isa/applications/procedures/16-2.html
-        source_version: "2026-04"
-
-    - key: criminal_disclosures
-      operator: equals
-      value: false
-      failure_status: review
-      message: Prior convictions or major violations require human attorney legal review.
-      citation:
-        authority: Immigration Services Agency of Japan
-        title: Immigration Control and Refugee Recognition Act Art. 24
-        url: https://www.moj.go.jp/isa/applications/procedures/16-2.html
-        source_version: "2026-04"
-
+  - key: school_completed
+    operator: equals
+    value: true
+    failure_status: fail
+    message: A 留学→技人国 change of status requires completion of your program at a Japanese
+      educational institution.
+    citation:
+      authority: Immigration Services Agency of Japan
+      title: Change of Status to Work (Student)
+      url: https://www.moj.go.jp/isa/applications/procedures/16-2.html
+      source_version: 2026-04
+  - key: has_job_offer
+    operator: equals
+    value: true
+    failure_status: fail
+    message: A formal job offer is required to change from 留学 to 技術・人文知識・国際業務.
+    citation:
+      authority: Immigration Services Agency of Japan
+      title: Change of Status to Work (Student)
+      url: https://www.moj.go.jp/isa/applications/procedures/16-2.html
+      source_version: 2026-04
+  - key: employer_sanctioned
+    operator: equals
+    value: false
+    failure_status: fail
+    message: A sanctioned employer (under Specified Skilled Worker or Technical Intern
+      regimes) blocks 技人国 applications for the whole legal entity. This requires human
+      review.
+    citation:
+      authority: Immigration Services Agency of Japan
+      title: Linked sanctions guidance for 技術・人文知識・国際業務
+      url: https://www.moj.go.jp/isa/applications/procedures/16-2.html
+      source_version: 2026-04
+  - key: job_description
+    operator: present
+    failure_status: review
+    message: The role duties must correspond to your degree field or relevant experience.
+      The narrative must link the offered job to your qualifications; review needed
+      if the match is not direct (e.g. degree unrelated to the role).
+    citation:
+      authority: Immigration Services Agency of Japan
+      title: 技術・人文知識・国際業務 review standards
+      url: https://www.moj.go.jp/isa/applications/procedures/16-2.html
+      source_version: 2026-04
+  - key: resident_tax_status
+    operator: equals
+    value: true
+    failure_status: warning
+    message: Tax arrears or unpaid Resident Tax (住民税) can lead to refusal or reduced
+      period of stay.
+    citation:
+      authority: Immigration Services Agency of Japan
+      title: Guidelines for Permission for Change of Status
+      url: https://www.moj.go.jp/isa/applications/procedures/16-2.html
+      source_version: 2026-04
+  - key: pension_health_insurance
+    operator: equals
+    value: true
+    failure_status: warning
+    message: Lapsed pension or social insurance contributions are a common quiet-refusal
+      cause.
+    citation:
+      authority: Immigration Services Agency of Japan
+      title: Review Standards for Change of Status
+      url: https://www.moj.go.jp/isa/applications/procedures/16-2.html
+      source_version: 2026-04
+  - key: criminal_disclosures
+    operator: equals
+    value: false
+    failure_status: review
+    message: Prior convictions or major violations require human attorney legal review.
+    citation:
+      authority: Immigration Services Agency of Japan
+      title: Immigration Control and Refugee Recognition Act Art. 24
+      url: https://www.moj.go.jp/isa/applications/procedures/16-2.html
+      source_version: 2026-04
 documents:
   items:
-    - code: passport
-      name:
-        en: Passport (Valid Original)
-        ja: パスポート（原本）
-      how_to_obtain:
-        en: Use your current valid original passport.
-      why_required:
-        en: Confirms identity, nationality, and valid travel document status.
-      is_required: true
-      citation:
-        authority: Immigration Services Agency of Japan
-        title: Application for Change of Status of Residence
-        url: https://www.moj.go.jp/isa/applications/procedures/16-2.html
-        source_version: "2026-04"
-
-    - code: residence_card
-      name:
-        en: Residence card (原本)
-        ja: 在留カード（原本）
-      how_to_obtain:
-        en: Present the original residence card currently issued to you.
-      why_required:
-        en: Confirms current registered residence status and legal period of stay.
-      is_required: true
-      citation:
-        authority: Immigration Services Agency of Japan
-        title: Application for Change of Status of Residence
-        url: https://www.moj.go.jp/isa/applications/procedures/16-2.html
-        source_version: "2026-04"
-
-    - code: graduation_certificate
-      name:
-        en: Graduation / course-completion certificate (卒業証明書)
-        ja: 卒業証明書
-      how_to_obtain:
-        en: Request from your institution's student affairs office.
-      why_required:
-        en: Proves completion of the program required for the change of status.
-      is_required: true
-      citation:
-        authority: Immigration Services Agency of Japan
-        title: Required Documents for Change of Status
-        url: https://www.moj.go.jp/isa/applications/procedures/16-2.html
-        source_version: "2026-04"
-
-    - code: job_offer_letter
-      name:
-        en: Job offer / appointment letter
-        ja: 雇用契約書または就任承諾書
-      how_to_obtain:
-        en: Request a signed offer letter from your future employer.
-      why_required:
-        en: Proves a concrete offer of employment and the role to be performed.
-      is_required: true
-      show_when:
-        key: has_job_offer
-        equals: true
-      citation:
-        authority: Immigration Services Agency of Japan
-        title: Required Documents for Change of Status
-        url: https://www.moj.go.jp/isa/applications/procedures/16-2.html
-        source_version: "2026-04"
-
-    - code: company_registration_certificate
-      name:
-        en: Employer Certificate of Registration / Current Registration
-        ja: 現在事項全部証明書（法人登記簿）
-      how_to_obtain:
-        en: Request a current registration extract from the employer or Legal Affairs Bureau.
-      why_required:
-        en: Verifies the employer entity and its operations.
-      is_required: true
-      show_when:
-        key: has_job_offer
-        equals: true
-      citation:
-        authority: Immigration Services Agency of Japan
-        title: Required Documents for Change of Status
-        url: https://www.moj.go.jp/isa/applications/procedures/16-2.html
-        source_version: "2026-04"
-
-    # Japanese-language documentation for Category 3-4 employers (15 Apr 2026).
-    - code: japanese_ability_documentation
-      name:
-        en: Japanese-language ability documentation
-        ja: 日本語能力を証明する書類
-      how_to_obtain:
-        en: >-
-          Provide a certificate or other documentation of Japanese ability relevant to
-          your customer-facing duties (JLPT, educational transcript, etc.).
-      why_required:
-        en: Required since 15 Apr 2026 for Category 3-4 employers.
-      is_required: true
-      show_when:
-        key: employer_category
-        equals: "3"
-      effective_from: "2026-04-15"
-      citation:
-        authority: Immigration Services Agency of Japan
-        title: 技術・人文知識・国際業務 clarification guidance (別紙4)
-        url: https://www.moj.go.jp/isa/applications/procedures/16-2.html
-        source_version: "2026-04"
-
-    - code: japanese_ability_documentation_cat4
-      name:
-        en: Japanese-language ability documentation (Category 4)
-        ja: 日本語能力を証明する書類
-      how_to_obtain:
-        en: >-
-          Provide a certificate or other documentation of Japanese ability relevant to
-          your customer-facing duties (JLPT, educational transcript, etc.).
-      why_required:
-        en: Required since 15 Apr 2026 for Category 4 employers.
-      is_required: true
-      show_when:
-        key: employer_category
-        equals: "4"
-      effective_from: "2026-04-15"
-      citation:
-        authority: Immigration Services Agency of Japan
-        title: 技術・人文知識・国際業務 clarification guidance (別紙4)
-        url: https://www.moj.go.jp/isa/applications/procedures/16-2.html
-        source_version: "2026-04"
-
-    - code: tax_certificate
-      name:
-        en: Resident Tax Certificate (課税証明書・納税証明書)
-        ja: 住民税の課税証明書及び納税証明書
-      how_to_obtain:
-        en: Issued by your local Ward Office / City Hall (役所) for the most recent year.
-      why_required:
-        en: Verifies compliance with Japanese tax obligations.
-      is_required: true
-      citation:
-        authority: Immigration Services Agency of Japan
-        title: Required Documents for Change of Status
-        url: https://www.moj.go.jp/isa/applications/procedures/16-2.html
-        source_version: "2026-04"
-
+  - code: passport
+    name:
+      en: Passport (Valid Original)
+      ja: パスポート（原本）
+    how_to_obtain:
+      en: Use your current valid original passport.
+    why_required:
+      en: Confirms identity, nationality, and valid travel document status.
+    is_required: true
+    citation:
+      authority: Immigration Services Agency of Japan
+      title: Application for Change of Status of Residence
+      url: https://www.moj.go.jp/isa/applications/procedures/16-2.html
+      source_version: 2026-04
+  - code: residence_card
+    name:
+      en: Residence card (原本)
+      ja: 在留カード（原本）
+    how_to_obtain:
+      en: Present the original residence card currently issued to you.
+    why_required:
+      en: Confirms current registered residence status and legal period of stay.
+    is_required: true
+    citation:
+      authority: Immigration Services Agency of Japan
+      title: Application for Change of Status of Residence
+      url: https://www.moj.go.jp/isa/applications/procedures/16-2.html
+      source_version: 2026-04
+  - code: graduation_certificate
+    name:
+      en: Graduation / course-completion certificate (卒業証明書)
+      ja: 卒業証明書
+    how_to_obtain:
+      en: Request from your institution's student affairs office.
+    why_required:
+      en: Proves completion of the program required for the change of status.
+    is_required: true
+    citation:
+      authority: Immigration Services Agency of Japan
+      title: Required Documents for Change of Status
+      url: https://www.moj.go.jp/isa/applications/procedures/16-2.html
+      source_version: 2026-04
+  - code: job_offer_letter
+    name:
+      en: Job offer / appointment letter
+      ja: 雇用契約書または就任承諾書
+    how_to_obtain:
+      en: Request a signed offer letter from your future employer.
+    why_required:
+      en: Proves a concrete offer of employment and the role to be performed.
+    is_required: true
+    show_when:
+      key: has_job_offer
+      equals: true
+    citation:
+      authority: Immigration Services Agency of Japan
+      title: Required Documents for Change of Status
+      url: https://www.moj.go.jp/isa/applications/procedures/16-2.html
+      source_version: 2026-04
+  - code: company_registration_certificate
+    name:
+      en: Employer Certificate of Registration / Current Registration
+      ja: 現在事項全部証明書（法人登記簿）
+    how_to_obtain:
+      en: Request a current registration extract from the employer or Legal Affairs
+        Bureau.
+    why_required:
+      en: Verifies the employer entity and its operations.
+    is_required: true
+    show_when:
+      key: has_job_offer
+      equals: true
+    citation:
+      authority: Immigration Services Agency of Japan
+      title: Required Documents for Change of Status
+      url: https://www.moj.go.jp/isa/applications/procedures/16-2.html
+      source_version: 2026-04
+  - code: japanese_ability_documentation
+    name:
+      en: Japanese-language ability documentation
+      ja: 日本語能力を証明する書類
+    how_to_obtain:
+      en: Provide a certificate or other documentation of Japanese ability relevant
+        to your customer-facing duties (JLPT, educational transcript, etc.).
+    why_required:
+      en: Required since 15 Apr 2026 for Category 3-4 employers.
+    is_required: true
+    show_when:
+      key: employer_category
+      equals: '3'
+    effective_from: '2026-04-15'
+    citation:
+      authority: Immigration Services Agency of Japan
+      title: 技術・人文知識・国際業務 clarification guidance (別紙4)
+      url: https://www.moj.go.jp/isa/applications/procedures/16-2.html
+      source_version: 2026-04
+  - code: japanese_ability_documentation_cat4
+    name:
+      en: Japanese-language ability documentation (Category 4)
+      ja: 日本語能力を証明する書類
+    how_to_obtain:
+      en: Provide a certificate or other documentation of Japanese ability relevant
+        to your customer-facing duties (JLPT, educational transcript, etc.).
+    why_required:
+      en: Required since 15 Apr 2026 for Category 4 employers.
+    is_required: true
+    show_when:
+      key: employer_category
+      equals: '4'
+    effective_from: '2026-04-15'
+    citation:
+      authority: Immigration Services Agency of Japan
+      title: 技術・人文知識・国際業務 clarification guidance (別紙4)
+      url: https://www.moj.go.jp/isa/applications/procedures/16-2.html
+      source_version: 2026-04
+  - code: tax_certificate
+    name:
+      en: Resident Tax Certificate (課税証明書・納税証明書)
+      ja: 住民税の課税証明書及び納税証明書
+    how_to_obtain:
+      en: Issued by your local Ward Office / City Hall (役所) for the most recent year.
+    why_required:
+      en: Verifies compliance with Japanese tax obligations.
+    is_required: true
+    citation:
+      authority: Immigration Services Agency of Japan
+      title: Required Documents for Change of Status
+      url: https://www.moj.go.jp/isa/applications/procedures/16-2.html
+      source_version: 2026-04
 forms:
-  - code: change_of_status
-    version: "2026-04"
-    official_title: Application for Change of Status of Residence (在留資格変更許可申請書)
-    citation:
-      authority: Immigration Services Agency of Japan
-      title: Application for Change of Status of Residence
-      url: https://www.moj.go.jp/isa/applications/procedures/16-2.html
-      source_version: "2026-04"
-    field_mappings:
-      - form_field: applicant.full_name
-        answer_key: full_name
-        required: true
-      - form_field: applicant.nationality
-        answer_key: nationality
-        required: true
-      - form_field: applicant.passport_number
-        answer_key: passport_number
-        required: true
-      - form_field: applicant.passport_expiry
-        answer_key: passport_expiry
-        required: true
-      - form_field: residence.card_number
-        answer_key: residence_card_number
-        required: true
-      - form_field: residence.card_expiry
-        answer_key: residence_card_expiry
-        required: true
-      - form_field: residence.address
-        answer_key: registered_address_japan
-        required: true
-      - form_field: current_status
-        answer_key: school_completed
-        required: true
-      - form_field: employer.name
-        answer_key: employer_name
-        required: false
-      - form_field: employer.job_description
-        answer_key: job_description
-        required: true
-      - form_field: employer.annual_salary_jpy
-        answer_key: annual_salary_jpy
-        required: true
-
+- code: change_of_status
+  version: 2026-04
+  official_title: Application for Change of Status of Residence (在留資格変更許可申請書)
+  citation:
+    authority: Immigration Services Agency of Japan
+    title: Application for Change of Status of Residence
+    url: https://www.moj.go.jp/isa/applications/procedures/16-2.html
+    source_version: 2026-04
+  field_mappings:
+  - form_field: applicant.full_name
+    answer_key: full_name
+    required: true
+  - form_field: applicant.nationality
+    answer_key: nationality
+    required: true
+  - form_field: applicant.passport_number
+    answer_key: passport_number
+    required: true
+  - form_field: applicant.passport_expiry
+    answer_key: passport_expiry
+    required: true
+  - form_field: residence.card_number
+    answer_key: residence_card_number
+    required: true
+  - form_field: residence.card_expiry
+    answer_key: residence_card_expiry
+    required: true
+  - form_field: residence.address
+    answer_key: registered_address_japan
+    required: true
+  - form_field: current_status
+    answer_key: school_completed
+    required: true
+  - form_field: employer.name
+    answer_key: employer_name
+    required: false
+  - form_field: employer.job_description
+    answer_key: job_description
+    required: true
+  - form_field: employer.annual_salary_jpy
+    answer_key: annual_salary_jpy
+    required: true
 fees:
-  # Same extension fee as work (in force since 1 April 2025).
-  - code: change_counter
-    amount: 6000
-    currency: JPY
-    channel: counter
-    published: true
-    effective_from: "2025-04-01"
-    note: Fee for change of status of residence at a Regional Immigration Bureau counter.
-    citation:
-      authority: Immigration Services Agency of Japan
-      title: Application for Change of Status of Residence
-      url: https://www.moj.go.jp/isa/applications/procedures/16-2.html
-      retrieved: "2026-08-01"
-
-  - code: change_online
-    amount: 5500
-    currency: JPY
-    channel: online
-    published: true
-    effective_from: "2025-04-01"
-    note: Fee for change of status of residence via the ISA online application system.
-    citation:
-      authority: Immigration Services Agency of Japan
-      title: Application for Change of Status of Residence
-      url: https://www.moj.go.jp/isa/applications/procedures/16-2.html
-      retrieved: "2026-08-01"
-
-  # Draft tiered schedule (cabinet-order figures at public-comment stage, July 2026).
-  # NOT published until confirmed (NF-2). Target effective date 1 Oct 2026.
-  - code: change_counter_tiered
-    currency: JPY
-    channel: counter
-    published: false
-    effective_from: "2026-10-01"
-    note: >-
-      Draft tiered schedule based on the period granted (cabinet order not final).
-      Fee is charged on permission, not on application — a refusal incurs no fee.
-    tiers:
-      - period: 3m
-        amount: 10000
-        note: 3 months or less — draft, not confirmed
-      - period: 1y
-        amount: 33000
-        note: 1 year — draft, not confirmed
-      - period: 3y
-        amount: 64000
-        note: 3 to under 5 years — draft, not confirmed
-      - period: 5y
-        amount: 75000
-        note: 5 years or more — draft, not confirmed
-    citation:
-      authority: Immigration Services Agency of Japan
-      title: Draft ISA fee revision figures (published 24 June 2026, public comment)
-      url: https://www.moj.go.jp/isa/applications/online/online-QA.html
-      retrieved: "2026-08-01"
-
+- code: change_counter
+  amount: 6000
+  currency: JPY
+  channel: counter
+  published: true
+  effective_from: '2025-04-01'
+  note: Fee for change of status of residence at a Regional Immigration Bureau counter.
+  citation:
+    authority: Immigration Services Agency of Japan
+    title: Application for Change of Status of Residence
+    url: https://www.moj.go.jp/isa/applications/procedures/16-2.html
+    retrieved: '2026-08-01'
+- code: change_online
+  amount: 5500
+  currency: JPY
+  channel: online
+  published: true
+  effective_from: '2025-04-01'
+  note: Fee for change of status of residence via the ISA online application system.
+  citation:
+    authority: Immigration Services Agency of Japan
+    title: Application for Change of Status of Residence
+    url: https://www.moj.go.jp/isa/applications/procedures/16-2.html
+    retrieved: '2026-08-01'
+- code: change_counter_tiered
+  currency: JPY
+  channel: counter
+  published: false
+  effective_from: '2026-10-01'
+  note: Draft tiered schedule based on the period granted (cabinet order not final).
+    Fee is charged on permission, not on application — a refusal incurs no fee.
+  tiers:
+  - period: 3m
+    amount: 10000
+    note: 3 months or less — draft, not confirmed
+  - period: 1y
+    amount: 33000
+    note: 1 year — draft, not confirmed
+  - period: 3y
+    amount: 64000
+    note: 3 to under 5 years — draft, not confirmed
+  - period: 5y
+    amount: 75000
+    note: 5 years or more — draft, not confirmed
+  citation:
+    authority: Immigration Services Agency of Japan
+    title: Draft ISA fee revision figures (published 24 June 2026, public comment)
+    url: https://www.moj.go.jp/isa/applications/online/online-QA.html
+    retrieved: '2026-08-01'
 sources:
-  - title: Application for Change of Status of Residence (MOJ)
-    url: https://www.moj.go.jp/isa/applications/procedures/16-2.html
-    retrieved: "2026-08-01"
-  - title: 技術・人文知識・国際業務 clarification guidance (別紙4)
-    url: https://www.moj.go.jp/isa/applications/procedures/16-2.html
-    retrieved: "2026-08-01"
+- title: Application for Change of Status of Residence (MOJ)
+  url: https://www.moj.go.jp/isa/applications/procedures/16-2.html
+  retrieved: '2026-08-01'
+- title: 技術・人文知識・国際業務 clarification guidance (別紙4)
+  url: https://www.moj.go.jp/isa/applications/procedures/16-2.html
+  retrieved: '2026-08-01'

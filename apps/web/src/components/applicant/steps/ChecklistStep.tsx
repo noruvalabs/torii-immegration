@@ -436,58 +436,55 @@ export function ChecklistStep({
                         rel="noreferrer"
                         className="mt-2 inline-flex items-center gap-1 text-xs text-primary hover:underline"
                       >
-                        Official source{version ? ` (${version})` : ""} <ExternalLink className="size-3" />
+                        <span>
+                          {String(item.citation?.authority || item.citation?.title || "Official authority source")}
+                          {version ? ` (${version})` : ""}
+                        </span>
+                        <ExternalLink className="size-3" />
                       </a>
                     )}
                   </div>
-                  <div className="flex flex-col gap-1">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center gap-1.5 shrink-0">
                     {!isGathered && matchingDocs.length > 0 && (
-                      <button
+                      <Button
+                        variant="outline"
+                        size="sm"
                         onClick={() => setShowPicker(showPicker === item.id ? null : item.id)}
-                        className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs text-primary hover:bg-accent"
+                        className="h-8 text-xs gap-1.5 px-2.5 text-primary border-primary/30 hover:bg-primary/5"
                       >
-                        <FolderOpen className="size-3" />
-                        Use saved ({matchingDocs.length})
-                      </button>
+                        <FolderOpen className="size-3.5" />
+                        Use Saved ({matchingDocs.length})
+                      </Button>
                     )}
                     {!isGathered && (
                       <>
-                        <button
+                        <Button
+                          size="sm"
                           onClick={() => handleUploadClick(item)}
                           disabled={busy}
-                          className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs text-primary hover:bg-accent disabled:opacity-50"
+                          className="h-8 text-xs gap-1.5 px-3 font-medium"
                         >
-                          {busy && mode === "upload" ? (
-                            <Loader2 className="size-3 animate-spin" />
+                          {busy ? (
+                            <Loader2 className="size-3.5 animate-spin" />
                           ) : (
-                            <Upload className="size-3" />
+                            <Upload className="size-3.5" />
                           )}
                           Upload
-                        </button>
+                        </Button>
                         <button
-                          onClick={() => handleScanClick(item)}
-                          disabled={busy || ocrLoading}
-                          className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs text-primary hover:bg-accent disabled:opacity-50"
-                        >
-                          {ocrLoading && uploading === item.id ? (
-                            <Loader2 className="size-3 animate-spin" />
-                          ) : (
-                            <Camera className="size-3" />
-                          )}
-                          Scan
-                        </button>
-                        <button
+                          type="button"
                           onClick={() => onStatusChange(item.id, "gathered")}
-                          className="rounded px-2 py-1 text-xs text-muted-foreground hover:bg-accent"
+                          className="text-[11px] text-muted-foreground hover:text-foreground px-1.5 py-1 transition-colors"
                         >
-                          Mark gathered
+                          Mark done
                         </button>
                       </>
                     )}
                     {isGathered && (
                       <button
+                        type="button"
                         onClick={() => setShowPicker(showPicker === item.id ? null : item.id)}
-                        className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs text-muted-foreground hover:bg-accent"
+                        className="text-xs text-muted-foreground hover:text-foreground px-2 py-1 transition-colors rounded hover:bg-accent"
                       >
                         Change
                       </button>

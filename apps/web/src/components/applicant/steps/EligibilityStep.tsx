@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, AlertTriangle, ExternalLink, Loader2, ShieldCheck, Scale, AlertOctagon, HelpCircle, CheckCircle2 } from "lucide-react";
+import { Check, AlertTriangle, ExternalLink, Loader2, ShieldCheck, Scale, AlertOctagon, HelpCircle, CheckCircle2, ArrowRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -14,6 +14,7 @@ type EligibilityStepProps = {
   jurisdictionCode?: string;
   jurisdictionName?: string;
   visaCategoryName?: string;
+  onReturnToIntake?: (targetKey?: string) => void;
 };
 
 export function EligibilityStep({
@@ -22,26 +23,35 @@ export function EligibilityStep({
   onEvaluate,
   jurisdictionCode = "JP",
   jurisdictionName,
-  visaCategoryName,
+  visaCategoryName = "",
+  onReturnToIntake,
 }: EligibilityStepProps) {
   const code = jurisdictionCode?.toUpperCase() || "JP";
   const countryName = jurisdictionName || (code === "JP" ? "Japan" : code === "GB" || code === "UK" ? "United Kingdom" : code === "US" ? "United States" : "Destination");
 
-  // Dynamic header copy based on jurisdiction
+  const catNorm = (visaCategoryName || "").toLowerCase();
+  const isStudent = catNorm.includes("student") || catNorm.includes("study");
+  const isWork = catNorm.includes("work") || catNorm.includes("h1b") || catNorm.includes("employment") || catNorm.includes("labor");
+
+  // Dynamic header copy based on jurisdiction and category
   const headerTitle =
     code === "JP"
-      ? "Japan Visa Eligibility & Criteria Assessment"
+      ? `Japan ${isStudent ? "Student" : isWork ? "Work" : "Visa"} Eligibility Assessment`
       : code === "GB" || code === "UK"
-        ? "UK Visa & Immigration (UKVI) Eligibility Assessment"
+        ? `UK Visa & Immigration (UKVI) ${isStudent ? "Student Route" : isWork ? "Skilled Worker" : "Standard Visitor"} Eligibility Assessment`
         : code === "US"
-          ? "US Visa Eligibility & INA Section 214(b) Screening"
+          ? `US Visa Eligibility & INA Section 214(b) Screening`
           : `${countryName} Visa Eligibility Screening`;
 
   const headerSubtitle =
-    code === "JP"
-      ? "Deterministic evaluation under the Immigration Control and Refugee Recognition Act (出入国管理及び難民認定法) & Ministry of Foreign Affairs (MOFA) criteria."
-      : code === "GB" || code === "UK"
-        ? "Evaluation under UK Immigration Rules (Appendix V: Visitor & Student Route statutory criteria)."
+    code === "GB" || code === "UK"
+      ? isStudent
+        ? "Evaluation under UK Immigration Rules (Appendix Student: Licensed Sponsor, CAS validity & Maintenance requirements)."
+        : isWork
+          ? "Evaluation under UK Immigration Rules (Appendix Skilled Worker: Certificate of Sponsorship & Salary threshold)."
+          : "Evaluation under UK Immigration Rules (Appendix V: Visitor Route statutory criteria)."
+      : code === "JP"
+        ? "Deterministic evaluation under the Immigration Control and Refugee Recognition Act (出入国管理及び難民認定法) & MOFA criteria."
         : code === "US"
           ? "Deterministic rules evaluation under the Immigration and Nationality Act (INA) Section 214(b) & Section 212(a)."
           : `Deterministic rules evaluation against official ${countryName} immigration requirements.`;
@@ -70,10 +80,12 @@ export function EligibilityStep({
           <p className="mt-0.5 text-xs text-muted-foreground">{headerSubtitle}</p>
         </div>
 
-        <Button onClick={onEvaluate} disabled={loading} className="gap-1.5 shrink-0 h-8 px-3 text-xs">
-          {loading ? <Loader2 className="size-4 animate-spin" /> : <Scale className="size-4" />}
-          {result ? "Re-evaluate screening" : "Evaluate eligibility now"}
-        </Button>
+        {result && (
+          <Button onClick={onEvaluate} disabled={loading} variant="outline" className="gap-1.5 shrink-0 h-8 px-3 text-xs">
+            {loading ? <Loader2 className="size-3.5 animate-spin" /> : <Scale className="size-3.5" />}
+            Re-evaluate screening
+          </Button>
+        )}
       </div>
 
       {!result ? (
@@ -132,6 +144,17 @@ export function EligibilityStep({
                       ? "Some required intake questions have not been answered yet. Return to Intake to complete all fields so full evaluation can run."
                       : "One or more answers conflict with statutory landing requirements (e.g. prior deportation or overstay ban). Consular review required."}
               </p>
+              {result.result === "out_of_scope" && onReturnToIntake && (
+                <div className="pt-2">
+                  <Button
+                    size="sm"
+                    onClick={() => onReturnToIntake()}
+                    className="h-7 text-xs gap-1.5 bg-blue-600 hover:bg-blue-700 text-white font-medium"
+                  >
+                    Return to Intake to Answer Missing Fields <ArrowRight className="size-3.5" />
+                  </Button>
+                </div>
+              )}
             </div>
 
             <div className="flex gap-2 shrink-0">
@@ -158,7 +181,7 @@ export function EligibilityStep({
             </div>
           </div>
 
-          {/* 4 Pillars Summary Cards */}
+          {/* 4 Pillars Summary Cards (Dynamic by Jurisdiction & Category) */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             <Card className="p-3.5 bg-card">
               <div className="flex items-start gap-2.5">
@@ -183,10 +206,34 @@ export function EligibilityStep({
                 </div>
                 <div>
                   <h5 className="text-xs font-bold uppercase tracking-wider text-foreground">
-                    Travel Purpose &amp; Plan
+                    {isStudent
+                      ? "Academic Course & Sponsor"
+                      : isWork
+                        ? "Job Offer & Employer Sponsor"
+                        : "Travel Purpose & Plan"}
                   </h5>
                   <p className="text-[11px] text-muted-foreground mt-0.5">
-                    Genuine sightseeing or visitor purpose with concrete schedule matching stay duration.
+                    {isStudent
+                      ? code === "JP"
+                        ? "Admission certificate, COE, or enrollment verification from a recognized Japanese institution."
+                        : code === "US"
+                          ? "Form I-20 issued by SEVP-certified institution and valid SEVIS registration."
+                          : code === "GB" || code === "UK"
+                            ? "Unconditional offer, valid CAS statement, and licensed education sponsor credentials."
+                            : "Admission offer and verified educational sponsor credentials."
+                      : isWork
+                        ? code === "JP"
+                          ? "Employment contract / job offer in Japan with authorized activities and remuneration."
+                          : code === "US"
+                            ? "Approved Form I-129 / LCA and qualifying specialty occupation employment offer."
+                            : code === "GB" || code === "UK"
+                              ? "Valid Certificate of Sponsorship (CoS), licensed employer details, and eligible role."
+                              : "Valid employment offer, sponsoring employer details, and qualifying role duties."
+                        : code === "JP"
+                          ? "Genuine sightseeing or visitor purpose with concrete itinerary matching stay duration."
+                          : code === "US"
+                            ? "Nonimmigrant visitor intent with strong home-country ties under INA Section 214(b)."
+                            : "Genuine sightseeing or visitor purpose with concrete schedule matching stay duration."}
                   </p>
                 </div>
               </div>
@@ -199,10 +246,34 @@ export function EligibilityStep({
                 </div>
                 <div>
                   <h5 className="text-xs font-bold uppercase tracking-wider text-foreground">
-                    Financial Capacity
+                    {isStudent
+                      ? "Living Costs & Tuition"
+                      : isWork
+                        ? "Maintenance & Salary"
+                        : "Financial Capacity"}
                   </h5>
                   <p className="text-[11px] text-muted-foreground mt-0.5">
-                    Verified bank statements, stable employment, or official sponsor guarantee covering expenses.
+                    {isStudent
+                      ? code === "JP"
+                        ? "Financial proof (bank balance or sponsor income ~¥120,000/mo or ¥1.5M–¥2M/yr) plus tuition."
+                        : code === "US"
+                          ? "Proof of sufficient liquid funds ($ USD) or Form I-134 affidavit covering tuition and living costs."
+                          : code === "GB" || code === "UK"
+                            ? "Bank statements demonstrating 28-day maintenance living costs (£1,334/mo London, £1,023 outside) plus tuition."
+                            : "Bank statements or financial sponsorship covering tuition and living expenses."
+                      : isWork
+                        ? code === "JP"
+                          ? "Remuneration meeting statutory standards (JPY) and resident tax / pension compliance."
+                          : code === "US"
+                            ? "Prevailing wage compliance and approved employer compensation package ($ USD)."
+                            : code === "GB" || code === "UK"
+                              ? "Verified salary meeting minimum threshold and required maintenance funds covering initial stay."
+                              : "Verified salary meeting minimum threshold and maintenance funds covering stay."
+                        : code === "JP"
+                          ? "Sufficient travel funds (JPY) covering intended stay and return travel tickets."
+                          : code === "US"
+                            ? "Demonstrated financial solvency to cover trip expenses without unauthorized employment."
+                            : "Verified bank statements, stable employment, or official sponsor guarantee covering expenses."}
                   </p>
                 </div>
               </div>
@@ -218,7 +289,11 @@ export function EligibilityStep({
                     Immigration Compliance
                   </h5>
                   <p className="text-[11px] text-muted-foreground mt-0.5">
-                    Clean compliance history with no active entry bans, overstays, or disqualifying grounds.
+                    {code === "JP"
+                      ? "Immigration Control Act compliance: clean record, no overstays or bans, tax/pension paid."
+                      : code === "US"
+                        ? "Statutory admissibility under INA 212(a): clean record, no overstays or unauthorized work."
+                        : "Clean compliance history with no active entry bans, overstays, or disqualifying grounds."}
                   </p>
                 </div>
               </div>
@@ -281,6 +356,19 @@ export function EligibilityStep({
                           <p className="text-xs text-muted-foreground leading-relaxed">
                             {finding.message}
                           </p>
+
+                          {isReview && onReturnToIntake && (
+                            <div className="pt-1">
+                              <button
+                                type="button"
+                                onClick={() => onReturnToIntake(finding.key)}
+                                className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-600 dark:text-blue-400 hover:underline"
+                              >
+                                Answer in Intake <ArrowRight className="size-3" />
+                              </button>
+                            </div>
+                          )}
+
                           {url && (
                             <div className="pt-1.5">
                               <a

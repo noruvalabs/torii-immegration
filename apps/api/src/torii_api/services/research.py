@@ -27,6 +27,14 @@ PAYLOAD_RULES = "eligibility_rules"
 PAYLOAD_DOCUMENTS = "document_requirements"
 PAYLOAD_FORMS = "form_templates"
 
+# Slices the pre-case ``admissibility`` stage researches. These were produced by the agent
+# and never read: the filing route, its steps and its fees were hardcoded per country
+# instead, which is the NF-2 breach docs/plan/03_corridor_bd_jp.md records as G2.
+PAYLOAD_PROCESS = "process"
+PAYLOAD_FEES = "fees"
+PAYLOAD_FILING_CHANNEL = "filing_channel"
+PAYLOAD_ADMISSION = "admission"
+
 
 def research_expiry() -> datetime:
     """Default ``expires_at`` for a freshly completed research run."""
@@ -68,6 +76,98 @@ def research_rules(payload: dict[str, Any]) -> list[dict[str, Any]]:
 
 def research_documents(payload: dict[str, Any]) -> list[dict[str, Any]]:
     return research_slice(payload, PAYLOAD_DOCUMENTS)
+
+
+def _cited(item: dict[str, Any]) -> bool:
+    """True when an item carries an official-source citation (NF-2).
+
+    Discovered content reaches an applicant only if it says where it came from. An
+    uncited step is dropped rather than shown, because a filing instruction nobody can
+    check against a government page is the thing this gate exists to stop.
+    """
+    citation = item.get("citation")
+    if not isinstance(citation, dict):
+        return False
+    return str(citation.get("url") or "").startswith("http")
+
+
+def research_process_steps(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    """Ordered filing steps the agent discovered, cited and sorted.
+
+    The step's own citation is used when it has one, else the ``process`` block's, since
+    the agent cites the process as a whole and the individual steps come from that page.
+    """
+    if not isinstance(payload, dict):
+        return []
+    process = payload.get(PAYLOAD_PROCESS)
+    if not isinstance(process, dict):
+        return []
+    block_citation = process.get("citation") if isinstance(process.get("citation"), dict) else None
+    if not (_cited(process) or block_citation):
+        return []
+
+    steps: list[dict[str, Any]] = []
+    for raw in process.get("steps") or []:
+        if not isinstance(raw, dict):
+            continue
+        title = str(raw.get("title") or "").strip()
+        if not title:
+            continue
+        step = dict(raw)
+        step["title"] = title
+        if not isinstance(step.get("citation"), dict) and block_citation:
+            step["citation"] = block_citation
+        if _cited(step):
+            steps.append(step)
+    steps.sort(key=lambda step: int(step.get("order") or 0))
+    return steps
+
+
+def research_processing_days(payload: dict[str, Any]) -> tuple[int | None, int | None]:
+    """The processing window the agent found, as ``(min, max)`` days."""
+    if not isinstance(payload, dict):
+        return (None, None)
+    process = payload.get(PAYLOAD_PROCESS)
+    if not isinstance(process, dict):
+        return (None, None)
+
+    def _days(key: str) -> int | None:
+        value = process.get(key)
+        return value if isinstance(value, int) and value >= 0 else None
+
+    return (_days("processing_time_days_min"), _days("processing_time_days_max"))
+
+
+def research_fees(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    """Fees the agent discovered. Only cited entries with a real amount are returned."""
+    fees: list[dict[str, Any]] = []
+    for fee in research_slice(payload, PAYLOAD_FEES):
+        amount = fee.get("amount")
+        if not isinstance(amount, (int, float)):
+            continue
+        if _cited(fee):
+            fees.append(fee)
+    return fees
+
+
+def research_filing_channel(payload: dict[str, Any]) -> dict[str, Any] | None:
+    """Where and by whom the application is filed, or ``None`` if uncited."""
+    if not isinstance(payload, dict):
+        return None
+    channel = payload.get(PAYLOAD_FILING_CHANNEL)
+    if not isinstance(channel, dict) or not _cited(channel):
+        return None
+    return dict(channel)
+
+
+def research_admission(payload: dict[str, Any]) -> dict[str, Any] | None:
+    """Whether a visa is required for this corridor and by which route, or ``None``."""
+    if not isinstance(payload, dict):
+        return None
+    admission = payload.get(PAYLOAD_ADMISSION)
+    if not isinstance(admission, dict) or not _cited(admission):
+        return None
+    return dict(admission)
 
 
 def research_forms(payload: dict[str, Any]) -> list[dict[str, Any]]:
@@ -155,17 +255,26 @@ def research_progress_steps(payload: dict[str, Any] | None) -> list[dict[str, An
 
 
 __all__ = [
+    "PAYLOAD_ADMISSION",
     "PAYLOAD_DOCUMENTS",
+    "PAYLOAD_FEES",
+    "PAYLOAD_FILING_CHANNEL",
+    "PAYLOAD_PROCESS",
     "PAYLOAD_FORMS",
     "PAYLOAD_QUESTIONS",
     "PAYLOAD_RULES",
     "RESEARCH_TTL_DAYS",
     "find_research",
+    "research_admission",
     "research_documents",
+    "research_fees",
+    "research_filing_channel",
     "research_expiry",
     "research_for_case",
     "research_forms",
     "research_is_usable",
+    "research_process_steps",
+    "research_processing_days",
     "research_payload",
     "research_progress_steps",
     "research_questions",

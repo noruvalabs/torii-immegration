@@ -1,0 +1,1039 @@
+# Intake questions for the boxes on Japan's official application forms.
+#
+# Ops-editable: change wording, sections, options or gating here without touching
+# Python. Keys must match the answer keys the form layouts fill
+# (apps/api/src/torii_api/services/jp_form_layouts.py) — a layout field with no
+# question here fails test_every_form_field_has_an_intake_question.
+#
+# show_when gates a question behind another answer, so a block of the form is only
+# asked about once it applies. The gate itself is asked automatically, immediately
+# before the first question it controls.
+
+questions:
+  is_employed:
+    prompt: "Are you employed, or do you have a job offer?"
+    type: boolean
+    section: "Work & employer"
+  has_financial_support:
+    prompt: "Is someone else paying for any part of your stay?"
+    type: boolean
+    section: "How your stay is paid for"
+  has_guarantor_in_japan:
+    prompt: "Do you have a guarantor or reference in Japan?"
+    type: boolean
+    section: "Guarantor or inviter in Japan"
+  has_inviter:
+    prompt: "Is someone in Japan inviting you?"
+    type: boolean
+    section: "Guarantor or inviter in Japan"
+  carries_cash_into_japan:
+    prompt: "Will you carry cash into Japan, or have money sent to you there?"
+    type: boolean
+    section: "How your stay is paid for"
+  has_guardian_in_japan:
+    prompt: "Are you at primary or junior high school in Japan?"
+    type: boolean
+    section: "Guarantor or inviter in Japan"
+  studied_japanese_formally:
+    prompt: "Have you studied Japanese at a school, or taken a Japanese language test?"
+    type: boolean
+    section: "Education & qualifications"
+  nationality:
+    prompt: "What is your nationality or region, exactly as printed in your passport?"
+    type: string
+    section: "Your details"
+    min_length: 2
+    max_length: 64
+  date_of_birth:
+    prompt: "What is your date of birth (YYYY-MM-DD)?"
+    type: date
+    section: "Your details"
+  full_name:
+    prompt: "What is your full name as shown in your passport (family name first)?"
+    type: string
+    section: "Your details"
+    min_length: 2
+    max_length: 200
+  sex:
+    prompt: "What sex is recorded on your passport?"
+    type: enum
+    section: "Your details"
+    options: [male, female]
+  place_of_birth:
+    prompt: "Where were you born (city and country)?"
+    type: string
+    section: "Your details"
+    min_length: 2
+    max_length: 120
+  marital_status:
+    prompt: "What is your marital status?"
+    type: enum
+    section: "Your details"
+    options: [single, married]
+  occupation:
+    prompt: "What is your occupation or position?"
+    type: string
+    section: "Your details"
+    min_length: 2
+    max_length: 100
+  home_town_city:
+    prompt: "What is your home town or city in your country of nationality?"
+    type: string
+    section: "Address & contact"
+    min_length: 2
+    max_length: 160
+  current_japan_address:
+    prompt: "What is your address in Japan (or your contact address in Japan if you are abroad)?"
+    type: string
+    section: "Address & contact"
+    min_length: 2
+    max_length: 200
+  telephone_japan:
+    prompt: "What telephone number should the immigration office use?"
+    type: string
+    section: "Address & contact"
+    max_length: 40
+  mobile_phone:
+    prompt: "What is your cellular phone number?"
+    type: string
+    section: "Address & contact"
+    max_length: 40
+  passport_number:
+    prompt: "What is your passport number?"
+    type: string
+    section: "Your details"
+    min_length: 4
+    max_length: 32
+  passport_expiry_date:
+    prompt: "When does your passport expire (YYYY-MM-DD)?"
+    type: date
+    section: "Your details"
+  current_status_of_residence:
+    prompt: "What status of residence do you currently hold?"
+    type: string
+    section: "Your current status in Japan"
+    max_length: 80
+  current_period_of_stay:
+    prompt: "What period of stay was granted (for example 1 year, 3 years)?"
+    type: string
+    section: "Your current status in Japan"
+    max_length: 40
+  current_status_expiry_date:
+    prompt: "When does your current period of stay expire (YYYY-MM-DD)?"
+    type: date
+    section: "Your current status in Japan"
+  residence_card_number:
+    prompt: "What is your residence card number?"
+    type: string
+    section: "Your current status in Japan"
+    max_length: 24
+  desired_status_of_residence:
+    prompt: "Which status of residence are you applying to change to?"
+    type: string
+    section: "What you are applying for"
+    max_length: 80
+  desired_period_of_stay:
+    prompt: "What period of stay are you requesting (for example 1 year, 3 years, 5 years)?"
+    type: string
+    section: "What you are applying for"
+    max_length: 40
+  reason_for_extension:
+    prompt: "Why do you need to extend your stay?"
+    type: string
+    section: "What you are applying for"
+    max_length: 200
+  change_reason:
+    prompt: "Why are you changing your status of residence?"
+    type: string
+    section: "What you are applying for"
+    max_length: 200
+  pr_reason:
+    prompt: "Why are you applying for permanent residence?"
+    type: string
+    section: "What you are applying for"
+    max_length: 200
+  intended_entry_date:
+    prompt: "On what date do you plan to enter Japan (YYYY-MM-DD)?"
+    type: date
+    section: "What you are applying for"
+  port_of_entry:
+    prompt: "Through which port do you plan to enter Japan (for example Narita, Haneda, Kansai)?"
+    type: string
+    section: "What you are applying for"
+    max_length: 80
+  intended_length_of_stay:
+    prompt: "How long do you intend to stay in Japan (for example 90 days, 1 year, 3 years)?"
+    type: string
+    section: "What you are applying for"
+    max_length: 40
+  intended_visa_application_place:
+    prompt: "At which Japanese embassy or consulate will you apply for the visa?"
+    type: string
+    section: "What you are applying for"
+    max_length: 120
+  has_accompanying_persons:
+    prompt: "Will anyone travel with you as an accompanying person?"
+    type: boolean
+    section: "What you are applying for"
+  previous_japan_visits:
+    prompt: "Have you entered or departed Japan before?"
+    type: boolean
+    section: "Declarations & history"
+  prior_coe_applications:
+    prompt: "Have you applied for a Certificate of Eligibility before?"
+    type: boolean
+    section: "Declarations & history"
+  criminal_record:
+    prompt: "Have you ever been subject to a criminal disposition, in Japan or overseas (including traffic offences)?"
+    type: boolean
+    section: "Declarations & history"
+  criminal_record_detail:
+    prompt: "If you answered yes above, describe the disposition."
+    type: string
+    section: "Declarations & history"
+    max_length: 200
+  prior_deportation:
+    prompt: "Have you ever been deported from Japan or left under a departure order?"
+    type: boolean
+    section: "Declarations & history"
+  has_family_in_japan:
+    prompt: "Do you have family in Japan, or anyone you currently live with there?"
+    type: boolean
+    section: "Declarations & history"
+  passport_type:
+    prompt: "What type of passport do you hold?"
+    type: enum
+    section: "Your details"
+    options: [ordinary, official, diplomatic, other]
+  passport_issue_date:
+    prompt: "When was your passport issued (YYYY-MM-DD)?"
+    type: date
+    section: "Your details"
+  passport_issue_place:
+    prompt: "Where was your passport issued?"
+    type: string
+    section: "Your details"
+    max_length: 120
+  passport_issuing_authority:
+    prompt: "Which authority issued your passport?"
+    type: string
+    section: "Your details"
+    max_length: 120
+  purpose_of_visit:
+    prompt: "What is the purpose of your visit to Japan?"
+    type: string
+    section: "What you are applying for"
+    max_length: 120
+  planned_arrival_date:
+    prompt: "On what date do you plan to arrive in Japan (YYYY-MM-DD)?"
+    type: date
+    section: "What you are applying for"
+  airline_flight_no:
+    prompt: "Which ship or airline will you arrive on?"
+    type: string
+    section: "What you are applying for"
+    max_length: 80
+  accommodation_name:
+    prompt: "What is the name of the hotel or the person you will stay with in Japan?"
+    type: string
+    section: "Address & contact"
+    max_length: 160
+  accommodation_tel:
+    prompt: "What is their telephone number in Japan?"
+    type: string
+    section: "Address & contact"
+    max_length: 40
+  accommodation_address:
+    prompt: "What is their address in Japan?"
+    type: string
+    section: "Address & contact"
+    max_length: 200
+  current_address:
+    prompt: "What is your current residential address?"
+    type: string
+    section: "Address & contact"
+    max_length: 200
+  employer_name:
+    prompt: "What is the name of your employer?"
+    type: string
+    section: "Work & employer"
+    max_length: 160
+    show_when: { key: is_employed, equals: true }
+  employer_tel:
+    prompt: "What is your employer's telephone number?"
+    type: string
+    section: "Work & employer"
+    max_length: 40
+    show_when: { key: is_employed, equals: true }
+  employer_address:
+    prompt: "What is your employer's address?"
+    type: string
+    section: "Work & employer"
+    max_length: 200
+    show_when: { key: is_employed, equals: true }
+  resident_guarantor_name:
+    prompt: "Who is your guarantor or reference in Japan?"
+    type: string
+    section: "Guarantor or inviter in Japan"
+    max_length: 160
+    show_when: { key: has_guarantor_in_japan, equals: true }
+  guarantor_telephone:
+    prompt: "What is your guarantor's telephone number?"
+    type: string
+    section: "Guarantor or inviter in Japan"
+    max_length: 40
+    show_when: { key: has_guarantor_in_japan, equals: true }
+  guarantor_address:
+    prompt: "What is your guarantor's address in Japan?"
+    type: string
+    section: "Guarantor or inviter in Japan"
+    max_length: 200
+    show_when: { key: has_guarantor_in_japan, equals: true }
+  relationship_to_supporter:
+    prompt: "What is your guarantor's relationship to you?"
+    type: string
+    section: "Guarantor or inviter in Japan"
+    max_length: 80
+    show_when: { key: has_guarantor_in_japan, equals: true }
+  inviter_name:
+    prompt: "Who is inviting you to Japan, if anyone (write the same name if it is your guarantor)?"
+    type: string
+    section: "Guarantor or inviter in Japan"
+    max_length: 160
+    show_when: { key: has_inviter, equals: true }
+  inviter_tel:
+    prompt: "What is the inviter's telephone number?"
+    type: string
+    section: "Guarantor or inviter in Japan"
+    max_length: 40
+    show_when: { key: has_inviter, equals: true }
+  inviter_address:
+    prompt: "What is the inviter's address in Japan?"
+    type: string
+    section: "Guarantor or inviter in Japan"
+    max_length: 200
+    show_when: { key: has_inviter, equals: true }
+  imprisoned_one_year_or_more:
+    prompt: "Have you ever been sentenced to imprisonment for one year or more in any country?"
+    type: boolean
+    section: "Declarations & history"
+  drug_offence_conviction:
+    prompt: "Have you ever been convicted and sentenced for a drug offence in any country?"
+    type: boolean
+    section: "Declarations & history"
+  prostitution_involvement:
+    prompt: "Have you ever engaged in, solicited or facilitated prostitution?"
+    type: boolean
+    section: "Declarations & history"
+  human_trafficking_involvement:
+    prompt: "Have you ever committed, incited or aided trafficking in persons?"
+    type: boolean
+    section: "Declarations & history"
+  employer_branch_name:
+    prompt: "Which branch or office do you work at, if not the head office?"
+    type: string
+    section: "Work & employer"
+    max_length: 160
+    show_when: { key: is_employed, equals: true }
+  final_school_name:
+    prompt: "What is the name of the last school you attended (or attend now)?"
+    type: string
+    section: "Education & qualifications"
+    max_length: 160
+  graduation_date:
+    prompt: "When did you graduate (YYYY-MM-DD)?"
+    type: date
+    section: "Education & qualifications"
+  has_it_qualification:
+    prompt: "Do you hold an information-technology qualification, or have you passed a certifying examination? (only asked of applicants working in IT)"
+    type: boolean
+    section: "Education & qualifications"
+  it_qualification_name:
+    prompt: "What is the name of that qualification or examination?"
+    type: string
+    section: "Education & qualifications"
+    max_length: 160
+  school_name:
+    prompt: "What is the name of the school you attend in Japan?"
+    type: string
+    section: "Education & qualifications"
+    max_length: 160
+  supporter_name:
+    prompt: "Who pays for your living costs in Japan?"
+    type: string
+    section: "How your stay is paid for"
+    max_length: 160
+    show_when: { key: has_financial_support, equals: true }
+  school_address:
+    prompt: "What is the address of the school you attend?"
+    type: string
+    section: "Education & qualifications"
+    max_length: 200
+  school_tel:
+    prompt: "What is the school's telephone number?"
+    type: string
+    section: "Education & qualifications"
+    max_length: 40
+  total_years_of_education:
+    prompt: "How many years of education have you completed in total, from primary school to your last institution?"
+    type: integer
+    section: "Education & qualifications"
+  japanese_test_name:
+    prompt: "Which Japanese language test have you taken, if any (for example JLPT)?"
+    type: string
+    section: "Education & qualifications"
+    max_length: 80
+    show_when: { key: studied_japanese_formally, equals: true }
+  japanese_test_score:
+    prompt: "What level or score did you attain?"
+    type: string
+    section: "Education & qualifications"
+    max_length: 40
+    show_when: { key: studied_japanese_formally, equals: true }
+  japanese_school_name:
+    prompt: "Which institution gave you Japanese language education, if any?"
+    type: string
+    section: "Education & qualifications"
+    max_length: 160
+    show_when: { key: studied_japanese_formally, equals: true }
+  japanese_study_from:
+    prompt: "When did that Japanese language education start (YYYY-MM-DD)?"
+    type: date
+    section: "Education & qualifications"
+    show_when: { key: studied_japanese_formally, equals: true }
+  japanese_study_to:
+    prompt: "When did it end (YYYY-MM-DD)?"
+    type: date
+    section: "Education & qualifications"
+    show_when: { key: studied_japanese_formally, equals: true }
+  support_self_monthly_jpy:
+    prompt: "How much of your monthly costs in Japan do you pay yourself (yen)?"
+    type: integer
+    section: "How your stay is paid for"
+  support_overseas_supporter_monthly_jpy:
+    prompt: "How much does a supporter living outside Japan pay each month (yen)?"
+    type: integer
+    section: "How your stay is paid for"
+    show_when: { key: has_financial_support, equals: true }
+  support_japan_supporter_monthly_jpy:
+    prompt: "How much does a supporter in Japan pay each month (yen)?"
+    type: integer
+    section: "How your stay is paid for"
+    show_when: { key: has_financial_support, equals: true }
+  scholarship_monthly_jpy:
+    prompt: "How much scholarship do you receive each month (yen)?"
+    type: integer
+    section: "How your stay is paid for"
+  funds_carried_jpy:
+    prompt: "How much money will you carry into Japan yourself (yen)?"
+    type: integer
+    section: "How your stay is paid for"
+    show_when: { key: carries_cash_into_japan, equals: true }
+  funds_remitted_jpy:
+    prompt: "How much will be remitted to you from abroad (yen)?"
+    type: integer
+    section: "How your stay is paid for"
+    show_when: { key: carries_cash_into_japan, equals: true }
+  supporter_address:
+    prompt: "What is your supporter's address?"
+    type: string
+    section: "How your stay is paid for"
+    max_length: 200
+    show_when: { key: has_financial_support, equals: true }
+  supporter_tel:
+    prompt: "What is your supporter's telephone number?"
+    type: string
+    section: "How your stay is paid for"
+    max_length: 40
+    show_when: { key: has_financial_support, equals: true }
+  supporter_occupation:
+    prompt: "What is your supporter's occupation and place of employment?"
+    type: string
+    section: "How your stay is paid for"
+    max_length: 160
+    show_when: { key: has_financial_support, equals: true }
+  supporter_employer_tel:
+    prompt: "What is their employer's telephone number?"
+    type: string
+    section: "How your stay is paid for"
+    max_length: 40
+    show_when: { key: has_financial_support, equals: true }
+  supporter_annual_income_jpy:
+    prompt: "What is your supporter's annual income (yen)?"
+    type: integer
+    section: "How your stay is paid for"
+    show_when: { key: has_financial_support, equals: true }
+  works_outside_status:
+    prompt: "Are you working, or planning to work, outside what your current status permits (for example a part-time job on a Student status)?"
+    type: boolean
+    section: "Work & employer"
+  part_time_work_type:
+    prompt: "What kind of work is it?"
+    type: string
+    section: "Work & employer"
+    max_length: 160
+  part_time_employer_name:
+    prompt: "Where do you work?"
+    type: string
+    section: "Work & employer"
+    max_length: 160
+  part_time_employer_tel:
+    prompt: "What is that employer's telephone number?"
+    type: string
+    section: "Work & employer"
+    max_length: 40
+  part_time_weekly_hours:
+    prompt: "How many hours a week do you work?"
+    type: integer
+    section: "Work & employer"
+  part_time_salary_jpy:
+    prompt: "What is the pay (yen)?"
+    type: integer
+    section: "Work & employer"
+  guardian_name:
+    prompt: "If you are at primary or junior high school, who is your guardian in Japan?"
+    type: string
+    section: "Guarantor or inviter in Japan"
+    max_length: 160
+    show_when: { key: has_guardian_in_japan, equals: true }
+  guardian_relationship:
+    prompt: "What is their relationship to you?"
+    type: string
+    section: "Guarantor or inviter in Japan"
+    max_length: 80
+    show_when: { key: has_guardian_in_japan, equals: true }
+  guardian_address:
+    prompt: "What is their address in Japan?"
+    type: string
+    section: "Guarantor or inviter in Japan"
+    max_length: 200
+    show_when: { key: has_guardian_in_japan, equals: true }
+  guardian_tel:
+    prompt: "What is their telephone number?"
+    type: string
+    section: "Guarantor or inviter in Japan"
+    max_length: 40
+    show_when: { key: has_guardian_in_japan, equals: true }
+  guardian_mobile:
+    prompt: "What is their mobile number?"
+    type: string
+    section: "Guarantor or inviter in Japan"
+    max_length: 40
+    show_when: { key: has_guardian_in_japan, equals: true }
+  legal_representative_mobile:
+    prompt: "What is the legal representative's mobile number?"
+    type: string
+    section: "Guarantor or inviter in Japan"
+    max_length: 40
+    show_when: { key: has_legal_representative, equals: true }
+  family_notification_place_japan:
+    prompt: "Where in Japan was your marriage, birth or adoption registered?"
+    type: string
+    section: "Guarantor or inviter in Japan"
+    max_length: 160
+  family_notification_date_japan:
+    prompt: "On what date was it registered in Japan (YYYY-MM-DD)?"
+    type: date
+    section: "Guarantor or inviter in Japan"
+  family_notification_place_home:
+    prompt: "Where in your home country was it registered?"
+    type: string
+    section: "Guarantor or inviter in Japan"
+    max_length: 160
+  family_notification_date_home:
+    prompt: "On what date was it registered there (YYYY-MM-DD)?"
+    type: date
+    section: "Guarantor or inviter in Japan"
+  part_time_employer_branch:
+    prompt: "Which branch or office of that employer?"
+    type: string
+    section: "Work & employer"
+    max_length: 160
+  annual_income_jpy:
+    prompt: "What is your own annual income (yen)?"
+    type: integer
+    section: "How your stay is paid for"
+    show_when: { key: is_employed, equals: true }
+  support_guarantor_monthly_jpy:
+    prompt: "How much does a guarantor pay each month (yen)?"
+    type: integer
+    section: "How your stay is paid for"
+    show_when: { key: has_guarantor_in_japan, equals: true }
+  support_other_monthly_jpy:
+    prompt: "How much comes from any other source each month (yen)?"
+    type: integer
+    section: "How your stay is paid for"
+  funds_carrier_name:
+    prompt: "Who will carry that money into Japan?"
+    type: string
+    section: "How your stay is paid for"
+    max_length: 160
+    show_when: { key: carries_cash_into_japan, equals: true }
+  funds_carry_date:
+    prompt: "When will they carry it (YYYY-MM-DD)?"
+    type: date
+    section: "How your stay is paid for"
+    show_when: { key: carries_cash_into_japan, equals: true }
+  funds_other_jpy:
+    prompt: "How much comes from any other source (yen)?"
+    type: integer
+    section: "How your stay is paid for"
+  supporter_date_of_birth:
+    prompt: "What is your supporter's date of birth (YYYY-MM-DD)?"
+    type: date
+    section: "How your stay is paid for"
+    show_when: { key: has_financial_support, equals: true }
+  supporter_nationality:
+    prompt: "What is your supporter's nationality?"
+    type: string
+    section: "How your stay is paid for"
+    max_length: 64
+    show_when: { key: has_financial_support, equals: true }
+  supporter_residence_card_number:
+    prompt: "What is your supporter's residence card number?"
+    type: string
+    section: "How your stay is paid for"
+    max_length: 24
+    show_when: { key: has_financial_support, equals: true }
+  supporter_status_of_residence:
+    prompt: "What status of residence does your supporter hold?"
+    type: string
+    section: "How your stay is paid for"
+    max_length: 80
+    show_when: { key: has_financial_support, equals: true }
+  supporter_period_of_stay:
+    prompt: "What period of stay were they granted?"
+    type: string
+    section: "How your stay is paid for"
+    max_length: 40
+    show_when: { key: has_financial_support, equals: true }
+  supporter_status_expiry_date:
+    prompt: "When does their period of stay expire (YYYY-MM-DD)?"
+    type: date
+    section: "How your stay is paid for"
+    show_when: { key: has_financial_support, equals: true }
+  supporter_employer_name:
+    prompt: "Where does your supporter work?"
+    type: string
+    section: "How your stay is paid for"
+    max_length: 160
+    show_when: { key: has_financial_support, equals: true }
+  supporter_employer_branch:
+    prompt: "Which branch or office?"
+    type: string
+    section: "How your stay is paid for"
+    max_length: 160
+    show_when: { key: has_financial_support, equals: true }
+  supporter_employer_address:
+    prompt: "What is their employer's address?"
+    type: string
+    section: "How your stay is paid for"
+    max_length: 200
+    show_when: { key: has_financial_support, equals: true }
+  guarantor_occupation:
+    prompt: "What is your guarantor's occupation?"
+    type: string
+    section: "Guarantor or inviter in Japan"
+    max_length: 160
+    show_when: { key: has_guarantor_in_japan, equals: true }
+  guarantor_mobile:
+    prompt: "What is your guarantor's mobile number?"
+    type: string
+    section: "Guarantor or inviter in Japan"
+    max_length: 40
+    show_when: { key: has_guarantor_in_japan, equals: true }
+  has_legal_representative:
+    prompt: "Is a legal representative filing this application on your behalf?"
+    type: boolean
+    section: "Guarantor or inviter in Japan"
+  legal_representative_name:
+    prompt: "If a legal representative is filing for you, what is their name?"
+    type: string
+    section: "Guarantor or inviter in Japan"
+    max_length: 160
+    show_when: { key: has_legal_representative, equals: true }
+  legal_representative_relationship:
+    prompt: "What is their relationship to you?"
+    type: string
+    section: "Guarantor or inviter in Japan"
+    max_length: 80
+    show_when: { key: has_legal_representative, equals: true }
+  legal_representative_address:
+    prompt: "What is their address?"
+    type: string
+    section: "Guarantor or inviter in Japan"
+    max_length: 200
+    show_when: { key: has_legal_representative, equals: true }
+  legal_representative_tel:
+    prompt: "What is their telephone number?"
+    type: string
+    section: "Guarantor or inviter in Japan"
+    max_length: 40
+    show_when: { key: has_legal_representative, equals: true }
+  # ── Applicant part 2, form L (posted from an overseas company) ───────────────────
+  # Items 18/19 of the extension sheet, 23/24 of the Certificate of Eligibility sheet.
+  # Only the transferee statuses ask these, and only when the applicant says they are
+  # posted from a company abroad — otherwise the block is left blank, as the form expects.
+  is_posted_from_overseas_company:
+    prompt: "Are you being posted to Japan by a company or organisation outside Japan?"
+    type: boolean
+    section: "Work & employer"
+  overseas_employer_name:
+    prompt: "What is the name of the company or organisation posting you?"
+    type: string
+    section: "Work & employer"
+    max_length: 160
+    show_when: { key: is_posted_from_overseas_company, equals: true }
+  overseas_employer_address:
+    prompt: "What is its address?"
+    type: string
+    section: "Work & employer"
+    max_length: 200
+    show_when: { key: is_posted_from_overseas_company, equals: true }
+  overseas_employer_relationship:
+    prompt: "How does that company relate to where you will work in Japan?"
+    type: enum
+    section: "Work & employer"
+    show_when: { key: is_posted_from_overseas_company, equals: true }
+    options:
+      - { value: holding_company, label: "Holding company (親会社)" }
+      - { value: subsidiary, label: "Subsidiary (子会社)" }
+      - { value: main_office, label: "Main office (本部・本店)" }
+      - { value: branch_office, label: "Branch office (支部・支店)" }
+      - { value: other, label: "Other (その他) — write the detail on the form yourself" }
+  # ── Applicant part 2, form R (Dependent) ────────────────────────────────────────
+  # Item 18 of the extension sheet, 23 of the Certificate of Eligibility sheet.
+  method_of_support:
+    prompt: "How will your stay in Japan be paid for?"
+    type: enum
+    section: "Funds & support"
+    options:
+      - { value: relatives, label: "By relatives (親族負担)" }
+      - { value: remittances_from_abroad, label: "Remittances from abroad (外国からの送金)" }
+      - { value: guarantor, label: "By a guarantor (身元保証人負担)" }
+      - { value: other, label: "Other (その他) — write the detail on the form yourself" }
+  part_time_salary_period:
+    prompt: "Is that pay a monthly or a daily amount?"
+    type: enum
+    section: "Work & employer"
+    show_when: { key: works_outside_status, equals: true }
+    options:
+      - { value: monthly, label: "Monthly (月額)" }
+      - { value: daily, label: "Daily (日額)" }
+  # ── Applicant part 3, form T (Spouse / Long-term resident) ───────────────────────
+  # Item 21(8) of the extension sheet, 26(8) of the Certificate of Eligibility sheet.
+  supporter_relationship:
+    prompt: "How is the person supporting you related to you?"
+    type: enum
+    section: "Funds & support"
+    show_when: { key: has_financial_support, equals: true }
+    options:
+      - { value: husband, label: "Husband (夫)" }
+      - { value: wife, label: "Wife (妻)" }
+      - { value: father, label: "Father (父)" }
+      - { value: mother, label: "Mother (母)" }
+      - { value: grandfather, label: "Grandfather (祖父)" }
+      - { value: grandmother, label: "Grandmother (祖母)" }
+      - { value: foster_father, label: "Foster father (養父)" }
+      - { value: foster_mother, label: "Foster mother (養母)" }
+      - { value: sibling, label: "Brother or sister (兄弟姉妹)" }
+      - { value: uncle_or_aunt, label: "Uncle or aunt (叔父・叔母)" }
+      - { value: educational_institution, label: "The school admitting me (受入教育機関)" }
+      - { value: friend, label: "A friend or acquaintance (友人・知人)" }
+      - { value: relative_of_friend, label: "A relative of a friend (友人・知人の親族)" }
+      - { value: business_connection, label: "A business contact (取引関係者・現地企業等職員)" }
+      - { value: relative_of_business_connection, label: "A relative of a business contact (取引関係者等の親族)" }
+      - { value: other, label: "Other (その他) — write the detail on the form yourself" }
+  # ── Permanent residence, page 2 ─────────────────────────────────────────────────
+  # Items 17 and 19. Asked only of a permanent-residence applicant.
+  householder_relationship:
+    prompt: "Who is the main person supporting your household?"
+    type: enum
+    section: "Funds & support"
+    options:
+      - { value: self, label: "Myself (本人)" }
+      - { value: husband, label: "My husband (夫)" }
+      - { value: wife, label: "My wife (妻)" }
+      - { value: father, label: "My father (父)" }
+      - { value: mother, label: "My mother (母)" }
+      - { value: child, label: "My child (子)" }
+      - { value: other, label: "Someone else (その他) — write the detail on the form yourself" }
+  householder_employer_name:
+    prompt: "Where does that person work?"
+    type: string
+    section: "Funds & support"
+    max_length: 160
+  householder_employer_branch:
+    prompt: "Which branch or office, if not the head office?"
+    type: string
+    section: "Funds & support"
+    max_length: 160
+  householder_employer_address:
+    prompt: "What is their workplace address?"
+    type: string
+    section: "Funds & support"
+    max_length: 200
+  householder_employer_tel:
+    prompt: "What is their workplace telephone number?"
+    type: string
+    section: "Funds & support"
+    max_length: 40
+  householder_annual_income_jpy:
+    prompt: "What is that person's annual income in yen?"
+    type: integer
+    section: "Funds & support"
+  guarantor_nationality:
+    prompt: "What is your guarantor's nationality or region?"
+    type: string
+    section: "Guarantor or inviter in Japan"
+    max_length: 80
+    show_when: { key: has_guarantor_in_japan, equals: true }
+  guarantor_relationship:
+    prompt: "How is your guarantor in Japan related to you?"
+    type: enum
+    section: "Guarantor or inviter in Japan"
+    show_when: { key: has_guarantor_in_japan, equals: true }
+    options:
+      - { value: husband, label: "Husband (夫)" }
+      - { value: wife, label: "Wife (妻)" }
+      - { value: father, label: "Father (父)" }
+      - { value: mother, label: "Mother (母)" }
+      - { value: child, label: "Child (子)" }
+      - { value: grandfather, label: "Grandfather (祖父)" }
+      - { value: grandmother, label: "Grandmother (祖母)" }
+      - { value: grandchild, label: "Grandchild (孫)" }
+      - { value: foster_father, label: "Foster father (養父)" }
+      - { value: foster_mother, label: "Foster mother (養母)" }
+      - { value: adopted_child, label: "Adopted child (養子)" }
+      - { value: child_of_spouse, label: "Child of my spouse (配偶者の子)" }
+      - { value: employer, label: "My employer (雇用主)" }
+      - { value: guarantor, label: "Person who took me in (身元引受人)" }
+      - { value: other, label: "Other (その他) — write the detail on the form yourself" }
+  # ── Applicant part 2, form P (Student) — education and Japanese-language blocks ──
+  education_enrollment_status:
+    prompt: "What is your status at the last school you attended?"
+    type: enum
+    section: "Education & qualifications"
+    options:
+      - { value: graduated, label: "Graduated (卒業)" }
+      - { value: in_school, label: "Currently enrolled (在学中)" }
+      - { value: temporary_absence, label: "On temporary leave (休学中)" }
+      - { value: withdrawal, label: "Withdrew (中退)" }
+  education_level:
+    prompt: "What level was that school?"
+    type: enum
+    section: "Education & qualifications"
+    options:
+      - { value: doctor, label: "Doctorate (大学院・博士)" }
+      - { value: master, label: "Master's (大学院・修士)" }
+      - { value: bachelor, label: "Bachelor's / university (大学)" }
+      - { value: junior_college, label: "Junior college (短期大学)" }
+      - { value: college_of_technology, label: "College of technology (専門学校)" }
+      - { value: senior_high_school, label: "Senior high school (高等学校)" }
+      - { value: junior_high_school, label: "Junior high school (中学校)" }
+      - { value: elementary_school, label: "Elementary school (小学校)" }
+      - { value: other, label: "Other (その他) — write the detail on the form yourself" }
+  japanese_ability_other:
+    prompt: "If your Japanese is evidenced some other way, describe it."
+    type: string
+    section: "Education & qualifications"
+    max_length: 200
+    show_when: { key: studied_japanese_formally, equals: true }
+  japanese_high_school_name:
+    prompt: "If you will study at a Japanese high school, which school taught you Japanese?"
+    type: string
+    section: "Education & qualifications"
+    max_length: 160
+    show_when: { key: studies_at_japanese_high_school, equals: true }
+  japanese_high_school_from:
+    prompt: "When did that Japanese-language education start (YYYY-MM)?"
+    type: date
+    section: "Education & qualifications"
+    show_when: { key: studies_at_japanese_high_school, equals: true }
+  japanese_high_school_to:
+    prompt: "When did it end (YYYY-MM)?"
+    type: date
+    section: "Education & qualifications"
+    show_when: { key: studies_at_japanese_high_school, equals: true }
+  # Item 21/27 is printed under "fill in the followings when the applicant plans to study
+  # in high school", so it is asked only of an applicant who says they will.
+  studies_at_japanese_high_school:
+    prompt: "Will you study at a Japanese high school?"
+    type: boolean
+    section: "Education & qualifications"
+  # ── Applicant part 3, form P (Student) ──────────────────────────────────────────
+  has_scholarship:
+    prompt: "Will a scholarship pay for part of your stay?"
+    type: boolean
+    section: "Funds & support"
+  scholarship_provider:
+    prompt: "Who provides that scholarship?"
+    type: enum
+    section: "Funds & support"
+    show_when: { key: has_scholarship, equals: true }
+    options:
+      - { value: foreign_government, label: "A foreign government (外国政府)" }
+      - { value: japanese_government, label: "The Japanese government (日本国政府)" }
+      - { value: local_government, label: "A Japanese local government (地方公共団体)" }
+      - { value: public_interest_body, label: "A public interest association or foundation (公益社団法人・公益財団法人)" }
+      - { value: other, label: "Other (その他) — write the detail on the form yourself" }
+  plan_after_graduation:
+    prompt: "What do you plan to do after your course ends?"
+    type: enum
+    section: "Education & qualifications"
+    options:
+      - { value: return_home, label: "Return to my home country (帰国)" }
+      - { value: higher_education_in_japan, label: "Go on to further study in Japan (日本での進学)" }
+      - { value: work_in_japan, label: "Find work in Japan (日本での就職)" }
+      - { value: other, label: "Other (その他) — write the detail on the form yourself" }
+  # ── Designated Activities (特定活動), form U ───────────────────────────────────────
+  # Item 17 of the extension sheet, 22 of the Certificate of Eligibility sheet. The
+  # activity chosen here decides which of the items behind it the applicant has to fill,
+  # so every later question on those sheets is gated on this answer. Not every activity
+  # appears in every packet; one that has no printed box on the sheet in hand leaves that
+  # box clear and is reported as still needing the applicant's hand.
+  designated_activity:
+    prompt: "Which designated activity are you applying under?"
+    type: enum
+    section: "What you are applying for"
+    options:
+      - { value: diplomat, label: "Diplomat (外交)" }
+      - { value: official, label: "Official (公用)" }
+      - { value: lawyer, label: "Lawyer (弁護士)" }
+      - { value: judicial_scrivener, label: "Judicial scrivener (司法書士)" }
+      - { value: land_and_building_investigator, label: "Land and building investigator (土地家屋調査士)" }
+      - { value: registered_foreign_qualified_lawyer, label: "Registered foreign-qualified lawyer (外国法事務弁護士)" }
+      - { value: public_accountant, label: "Public accountant (公認会計士)" }
+      - { value: foreign_qualified_certified_public_accountant, label: "Foreign-qualified certified public accountant (外国公認会計士)" }
+      - { value: certified_tax_accountant, label: "Certified tax accountant (税理士)" }
+      - { value: public_consultant_on_social_and_labor_insurance, label: "Public consultant on social and labour insurance (社会保険労務士)" }
+      - { value: patent_attorney, label: "Patent attorney (弁理士)" }
+      - { value: maritime_procedure_agent, label: "Maritime procedure agent (海事代理士)" }
+      - { value: certified_administrative_procedures_legal_specialist, label: "Certified administrative procedures legal specialist (行政書士)" }
+      - { value: doctor, label: "Doctor (医師)" }
+      - { value: dentist, label: "Dentist (歯科医師)" }
+      - { value: pharmacist, label: "Pharmacist (薬剤師)" }
+      - { value: public_health_nurse, label: "Public health nurse (保健師)" }
+      - { value: midwife, label: "Midwife (助産師)" }
+      - { value: nurse, label: "Nurse, not under EPA (看護師)" }
+      - { value: assistant_nurse, label: "Assistant nurse (准看護師)" }
+      - { value: dental_hygienist, label: "Dental hygienist (歯科衛生士)" }
+      - { value: radiology_technician, label: "Radiology technician (診療放射線技師)" }
+      - { value: physical_therapist, label: "Physical therapist (理学療法士)" }
+      - { value: occupational_therapist, label: "Occupational therapist (作業療法士)" }
+      - { value: orthoptist, label: "Orthoptist (視能訓練士)" }
+      - { value: clinical_engineer, label: "Clinical engineer (臨床工学技士)" }
+      - { value: prosthetist, label: "Prosthetist (義肢装具士)" }
+      - { value: housekeeper, label: "Housekeeper (家事使用人)" }
+      - { value: living_with_family, label: "Living with my family, a diplomat's family included (家族と同居)" }
+      - { value: working_holiday, label: "Working holiday (ワーキング・ホリデー)" }
+      - { value: foreign_lawyer, label: "Foreign lawyer (外国弁護士)" }
+      - { value: amateur_sports_athlete, label: "Amateur sports athlete (アマチュアスポーツ選手)" }
+      - { value: internship, label: "Internship (インターンシップ)" }
+      - { value: summer_job, label: "Summer job (サマージョブ) — new applications only" }
+      - { value: international_cultural_exchange, label: "International cultural exchange (国際文化交流) — new applications only" }
+      - { value: epa_nurse, label: "Nurse under EPA (EPA看護師) — extension or change of status only" }
+      - { value: epa_certified_careworker, label: "Certified careworker under EPA (EPA介護福祉士) — extension or change of status only" }
+      - { value: epa_nurse_candidate, label: "Nurse candidate under EPA (EPA看護師候補者) — extension or change of status only" }
+      - { value: epa_careworker_candidate, label: "Careworker candidate under EPA (EPA介護福祉士候補者) — extension or change of status only" }
+      - { value: epa_student_careworker_candidate, label: "Student careworker candidate under EPA (EPA就学介護福祉士候補者) — extension or change of status only" }
+      - { value: manufacturing_worker, label: "Foreign worker in manufacturing (製造業外国従業員)" }
+      - { value: domestic_worker_strategic_zone, label: "Domestic worker, national strategic zone (家事支援者)" }
+      - { value: crop_farming_worker_strategic_zone, label: "Crop farming worker, national strategic zone (耕種農業支援者)" }
+      - { value: livestock_farming_worker_strategic_zone, label: "Livestock farming worker, national strategic zone (畜産農業支援者)" }
+      - { value: fourth_generation_japanese_descent, label: "Fourth-generation foreign national of Japanese descent (日系四世)" }
+      - { value: entrepreneurial_activities, label: "Entrepreneurial activities (起業活動)" }
+      - { value: other, label: "Other (その他) — write the detail on the form yourself" }
+  education_country:
+    prompt: "Was the last school you attended in Japan or abroad?"
+    type: enum
+    section: "Education & qualifications"
+    options:
+      - { value: japan, label: "In Japan (本邦)" }
+      - { value: foreign_country, label: "Abroad (外国)" }
+  final_school_department:
+    prompt: "What department, course or specialised course did you study?"
+    type: string
+    section: "Education & qualifications"
+    max_length: 160
+  major_field_of_study:
+    prompt: "What was your major field of study?"
+    type: enum
+    section: "Education & qualifications"
+    options:
+      - { value: law, label: "Law (法学)" }
+      - { value: economics, label: "Economics (経済学)" }
+      - { value: politics, label: "Politics (政治学)" }
+      - { value: commercial_science, label: "Commercial science (商学)" }
+      - { value: business_administration, label: "Business administration (経営学)" }
+      - { value: literature, label: "Literature (文学)" }
+      - { value: linguistics, label: "Linguistics (語学)" }
+      - { value: sociology, label: "Sociology (社会学)" }
+      - { value: history, label: "History (歴史学)" }
+      - { value: psychology, label: "Psychology (心理学)" }
+      - { value: education, label: "Education (教育学)" }
+      - { value: science_of_art, label: "Science of art (芸術学)" }
+      - { value: other_cultural_or_social_science, label: "Other cultural or social science (その他人文・社会科学)" }
+      - { value: science, label: "Science (理学)" }
+      - { value: chemistry, label: "Chemistry (化学)" }
+      - { value: engineering, label: "Engineering (工学)" }
+      - { value: agriculture, label: "Agriculture (農学)" }
+      - { value: fisheries, label: "Fisheries (水産学)" }
+      - { value: pharmacy, label: "Pharmacy (薬学)" }
+      - { value: medicine, label: "Medicine (医学)" }
+      - { value: dentistry, label: "Dentistry (歯学)" }
+      - { value: other_natural_science, label: "Other natural science (その他自然科学)" }
+      - { value: sports_science, label: "Sports science (体育学)" }
+      - { value: nursing_care_and_welfare, label: "Nursing care and welfare (介護福祉)" }
+      - { value: other, label: "Other (その他) — write the detail on the form yourself" }
+  vocational_field_of_study:
+    prompt: "What field did you study at your college of technology?"
+    type: enum
+    section: "Education & qualifications"
+    show_when: { key: education_level, equals: college_of_technology }
+    options:
+      - { value: industry, label: "Industry / engineering (工業)" }
+      - { value: agriculture, label: "Agriculture (農業)" }
+      - { value: medical_services_and_hygienics, label: "Medical services and hygienics (医療・衛生)" }
+      - { value: education_and_social_welfare, label: "Education and social welfare (教育・社会福祉)" }
+      - { value: law, label: "Law (法律)" }
+      - { value: practical_commercial_business, label: "Practical commercial business (商業実務)" }
+      - { value: dress_design_and_home_economics, label: "Dress design and home economics (服飾・家政)" }
+      - { value: culture_and_education, label: "Culture and education (文化・教養)" }
+      - { value: nursing_care_and_welfare, label: "Nursing care and welfare (介護福祉)" }
+      - { value: other, label: "Other (その他) — write the detail on the form yourself" }
+  olympics_year:
+    prompt: "In which year did you compete at the Olympic Games?"
+    type: string
+    section: "Education & qualifications"
+    max_length: 12
+  world_championship_year:
+    prompt: "In which year did you compete at a world championship?"
+    type: string
+    section: "Education & qualifications"
+    max_length: 12
+  other_competition_year:
+    prompt: "In which year did you compete at another international competition?"
+    type: string
+    section: "Education & qualifications"
+    max_length: 12
+  current_university_name:
+    prompt: "Which university and faculty do you currently attend?"
+    type: string
+    section: "Education & qualifications"
+    max_length: 160
+  current_university_course:
+    prompt: "Which course do you attend there?"
+    type: string
+    section: "Education & qualifications"
+    max_length: 160
+  entrepreneur_managing_experience_years:
+    prompt: "How many years have you spent managing or supervising a business abroad in the field you intend to start in?"
+    type: string
+    section: "Work & employer"
+    max_length: 12
+  entrepreneur_work_experience_years:
+    prompt: "How many years of work experience do you have in that field?"
+    type: string
+    section: "Work & employer"
+    max_length: 12

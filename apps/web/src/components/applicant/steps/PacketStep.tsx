@@ -34,228 +34,232 @@ type PacketStepProps = {
   onSubmit: () => void;
 };
 
+// These are drafts the applicant completes and signs, not finished official documents.
+// Nothing here may assert a fact the applicant has not stated: an earlier version
+// invented a hotel ("Tokyo Central Hotel"), its address and phone number, a day-by-day
+// itinerary generated from `day % 3`, and had the applicant certify that all travel costs
+// were "fully provided for and guaranteed" with bank statements enclosed — regardless of
+// what they had actually answered or attached.
+const BLANK = "\u2014";
+
+function answered(answers: Record<string, unknown>, ...keys: string[]): string {
+  for (const key of keys) {
+    const value = answers[key];
+    if (value !== undefined && value !== null && String(value).trim() !== "") {
+      return String(value).trim();
+    }
+  }
+  return BLANK;
+}
+
+function gatheredDocuments(
+  packet: Record<string, unknown> | null,
+  matching?: RegExp,
+): { name?: string; status?: string }[] {
+  const checklist = Array.isArray(packet?.checklist)
+    ? (packet.checklist as { name?: string; status?: string }[])
+    : [];
+  return checklist
+    .filter((item) => item.status && item.status !== "needed")
+    .filter((item) => !matching || matching.test(item.name ?? ""));
+}
+
+function numberedOrNone(items: { name?: string }[], emptyNote: string): string {
+  if (!items.length) return `   ${emptyNote}`;
+  return items.map((item, index) => `   ${index + 1}. ${item.name ?? "Document"}`).join("\n");
+}
+
 function generateCoverLetter(caseData: Case, packet: Record<string, unknown> | null): string {
   const reference = String(packet?.reference ?? caseData.reference);
   const scope = caseData.scope_label ?? caseData.locale.toUpperCase();
-  const dateStr = new Date().toLocaleDateString("en-US", {
+  const dateStr = new Date().toLocaleDateString("en-GB", {
     year: "numeric",
     month: "long",
     day: "numeric",
   });
 
   const answers = caseData.intake_answers || {};
-  const fullName = String(answers.full_name || answers.applicant_name || "Applicant");
-  const passportNo = String(answers.passport_number || answers.passport_no || "See Attached Passport");
-  const nationality = String(answers.nationality || "See Passport");
-  const purpose = String(answers.main_purpose || answers.purpose_of_visit || "Tourism and cultural sightseeing");
-  const stayDays = String(answers.stay_duration_days || answers.intended_length_of_stay_days || "15");
-  const arrivalDate = String(answers.planned_arrival_date || "Upcoming scheduled date");
+  const fullName = answered(answers, "full_name", "applicant_name");
+  const passportNo = answered(answers, "passport_number", "passport_no");
+  const nationality = answered(answers, "nationality");
+  const purpose = answered(answers, "main_purpose", "purpose_of_visit");
+  const stayDays = answered(answers, "stay_duration_days", "intended_length_of_stay_days");
+  const arrivalDate = answered(answers, "planned_arrival_date");
 
-  const checklist = Array.isArray(packet?.checklist)
-    ? (packet.checklist as { name?: string; status?: string; is_required?: boolean }[])
-    : [];
+  const documents = numberedOrNone(
+    gatheredDocuments(packet),
+    "(No documents recorded yet — complete your checklist.)",
+  );
 
-  const documentListStr = checklist
-    .filter((c) => c.status && c.status !== "needed")
-    .map((c, i) => `   ${i + 1}. ${c.name || "Supporting Document"} (Verified & Attached)`)
-    .join("\n") || "   1. Valid Original Passport & Bio-Data Photocopies\n   2. Official Visa Application Form (Signed)\n   3. Day-by-Day Schedule of Stay (Itinerary Table)\n   4. Bank Statements / Proof of Financial Solvency\n   5. Employment Certificate / Business Registration\n   6. Accommodation & Flight Reservations";
+  return `APPLICATION COVER LETTER  (draft — check and sign before filing)
 
-  return `DATE: ${dateStr}
+Reference: ${reference}
+Scope: ${scope}
+Date: ${dateStr}
 
-TO:
-The Visa Section / Consular Division
-Embassy / Consulate General / VFS Application Center
-
-SUBJECT: FORMAL VISA APPLICATION COVER LETTER & DOSSIER SUBMISSION
-Applicant Name: ${fullName}
-Passport Number: ${passportNo}
+Applicant: ${fullName}
 Nationality: ${nationality}
-Application Reference: ${reference}
-Visa Category / Scope: ${scope}
+Passport number: ${passportNo}
 
-Dear Consular Officer,
+Purpose of visit: ${purpose}
+Intended length of stay: ${stayDays}
+Planned arrival: ${arrivalDate}
 
-I have the honor to submit my formal application for a Short-Term Visitor Visa for ${scope}. All required information, official forms, and verified supporting documents have been assembled in strict accordance with published consular guidelines.
+Enclosed documents:
+${documents}
 
-1. PURPOSE OF VISIT & ITINERARY:
-My primary purpose of travel is ${purpose}. I plan to arrive in the destination on ${arrivalDate} and intend to stay for a duration of ${stayDays} days. A detailed day-by-day Schedule of Stay (Itinerary) is attached for your reference.
+I submit this application and the documents listed above for your consideration.
+Please contact me if any further document or clarification is required.
 
-2. FINANCIAL MEANS & EXPENSE COVERAGE:
-I confirm that I possess sufficient personal funds and liquid financial reserves to fully support all expenses during my travel, including airfare, accommodation, dining, domestic transport, and incidental expenses. Official bank certificates and statements demonstrating steady income are enclosed.
-
-3. TIES TO HOME COUNTRY & COMMITMENT TO RETURN:
-I maintain strong personal, familial, and professional ties in my home country (${nationality}), including active employment/business commitments. I solemnly affirm that I will strictly abide by all immigration laws, will not engage in any unauthorized activities, and will depart the destination promptly upon completion of my visit.
-
-4. ENCLOSED DOCUMENT INVENTORY:
-The following documents are organized and enclosed in this submission dossier:
-${documentListStr}
-
-I certify that all statements and attached records are true, complete, and authentic. Thank you for your time and kind consideration of my visa application.
-
-Respectfully yours,
-
-
-________________________________________
-${fullName}
-Passport No: ${passportNo}
+Signature: ______________________________
+Name: ${fullName}
 Date: ${dateStr}
 `;
 }
 
 function generateScheduleOfStay(caseData: Case, packet: Record<string, unknown> | null): string {
   const answers = caseData.intake_answers || {};
-  const fullName = String(answers.full_name || answers.applicant_name || "Applicant");
-  const arrivalDate = String(answers.planned_arrival_date || "2026-09-01");
-  const stayDays = parseInt(String(answers.stay_duration_days || answers.intended_length_of_stay_days || "15"), 10) || 15;
-  const hotel = String(answers.accommodation_name || answers.accommodation_type || "Tokyo Central Hotel");
-  const hotelAddress = String(answers.accommodation_address || "Chiyoda-ku, Tokyo, Japan / Tel: +81-3-0000-0000");
+  const fullName = answered(answers, "full_name", "applicant_name");
+  const arrivalDate = answered(answers, "planned_arrival_date");
+  const accommodation = answered(answers, "accommodation_name");
+  const accommodationAddress = answered(answers, "accommodation_address");
+  const rawDays = answers.stay_duration_days ?? answers.intended_length_of_stay_days;
+  const stayDays = Number.parseInt(String(rawDays ?? ""), 10);
 
+  // The itinerary is the applicant's to write. Generating plausible activities would put
+  // a fictional plan in front of a consular officer over the applicant's own signature,
+  // so the rows are left blank — dated where the arrival date is known.
+  const base = arrivalDate !== BLANK ? new Date(arrivalDate) : null;
+  const dayCount = Number.isFinite(stayDays) && stayDays > 0 ? Math.min(stayDays, 15) : 0;
   let rows = "";
-  const baseDate = new Date(arrivalDate);
-  const validBase = isNaN(baseDate.getTime()) ? new Date() : baseDate;
-
-  for (let day = 1; day <= Math.min(stayDays, 15); day++) {
-    const currentDate = new Date(validBase);
-    currentDate.setDate(validBase.getDate() + (day - 1));
-    const dStr = currentDate.toISOString().split("T")[0];
-
-    let activity = "";
-    if (day === 1) {
-      activity = "Arrival at Airport, immigration clearance, check-in at accommodation.";
-    } else if (day === Math.min(stayDays, 15)) {
-      activity = "Check-out from hotel, souvenir shopping, depart from airport back to home country.";
-    } else if (day % 3 === 0) {
-      activity = "Cultural sightseeing, visiting historical heritage sites and museums.";
-    } else if (day % 3 === 1) {
-      activity = "City exploration, shopping in central district, local culinary tour.";
-    } else {
-      activity = "Scenic day tour, visiting parks and scenic observatory.";
+  for (let day = 1; day <= dayCount; day++) {
+    let dateLabel = `Day ${day}`;
+    if (base && !Number.isNaN(base.getTime())) {
+      const current = new Date(base);
+      current.setDate(base.getDate() + (day - 1));
+      dateLabel = `Day ${day} (${current.toISOString().split("T")[0]})`;
     }
-
-    rows += `| Day ${day} (${dStr}) | ${activity.padEnd(45)} | ${hotel.padEnd(20)} | ${hotelAddress} |\n`;
+    rows += `${dateLabel.padEnd(22)}|                                        |\n`;
+  }
+  if (!rows) {
+    rows = "(Answer your arrival date and length of stay to get dated rows.)\n";
   }
 
-  return `================================================================================
-OFFICIAL SCHEDULE OF STAY / DAY-BY-DAY ITINERARY (滞在予定表)
+  return `SCHEDULE OF STAY / 滞在予定表  (draft — complete and sign before filing)
+
 Applicant: ${fullName}
-Planned Arrival: ${arrivalDate} | Duration: ${stayDays} Days
-================================================================================
+Planned arrival: ${arrivalDate}
+Length of stay: ${stayDays > 0 ? `${stayDays} days` : BLANK}
+Accommodation: ${accommodation}
+Address and telephone: ${accommodationAddress}
 
-+-------------------+-----------------------------------------------+----------------------+----------------------------------------------+
-| Date              | Activity Plan & Destination                   | Accommodation / Contact | Address & Contact Phone                      |
-+-------------------+-----------------------------------------------+----------------------+----------------------------------------------+
-${rows}+-------------------+-----------------------------------------------+----------------------+----------------------------------------------+
+Write what you will actually do each day. The consulate compares this against your
+bookings, so it has to match them.
 
-Notes:
-- All accommodations and transport routes have been prepared in accordance with the planned schedule.
-- The applicant will reside at the specified accommodation throughout the visit.
+Date                  | Plan for the day                       |
+----------------------+----------------------------------------+
+${rows}----------------------+----------------------------------------+
 
-Applicant Signature: ______________________   Date: ${new Date().toISOString().split("T")[0]}
+Signature: ______________________________
+Date: ${new Date().toISOString().split("T")[0]}
 `;
 }
 
 function generateReasonForVisit(caseData: Case, packet: Record<string, unknown> | null): string {
   const answers = caseData.intake_answers || {};
-  const fullName = String(answers.full_name || answers.applicant_name || "Applicant");
-  const passportNo = String(answers.passport_number || answers.passport_no || "N/A");
-  const nationality = String(answers.nationality || "N/A");
-  const residence = String(answers.current_residence_country || answers.residence_country || nationality);
-  const purpose = String(answers.main_purpose || answers.purpose_of_visit || "Tourism and sightseeing");
-  const stayDays = String(answers.stay_duration_days || answers.intended_length_of_stay_days || "15");
-  const occupation = String(answers.occupation || "Employed Professional");
-  const employer = String(answers.employer_name || "Company / Business Organization");
+  const fullName = answered(answers, "full_name", "applicant_name");
+  const passportNo = answered(answers, "passport_number", "passport_no");
+  const nationality = answered(answers, "nationality");
+  const residence = answered(answers, "current_residence_country", "residence_country");
+  const purpose = answered(answers, "main_purpose", "purpose_of_visit");
+  const stayDays = answered(answers, "stay_duration_days", "intended_length_of_stay_days");
+  const occupation = answered(answers, "occupation");
+  const employer = answered(answers, "employer_name");
 
-  return `STATEMENT OF REASON FOR INVITATION / VISIT (理由書 - STATEMENT OF PURPOSE)
+  return `STATEMENT OF PURPOSE / 理由書  (draft — write this in your own words)
 
-TO:
-The Ministry of Foreign Affairs / Consular Division
+Applicant: ${fullName}
+Nationality: ${nationality}
+Passport number: ${passportNo}
+Country of residence: ${residence}
+Occupation: ${occupation}
+Employer: ${employer}
+Purpose of visit: ${purpose}
+Intended length of stay: ${stayDays}
 
-1. APPLICANT INFORMATION:
-- Name: ${fullName}
-- Nationality: ${nationality}
-- Country of Residence: ${residence}
-- Passport Number: ${passportNo}
-- Current Occupation: ${occupation} (${employer})
+Write your statement below. A consular officer is reading for your reasons in your own
+words, so cover why you are travelling, what ties you to your home country, and how the
+trip is paid for. Torii does not write this for you: a statement you did not write is one
+you cannot stand behind at an interview.
 
-2. DETAILED BACKGROUND & REASON FOR VISIT:
-I am submitting this statement to explain the genuine intent and circumstances of my upcoming visit. I have long held a profound interest in exploring the rich cultural heritage, historical landmarks, and world-renowned scenic attractions of the destination.
 
-My scheduled stay is for ${stayDays} days, specifically dedicated to ${purpose}. During this period, I will follow a structured itinerary and stay at verified accommodations.
+____________________________________________________________________________________
 
-3. FINANCIAL CAPACITY & EXPENSE DISCLOSURE:
-As demonstrated by the enclosed bank statements and proof of income from my occupation at ${employer}, I have accumulated sufficient personal liquid funds to comfortably support all aspects of my trip without recourse to public funds or unauthorized work.
+____________________________________________________________________________________
 
-4. GUARANTEE OF RETURN:
-I have binding professional, social, and financial obligations in ${residence}, including my ongoing career and family commitments. I solemnly declare that I will strictly observe the laws and visa regulations, and I will depart the destination before the expiration of my permitted stay.
-
-I respectfully request that my visa application be granted.
+____________________________________________________________________________________
 
 
 Signature: ______________________________
-Full Name: ${fullName}
 Date: ${new Date().toISOString().split("T")[0]}
 `;
 }
 
-function generateFinancialGuarantee(caseData: Case, packet: Record<string, unknown> | null): string {
+function generateFinancialGuarantee(
+  caseData: Case,
+  packet: Record<string, unknown> | null,
+): string {
   const answers = caseData.intake_answers || {};
-  const fullName = String(answers.full_name || answers.applicant_name || "Applicant");
-  const passportNo = String(answers.passport_number || answers.passport_no || "N/A");
-  const payer = String(answers.trip_payer || "Self");
-  const salary = answers.monthly_salary ? `Monthly Salary: ${String(answers.monthly_salary)}` : "Verified regular income";
-  const employer = String(answers.employer_name || answers.occupation || "Self-Employed / Business / Company");
+  const fullName = answered(answers, "full_name", "applicant_name");
+  const passportNo = answered(answers, "passport_number", "passport_no");
+  const payer = answered(answers, "trip_payer");
+  const salary = answered(answers, "monthly_salary", "annual_salary_jpy");
+  const savings = answered(answers, "estimated_savings_available");
+  const employer = answered(answers, "employer_name");
 
-  return `FINANCIAL GUARANTEE & EXPLANATION OF EXPENSES (身元保証書 / 経費支弁書)
+  const enclosed = numberedOrNone(
+    gatheredDocuments(packet, /bank|financial|tax|income|salary|fund/i),
+    "(None recorded yet — attach your financial evidence and list it here.)",
+  );
 
-TO:
-The Consular Officer / Visa Section
+  return `EXPLANATION OF EXPENSES / 経費支弁書  (draft — check and sign before filing)
 
-I, ${fullName}, holder of Passport No. ${passportNo}, hereby declare the following regarding the financial coverage and guarantee for my travel:
+Applicant: ${fullName}
+Passport number: ${passportNo}
 
-1. FUNDING SOURCE:
-- Trip Payer: ${payer.toUpperCase()}
-- Professional Affiliation / Source of Funds: ${employer}
-- Income Verification: ${salary}
+Who is paying for the trip: ${payer}
+Employer: ${employer}
+Stated income: ${salary}
+Stated available funds: ${savings}
 
-2. EXPENSES UNDERTAKEN:
-I hereby certify that all costs and expenses incurred during this trip—including roundtrip international airfare, domestic transportation within the destination, hotel accommodations, meals, travel medical insurance, and unforeseen emergencies—are fully provided for and guaranteed.
+Financial evidence recorded so far:
+${enclosed}
 
-3. ENCLOSED FINANCIAL PROOF:
-- Official Bank Statement / Bank Balance Certificate (Last 3–6 Months)
-- Income Tax Returns (ITR) / Salary Certificates
-- Confirmed Flight & Accommodation Reservations
+Check every figure above against the documents you are attaching before you sign. This is
+a declaration to a government: it must state what you can evidence, and nothing more.
 
-I guarantee that the applicant will not become a public burden in any manner and will comply with all immigration requirements.
-
-
-Guarantor / Applicant Signature: ______________________________
+Signature: ______________________________
 Name: ${fullName}
 Date: ${new Date().toISOString().split("T")[0]}
 `;
 }
 
-function generateCompleteOfficialForm(caseData: Case, packet: Record<string, unknown> | null): string {
+function generateCompleteOfficialForm(
+  caseData: Case,
+  packet: Record<string, unknown> | null,
+): string {
   const answers = caseData.intake_answers || {};
   let fieldsStr = "";
-  for (const [k, v] of Object.entries(answers)) {
-    if (v !== null && v !== "") {
-      fieldsStr += `  • ${k.replace(/_/g, " ").toUpperCase().padEnd(36)} : ${String(v)}\n`;
+  for (const [key, value] of Object.entries(answers)) {
+    if (value !== null && value !== "") {
+      fieldsStr += `  ${key.replace(/_/g, " ").padEnd(38)}: ${String(value)}\n`;
     }
   }
 
-  return `================================================================================
-OFFICIAL VISA APPLICATION FORM — PRE-FILLED FIELD DATA SHEET
-(Use this verified field guide to fill or verify the official embassy PDF / portal)
-================================================================================
+  return `YOUR ANSWERS, AS RECORDED
+(Check these against the official form before you sign it.)
 
-APPLICANT PROFILE DATA:
-${fieldsStr || "  • No intake answers recorded."}
-
-DECLARATION & SIGNATURE SECTION:
-I hereby declare that the statement given above is true and correct. I understand that visa issuance is at the discretion of the embassy and that any false statement may result in visa denial or immediate deportation.
-
-Applicant Signature: ______________________________
-Date: ${new Date().toISOString().split("T")[0]}
+${fieldsStr || "  No answers recorded yet."}
 `;
 }
 
@@ -531,6 +535,10 @@ export function PacketStep({ packet, caseData, loading, onBuild, onSubmit }: Pac
   }
 
   const docLabels = getDocLabels();
+  const effectivePacket =
+    packet ||
+    (caseData.packet_snapshot as Record<string, unknown> | null) ||
+    (caseData.status === "packet_ready" ? { reference: caseData.reference } : null);
 
   function getActiveDocText(): { title: string; filename: string; text: string; isAi: boolean } {
     let base = { title: "", filename: "", text: "" };
@@ -539,35 +547,35 @@ export function PacketStep({ packet, caseData, loading, onBuild, onSubmit }: Pac
         base = {
           title: docLabels.schedule.replace(/^[^\w]+/, ""),
           filename: `${caseData.reference}-schedule-of-stay.txt`,
-          text: generateScheduleOfStay(caseData, packet),
+          text: generateScheduleOfStay(caseData, effectivePacket),
         };
         break;
       case "reason":
         base = {
           title: docLabels.reason.replace(/^[^\w]+/, ""),
           filename: `${caseData.reference}-reason-for-visit.txt`,
-          text: generateReasonForVisit(caseData, packet),
+          text: generateReasonForVisit(caseData, effectivePacket),
         };
         break;
       case "financial":
         base = {
           title: docLabels.financial.replace(/^[^\w]+/, ""),
           filename: `${caseData.reference}-financial-guarantee.txt`,
-          text: generateFinancialGuarantee(caseData, packet),
+          text: generateFinancialGuarantee(caseData, effectivePacket),
         };
         break;
       case "form":
         base = {
           title: docLabels.form.replace(/^[^\w]+/, ""),
           filename: `${caseData.reference}-official-form-data.txt`,
-          text: generateCompleteOfficialForm(caseData, packet),
+          text: generateCompleteOfficialForm(caseData, effectivePacket),
         };
         break;
       case "full":
         base = {
           title: docLabels.full.replace(/^[^\w]+/, ""),
           filename: `${caseData.reference}-complete-filing-kit.txt`,
-          text: generateCompleteFilingKitText(packet || {}, caseData),
+          text: generateCompleteFilingKitText(effectivePacket || {}, caseData),
         };
         break;
       case "cover":
@@ -575,7 +583,7 @@ export function PacketStep({ packet, caseData, loading, onBuild, onSubmit }: Pac
         base = {
           title: docLabels.cover.replace(/^[^\w]+/, ""),
           filename: `${caseData.reference}-embassy-cover-letter.txt`,
-          text: generateCoverLetter(caseData, packet),
+          text: generateCoverLetter(caseData, effectivePacket),
         };
         break;
     }
@@ -605,13 +613,13 @@ export function PacketStep({ packet, caseData, loading, onBuild, onSubmit }: Pac
     setTimeout(() => {
       link.remove();
       URL.revokeObjectURL(url);
-    }, 10000);
+    }, 5000);
   }
 
   function downloadFullFilingKit() {
-    if (!packet) return;
+    if (!effectivePacket) return;
     const filename = `${caseData.reference}-complete-filing-kit.txt`;
-    const blob = new Blob([generateCompleteFilingKitText(packet, caseData)], {
+    const blob = new Blob([generateCompleteFilingKitText(effectivePacket, caseData)], {
       type: "text/plain;charset=utf-8",
     });
     const url = URL.createObjectURL(blob);
@@ -641,7 +649,7 @@ export function PacketStep({ packet, caseData, loading, onBuild, onSubmit }: Pac
         </Badge>
       </div>
 
-      {!packet ? (
+      {!effectivePacket ? (
         <Card>
           <CardContent className="flex flex-col items-center py-10 text-center space-y-3">
             <Sparkles className="size-10 text-primary/50" />
@@ -674,7 +682,9 @@ export function PacketStep({ packet, caseData, loading, onBuild, onSubmit }: Pac
                     Scope: <span className="font-semibold text-foreground">{caseData.scope_label ?? caseData.locale.toUpperCase()}</span>
                   </p>
                   <p className="mt-1 text-xs text-foreground/80">
-                    🎉 Torii has auto-filled your official forms, verified your document checklist, and prepared your official PDF package.
+                    Your official forms are filled from your answers and your documents are
+                    listed. Check every entry and sign before you file — Torii prepares the
+                    paperwork, it does not verify your documents or approve your application.
                   </p>
                 </div>
               </div>
@@ -890,24 +900,69 @@ export function PacketStep({ packet, caseData, loading, onBuild, onSubmit }: Pac
 
           {/* Feature 2: Official Step-by-Step Submission Roadmap */}
           <div className="space-y-3">
-            <h4 className="text-sm font-bold tracking-tight flex items-center gap-2">
-              <ArrowRight className="size-4 text-primary" /> Step-by-Step Submission Roadmap
-            </h4>
+            <div className="flex items-center justify-between">
+              <h4 className="text-sm font-bold tracking-tight flex items-center gap-2">
+                <ArrowRight className="size-4 text-primary" /> Official Submission Roadmap &amp; Filing Channels
+              </h4>
+              <span className="text-[11px] text-muted-foreground">Every instruction backed by official government source</span>
+            </div>
             <div className="grid gap-3 sm:grid-cols-2">
-              {Array.isArray(packet.submission_steps) && packet.submission_steps.length > 0 ? (
-                (packet.submission_steps as { step?: number; title?: string; description?: string }[]).map((st, i) => (
-                  <div key={i} className="rounded-[var(--radius)] border bg-card p-4 space-y-1">
-                    <div className="flex items-center justify-between">
-                      <Badge tone="default">Step {st.step ?? i + 1}</Badge>
-                      <span className="text-[10px] text-primary font-semibold">Official Requirement</span>
+              {effectivePacket && Array.isArray(effectivePacket.submission_steps) && effectivePacket.submission_steps.length > 0 ? (
+                (effectivePacket.submission_steps as {
+                  step?: number;
+                  title?: string;
+                  description?: string;
+                  portal_url?: string | null;
+                  authority?: string | null;
+                  official_citation_url?: string | null;
+                  category?: string | null;
+                }[]).map((st, i) => (
+                  <div key={i} className="rounded-xl border border-border bg-card p-4 space-y-2 flex flex-col justify-between shadow-xs">
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <Badge tone="default">Step {st.step ?? i + 1}</Badge>
+                        {st.authority && (
+                          <span className="text-[10px] text-muted-foreground truncate max-w-[190px]" title={st.authority}>
+                            🏛️ {st.authority}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs font-bold text-foreground pt-1">{st.title}</p>
+                      <p className="text-[11px] text-muted-foreground leading-relaxed">{st.description}</p>
                     </div>
-                    <p className="text-xs font-semibold text-foreground pt-1">{st.title}</p>
-                    <p className="text-[11px] text-muted-foreground">{st.description}</p>
+
+                    <div className="pt-2 border-t flex flex-wrap items-center justify-between gap-2 text-[11px]">
+                      {st.portal_url ? (
+                        <a
+                          href={st.portal_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-primary hover:underline font-semibold"
+                        >
+                          <ExternalLink className="size-3" />
+                          Open Official Portal
+                        </a>
+                      ) : (
+                        <span className="text-muted-foreground text-[10px]">In-Person / Consular Channel</span>
+                      )}
+
+                      {st.official_citation_url && (
+                        <a
+                          href={st.official_citation_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground text-[10px]"
+                          title="Verify official government regulation"
+                        >
+                          Verify Source ↗
+                        </a>
+                      )}
+                    </div>
                   </div>
                 ))
               ) : (
                 <>
-                  <div className="rounded-[var(--radius)] border bg-card p-4 space-y-1">
+                  <div className="rounded-xl border bg-card p-4 space-y-1">
                     <div className="flex items-center justify-between">
                       <Badge tone="default">Step 1</Badge>
                       <span className="text-[10px] text-primary font-semibold">Online Portal</span>
@@ -917,7 +972,7 @@ export function PacketStep({ packet, caseData, loading, onBuild, onSubmit }: Pac
                       Use Torii&apos;s copyable field guide from the Forms tab to fill out the embassy web portal.
                     </p>
                   </div>
-                  <div className="rounded-[var(--radius)] border bg-card p-4 space-y-1">
+                  <div className="rounded-xl border bg-card p-4 space-y-1">
                     <div className="flex items-center justify-between">
                       <Badge tone="default">Step 2</Badge>
                       <span className="text-[10px] text-primary font-semibold">Filing Fee</span>
@@ -927,7 +982,7 @@ export function PacketStep({ packet, caseData, loading, onBuild, onSubmit }: Pac
                       Pay required fee through the government payment gateway and save receipt.
                     </p>
                   </div>
-                  <div className="rounded-[var(--radius)] border bg-card p-4 space-y-1">
+                  <div className="rounded-xl border bg-card p-4 space-y-1">
                     <div className="flex items-center justify-between">
                       <Badge tone="default">Step 3</Badge>
                       <span className="text-[10px] text-primary font-semibold">Appointment</span>
@@ -937,7 +992,7 @@ export function PacketStep({ packet, caseData, loading, onBuild, onSubmit }: Pac
                       Schedule appointment date at the nearest Visa Application Center or Embassy.
                     </p>
                   </div>
-                  <div className="rounded-[var(--radius)] border bg-card p-4 space-y-1">
+                  <div className="rounded-xl border bg-card p-4 space-y-1">
                     <div className="flex items-center justify-between">
                       <Badge tone="default">Step 4</Badge>
                       <span className="text-[10px] text-primary font-semibold">Dossier</span>
@@ -958,9 +1013,9 @@ export function PacketStep({ packet, caseData, loading, onBuild, onSubmit }: Pac
               <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
                 Physical Dossier Stacking Order (For Embassy Interview / VAC Dropoff)
               </h4>
-              {Array.isArray(packet.dossier_order) && packet.dossier_order.length > 0 ? (
+              {effectivePacket && Array.isArray(effectivePacket.dossier_order) && effectivePacket.dossier_order.length > 0 ? (
                 <ol className="space-y-1.5 text-xs text-foreground">
-                  {(packet.dossier_order as string[]).map((item, idx) => (
+                  {(effectivePacket.dossier_order as string[]).map((item, idx) => (
                     <li key={idx} className="flex items-start gap-2">
                       <Badge tone="muted" className="text-[10px] shrink-0">{idx + 1}</Badge>
                       <span>{item.replace(/^\d+\.\s*/, "")}</span>

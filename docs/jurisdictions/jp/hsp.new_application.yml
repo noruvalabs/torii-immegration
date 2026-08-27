@@ -1,0 +1,277 @@
+jurisdiction: JP
+visa_category: hsp
+action: new_application
+title: Highly Skilled Professional (高度専門職) - Certificate of Eligibility (COE)
+description: Points-based preferential visa for advanced researchers, technical specialists, and corporate executives offering fast-track Permanent Residency in 1 to 3 years.
+version: 2026-04
+is_live: true
+
+stages:
+  - sequence: 1
+    code: sponsor_petition
+    actor: sponsor
+    handoff_artifact: coe
+
+intake:
+  questions:
+    - key: full_name
+      prompt: Full Name (as shown in passport)
+      type: string
+      required: true
+      section: Personal Information
+    - key: nationality
+      prompt: Nationality / Country of Citizenship
+      type: string
+      required: true
+      section: Personal Information
+    - key: date_of_birth
+      prompt: Date of Birth
+      type: string
+      required: true
+      section: Personal Information
+    - key: passport_number
+      prompt: Passport Number
+      type: string
+      required: true
+      section: Personal Information
+    - key: hsp_sub_category
+      prompt: Highly Skilled Professional Sub-Category
+      type: choice
+      options:
+        - 1a_academic_research: Advanced Academic Research (高度学術研究活動 - 1号イ)
+        - 1b_specialized_technical: Advanced Specialized / Technical (高度専門・技術活動 - 1号ロ)
+        - 1c_business_management: Advanced Business Management (高度経営・管理活動 - 1号ハ)
+      required: true
+      section: HSP Activity & Category
+    - key: hsp_total_points
+      prompt: Total Calculated HSP Points on Points Matrix (Minimum 70 points required)
+      type: number
+      required: true
+      section: Points Matrix Assessment
+    - key: annual_salary_jpy
+      prompt: Expected Annual Salary in Japan (JPY)
+      type: number
+      required: true
+      section: Employment & Compensation
+    - key: highest_degree_level
+      prompt: Highest Academic Degree Attained
+      type: choice
+      options:
+        - doctor: Doctoral Degree (PhD) [30 pts]
+        - master_dual: Multiple Master's / Professional Degrees [25 pts]
+        - master: Master's Degree [20 pts]
+        - bachelor: Bachelor's Degree [10 pts]
+        - none: None of the above [0 pts]
+      required: true
+      section: Points Matrix Assessment
+    - key: professional_experience_years
+      prompt: Years of Relevant Professional Work Experience
+      type: number
+      required: true
+      section: Points Matrix Assessment
+    - key: age_years
+      prompt: Current Age (Years)
+      type: number
+      required: true
+      section: Points Matrix Assessment
+    - key: japanese_language_ability
+      prompt: Japanese Language Proficiency Certification
+      type: choice
+      options:
+        - jlpt_n1: JLPT N1 or BJT >= 480 [15 pts]
+        - jlpt_n2: JLPT N2 [10 pts]
+        - japan_uni_grad: Graduated from a Japanese University / Graduate School [10 pts]
+        - none: None [0 pts]
+      required: true
+      section: Points Matrix Assessment
+    - key: employer_name
+      prompt: Sponsoring Employer / Institution Name in Japan
+      type: string
+      required: true
+      section: Employer Details
+    - key: employer_category
+      prompt: Employer Corporate Category Tier
+      type: choice
+      options:
+        - '1': Category 1 (Listed Company / Public Entity)
+        - '2': Category 2 (Withholding tax >= 10M JPY)
+        - '3': Category 3 (SME / Standard Corporate Entity)
+        - '4': Category 4 (New Company / Startup)
+      required: true
+      section: Employer Details
+    - key: criminal_record_any
+      prompt: Do you have any past criminal convictions or deportation history in Japan or abroad?
+      type: boolean
+      required: true
+      section: Compliance & Background
+
+eligibility:
+  rules:
+    - key: hsp_total_points
+      operator: min
+      value: 70
+      failure_status: fail
+      message: You must attain at least 70 points on the official Ministry of Justice HSP points calculation matrix to qualify for Highly Skilled Professional status.
+      citation:
+        authority: Immigration Services Agency of Japan (ISA)
+        title: "Points-Based Preferential Immigration Treatment for Highly Skilled Foreign Professionals"
+        url: https://www.isa.go.jp/en/applications/procedures/nyuukokukanri07_00037.html
+        source_version: 2026-04
+
+    - key: annual_salary_jpy
+      operator: min
+      value: 3000000
+      failure_status: fail
+      message: A statutory minimum annual salary floor of 3,000,000 JPY is required for Advanced Specialized/Technical (1号ロ) and Business Management (1号ハ) activities.
+      citation:
+        authority: Immigration Services Agency of Japan (ISA)
+        title: "Minimum Income Criteria for Highly Skilled Foreign Professionals"
+        url: https://www.isa.go.jp/en/applications/procedures/nyuukokukanri07_00037.html
+        source_version: 2026-04
+
+    - key: criminal_record_any
+      operator: equals
+      value: false
+      failure_status: fail
+      message: Past criminal convictions or deportations require discretionary legal evaluation under Article 5 of the Immigration Control Act.
+      citation:
+        authority: Immigration Control and Refugee Recognition Act (Article 5 & 24)
+        title: "Statutory Grounds for Refusal of Landing & Good Conduct Review"
+        url: https://www.isa.go.jp/en/applications/procedures/index.html
+        source_version: 2026-04
+
+documents:
+  items:
+    - code: passport
+      name:
+        en: Passport (Valid Original & Photo Page Copy)
+        ja: 旅券（パスポート原本及び写し）
+      how_to_obtain:
+        en: Submit clear copy of passport bio-data and signature page.
+      why_required:
+        en: Mandatory identification and nationality validation.
+      is_required: true
+      citation:
+        authority: Ministry of Foreign Affairs of Japan (MOFA)
+        title: "Statutory Passport Verification Guidelines"
+        url: https://www.mofa.go.jp/j_info/visit/visa/index.html
+        source_version: 2026-04
+
+    - code: hsp_points_calculation_sheet
+      name:
+        en: Official Points Calculation Sheet (ポイント計算表)
+        ja: 高度人材ポイント計算表及び疎明資料
+      how_to_obtain:
+        en: Complete the official MOJ Points Calculation Sheet tallying all eligible criteria.
+      why_required:
+        en: Core statutory evidence establishing >= 70 or >= 80 points.
+      is_required: true
+      citation:
+        authority: Immigration Services Agency of Japan (ISA)
+        title: "HSP Points Calculation Sheet and Explanatory Materials"
+        url: https://www.isa.go.jp/en/applications/procedures/nyuukokukanri07_00037.html
+        source_version: 2026-04
+
+    - code: degree_certificates
+      name:
+        en: Degree Certificates & Graduation Diplomas (学位証明書・卒業証明書)
+        ja: 学位取得証明書・大学卒業証明書
+      how_to_obtain:
+        en: Request official degree certificates (PhD, Master's, Bachelor's) from graduating institutions.
+      why_required:
+        en: Substantiates academic background points on the points matrix.
+      is_required: true
+      citation:
+        authority: Immigration Services Agency of Japan (ISA)
+        title: "Proof of Academic Credentials for Points Allocation"
+        url: https://www.isa.go.jp/en/applications/procedures/nyuukokukanri07_00037.html
+        source_version: 2026-04
+
+    - code: employment_certificate_and_salary_proof
+      name:
+        en: Employment Contract / Salary & Compensation Agreement (雇用契約書・年収見込証明書)
+        ja: 雇用契約書及び年収見込証明書
+      how_to_obtain:
+        en: Issued and signed by the Japanese employer specifying duties, role, and projected annual remuneration.
+      why_required:
+        en: Validates statutory minimum salary and annual salary points tier.
+      is_required: true
+      citation:
+        authority: Immigration Services Agency of Japan (ISA)
+        title: "Proof of Annual Remuneration and Contract Execution"
+        url: https://www.isa.go.jp/en/applications/procedures/nyuukokukanri07_00037.html
+        source_version: 2026-04
+
+    - code: work_experience_certificates
+      name:
+        en: Past Employment History Certificates (在職証明書・実務経歴証明書)
+        ja: 過去の職歴・在職証明書
+      how_to_obtain:
+        en: Request signed service letters from prior employers detailing dates and relevant technical responsibilities.
+      why_required:
+        en: Verifies professional career points (3, 5, 7, 10+ years).
+      is_required: false
+      citation:
+        authority: Immigration Services Agency of Japan (ISA)
+        title: "Proof of Professional Experience Standards"
+        url: https://www.isa.go.jp/en/applications/procedures/nyuukokukanri07_00037.html
+        source_version: 2026-04
+
+    - code: japanese_proficiency_certificate
+      name:
+        en: JLPT N1 / N2 Certificate or Japanese University Degree (日本語能力試験証明書)
+        ja: 日本語能力試験認定結果及び成績に関する証明書
+      how_to_obtain:
+        en: Issued by Japan Educational Exchanges and Services (JEES) or Japanese university diploma.
+      why_required:
+        en: Awards 10 to 15 bonus points for Japanese linguistic competence.
+      is_required: false
+      citation:
+        authority: Japan Educational Exchanges and Services (JEES) & ISA
+        title: "JLPT Certification Verification"
+        url: https://www.isa.go.jp/en/applications/procedures/nyuukokukanri07_00037.html
+        source_version: 2026-04
+
+    - code: statutory_withholding_tax_summary
+      name:
+        en: Statutory Withholding Tax Summary Slip (法定調書合計表 - Category 1/2/3)
+        ja: 給与所得の源泉徴収票等の法定調書合計表（受付印のあるもの）
+      how_to_obtain:
+        en: Provided by employer finance/tax department showing total withholding tax paid in prior year.
+      why_required:
+        en: Determines employer category tier (1, 2, or 3) and documentary exemptions.
+      is_required: true
+      citation:
+        authority: National Tax Agency of Japan (国税庁)
+        title: "Statutory Withholding Tax Statement (法定調書合計表)"
+        url: https://www.nta.go.jp/taxes/tetsuzuki/shinsei/annai/hotei/23100051.htm
+        source_version: 2026-04
+
+forms:
+  - code: jp_hsp_application_form
+    version: 2026-04
+    official_title: Application for Certificate of Eligibility (COE) — Highly Skilled Professional
+    citation:
+      authority: Immigration Services Agency of Japan (ISA)
+      title: "Application Form for Status of Residence (高度専門職)"
+      url: https://www.isa.go.jp/en/applications/procedures/nyuukokukanri07_00037.html
+      source_version: 2026-04
+    field_mappings:
+      - form_field: applicant.full_name
+        answer_key: full_name
+        required: true
+      - form_field: applicant.nationality
+        answer_key: nationality
+        required: true
+      - form_field: applicant.passport_number
+        answer_key: passport_number
+        required: true
+      - form_field: points.total_points
+        answer_key: hsp_total_points
+        required: true
+      - form_field: job.annual_salary_jpy
+        answer_key: annual_salary_jpy
+        required: true
+      - form_field: employer.name
+        answer_key: employer_name
+        required: true

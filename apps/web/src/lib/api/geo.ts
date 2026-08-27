@@ -75,16 +75,21 @@ export function getDestinations() {
   return request<Destination[]>("/destinations", { method: "GET" });
 }
 
-export function getVisaTypes() {
-  return request<VisaType[]>("/visa-types", { method: "GET" });
+export function getVisaTypes(destination?: string) {
+  const query = destination ? `?destination=${encodeURIComponent(destination)}` : "";
+  return request<VisaType[]>(`/visa-types${query}`, { method: "GET" });
 }
 
 export function getNationalities() {
   return request<Nationality[]>("/nationalities", { method: "GET" });
 }
 
-export function getApplicationTypes() {
-  return request<ApplicationType[]>("/application-types", { method: "GET" });
+export function getApplicationTypes(destination?: string, visaType?: string) {
+  const params = new URLSearchParams();
+  if (destination) params.append("destination", destination);
+  if (visaType) params.append("visa_type", visaType);
+  const query = params.toString() ? `?${params.toString()}` : "";
+  return request<ApplicationType[]>(`/application-types${query}`, { method: "GET" });
 }
 
 export function updateResidence(countryCode: string) {

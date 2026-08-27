@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   FileText,
   Loader2,
@@ -18,7 +18,8 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth-context";
-import { answerIntake } from "@/lib/api/cases";
+import { answerIntake, downloadOfficialForm, getFiling, getOfficialForms } from "@/lib/api/cases";
+import type { FilingInfo, OfficialForm, PortalPack } from "@/lib/api/cases";
 import { toast } from "@/components/ui/sonner";
 import type { GeneratedForm } from "./types";
 
@@ -30,84 +31,6 @@ type FormsStepProps = {
   caseId?: number;
   reference?: string;
 };
-
-function getFormMetadata(code: string): { title: string; purpose: string; officialUrl?: string } {
-  const c = code.toLowerCase();
-  if (c === "i901" || c.includes("i901") || c.includes("sevis_fee")) {
-    return {
-      title: "Form I-901 (SEVIS Fee Payment Confirmation)",
-      purpose: "Mandatory Student and Exchange Visitor Program (SEVP) fee payment filed online at FMJfee.com ($350 for F-1 / $220 for J-1). Required before consular interview.",
-      officialUrl: "https://www.fmjfee.com/i901fee/index.html",
-    };
-  }
-  if (c === "i20" || c.includes("i20") || c.includes("i-20")) {
-    return {
-      title: "Form I-20 (Certificate of Eligibility for F-1 Student Status)",
-      purpose: "Official Department of Homeland Security certificate issued by your SEVP-certified U.S. school confirming admission, SEVIS ID, degree level, and estimated cost.",
-      officialUrl: "https://www.ice.gov/sevis",
-    };
-  }
-  if (c === "i134" || c.includes("i134") || c.includes("i-134") || c.includes("affidavit")) {
-    return {
-      title: "Form I-134 (Declaration of Financial Support)",
-      purpose: "USCIS declaration executed by a sponsor (parent, relative, or employer) proving sufficient liquid funds and income to support the applicant without unauthorized work.",
-      officialUrl: "https://www.uscis.gov/i-134",
-    };
-  }
-  if (c.includes("appointment") || c.includes("mrv")) {
-    return {
-      title: "U.S. Visa Appointment Portal & MRV Fee Scheduling",
-      purpose: "Official U.S. Embassy scheduling profile generating the MRV fee payment slip ($185) and the in-person interview confirmation appointment letter.",
-      officialUrl: "https://travel.state.gov/content/travel/en/us-visas/visa-information-resources/policy-updates.html",
-    };
-  }
-  if (c.includes("ds_160") || c.includes("ds160") || c.includes("b1") || c.includes("b2") || c.includes("f1")) {
-    return {
-      title: "Online Nonimmigrant Visa Application (Form DS-160)",
-      purpose: "Official U.S. Department of State application submitted via CEAC. Collects biographical data, passport info, travel plans, SEVIS/educational records, and security screening.",
-      officialUrl: "https://ceac.state.gov/genniv/",
-    };
-  }
-  if (c === "isa_application" || c.includes("isa") || c.includes("16-1") || c.includes("16-3")) {
-    return {
-      title: "Application for Extension / Change of Status (在留期間更新・資格変更許可申請書)",
-      purpose: "Standard official application form submitted to the Immigration Services Agency of Japan (出入国在留管理庁).",
-      officialUrl: "https://www.moj.go.jp/isa/applications/procedures/16-1.html",
-    };
-  }
-  if (c.includes("institution") || c.includes("school")) {
-    return {
-      title: "Application for Extension — Institution Part (所属機関等作成用)",
-      purpose: "Section completed and sealed by the sponsoring Japanese educational institution or university verifying enrollment and attendance.",
-      officialUrl: "https://www.moj.go.jp/isa/applications/procedures/16-1.html",
-    };
-  }
-  if (c.includes("organization") || c.includes("employer")) {
-    return {
-      title: "Application for Extension — Employer Part (所属機関等作成用 技人国)",
-      purpose: "Section completed by the sponsoring employer in Japan declaring corporate category, remuneration, and contract terms.",
-      officialUrl: "https://www.moj.go.jp/isa/applications/procedures/16-3.html",
-    };
-  }
-  if (c.includes("schengen")) {
-    return {
-      title: "Harmonised Schengen Visa Application Form",
-      purpose: "Uniform application form for entry and stay in the Schengen area for up to 90 days in any 180-day period.",
-      officialUrl: "https://home-affairs.ec.europa.eu/policies/schengen-borders-visa/visa-policy/applying-schengen-visa_en",
-    };
-  }
-  if (c.includes("uk") || c.includes("ukvi") || c.includes("visitor")) {
-    return {
-      title: "UK Visas and Immigration (UKVI) Application Form",
-      purpose: "Standard application schedule and declarations for UK entry clearance or further leave to remain.",
-      officialUrl: "https://www.gov.uk/browse/visas-immigration",
-    };
-  }
-  return {
-    title: `Official Application Form (${code})`,
-    purpose: "Official government immigration filing form required by published statutory regulations.",
-  };
-}
 
 export function FormsStep({
   forms,
@@ -123,6 +46,66 @@ export function FormsStep({
   const [missingFieldInputs, setMissingFieldInputs] = useState<Record<string, string>>({});
   const [savingMissingField, setSavingMissingField] = useState<string | null>(null);
   const [quickSaveNotice, setQuickSaveNotice] = useState<string | null>(null);
+  const [officialForms, setOfficialForms] = useState<OfficialForm[]>([]);
+  const [filing, setFiling] = useState<FilingInfo | null>(null);
+
+  useEffect(() => {
+    if (!token || !caseId) return;
+    let cancelled = false;
+    Promise.allSettled([getOfficialForms(token, caseId), getFiling(token, caseId)]).then(
+      ([formsResult, filingResult]) => {
+        if (cancelled) return;
+        // Both are additive; the rest of the step stands without either.
+        setOfficialForms(formsResult.status === "fulfilled" ? formsResult.value.forms : []);
+        setFiling(filingResult.status === "fulfilled" ? filingResult.value : null);
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [token, caseId]);
+
+  const portalPack: PortalPack | undefined =
+    filing?.filing_mode === "online_portal" ? filing.portal_pack : undefined;
+
+  function saveBlob(bytes: Uint8Array<ArrayBuffer>, filename: string) {
+    const blob = new Blob([bytes], { type: "application/pdf" });
+    if (blob.size === 0) throw new Error("Generated PDF file is empty (0 bytes).");
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    setTimeout(() => {
+      link.remove();
+      URL.revokeObjectURL(url);
+    }, 10000);
+  }
+
+  function decodeBase64(data: string): Uint8Array<ArrayBuffer> {
+    const binary = atob(data);
+    const bytes = new Uint8Array(new ArrayBuffer(binary.length));
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    return bytes;
+  }
+
+  async function handleDownloadOfficialForm(formCode: string) {
+    const activeToken =
+      token || (typeof window !== "undefined" ? localStorage.getItem("torii_token") : null);
+    if (!caseId || !activeToken) return;
+    setDownloadingPdf(formCode);
+    try {
+      const data = await downloadOfficialForm(activeToken, caseId, formCode);
+      if (!data?.data_base64) throw new Error("Invalid server response: missing PDF data.");
+      saveBlob(decodeBase64(data.data_base64), data.filename);
+      toast.success("Official form downloaded.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Download failed. Please try again.");
+    } finally {
+      setDownloadingPdf(null);
+    }
+  }
 
   function handleCopy(key: string, value: string) {
     void navigator.clipboard.writeText(value);
@@ -212,17 +195,180 @@ export function FormsStep({
             Torii automatically maps your intake data and scanned documents directly into official embassy application forms.
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Button onClick={onGenerate} disabled={loading}>
-            {loading ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Sparkles className="mr-2 size-4" />}
-            {forms.length === 0 ? "Auto-fill official forms" : "Regenerate forms"}
-          </Button>
-        </div>
+        {forms.length > 0 && (
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={onGenerate} disabled={loading} className="text-xs h-8">
+              {loading ? <Loader2 className="mr-1.5 size-3.5 animate-spin" /> : <Sparkles className="mr-1.5 size-3.5" />}
+              Regenerate forms
+            </Button>
+          </div>
+        )}
       </div>
 
       {quickSaveNotice && (
         <div className="rounded-md border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs text-emerald-800 dark:text-emerald-300 font-medium">
           {quickSaveNotice}
+        </div>
+      )}
+
+      {portalPack && (
+        <div className="space-y-3">
+          <div className="rounded-[var(--radius)] border border-amber-500/30 bg-amber-500/5 p-4">
+            <p className="text-xs font-semibold uppercase tracking-wider text-amber-700 dark:text-amber-400">
+              Filed online — there is no form to submit
+            </p>
+            <p className="mt-1.5 text-xs text-muted-foreground">
+              {portalPack.scope_label} is completed on the government&apos;s own website.
+              Torii prepares your answers in the order the service asks for them so you can
+              work down the screen and copy each one across.
+            </p>
+            {filing?.apply_url && (
+              <a
+                href={filing.apply_url}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+              >
+                <ExternalLink className="size-3" />
+                Apply at {filing.apply_url.replace(/^https?:\/\//, "")}
+              </a>
+            )}
+          </div>
+
+          <div className="rounded-[var(--radius)] border bg-card p-4 space-y-4">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-sm font-semibold">
+                {portalPack.answered_count} of{" "}
+                {portalPack.answered_count + portalPack.outstanding_count} questions answered
+              </p>
+              <Button
+                onClick={() => handleDownloadPdf("portal-pack")}
+                disabled={downloadingPdf === "portal-pack"}
+                className="text-xs h-8 shrink-0"
+              >
+                {downloadingPdf === "portal-pack" ? (
+                  <Loader2 className="mr-1.5 size-3.5 animate-spin" />
+                ) : (
+                  <Download className="mr-1.5 size-3.5" />
+                )}
+                Download answer pack
+              </Button>
+            </div>
+
+            {portalPack.sections.map((section) => (
+              <div key={section.key} className="space-y-1.5">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  {section.title}
+                </p>
+                <div className="rounded-md border divide-y">
+                  {section.fields.map((field) => (
+                    <div
+                      key={field.field}
+                      className="flex items-baseline gap-3 px-3 py-1.5 text-xs"
+                    >
+                      <span className="w-1/2 shrink-0 text-muted-foreground">
+                        {field.label}
+                        {field.required && <span className="text-amber-600"> *</span>}
+                      </span>
+                      {field.answered ? (
+                        <span className="font-medium break-words">{field.value}</span>
+                      ) : (
+                        <span className="italic text-muted-foreground/60">not answered yet</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+
+            {portalPack.outstanding.length > 0 && (
+              <p className="text-xs text-amber-700 dark:text-amber-400">
+                <AlertCircle className="mr-1 inline size-3.5 align-text-bottom" />
+                The service will ask for {portalPack.outstanding.length} more:{" "}
+                {portalPack.outstanding.join(", ")}.
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {officialForms.length > 0 && (
+        <div className="space-y-3">
+          <div>
+            <h4 className="text-sm font-semibold text-foreground">
+              The official form{officialForms.length > 1 ? "s" : ""} for your application type
+            </h4>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Downloaded straight from the issuing ministry and filled with your answers — the
+              exact sheet your residence status and procedure require, not a copy of it.
+            </p>
+          </div>
+
+          {officialForms.map((form) => {
+            const missing = form.missing_answer_keys ?? [];
+            const total = form.total_items ?? 0;
+            const answered = Math.max(0, total - missing.length);
+            return (
+              <div key={form.code} className="rounded-[var(--radius)] border bg-card p-4 space-y-3">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold tracking-tight">{form.title_ja}</p>
+                    <p className="text-xs text-muted-foreground">{form.title_en}</p>
+                    <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                      {form.series && (
+                        <Badge tone="muted" className="text-[10px] font-normal">
+                          {form.series}
+                        </Badge>
+                      )}
+                      <Badge tone="muted" className="text-[10px] font-normal">
+                        {form.pages} page{form.pages > 1 ? "s" : ""}
+                      </Badge>
+                      {total > 0 && (
+                        <Badge
+                          tone={missing.length === 0 ? "success" : "warning"}
+                          className="text-[10px] font-normal"
+                        >
+                          {answered}/{total} items filled
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                  <Button
+                    onClick={() => handleDownloadOfficialForm(form.code)}
+                    disabled={downloadingPdf === form.code}
+                    className="text-xs h-8 shrink-0"
+                  >
+                    {downloadingPdf === form.code ? (
+                      <Loader2 className="mr-1.5 size-3.5 animate-spin" />
+                    ) : (
+                      <Download className="mr-1.5 size-3.5" />
+                    )}
+                    Download filled form
+                  </Button>
+                </div>
+
+                {missing.length > 0 && (
+                  <p className="text-xs text-amber-700 dark:text-amber-400">
+                    <AlertCircle className="mr-1 inline size-3.5 align-text-bottom" />
+                    Still blank on the form: {missing.map((key) => key.replace(/_/g, " ")).join(", ")}.
+                    Answer these in intake and download again.
+                  </p>
+                )}
+
+                {form.note && <p className="text-xs text-muted-foreground">{form.note}</p>}
+
+                <a
+                  href={form.source_page_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                >
+                  <ExternalLink className="size-3" />
+                  {form.authority}
+                </a>
+              </div>
+            );
+          })}
         </div>
       )}
 
@@ -254,7 +400,17 @@ export function FormsStep({
           </div>
 
           {forms.map((form) => {
-            const meta = getFormMetadata(form.form_code);
+            // Title and source come from the form itself — the pack or the research that
+            // produced it — rather than being guessed from its code. The guesses were
+            // wrong for anything the chain did not anticipate, and silently so.
+            const citation = (form.citation ?? {}) as {
+              title?: string;
+              url?: string;
+              authority?: string;
+              source_version?: string;
+            };
+            const title = form.official_title || citation.title || form.form_code;
+            const officialUrl = typeof citation.url === "string" ? citation.url : undefined;
             const hasFilledFields = Object.keys(form.filled_fields).length > 0;
             const displayFields = hasFilledFields
               ? form.filled_fields
@@ -269,7 +425,7 @@ export function FormsStep({
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between border-b pb-4">
                   <div>
                     <div className="flex flex-wrap items-center gap-2">
-                      <h4 className="text-base font-bold tracking-tight">{meta.title}</h4>
+                      <h4 className="text-base font-bold tracking-tight">{title}</h4>
                       <Badge tone="muted" className="font-mono text-[10px]">
                         {form.form_code} v{form.form_version}
                       </Badge>
@@ -307,9 +463,9 @@ export function FormsStep({
                         Download Form (PDF)
                       </Button>
                     )}
-                    {meta.officialUrl && (
+                    {officialUrl && (
                       <a
-                        href={meta.officialUrl}
+                        href={officialUrl}
                         target="_blank"
                         rel="noreferrer"
                         className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
@@ -320,11 +476,19 @@ export function FormsStep({
                   </div>
                 </div>
 
-                {/* Form Purpose Guide */}
-                <div className="rounded bg-muted/40 p-3 flex items-start gap-2.5">
-                  <HelpCircle className="size-4 text-muted-foreground shrink-0 mt-0.5" />
-                  <p className="text-xs text-muted-foreground leading-relaxed">{meta.purpose}</p>
-                </div>
+                {/* Who publishes this form and which revision, from its citation. The
+                    replaced version described the form's purpose in prose invented from
+                    its code, which was wrong for every code the chain had not foreseen. */}
+                {citation.authority && (
+                  <div className="rounded bg-muted/40 p-3 flex items-start gap-2.5">
+                    <HelpCircle className="size-4 text-muted-foreground shrink-0 mt-0.5" />
+                    <p className="text-xs text-muted-foreground leading-relaxed">
+                      Published by {citation.authority}
+                      {citation.source_version ? ` (revision ${citation.source_version})` : ""}.
+                      Check your answers against the official form before you sign it.
+                    </p>
+                  </div>
+                )}
 
                 {/* Missing Fields Inline Quick-Fixer */}
                 {form.missing_required_fields.length > 0 && (
@@ -334,7 +498,9 @@ export function FormsStep({
                         <AlertCircle className="size-4 shrink-0 text-amber-600 dark:text-amber-400" />
                         <span>Missing Required Form Field{form.missing_required_fields.length > 1 ? "s" : ""}:</span>
                       </div>
-                      <span className="text-[10px] text-muted-foreground">Required by official Japanese Immigration Bureau form</span>
+                      <span className="text-[10px] text-muted-foreground">
+                        Required by {citation.authority || "the official form"}
+                      </span>
                     </div>
                     <p className="text-[11px] text-muted-foreground">
                       The official form template requires values for: <strong className="text-foreground">{form.missing_required_fields.join(", ")}</strong>. You can enter the missing value below and click Save:

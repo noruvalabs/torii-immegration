@@ -1,0 +1,301 @@
+scope:
+  jurisdiction: UK
+  visa_category: work
+  action: new_application
+  is_live: true
+  name: UK Skilled Worker Visa — New Application (gov.uk / UKVI Path)
+
+stages:
+  - sequence: 1
+    code: sponsor_petition
+    actor: sponsor
+    handoff_artifact: coe
+  - sequence: 2
+    code: applicant_filing
+    actor: applicant
+
+intake:
+  questions:
+    # --- Section 1: Identity & Passport ---
+    - key: full_name
+      section: Identity & Passport
+      prompt: What is your full name as it appears on your passport?
+      type: string
+      min_length: 2
+      max_length: 200
+      required: true
+      citation:
+        authority: UK Visas and Immigration (UKVI / Home Office)
+        title: Identity and Nationality Evidence
+        url: https://www.gov.uk/skilled-worker-visa
+
+    - key: nationality
+      section: Identity & Passport
+      prompt: What is your nationality (passport issuing country)?
+      type: enum
+      options:
+        - BD
+        - IN
+        - PK
+        - LK
+        - NP
+        - JP
+        - US
+        - CA
+        - AU
+        - DE
+        - FR
+        - CN
+        - PH
+        - VN
+        - other
+      required: true
+      citation:
+        authority: UK Visas and Immigration (UKVI / Home Office)
+        title: Passport and Travel Document Requirements
+        url: https://www.gov.uk/skilled-worker-visa
+
+    - key: date_of_birth
+      section: Identity & Passport
+      prompt: What is your date of birth (YYYY-MM-DD)?
+      type: date
+      required: true
+      citation:
+        authority: UK Visas and Immigration (UKVI / Home Office)
+        title: Identity Verification
+        url: https://www.gov.uk/skilled-worker-visa
+
+    - key: passport_number
+      section: Identity & Passport
+      prompt: What is your passport number?
+      type: string
+      min_length: 5
+      max_length: 32
+      required: true
+      citation:
+        authority: UK Visas and Immigration (UKVI / Home Office)
+        title: Passport Details
+        url: https://www.gov.uk/skilled-worker-visa
+
+    - key: passport_expiry
+      section: Identity & Passport
+      prompt: When does your passport expire (YYYY-MM-DD)?
+      type: date
+      required: true
+      citation:
+        authority: UK Visas and Immigration (UKVI / Home Office)
+        title: Valid Travel Document Validity
+        url: https://www.gov.uk/skilled-worker-visa
+
+    # --- Section 2: Sponsorship & Employment ---
+    - key: sponsor_name
+      section: Sponsorship & Employment
+      prompt: What is the official name of your UK Licensed Sponsor employer?
+      type: string
+      min_length: 2
+      max_length: 200
+      required: true
+      citation:
+        authority: UK Visas and Immigration (UKVI / Home Office)
+        title: Valid Certificate of Sponsorship (CoS)
+        url: https://www.gov.uk/skilled-worker-visa/your-job
+
+    - key: cos_reference
+      section: Sponsorship & Employment
+      prompt: What is your Certificate of Sponsorship (CoS) Reference Number?
+      type: string
+      min_length: 6
+      max_length: 30
+      required: true
+      citation:
+        authority: UK Visas and Immigration (UKVI / Home Office)
+        title: Certificate of Sponsorship Requirement
+        url: https://www.gov.uk/skilled-worker-visa/your-job
+
+    - key: job_title
+      section: Sponsorship & Employment
+      prompt: What is your official job title in the UK?
+      type: string
+      min_length: 2
+      max_length: 150
+      required: true
+      citation:
+        authority: UK Visas and Immigration (UKVI / Home Office)
+        title: Eligible Occupation Codes (SOC 2020)
+        url: https://www.gov.uk/skilled-worker-visa/your-job
+
+    - key: annual_salary_gbp
+      section: Sponsorship & Employment
+      prompt: What is your proposed gross annual salary in GBP (£)?
+      type: integer
+      min_value: 20000
+      max_value: 500000
+      required: true
+      citation:
+        authority: UK Visas and Immigration (UKVI / Home Office)
+        title: Salary Thresholds for Skilled Workers
+        url: https://www.gov.uk/skilled-worker-visa/your-job
+
+    # --- Section 3: English Language & Maintenance ---
+    - key: english_language_proof
+      section: Qualifications & English
+      prompt: How do you meet the UK English language requirement (CEFR B1 or higher)?
+      type: enum
+      options:
+        - passed_approved_test
+        - uk_degree
+        - degree_taught_in_english_ecctis
+        - national_of_exempt_country
+      required: true
+      citation:
+        authority: UK Visas and Immigration (UKVI / Home Office)
+        title: Knowledge of English (CEFR Level B1)
+        url: https://www.gov.uk/skilled-worker-visa/knowledge-of-english
+
+    - key: sponsor_certifies_maintenance
+      section: Qualifications & English
+      prompt: Does your UK sponsor certify maintenance on your CoS (ticked 'A-rated sponsor maintains applicant')?
+      type: boolean
+      required: true
+      citation:
+        authority: UK Visas and Immigration (UKVI / Home Office)
+        title: Financial / Maintenance Requirement (£1,276)
+        url: https://www.gov.uk/skilled-worker-visa/how-much-it-costs
+
+    # --- Section 4: Security & History ---
+    - key: criminal_record
+      section: Security & History
+      prompt: Have you ever been convicted of a criminal offence or immigration breach in the UK or any other country?
+      type: boolean
+      required: true
+      citation:
+        authority: UK Visas and Immigration (UKVI / Home Office)
+        title: General Grounds for Refusal (Part 9 Immigration Rules)
+        url: https://www.gov.uk/guidance/immigration-rules/immigration-rules-part-9-grounds-for-refusal
+
+eligibility:
+  rules:
+    - key: cos_reference
+      operator: not_empty
+      value: null
+      failure_status: ineligible
+      message: A valid Certificate of Sponsorship (CoS) reference number from a UK Home Office licensed sponsor is mandatory.
+      citation:
+        authority: UK Visas and Immigration (UKVI / Home Office)
+        title: Sponsorship Mandatory Requirement
+        url: https://www.gov.uk/skilled-worker-visa/your-job
+
+    - key: annual_salary_gbp
+      operator: min
+      value: 29000
+      failure_status: at_risk
+      message: Your gross salary must meet the general Skilled Worker salary threshold (typically £38,700, or £29,000 / lower going rate under transitional/shortage rules).
+      citation:
+        authority: UK Visas and Immigration (UKVI / Home Office)
+        title: "Skilled Worker Visa: Eligible Occupations, Going Rates & Salary Thresholds"
+        url: https://www.gov.uk/government/publications/skilled-worker-visa-going-rates-for-eligible-occupations
+
+    - key: english_language_proof
+      operator: in
+      value:
+        - passed_approved_test
+        - uk_degree
+        - degree_taught_in_english_ecctis
+        - national_of_exempt_country
+      failure_status: at_risk
+      message: Proof of English proficiency at CEFR level B1 (reading, writing, speaking and listening) is required.
+      citation:
+        authority: UK Visas and Immigration (UKVI / Home Office)
+        title: "Knowledge of English: Approved Secure English Language Tests (SELT)"
+        url: https://www.gov.uk/skilled-worker-visa/knowledge-of-english
+
+documents:
+  requirements:
+    - code: cos_document
+      name: Certificate of Sponsorship (CoS) Details Summary
+      is_required: true
+      citation:
+        authority: UK Visas and Immigration (UKVI / Home Office)
+        title: "UK Visa Sponsorship for Employers: Eligibility and Verification"
+        url: https://www.gov.uk/uk-visa-sponsorship-employers
+
+    - code: passport_scan
+      name: Current Valid Passport (Photo and Bio-data Page)
+      is_required: true
+      citation:
+        authority: UK Visas and Immigration (UKVI / Home Office)
+        title: Identity and Passport Verification Guidelines
+        url: https://www.gov.uk/government/publications/biometric-information-enrolment-guidance
+
+    - code: english_proficiency_evidence
+      name: English Language Test Certificate (SELT) or ECCTIS Degree Statement
+      is_required: true
+      citation:
+        authority: UK Visas and Immigration (UKVI / Home Office)
+        title: "Knowledge of English: Approved Secure English Language Tests (SELT)"
+        url: https://www.gov.uk/skilled-worker-visa/knowledge-of-english
+
+    - code: maintenance_bank_statement
+      name: Bank Statements Showing £1,276 Savings for 28 Consecutive Days (or Sponsor Maintenance Letter)
+      is_required: true
+      citation:
+        authority: UK Visas and Immigration (UKVI / Home Office)
+        title: Financial Evidence for Sponsored Routes & 28-day Maintenance Rule
+        url: https://www.gov.uk/guidance/financial-evidence-for-sponsored-or-endorsed-work-routes
+
+    - code: tb_test_certificate
+      name: Tuberculosis (TB) Test Certificate from Approved Clinic (if applying from listed country)
+      is_required: false
+      citation:
+        authority: UK Visas and Immigration (UKVI / Home Office)
+        title: Tuberculosis (TB) Testing for UK Visa Applicants
+        url: https://www.gov.uk/tb-test-visa
+
+forms:
+  - code: ukvi_skilled_worker
+    version: '2026-04'
+    official_title: UKVI Skilled Worker Online Application (Access UK)
+    citation:
+      authority: UK Visas and Immigration (UKVI / Home Office)
+      title: Online Application Form & Guidance
+      url: https://www.gov.uk/skilled-worker-visa/apply
+    # form_field is "<portal section>.<question>". The section prefix is what groups the
+    # answer pack into the order Access UK asks for things, so a new question needs a
+    # pack edit here and nothing in code.
+    field_mappings:
+      - form_field: personal.full_name
+        answer_key: full_name
+        required: true
+      - form_field: personal.date_of_birth
+        answer_key: date_of_birth
+        required: true
+      - form_field: personal.nationality
+        answer_key: nationality
+        required: true
+      - form_field: passport.passport_number
+        answer_key: passport_number
+        required: true
+      - form_field: passport.passport_expiry
+        answer_key: passport_expiry
+        required: true
+      - form_field: sponsor.sponsor_name
+        answer_key: sponsor_name
+        required: true
+      - form_field: sponsor.certificate_of_sponsorship_reference
+        answer_key: cos_reference
+        required: true
+      - form_field: employment.job_title
+        answer_key: job_title
+        required: true
+      - form_field: employment.annual_salary_gbp
+        answer_key: annual_salary_gbp
+        required: true
+      - form_field: employment.sponsor_certifies_maintenance
+        answer_key: sponsor_certifies_maintenance
+        required: false
+      - form_field: declarations.english_language_proof
+        answer_key: english_language_proof
+        required: true
+      - form_field: declarations.criminal_record
+        answer_key: criminal_record
+        required: true

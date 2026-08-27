@@ -1,0 +1,160 @@
+scope:
+  jurisdiction: UK
+  visa_category: student
+  action: new_application
+  is_live: true
+  name: UK Student Visa — New Application (gov.uk / UKVI Path)
+
+stages:
+  - sequence: 1
+    code: sponsor_petition
+    actor: institution
+    handoff_artifact: coe
+  - sequence: 2
+    code: applicant_filing
+    actor: applicant
+
+intake:
+  questions:
+    - key: full_name
+      section: Identity & Passport
+      prompt: What is your full name as it appears on your passport?
+      type: string
+      min_length: 2
+      max_length: 200
+      required: true
+      citation:
+        authority: UK Visas and Immigration (UKVI / Home Office)
+        title: Identity Requirements
+        url: https://www.gov.uk/student-visa
+
+    - key: nationality
+      section: Identity & Passport
+      prompt: What is your nationality (passport issuing country)?
+      type: enum
+      options:
+        - BD
+        - IN
+        - PK
+        - LK
+        - NP
+        - JP
+        - US
+        - CA
+        - AU
+        - other
+      required: true
+      citation:
+        authority: UK Visas and Immigration (UKVI / Home Office)
+        title: Nationality & Travel Documents
+        url: https://www.gov.uk/student-visa
+
+    - key: cas_number
+      section: University & Course
+      prompt: What is your Confirmation of Acceptance for Studies (CAS) reference number?
+      type: string
+      min_length: 6
+      max_length: 30
+      required: true
+      citation:
+        authority: UK Visas and Immigration (UKVI / Home Office)
+        title: Confirmation of Acceptance for Studies (CAS)
+        url: https://www.gov.uk/student-visa/course
+
+    - key: institution_name
+      section: University & Course
+      prompt: What is the name of your licensed UK university / education sponsor?
+      type: string
+      min_length: 2
+      max_length: 200
+      required: true
+      citation:
+        authority: UK Visas and Immigration (UKVI / Home Office)
+        title: Licensed Student Sponsor
+        url: https://www.gov.uk/student-visa/course
+
+    - key: course_title
+      section: University & Course
+      prompt: What is your course title in the UK?
+      type: string
+      min_length: 2
+      max_length: 200
+      required: true
+      citation:
+        authority: UK Visas and Immigration (UKVI / Home Office)
+        title: Eligible Course of Study
+        url: https://www.gov.uk/student-visa/course
+
+    - key: has_financial_evidence
+      section: Financial Requirements
+      prompt: Can you demonstrate required living costs (£1,334/month for London, £1,023/month outside London) held for 28 consecutive days?
+      type: boolean
+      required: true
+      citation:
+        authority: UK Visas and Immigration (UKVI / Home Office)
+        title: Financial Evidence (£1,334 / £1,023 per month)
+        url: https://www.gov.uk/student-visa/money
+
+eligibility:
+  rules:
+    - key: cas_number
+      operator: not_empty
+      value: null
+      failure_status: ineligible
+      message: An unconditional offer and CAS number from an approved licensed UK student sponsor is mandatory.
+      citation:
+        authority: UK Visas and Immigration (UKVI / Home Office)
+        title: CAS Validity
+        url: https://www.gov.uk/student-visa/course
+
+    - key: has_financial_evidence
+      operator: eq
+      value: true
+      failure_status: at_risk
+      message: You must provide bank statements showing course fees plus living expenses held for 28 consecutive days.
+      citation:
+        authority: UK Visas and Immigration (UKVI / Home Office)
+        title: Maintenance Requirements
+        url: https://www.gov.uk/student-visa/money
+
+documents:
+  requirements:
+    - code: cas_statement
+      name: Official CAS Statement / Letter from UK Education Sponsor
+      is_required: true
+      citation:
+        authority: UK Visas and Immigration (UKVI / Home Office)
+        title: Course Confirmation
+        url: https://www.gov.uk/student-visa/documents-you-must-provide
+
+    - code: passport_scan
+      name: Valid Passport Bio-data Page
+      is_required: true
+      citation:
+        authority: UK Visas and Immigration (UKVI / Home Office)
+        title: Proof of Identity
+        url: https://www.gov.uk/student-visa/documents-you-must-provide
+
+    - code: financial_proof
+      name: Bank Statements / Scholarship Letter Meeting 28-Day Rule
+      is_required: true
+      citation:
+        authority: UK Visas and Immigration (UKVI / Home Office)
+        title: Money to Support Yourself
+        url: https://www.gov.uk/student-visa/money
+
+forms:
+  - code: ukvi_student
+    version: '2026-04'
+    official_title: UKVI Student Visa Application Form
+    citation:
+      authority: UK Visas and Immigration (UKVI / Home Office)
+      title: Online Application Form
+      url: https://www.gov.uk/student-visa/apply
+    field_mappings:
+      - form_field: applicant_name
+        answer_key: full_name
+        required: true
+      - form_field: nationality
+        answer_key: nationality
+        required: true

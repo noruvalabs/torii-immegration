@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useMemo } from "react";
 import { Search, ChevronDown, Check, X } from "lucide-react";
 import { ALL_COUNTRIES, matchCountry, type Country } from "@/lib/countries";
+import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
 export type CountrySelectorProps = {
@@ -14,8 +15,10 @@ export type CountrySelectorProps = {
   disabled?: boolean;
   className?: string;
   gridMaxHeightClass?: string;
+  gridColsClass?: string;
   id?: string;
   autoFocus?: boolean;
+  autoFillSearch?: boolean;
 };
 
 export function CountrySelector({
@@ -27,28 +30,70 @@ export function CountrySelector({
   disabled = false,
   className,
   gridMaxHeightClass = "max-h-56",
+  gridColsClass = "sm:grid-cols-2",
   id,
+  autoFillSearch = false,
 }: CountrySelectorProps) {
-  const [search, setSearch] = useState("");
-  const [isOpen, setIsOpen] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const searchInputRef = useRef<HTMLInputElement>(null);
-
   const selectedCountry = useMemo(() => {
     if (!value) return null;
     return matchCountry(value);
   }, [value]);
 
+  const [search, setSearch] = useState(() => {
+    if (autoFillSearch && value) {
+      const matched = matchCountry(value);
+      return matched ? matched.name : "";
+    }
+    return "";
+  });
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // Sync search input when value prop changes
+  const prevValueRef = useRef(value);
+  useEffect(() => {
+    if (value !== prevValueRef.current) {
+      prevValueRef.current = value;
+      if (autoFillSearch && value) {
+        const matched = matchCountry(value);
+        if (matched) {
+          setSearch(matched.name);
+        }
+      }
+    }
+  }, [value, autoFillSearch]);
+
   const filteredCountries = useMemo(() => {
-    if (!search.trim()) return ALL_COUNTRIES;
+    if (!search.trim()) {
+      if (selectedCountry) {
+        return [
+          selectedCountry,
+          ...ALL_COUNTRIES.filter((c) => c.code !== selectedCountry.code),
+        ];
+      }
+      return ALL_COUNTRIES;
+    }
     const q = search.trim().toLowerCase();
-    return ALL_COUNTRIES.filter(
+    const matches = ALL_COUNTRIES.filter(
       (c) =>
         c.name.toLowerCase().includes(q) ||
         c.code.toLowerCase() === q ||
         (c.currency && c.currency.toLowerCase().includes(q)),
     );
-  }, [search]);
+
+    return matches.sort((a, b) => {
+      const aExact = a.name.toLowerCase() === q || a.code.toLowerCase() === q;
+      const bExact = b.name.toLowerCase() === q || b.code.toLowerCase() === q;
+      if (aExact && !bExact) return -1;
+      if (!aExact && bExact) return 1;
+      const aStarts = a.name.toLowerCase().startsWith(q);
+      const bStarts = b.name.toLowerCase().startsWith(q);
+      if (aStarts && !bStarts) return -1;
+      if (!aStarts && bStarts) return 1;
+      return 0;
+    });
+  }, [search, selectedCountry]);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -84,7 +129,11 @@ export function CountrySelector({
     const val = valueType === "code" ? country.code : country.name;
     onChange(val, country);
     setIsOpen(false);
-    setSearch("");
+    if (autoFillSearch) {
+      setSearch(country.name);
+    } else {
+      setSearch("");
+    }
   }
 
   /* Grid mode rendering (used for large interactive selection steps) */
@@ -97,6 +146,7 @@ export function CountrySelector({
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
+            onFocus={(e) => e.target.select()}
             placeholder="Search all 240+ countries..."
             className="h-9 w-full rounded-[var(--radius)] border bg-background pl-9 pr-8 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring"
           />
@@ -104,7 +154,7 @@ export function CountrySelector({
             <button
               type="button"
               onClick={() => setSearch("")}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-0.5 rounded hover:bg-muted"
               aria-label="Clear search"
             >
               <X className="size-3.5" />
@@ -113,13 +163,21 @@ export function CountrySelector({
         </div>
 
         {filteredCountries.length === 0 ? (
-          <p className="py-6 text-center text-xs text-muted-foreground">
-            No country matches &ldquo;{search}&rdquo;
-          </p>
+          <div className="py-6 text-center text-xs text-muted-foreground space-y-2">
+            <p>No country matches &ldquo;{search}&rdquo;</p>
+            <button
+              type="button"
+              onClick={() => setSearch("")}
+              className="text-xs text-primary font-medium hover:underline"
+            >
+              View all 240+ countries
+            </button>
+          </div>
         ) : (
           <div
             className={cn(
-              "grid gap-2 overflow-y-auto pr-1 sm:grid-cols-2",
+              "grid gap-2 overflow-y-auto pr-1",
+              gridColsClass,
               gridMaxHeightClass,
             )}
           >
@@ -137,7 +195,7 @@ export function CountrySelector({
                   className={cn(
                     "flex items-center gap-3 rounded-[var(--radius)] border p-2.5 text-left text-sm transition-colors",
                     isSelected
-                      ? "border-primary bg-primary/10 font-semibold text-primary shadow-sm"
+                      ? "border-primary bg-primary/10 font-semibold text-primary shadow-sm ring-1 ring-primary/30"
                       : "bg-card hover:bg-accent text-foreground",
                   )}
                 >
@@ -150,11 +208,10 @@ export function CountrySelector({
                   <span className="min-w-0 flex-1 truncate font-medium">
                     {c.name}
                   </span>
-                  <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
-                    {c.code}
-                  </span>
                   {isSelected && (
-                    <Check className="size-4 shrink-0 text-[var(--color-success)]" />
+                    <Badge tone="success" className="text-[10px] py-0 px-1.5 shrink-0">
+                      Selected
+                    </Badge>
                   )}
                 </button>
               );

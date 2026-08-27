@@ -8,6 +8,8 @@ import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/lib/auth-context";
 import {
   getAllGeoData,
+  getVisaTypes,
+  getApplicationTypes,
   type GeoData,
   type Destination,
   type VisaType,
@@ -42,6 +44,9 @@ export default function ScopePage() {
 
   const [submitting, setSubmitting] = useState(false);
   const [createdCase, setCreatedCase] = useState<CaseResult | null>(null);
+  const [dynamicVisaTypes, setDynamicVisaTypes] = useState<VisaType[] | null>(null);
+  const [dynamicAppTypes, setDynamicAppTypes] = useState<ApplicationType[] | null>(null);
+  const [loadingOptions, setLoadingOptions] = useState(false);
 
   // Seed residence/nationality once from profile — never re-run after Continue saves profile.
   const seededFromProfileRef = useRef(false);
@@ -79,6 +84,53 @@ export default function ScopePage() {
       cancelled = true;
     };
   }, [token]);
+
+  useEffect(() => {
+    if (!selectedDestination) {
+      setDynamicVisaTypes(null);
+      setDynamicAppTypes(null);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        setLoadingOptions(true);
+        const vTypes = await getVisaTypes(selectedDestination.code);
+        if (cancelled) return;
+        setDynamicVisaTypes(vTypes);
+      } catch {
+        // Fallback to static geoData options
+      } finally {
+        if (!cancelled) setLoadingOptions(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedDestination]);
+
+  useEffect(() => {
+    if (!selectedDestination || !selectedVisaType) {
+      setDynamicAppTypes(null);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        setLoadingOptions(true);
+        const aTypes = await getApplicationTypes(selectedDestination.code, selectedVisaType.code);
+        if (cancelled) return;
+        setDynamicAppTypes(aTypes);
+      } catch {
+        // Fallback to static geoData options
+      } finally {
+        if (!cancelled) setLoadingOptions(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedDestination, selectedVisaType]);
 
   function goBack() {
     setError(null);
@@ -119,6 +171,7 @@ export default function ScopePage() {
 
   function selectVisaType(v: VisaType) {
     setSelectedVisaType(v);
+    setSelectedAppType(null);
     setStep("app_type");
   }
 
@@ -197,8 +250,8 @@ export default function ScopePage() {
   }
 
   const destinations = geoData?.destinations ?? [];
-  const visaTypes = geoData?.visa_types ?? [];
-  const appTypes = geoData?.application_types ?? [];
+  const visaTypes = dynamicVisaTypes ?? geoData?.visa_types ?? [];
+  const appTypes = dynamicAppTypes ?? geoData?.application_types ?? [];
   const nationalities = geoData?.nationalities ?? [];
   const residenceLabel = matchCountry(residenceCountry).name;
   const nationalityLabel = matchCountry(nationality).name;
@@ -210,7 +263,7 @@ export default function ScopePage() {
           Start a new application
         </h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Apply for a visa from {geoData?.detected_country.country_name ?? "Bangladesh"} to Japan, United States, or United Kingdom.
+          Apply for a visa from {residenceLabel || geoData?.detected_country?.country_name || "your residence"} to our supported destinations.
         </p>
       </div>
 
@@ -248,52 +301,78 @@ export default function ScopePage() {
       )}
 
       {/* Combined residence + nationality */}
+      {/* Combined residence + nationality in 2 columns */}
       {step === "identity" && (
         <div className="space-y-6">
-          <div className="space-y-3">
-            <h3 className="text-sm font-medium text-muted-foreground">
-              Country of residence
-            </h3>
-            {(user?.current_country || geoData?.detected_country) && (
-              <div className="rounded-[var(--radius)] border border-primary/20 bg-primary/5 px-4 py-3 text-sm">
-                <span className="font-medium">
-                  {user?.current_country ? "From profile / auto-detected:" : "Auto-detected:"}
-                </span>{" "}
-                <span className="text-muted-foreground">
-                  {residenceLabel} ({residenceCountry})
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+            {/* Column 1: Country of residence */}
+            <div className="space-y-3 rounded-xl border bg-card p-5 shadow-xs flex flex-col">
+              <div>
+                <h3 className="text-sm font-semibold text-foreground">
+                  Country of Residence
+                </h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Where you currently reside or have legal residency.
+                </p>
+              </div>
+
+              {(user?.current_country || geoData?.detected_country) && (
+                <div className="rounded-[var(--radius)] border border-primary/20 bg-primary/5 px-3 py-2 text-xs flex items-center justify-between">
+                  <span className="font-medium text-foreground">
+                    {user?.current_country ? "Profile / auto-detected:" : "Auto-detected:"}
+                  </span>
+                  <span className="font-semibold text-primary">
+                    {residenceLabel}
+                  </span>
+                </div>
+              )}
+
+              <CountrySelector
+                mode="grid"
+                valueType="code"
+                value={residenceCountry}
+                onChange={(code) => setResidenceCountry(code)}
+                gridMaxHeightClass="max-h-72"
+                gridColsClass="grid-cols-1 sm:grid-cols-2"
+              />
+            </div>
+
+            {/* Column 2: Nationality */}
+            <div className="space-y-3 rounded-xl border bg-card p-5 shadow-xs flex flex-col">
+              <div>
+                <h3 className="text-sm font-semibold text-foreground">
+                  Nationality (Passport Country)
+                </h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Some visas differ by nationality. We use this to tailor official requirements.
+                </p>
+              </div>
+
+              <div className="rounded-[var(--radius)] border border-muted bg-muted/40 px-3 py-2 text-xs flex items-center justify-between">
+                <span className="font-medium text-muted-foreground">
+                  Selected Passport:
+                </span>
+                <span className="font-semibold text-foreground">
+                  {nationalityLabel}
                 </span>
               </div>
-            )}
-            <CountrySelector
-              mode="grid"
-              valueType="code"
-              value={residenceCountry}
-              onChange={(code) => setResidenceCountry(code)}
-              gridMaxHeightClass="max-h-56"
-            />
-          </div>
 
-          <div className="space-y-3">
-            <h3 className="text-sm font-medium text-muted-foreground">
-              Nationality (passport country)
-            </h3>
-            <p className="text-xs text-muted-foreground">
-              Some visas differ by nationality. We use this to tailor official requirements.
-            </p>
-            <CountrySelector
-              mode="grid"
-              valueType="code"
-              value={nationality}
-              onChange={(code) => setNationality(code)}
-              gridMaxHeightClass="max-h-56"
-            />
+              <CountrySelector
+                mode="grid"
+                valueType="code"
+                value={nationality}
+                onChange={(code) => setNationality(code)}
+                gridMaxHeightClass="max-h-72"
+                gridColsClass="grid-cols-1 sm:grid-cols-2"
+              />
+            </div>
           </div>
 
           <button
             type="button"
             onClick={() => void confirmIdentity()}
             disabled={!residenceCountry || !nationality || savingIdentity}
-            className="inline-flex w-full items-center justify-center gap-2 rounded-[var(--radius)] bg-primary px-4 py-3 text-sm font-medium text-primary-foreground transition-colors hover:opacity-90 disabled:pointer-events-none disabled:opacity-50"
+            className="inline-flex w-full items-center justify-center gap-2 rounded-[var(--radius)] bg-primary px-4 py-3.5 text-sm font-medium text-primary-foreground transition-colors hover:opacity-90 disabled:pointer-events-none disabled:opacity-50 shadow-sm"
           >
             {savingIdentity ? (
               <>
@@ -322,20 +401,23 @@ export default function ScopePage() {
               No destinations available.
             </p>
           ) : (
-            destinations.map((d) => (
-              <button
-                key={d.code}
-                onClick={() => selectDestination(d)}
-                className="flex w-full items-center gap-4 rounded-[var(--radius)] border bg-card p-4 text-left transition-colors hover:bg-accent"
-              >
-                <span className="text-2xl">{d.flag}</span>
-                <div className="flex-1">
-                  <p className="font-medium">{d.name}</p>
-                  <p className="text-xs text-muted-foreground">{d.currency}</p>
-                </div>
-                <ArrowRight className="size-4 text-muted-foreground" />
-              </button>
-            ))
+            destinations.map((d) => {
+              const flag = d.flag || matchCountry(d.code).flag || "🌐";
+              return (
+                <button
+                  key={d.code}
+                  onClick={() => selectDestination(d)}
+                  className="flex w-full items-center gap-4 rounded-[var(--radius)] border bg-card p-4 text-left transition-colors hover:bg-accent"
+                >
+                  <span className="text-2xl">{flag}</span>
+                  <div className="flex-1">
+                    <p className="font-medium">{d.name}</p>
+                    <p className="text-xs text-muted-foreground">{d.currency}</p>
+                  </div>
+                  <ArrowRight className="size-4 text-muted-foreground" />
+                </button>
+              );
+            })
           )}
         </div>
       )}
@@ -348,9 +430,14 @@ export default function ScopePage() {
           <h3 className="text-sm font-medium text-muted-foreground">
             Visa type for <strong>{selectedDestination?.flag} {selectedDestination?.name}</strong>
           </h3>
-          {visaTypes.length === 0 ? (
+          {loadingOptions ? (
+            <div className="py-8 text-center">
+              <Loader2 className="mx-auto size-6 animate-spin text-muted-foreground" />
+              <p className="mt-2 text-xs text-muted-foreground">Loading available visa types…</p>
+            </div>
+          ) : visaTypes.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              No visa types available.
+              No visa types available for this destination.
             </p>
           ) : (
             visaTypes.map((v) => (
@@ -376,21 +463,32 @@ export default function ScopePage() {
             <ArrowLeft className="size-3.5" /> Back
           </button>
           <h3 className="text-sm font-medium text-muted-foreground">
-            Application type
+            Application type for <strong>{selectedDestination?.flag} {selectedDestination?.name} — {selectedVisaType?.name}</strong>
           </h3>
-          {appTypes.map((a) => (
-            <button
-              key={a.code}
-              onClick={() => selectAppType(a)}
-              className="flex w-full items-center gap-4 rounded-[var(--radius)] border bg-card p-4 text-left transition-colors hover:bg-accent"
-            >
-              <div className="flex-1">
-                <p className="font-medium">{a.name}</p>
-                <p className="text-xs text-muted-foreground">{a.description}</p>
-              </div>
-              <ArrowRight className="size-4 text-muted-foreground" />
-            </button>
-          ))}
+          {loadingOptions ? (
+            <div className="py-8 text-center">
+              <Loader2 className="mx-auto size-6 animate-spin text-muted-foreground" />
+              <p className="mt-2 text-xs text-muted-foreground">Loading available application types…</p>
+            </div>
+          ) : appTypes.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              No application types available for this destination.
+            </p>
+          ) : (
+            appTypes.map((a) => (
+              <button
+                key={a.code}
+                onClick={() => selectAppType(a)}
+                className="flex w-full items-center gap-4 rounded-[var(--radius)] border bg-card p-4 text-left transition-colors hover:bg-accent"
+              >
+                <div className="flex-1">
+                  <p className="font-medium">{a.name}</p>
+                  <p className="text-xs text-muted-foreground">{a.description}</p>
+                </div>
+                <ArrowRight className="size-4 text-muted-foreground" />
+              </button>
+            ))
+          )}
         </div>
       )}
 

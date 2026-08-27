@@ -54,6 +54,8 @@ export type Case = {
   residence_country?: string | null;
   research_id?: number | null;
   is_entitled?: boolean;
+  packet_snapshot?: Record<string, unknown> | null;
+  eligibility_snapshot?: Record<string, unknown> | null;
 };
 
 export type IntakeQuestion = {
@@ -62,12 +64,21 @@ export type IntakeQuestion = {
   type: "boolean" | "string" | "integer" | "enum" | "date";
   required?: boolean;
   options?: string[] | null;
-  show_when?: { key: string; equals: boolean | string | number } | null;
+  /** The official form's own wording per option, where the choice mirrors a tick-box group. */
+  option_labels?: Record<string, string> | null;
+  /** Revealed by another answer: `equals` for one value, `one_of` for any of several. */
+  show_when?: {
+    key: string;
+    equals?: boolean | string | number | null;
+    one_of?: string[] | null;
+  } | null;
   min_length?: number | null;
   max_length?: number | null;
   min_value?: number | null;
   max_value?: number | null;
   section?: string | null;
+  /** Why the question is asked — set where the answer fills a specific official-form box. */
+  hint?: string | null;
   citation?: Record<string, unknown> | null;
 };
 
@@ -124,6 +135,8 @@ export type GeneratedForm = {
   filled_fields: Record<string, unknown>;
   missing_required_fields: string[];
   citation: Record<string, unknown>;
+  /** The form's own name, from the pack or the research behind it. */
+  official_title?: string | null;
 };
 
 export type ReviewResult = {
@@ -303,6 +316,92 @@ export function generateForms(token: string, caseId: number) {
 
 export function getForms(token: string, caseId: number) {
   return req<GeneratedForm[]>(`/cases/${caseId}/forms`, token);
+}
+
+// ── Official government forms ──────────────────────────────────────────────────
+// The exact ministry-published sheet for this application type, not a rendering of it.
+
+export type OfficialForm = {
+  code: string;
+  title_en: string;
+  title_ja: string;
+  series: string;
+  procedure: string;
+  authority: string;
+  source_page_url: string;
+  pdf_url: string | null;
+  pages: number;
+  citation: { authority: string; title: string; url: string };
+  note: string | null;
+  missing_answer_keys?: string[];
+  total_items?: number;
+};
+
+export type OfficialFormsResponse = {
+  jurisdiction: string | null;
+  visa_category?: string | null;
+  action?: string | null;
+  scope_label: string | null;
+  forms: OfficialForm[];
+};
+
+export function getOfficialForms(token: string, caseId: number) {
+  return req<OfficialFormsResponse>(`/cases/${caseId}/official-forms`, token);
+}
+
+// ── Filing mode ────────────────────────────────────────────────────────────────
+// Some countries publish a form to fill in and hand over (Japan); others are filed
+// entirely on a government website (the UK), where the deliverable is an answer pack.
+
+export type PortalField = {
+  field: string;
+  label: string;
+  answer_key: string;
+  value: string | null;
+  required: boolean;
+  answered: boolean;
+};
+
+export type PortalSection = { key: string; title: string; fields: PortalField[] };
+
+export type PortalPack = {
+  jurisdiction: string;
+  scope_label: string;
+  apply_url: string | null;
+  sections: PortalSection[];
+  citations: { authority?: string; title?: string; url?: string }[];
+  answered_count: number;
+  outstanding_count: number;
+  outstanding: string[];
+};
+
+export type FilingInfo = {
+  case_id: number;
+  jurisdiction: string | null;
+  scope_label: string | null;
+  filing_mode: "official_form_pdf" | "online_portal" | "hybrid";
+  apply_url: string | null;
+  portal_pack?: PortalPack;
+};
+
+export function getFiling(token: string, caseId: number) {
+  return req<FilingInfo>(`/cases/${caseId}/filing`, token);
+}
+
+export type OfficialFormDownload = {
+  filename: string;
+  media_type: string;
+  data_base64: string;
+  size_bytes: number;
+  form?: Record<string, unknown>;
+};
+
+export function downloadOfficialForm(token: string, caseId: number, formCode: string) {
+  return req<OfficialFormDownload>(
+    `/cases/${caseId}/export/official-form/${encodeURIComponent(formCode)}?format=base64`,
+    token,
+    { headers: { Accept: "application/json" } },
+  );
 }
 
 // ── Review ─────────────────────────────────────────────────────────────────────

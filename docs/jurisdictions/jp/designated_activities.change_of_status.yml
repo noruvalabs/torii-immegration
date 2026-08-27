@@ -1,0 +1,203 @@
+jurisdiction: JP
+visa_category: designated_activities
+action: change_of_status
+title: Designated Activities (特定活動) - Article 46 & Job Hunting
+description: Status of residence for Japanese university graduates with JLPT N1 (Article 46 - broad work rights), continuous job hunting after graduation, and specialized internships.
+version: 2026-04
+is_live: true
+
+stages:
+  - sequence: 1
+    code: applicant_filing
+    actor: applicant
+
+intake:
+  questions:
+    - key: full_name
+      prompt: Full Name (as shown in passport)
+      type: string
+      required: true
+      section: Personal Information
+    - key: nationality
+      prompt: Nationality / Country of Citizenship
+      type: string
+      required: true
+      section: Personal Information
+    - key: designated_activities_type
+      prompt: Type of Designated Activities Application
+      type: choice
+      options:
+        - article_46_graduate: Article 46 - Japanese University Graduate with JLPT N1 (特定活動46号・就労)
+        - post_grad_job_hunting: Continuous Post-Graduation Job Hunting (特定活動・継続就職活動)
+        - internship: Internship / Summer Job (特定活動・インターンシップ)
+      required: true
+      section: Activity Type
+    - key: graduated_japanese_university
+      prompt: Did you graduate from a 4-year Japanese University or Graduate School?
+      type: boolean
+      required: true
+      section: Educational Background
+    - key: japanese_language_ability
+      prompt: Japanese Language Proficiency Certification
+      type: choice
+      options:
+        - jlpt_n1: JLPT N1 (Passed)
+        - bjt_480_plus: BJT Business Japanese Test >= 480 points
+        - native_or_japanese_major: Majored in Japanese Language at University
+        - below_n1: Below N1 / No Certification
+      required: true
+      section: Language Proficiency
+    - key: has_job_offer
+      prompt: Do you currently hold a signed full-time job offer in Japan?
+      type: boolean
+      required: true
+      section: Employment
+    - key: employer_annual_salary_jpy
+      prompt: Contracted Annual Gross Salary (JPY)
+      type: number
+      required: false
+      section: Employment
+    - key: university_recommendation_letter
+      prompt: Do you have an official recommendation letter for job hunting from your Japanese university/college?
+      type: boolean
+      required: false
+      section: Job Hunting Continuation
+
+eligibility:
+  rules:
+    - key: graduated_japanese_university
+      operator: equals
+      value: true
+      failure_status: fail
+      message: Article 46 Designated Activities strictly requires graduation from a 4-year Japanese university or graduate school (Vocational colleges/Senmon-gakko are not eligible for Article 46).
+      citation:
+        authority: Immigration Services Agency of Japan (ISA)
+        title: "Guidelines for Designated Activities (Notification No. 46) for Japanese University Graduates"
+        url: https://www.isa.go.jp/en/applications/procedures/nyuukokukanri07_00038.html
+        source_version: 2026-04
+
+    - key: japanese_language_ability
+      operator: in
+      value:
+        - jlpt_n1
+        - bjt_480_plus
+        - native_or_japanese_major
+      failure_status: fail
+      message: You must hold JLPT N1 or BJT score of 480+ to qualify for Article 46 Designated Activities.
+      citation:
+        authority: Immigration Services Agency of Japan (ISA)
+        title: "Linguistic Competence Criteria for Article 46"
+        url: https://www.isa.go.jp/en/applications/procedures/nyuukokukanri07_00038.html
+        source_version: 2026-04
+
+documents:
+  items:
+    - code: passport
+      name:
+        en: Passport (Original)
+        ja: 旅券（原本）
+      how_to_obtain:
+        en: Present valid original passport.
+      why_required:
+        en: Identification and visa recording.
+      is_required: true
+      citation:
+        authority: Ministry of Foreign Affairs of Japan (MOFA)
+        title: "Passport Verification Guidelines"
+        url: https://www.mofa.go.jp/j_info/visit/visa/index.html
+        source_version: 2026-04
+
+    - code: residence_card
+      name:
+        en: Residence Card (Original)
+        ja: 在留カード（原本）
+      how_to_obtain:
+        en: Present physical residence card.
+      why_required:
+        en: Confirms lawful stay.
+      is_required: true
+      citation:
+        authority: Immigration Services Agency of Japan (ISA)
+        title: "Residence Card Verification"
+        url: https://www.isa.go.jp/en/applications/guide/residencecard.html
+        source_version: 2026-04
+
+    - code: japanese_university_diploma
+      name:
+        en: Japanese University Graduation Certificate / Degree Diploma (卒業証明書または学位記)
+        ja: 日本の大学等の卒業証明書または学位記の写し
+      how_to_obtain:
+        en: Issued by your graduating Japanese university or graduate school.
+      why_required:
+        en: Statutory proof of graduation from a recognized Japanese degree-granting institution.
+      is_required: true
+      citation:
+        authority: Ministry of Education, Culture, Sports, Science and Technology (MEXT) & ISA
+        title: "University Degree Certification Standards"
+        url: https://www.isa.go.jp/en/applications/procedures/nyuukokukanri07_00038.html
+        source_version: 2026-04
+
+    - code: jlpt_n1_certificate
+      name:
+        en: JLPT N1 Certificate or BJT 480+ Score Report (日本語能力試験N1認定書)
+        ja: 日本語能力試験N1認定結果及び成績に関する証明書またはBJT480点以上の証明書
+      how_to_obtain:
+        en: Issued by JEES / Japan Foundation or BJT testing organization.
+      why_required:
+        en: Mandatory prerequisite under Article 46 Notification.
+      is_required: true
+      citation:
+        authority: Japan Educational Exchanges and Services (JEES) & ISA
+        title: "Japanese Linguistic Proficiency Standards for Article 46"
+        url: https://www.isa.go.jp/en/applications/procedures/nyuukokukanri07_00038.html
+        source_version: 2026-04
+
+    - code: employment_contract_and_job_description
+      name:
+        en: Employment Agreement & Detailed Job Duties Statement (雇用契約書及び業務内容説明書)
+        ja: 雇用契約書及び具体的な職務内容を説明する文書
+      how_to_obtain:
+        en: Executed with Japanese employer, detailing duties that require high-level communication skills.
+      why_required:
+        en: Validates that duties utilize Japanese university educational foundation and language proficiency.
+      is_required: true
+      citation:
+        authority: Immigration Services Agency of Japan (ISA)
+        title: "Employment Condition and Duty Scope Review"
+        url: https://www.isa.go.jp/en/applications/procedures/nyuukokukanri07_00038.html
+        source_version: 2026-04
+
+    - code: university_recommendation_letter
+      name:
+        en: University Recommendation Letter for Job Hunting (大学の推薦状 - 就職活動時)
+        ja: 卒業した大学等による継続就職活動についての推薦状
+      how_to_obtain:
+        en: Issued by the career / student affairs center of your Japanese university.
+      why_required:
+        en: Mandatory for Post-Graduation Job Hunting (就職活動) Designated Activities status.
+      is_required: false
+      citation:
+        authority: Immigration Services Agency of Japan (ISA)
+        title: "Post-Graduation Job Search Guidelines"
+        url: https://www.isa.go.jp/en/applications/procedures/zairyu_shikaku10.html
+        source_version: 2026-04
+
+forms:
+  - code: jp_designated_activities_form
+    version: 2026-04
+    official_title: Application for Change of Status of Residence (特定活動)
+    citation:
+      authority: Immigration Services Agency of Japan (ISA)
+      title: "Designated Activities Application Form"
+      url: https://www.moj.go.jp/isa/applications/procedures/16-2.html
+      source_version: 2026-04
+    field_mappings:
+      - form_field: applicant.full_name
+        answer_key: full_name
+        required: true
+      - form_field: applicant.nationality
+        answer_key: nationality
+        required: true
+      - form_field: applicant.residence_card_number
+        answer_key: residence_card_number
+        required: true

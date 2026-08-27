@@ -93,6 +93,9 @@ def test_uk_meta_flags_research_enabled() -> None:
     tourist = next(c for c in uk.categories if c["code"] == "tourist")
     assert tourist["is_live"] is False
     assert tourist["research_enabled"] is True
-    new_action = next(a for a in uk.actions if a["code"] == "new")
-    assert new_action["is_live"] is False
-    assert new_action["research_enabled"] is True
+    work = next(c for c in uk.categories if c["code"] == "work")
+    assert work["is_live"] is True
+    student = next(c for c in uk.categories if c["code"] == "student")
+    assert student["is_live"] is True
+    cos_action = next(a for a in uk.actions if a["code"] == "change_of_status")
+    assert cos_action["is_live"] is True

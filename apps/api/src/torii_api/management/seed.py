@@ -87,6 +87,7 @@ SEED_EXTRA_ACTIONS = [
     {"code": "new", "name": "New Visa", "is_live": True},
     {"code": "renewal", "name": "Renewal / Extension", "is_live": True},
     {"code": "new_application", "name": "New application", "is_live": True},
+    {"code": "change_of_status", "name": "Change of status", "is_live": True},
 ]
 
 GENERIC_QUESTIONS: list[dict[str, Any]] = [

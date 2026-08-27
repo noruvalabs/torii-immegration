@@ -14,6 +14,7 @@ import structlog
 from pydantic import BaseModel
 
 from torii_api.config import get_settings
+from torii_api.services.citations import resolve_official_citation
 from torii_api.services.content_packs import is_effective_on
 from torii_api.services.pack_exports import pack_rules
 
@@ -113,6 +114,48 @@ KEY_ALIASES: dict[str, list[str]] = {
         "has_sufficient_funds",
         "bank_statement_6_months",
         "bank_statements_available",
+        "has_financial_evidence",
+        "financial_evidence",
+    ],
+    "has_financial_evidence": [
+        "has_sufficient_funds",
+        "bank_statement_available",
+        "financial_evidence",
+        "maintenance_funds_available",
+        "maintenance_funds",
+        "funds_available",
+    ],
+    "cas_number": [
+        "cas_reference",
+        "cas",
+        "cas_reference_number",
+        "confirmation_of_acceptance_for_studies",
+        "cas_statement_reference",
+    ],
+    "institution_name": [
+        "university_name",
+        "education_provider",
+        "sponsor_institution",
+        "school_name",
+        "educational_institution",
+    ],
+    "course_title": [
+        "program_title",
+        "course_name",
+        "degree_title",
+        "student_course",
+    ],
+    "cos_number": [
+        "cos_reference",
+        "cos",
+        "certificate_of_sponsorship",
+        "certificate_of_sponsorship_number",
+    ],
+    "employer_name": [
+        "company_name",
+        "sponsor_name",
+        "inviting_company_name",
+        "organization_name",
     ],
     "traveled_internationally_before": ["travel_history", "international_travel"],
     "prior_overstay_history": ["prior_overstay", "overstay_history"],
@@ -194,8 +237,13 @@ def _matches(answer: Any, operator: str, expected: Any, context: dict[str, Any])
     return False
 
 
-def _rule_applies(rule: dict[str, Any], as_of: date, context: dict[str, Any]) -> bool:
-    """A rule applies when it is temporally effective and matches the employer category."""
+def _rule_applies(
+    rule: dict[str, Any],
+    as_of: date,
+    context: dict[str, Any],
+    answers: dict[str, Any] | None = None,
+) -> bool:
+    """A rule applies when it is temporally effective and matches prerequisites / context."""
     if not is_effective_on(rule, as_of):
         return False
     required_categories = rule.get("employer_category")
@@ -206,6 +254,49 @@ def _rule_applies(rule: dict[str, Any], as_of: date, context: dict[str, Any]) ->
         if isinstance(required_categories, list):
             return actual in required_categories
         return actual == required_categories
+
+    # Explicit show_when condition on the rule
+    show_when = rule.get("show_when")
+    if isinstance(show_when, dict) and answers is not None:
+        sw_key = show_when.get("key")
+        sw_equals = show_when.get("equals")
+        if sw_key:
+            actual_val = _get_answer_for_key(str(sw_key), answers)
+            if actual_val is None or actual_val != sw_equals:
+                return False
+
+    # Dependent fields that only apply when a prerequisite is true
+    if answers is not None:
+        key = str(rule.get("key", ""))
+        has_job_offer = answers.get("has_job_offer")
+        if has_job_offer is False or str(has_job_offer).strip().lower() in ("false", "no", "0"):
+            job_offer_dependent_keys = {
+                "employer_sanctioned",
+                "job_description",
+                "employer_name",
+                "employer_corporate_number",
+                "annual_salary_jpy",
+                "annual_salary_gbp",
+                "cos_number",
+                "cos_reference",
+                "soc_code",
+                "workplace_address",
+                "job_title",
+            }
+            if key in job_offer_dependent_keys:
+                return False
+
+        has_fin_support = answers.get("has_financial_support") or answers.get("has_financial_evidence")
+        if has_fin_support is False or str(has_fin_support).strip().lower() in ("false", "no", "0"):
+            sponsor_dependent_keys = {
+                "sponsor_type",
+                "sponsor_relationship",
+                "sponsor_annual_income",
+                "sponsor_bank_balance",
+            }
+            if key in sponsor_dependent_keys:
+                return False
+
     return True
 
 
@@ -226,17 +317,24 @@ def evaluate_eligibility(
     context = context or {}
     findings: list[EligibilityFinding] = []
     for rule in rules:
-        if not _rule_applies(rule, as_of, context):
+        if not _rule_applies(rule, as_of, context, answers=answers):
             continue
         key = str(rule["key"])
         answer = _get_answer_for_key(key, answers)
+        jur_code = str(context.get("jurisdiction_code") or context.get("jurisdiction") or "JP")
+        visa_cat = str(context.get("visa_category") or context.get("category") or "")
+        citation = resolve_official_citation(
+            jurisdiction_code=jur_code,
+            visa_category=visa_cat,
+            existing_citation=rule.get("citation"),
+        )
         if answer is None or str(answer).strip() == "":
             findings.append(
                 EligibilityFinding(
                     key=key,
                     status="out_of_scope",
                     message=f"Cannot evaluate '{key.replace('_', ' ')}' because the answer is missing in intake.",
-                    citation=dict(rule.get("citation") or {}),
+                    citation=citation,
                 )
             )
             continue
@@ -248,7 +346,7 @@ def evaluate_eligibility(
                     message=str(
                         rule.get("message", f"Rule for '{key.replace('_', ' ')}' was not met.")
                     ),
-                    citation=dict(rule.get("citation") or {}),
+                    citation=citation,
                 )
             )
         else:
@@ -262,7 +360,7 @@ def evaluate_eligibility(
                             f"Criterion '{key.replace('_', ' ')}' is satisfied based on intake answers.",
                         )
                     ),
-                    citation=dict(rule.get("citation") or {}),
+                    citation=citation,
                 )
             )
 

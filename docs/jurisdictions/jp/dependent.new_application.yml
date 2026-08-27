@@ -1,0 +1,207 @@
+jurisdiction: JP
+visa_category: dependent
+action: new_application
+title: Dependent Visa (家族滞在) - New Application & COE
+description: Residence status for the dependent spouse and children of a foreign national residing in Japan on a work or student visa.
+version: 2026-04
+is_live: true
+
+stages:
+  - sequence: 1
+    code: sponsor_petition
+    actor: sponsor
+    handoff_artifact: coe
+
+intake:
+  questions:
+    - key: full_name
+      prompt: Applicant Full Name (as shown in passport)
+      type: string
+      required: true
+      section: Applicant Information
+    - key: nationality
+      prompt: Applicant Nationality
+      type: string
+      required: true
+      section: Applicant Information
+    - key: relationship_to_supporter
+      prompt: Relationship to the Principal Supporter in Japan
+      type: choice
+      options:
+        - spouse: Spouse (Husband / Wife)
+        - child: Child (Biological or Legally Adopted)
+      required: true
+      section: Family Relationship
+    - key: supporter_name
+      prompt: Principal Supporter Full Name
+      type: string
+      required: true
+      section: Supporter in Japan
+    - key: supporter_residence_card_number
+      prompt: Principal Supporter Residence Card Number
+      type: string
+      required: true
+      section: Supporter in Japan
+    - key: supporter_status_of_residence
+      prompt: Principal Supporter Status of Residence
+      type: choice
+      options:
+        - gijinkoku: Engineer / Specialist in Humanities / International Services (技術・人文知識・国際業務)
+        - hsp: Highly Skilled Professional (高度専門職)
+        - business_manager: Business Manager (経営・管理)
+        - student: Student (留学 - University / Graduate School only)
+        - professor_researcher: Professor / Researcher (教授・研究)
+        - other_work: Other Work Status
+      required: true
+      section: Supporter in Japan
+    - key: supporter_annual_income_jpy
+      prompt: Supporter Annual Gross Income in Japan (JPY)
+      type: number
+      required: true
+      section: Financial Capacity
+    - key: supporter_bank_balance_jpy
+      prompt: Supporter Bank Balance in Japan (JPY)
+      type: number
+      required: false
+      section: Financial Capacity
+
+eligibility:
+  rules:
+    - key: relationship_to_supporter
+      operator: in
+      value:
+        - spouse
+        - child
+      failure_status: fail
+      message: Dependent status (家族滞在) is strictly restricted to the lawful spouse and children of the principal resident under the Immigration Control Act. Parents and siblings cannot be sponsored under this status.
+      citation:
+        authority: Immigration Services Agency of Japan (ISA)
+        title: "Status of Residence: Dependent (家族滞在) Eligibility Standards"
+        url: https://www.isa.go.jp/en/applications/procedures/zairyu_shikaku23.html
+        source_version: 2026-04
+
+    - key: supporter_annual_income_jpy
+      operator: min
+      value: 2400000
+      failure_status: warning
+      message: The principal supporter must demonstrate sufficient ongoing income to maintain the dependents in Japan without burdening public finances.
+      citation:
+        authority: Immigration Services Agency of Japan (ISA)
+        title: "Financial Maintenance Verification for Dependents"
+        url: https://www.isa.go.jp/en/applications/procedures/zairyu_shikaku23.html
+        source_version: 2026-04
+
+documents:
+  items:
+    - code: passport
+      name:
+        en: Dependent Passport (Copy)
+        ja: 申請人の旅券（写し）
+      how_to_obtain:
+        en: Copy of bio-data and photo page.
+      why_required:
+        en: Proves applicant identity and nationality.
+      is_required: true
+      citation:
+        authority: Ministry of Foreign Affairs of Japan (MOFA)
+        title: "Passport Standards"
+        url: https://www.mofa.go.jp/j_info/visit/visa/index.html
+        source_version: 2026-04
+
+    - code: marriage_or_birth_certificate
+      name:
+        en: Official Marriage / Birth Certificate with Japanese Translation (婚姻届出証明書・出生証明書及び訳文)
+        ja: 家族関係を証する公的文書（婚姻証明書・出生証明書）及び日本語訳
+      how_to_obtain:
+        en: Official government-issued certificate from applicant's home country with complete Japanese translation.
+      why_required:
+        en: Legal proof of spousal or parental relationship to the supporter.
+      is_required: true
+      citation:
+        authority: Immigration Services Agency of Japan (ISA)
+        title: "Proof of Family Relationship Guidelines"
+        url: https://www.isa.go.jp/en/applications/procedures/zairyu_shikaku23.html
+        source_version: 2026-04
+
+    - code: supporter_residence_card_and_passport
+      name:
+        en: Supporter's Residence Card & Passport Copies (扶養者の在留カード及び旅券写し)
+        ja: 扶養者の在留カード（表裏）及びパスポート写し
+      how_to_obtain:
+        en: Photocopy of both sides of supporter's Japanese residence card and bio-data page of passport.
+      why_required:
+        en: Confirms supporter's valid legal status and period of stay in Japan.
+      is_required: true
+      citation:
+        authority: Immigration Services Agency of Japan (ISA)
+        title: "Supporter Residence Verification"
+        url: https://www.isa.go.jp/en/applications/procedures/zairyu_shikaku23.html
+        source_version: 2026-04
+
+    - code: supporter_employment_certificate
+      name:
+        en: Supporter's Certificate of Employment (扶養者の在職証明書または在学証明書)
+        ja: 扶養者の在職証明書（学生の場合は在学証明書）
+      how_to_obtain:
+        en: Issued by supporter's Japanese employer or university.
+      why_required:
+        en: Verifies active employment or university enrollment.
+      is_required: true
+      citation:
+        authority: Immigration Services Agency of Japan (ISA)
+        title: "Supporter Professional Status Verification"
+        url: https://www.isa.go.jp/en/applications/procedures/zairyu_shikaku23.html
+        source_version: 2026-04
+
+    - code: supporter_tax_certificates
+      name:
+        en: Supporter's Resident Tax Certificates (扶養者の住民税課税証明書・納税証明書)
+        ja: 扶養者の直近年度の住民税課税証明書及び納税証明書
+      how_to_obtain:
+        en: Issued by local Ward/City Municipal Office.
+      why_required:
+        en: Validates annual income and tax compliance of the household.
+      is_required: true
+      citation:
+        authority: National Tax Agency of Japan (国税庁)
+        title: "Resident Tax Verification"
+        url: https://www.nta.go.jp/taxes/tetsuzuki/shinsei/annai/hotei/23100051.htm
+        source_version: 2026-04
+
+    - code: supporter_bank_balance_certificate
+      name:
+        en: Supporter's Bank Balance Certificate (扶養者の預金残高証明書)
+        ja: 扶養者の預金残高証明書または通帳の写し
+      how_to_obtain:
+        en: Issued by supporter's Japanese bank.
+      why_required:
+        en: Demonstrates readily available liquid assets for initial resettlement.
+      is_required: false
+      citation:
+        authority: Immigration Services Agency of Japan (ISA)
+        title: "Financial Sufficiency Standards"
+        url: https://www.isa.go.jp/en/applications/procedures/zairyu_shikaku23.html
+        source_version: 2026-04
+
+forms:
+  - code: jp_dependent_coe_form
+    version: 2026-04
+    official_title: Application for Certificate of Eligibility (家族滞在)
+    citation:
+      authority: Immigration Services Agency of Japan (ISA)
+      title: "Dependent COE Application Form"
+      url: https://www.isa.go.jp/en/applications/procedures/zairyu_shikaku23.html
+      source_version: 2026-04
+    field_mappings:
+      - form_field: applicant.full_name
+        answer_key: full_name
+        required: true
+      - form_field: applicant.nationality
+        answer_key: nationality
+        required: true
+      - form_field: supporter.name
+        answer_key: supporter_name
+        required: true
+      - form_field: supporter.residence_card_number
+        answer_key: supporter_residence_card_number
+        required: true

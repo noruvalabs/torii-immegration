@@ -4,33 +4,32 @@ host_locale: en
 is_live: true
 efile_enabled: false
 self_filing_allowed: true
-notes: >
-  Research-driven market. Scopes in this jurisdiction are served by the
-  live-research pipeline (research_enabled) rather than a seeded content pack,
-  so requirements stay current with official gov.uk sources.
+# UKVI publishes no downloadable application form; every route is completed on
+# gov.uk and biometrics are given at a visa application centre.
+filing_mode: online_portal
+apply_url: https://www.gov.uk/browse/visas-immigration
+notes: Official UK Visas and Immigration (UKVI / Home Office) immigration workflows.
 categories:
-  - code: tourist
-    name: Standard Visitor Visa
-    is_live: false
-    research_enabled: true
+  - code: work
+    name: Skilled Worker Visa
+    is_live: true
   - code: student
     name: Student Visa
-    is_live: false
-    research_enabled: true
-  - code: work
-    name: Work Visa
+    is_live: true
+  - code: tourist
+    name: Standard Visitor Visa
     is_live: false
     research_enabled: true
 actions:
   - code: new
     name: New Visa
-    is_live: false
-    research_enabled: true
+    is_live: true
   - code: renewal
     name: Renewal / Extension
-    is_live: false
-    research_enabled: true
+    is_live: true
   - code: new_application
     name: New application
-    is_live: false
-    research_enabled: true
+    is_live: true
+  - code: change_of_status
+    name: Change of status
+    is_live: true

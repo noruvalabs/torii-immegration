@@ -1,19 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
 import { usePathname } from "next/navigation";
 import {
   Bot,
-  CheckCircle2,
-  ChevronDown,
-  ExternalLink,
-  HelpCircle,
   Loader2,
-  MessageSquare,
-  RefreshCw,
+  Minus,
   Send,
-  Sparkles,
-  Wand2,
   X,
   Zap,
 } from "lucide-react";
@@ -40,6 +33,8 @@ type IntakeAction = {
   value: string;
   label: string;
 };
+
+
 
 const CATEGORY_PROMPTS: Record<string, string[]> = {
   student: [
@@ -86,10 +81,28 @@ function parseMessageWithActions(text: string): { cleanText: string; actions: In
   return { cleanText, actions };
 }
 
+function clampPosition(x: number, y: number, width: number, height: number): { x: number; y: number } {
+  if (typeof window === "undefined") return { x, y };
+  const pad = 12;
+  const minX = pad;
+  const maxX = Math.max(pad, window.innerWidth - width - pad);
+  const minY = pad;
+  const maxY = Math.max(pad, window.innerHeight - height - pad);
+  return {
+    x: Math.min(Math.max(minX, x), maxX),
+    y: Math.min(Math.max(minY, y), maxY),
+  };
+}
+
 export function FloatingAssistant() {
   const pathname = usePathname();
   const { token } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
+  const [position, setPosition] = useState<{ x: number; y: number } | null>(null);
+
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStartRef = useRef<{ startX: number; startY: number; startPosX: number; startPosY: number } | null>(null);
+
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
@@ -100,6 +113,32 @@ export function FloatingAssistant() {
   const [activeChecklist, setActiveChecklist] = useState<ChecklistItem[]>([]);
   const [activeProfile, setActiveProfile] = useState<User | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Initialize and load saved positions
+  useEffect(() => {
+    try {
+      localStorage.removeItem("torii_assistant_trigger_pos");
+      localStorage.removeItem("torii_assistant_size");
+      const savedPos = localStorage.getItem("torii_assistant_pos");
+      if (savedPos) {
+        const parsed = JSON.parse(savedPos);
+        if (typeof parsed.x === "number" && typeof parsed.y === "number") {
+          setPosition(clampPosition(parsed.x, parsed.y, 350, 460));
+        }
+      }
+    } catch {
+      // Ignore storage errors
+    }
+  }, []);
+
+  // Recalculate clamps on window resize
+  useEffect(() => {
+    const handleResize = () => {
+      setPosition((prev) => (prev ? clampPosition(prev.x, prev.y, 350, 460) : null));
+    };
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   // Extract case ID if currently on a case page
   const caseMatch = pathname?.match(/\/cases\/(\d+)/);
@@ -197,16 +236,71 @@ export function FloatingAssistant() {
     }
   }, [messages, isOpen]);
 
+  // Window drag handlers
+  const handlePointerDown = (e: PointerEvent<HTMLDivElement>) => {
+    if (e.button !== 0) return;
+    if ((e.target as HTMLElement).closest("button, a, input, textarea")) return;
+    const currentX = position?.x ?? Math.max(12, window.innerWidth - 350 - 24);
+    const currentY = position?.y ?? Math.max(12, window.innerHeight - 460 - 24);
+
+    dragStartRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      startPosX: currentX,
+      startPosY: currentY,
+    };
+    setIsDragging(true);
+    e.currentTarget.setPointerCapture(e.pointerId);
+  };
+
+  const handlePointerMove = (e: PointerEvent<HTMLDivElement>) => {
+    if (!isDragging || !dragStartRef.current) return;
+    const deltaX = e.clientX - dragStartRef.current.startX;
+    const deltaY = e.clientY - dragStartRef.current.startY;
+
+    const rawX = dragStartRef.current.startPosX + deltaX;
+    const rawY = dragStartRef.current.startPosY + deltaY;
+    const clamped = clampPosition(rawX, rawY, 350, 460);
+    setPosition(clamped);
+  };
+
+  const handlePointerUp = (e: PointerEvent<HTMLDivElement>) => {
+    if (!isDragging) return;
+    setIsDragging(false);
+    dragStartRef.current = null;
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    } catch {
+      // Ignore pointer capture error
+    }
+    if (position) {
+      try {
+        localStorage.setItem("torii_assistant_pos", JSON.stringify(position));
+      } catch {
+        // Ignore
+      }
+    }
+  };
+
+  const handleResetPosition = () => {
+    setPosition(null);
+    try {
+      localStorage.removeItem("torii_assistant_pos");
+    } catch {
+      // Ignore
+    }
+  };
+
+
+
   async function handleApplyIntakeAction(action: IntakeAction) {
     if (!token || !caseId || applyingAction) return;
     setApplyingAction(action.key);
     setError(null);
     try {
-      // 1. Update intake answer
       try {
         await answerIntake(token, caseId, action.key, action.value);
       } catch {
-        // Fallback key alias check
         if (action.key === "main_purpose") {
           await answerIntake(token, caseId, "purpose_of_visit", action.value);
         } else if (action.key === "purpose_of_visit") {
@@ -214,7 +308,6 @@ export function FloatingAssistant() {
         }
       }
 
-      // 2. Re-evaluate eligibility automatically
       await evaluateEligibility(token, caseId);
 
       setMessages((prev) => [
@@ -331,70 +424,110 @@ export function FloatingAssistant() {
 
   return (
     <>
-      {/* Floating Trigger Button */}
+      {/* Floating Trigger Button (Compact Bottom-Right) */}
       {!isOpen && (
         <button
           onClick={() => setIsOpen(true)}
-          className="fixed bottom-6 right-6 z-50 flex items-center gap-2.5 rounded-full bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground shadow-xl transition-all duration-200 hover:scale-105 hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
+          className="fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-full bg-primary px-3.5 py-2 text-xs font-semibold text-primary-foreground shadow-2xl transition-all duration-150 hover:scale-105 hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
           aria-label="Open AI Assistant"
+          title="Click to open AI Assistant"
         >
           <div className="relative">
-            <Bot className="size-5" />
-            <span className="absolute -top-1 -right-1 flex size-2.5">
+            <Bot className="size-4" />
+            <span className="absolute -top-0.5 -right-0.5 flex size-2">
               <span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-400 opacity-75"></span>
-              <span className="relative inline-flex size-2.5 rounded-full bg-emerald-500"></span>
+              <span className="relative inline-flex size-2 rounded-full bg-emerald-500"></span>
             </span>
           </div>
-          <span className="font-medium">
-            {disqualifiedFindings.length > 0 ? `AI Helper (${disqualifiedFindings.length} issues)` : "Need Help? Ask AI"}
-          </span>
+          <span>Ask AI</span>
         </button>
       )}
 
-      {/* Floating Chat Drawer / Window */}
+      {/* Floating Chat Window */}
       {isOpen && (
-        <div className="fixed bottom-4 right-4 z-50 flex h-[620px] w-[390px] sm:w-[450px] flex-col overflow-hidden rounded-2xl border bg-card shadow-2xl transition-all duration-300 animate-in fade-in slide-in-from-bottom-5">
-          {/* Header */}
-          <div className="flex items-center justify-between border-b bg-muted/40 px-4 py-3">
-            <div className="flex items-center gap-2.5">
-              <div className="flex size-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                <Bot className="size-5" />
+        <div
+          style={{
+            left: position ? `${position.x}px` : undefined,
+            top: position ? `${position.y}px` : undefined,
+            right: !position ? "24px" : undefined,
+            bottom: !position ? "24px" : undefined,
+            width: "min(350px, calc(100vw - 24px))",
+            height: "min(460px, calc(100vh - 24px))",
+          }}
+          className={`fixed z-50 flex flex-col overflow-hidden rounded-2xl border bg-card/95 backdrop-blur-md shadow-2xl transition-[width,height] duration-200 animate-in fade-in ${
+            isDragging ? "ring-2 ring-primary/60 shadow-primary/20" : ""
+          }`}
+        >
+          {/* Draggable Header Bar */}
+          <div
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            onDoubleClick={handleResetPosition}
+            className={`flex items-center justify-between border-b bg-muted/70 px-3 py-2 select-none touch-none ${
+              isDragging ? "cursor-grabbing bg-muted/90" : "cursor-grab hover:bg-muted/80"
+            }`}
+            title="Drag to move · Double-click to reset position"
+          >
+            {/* Header Left: Bot Icon + Title */}
+            <div className="flex items-center gap-2 min-w-0 flex-1">
+              <div className="flex size-6 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+                <Bot className="size-3.5" />
               </div>
-              <div className="min-w-0 max-w-[260px]">
+              <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-1.5">
-                  <h3 className="text-sm font-semibold text-foreground truncate">AI Visa Assistant</h3>
-                  <Badge tone="success" className="text-[9px] px-1.5 py-0">Online</Badge>
+                  <h3 className="text-xs font-bold text-foreground truncate">Ask AI Assistant</h3>
+                  <span className="size-1.5 rounded-full bg-emerald-500" title="Online" />
                 </div>
-                <p className="text-[11px] text-muted-foreground truncate">
+                <p className="text-[10px] text-muted-foreground truncate">
                   {caseId
                     ? `${activeCase?.reference || `Case #${caseId}`} · ${activeCase?.scope_label || `${jurisdictionCode} ${visaCategory ? visaCategory.toUpperCase() : "VISA"}`}`
-                    : "Official immigration guidance"}
+                    : "Procedural immigration guidance"}
                 </p>
               </div>
             </div>
 
-            <div className="flex items-center gap-1">
+            {/* Header Right Action Controls: Minimize and Close */}
+            <div
+              className="flex items-center gap-1 shrink-0"
+              onPointerDown={(e) => e.stopPropagation()}
+              onPointerUp={(e) => e.stopPropagation()}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Minimize to bottom-right floating pill */}
               <button
-                onClick={() => setMessages([])}
-                className="rounded-lg p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-                title="Clear chat history"
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsOpen(false);
+                }}
+                className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors cursor-pointer"
+                title="Minimize assistant"
+                aria-label="Minimize assistant"
               >
-                <RefreshCw className="size-3.5" />
+                <Minus className="size-3.5" />
               </button>
+
+              {/* Close assistant */}
               <button
-                onClick={() => setIsOpen(false)}
-                className="rounded-lg p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsOpen(false);
+                }}
+                className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors cursor-pointer"
                 title="Close assistant"
+                aria-label="Close assistant"
               >
-                <X className="size-4" />
+                <X className="size-3.5" />
               </button>
             </div>
           </div>
 
           {/* Live Issue Banner if case has disqualified findings */}
           {disqualifiedFindings.length > 0 && (
-            <div className="bg-amber-500/10 border-b border-amber-500/20 px-3.5 py-2 flex items-center justify-between gap-2 text-[11px]">
-              <span className="text-amber-800 dark:text-amber-300 font-medium">
+            <div className="bg-amber-500/10 border-b border-amber-500/20 px-3 py-1.5 flex items-center justify-between gap-2 text-[11px] shrink-0">
+              <span className="text-amber-800 dark:text-amber-300 font-medium truncate">
                 ⚠️ {disqualifiedFindings.length} eligibility warning(s) detected
               </span>
               <button
@@ -406,124 +539,125 @@ export function FloatingAssistant() {
             </div>
           )}
 
-          {/* Chat Messages */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-3.5 text-xs">
-            {messages.map((m, idx) => {
-              const { cleanText, actions } = parseMessageWithActions(m.text);
+              {/* Chat Messages */}
+              <div className="flex-1 overflow-y-auto p-3.5 space-y-3 text-xs overscroll-contain">
+                {messages.map((m, idx) => {
+                  const { cleanText, actions } = parseMessageWithActions(m.text);
 
-              return (
-                <div
-                  key={idx}
-                  className={`flex flex-col gap-1.5 ${m.role === "user" ? "items-end" : "items-start"}`}
-                >
-                  <div className={`flex gap-2.5 ${m.role === "user" ? "justify-end" : "justify-start"}`}>
-                    {m.role === "assistant" && (
-                      <div className="size-6 shrink-0 rounded-full bg-primary/10 flex items-center justify-center text-primary mt-0.5">
-                        <Bot className="size-3.5" />
-                      </div>
-                    )}
+                  return (
                     <div
-                      className={`max-w-[85%] rounded-xl px-3.5 py-2.5 leading-relaxed ${
-                        m.role === "user"
-                          ? "bg-primary text-primary-foreground font-medium rounded-tr-none"
-                          : "bg-muted/70 text-foreground border rounded-tl-none whitespace-pre-wrap"
-                      }`}
+                      key={idx}
+                      className={`flex flex-col gap-1.5 ${m.role === "user" ? "items-end" : "items-start"}`}
                     >
-                      {cleanText}
-                    </div>
-                  </div>
-
-                  {/* One-Click Action Buttons if available */}
-                  {actions.length > 0 && (
-                    <div className="ml-8 mt-1 space-y-1.5">
-                      {actions.map((act, aIdx) => (
-                        <Button
-                          key={aIdx}
-                          onClick={() => void handleApplyIntakeAction(act)}
-                          disabled={Boolean(applyingAction)}
-                          className="h-8 text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1.5 shadow-sm"
+                      <div className={`flex gap-2 ${m.role === "user" ? "justify-end" : "justify-start"}`}>
+                        {m.role === "assistant" && (
+                          <div className="size-5 shrink-0 rounded-full bg-primary/10 flex items-center justify-center text-primary mt-0.5">
+                            <Bot className="size-3" />
+                          </div>
+                        )}
+                        <div
+                          className={`max-w-[88%] rounded-xl px-3 py-2 leading-relaxed ${
+                            m.role === "user"
+                              ? "bg-primary text-primary-foreground font-medium rounded-tr-none text-xs"
+                              : "bg-muted/70 text-foreground border rounded-tl-none whitespace-pre-wrap text-xs"
+                          }`}
                         >
-                          {applyingAction === act.key ? (
-                            <Loader2 className="size-3.5 animate-spin" />
-                          ) : (
-                            <Zap className="size-3.5 fill-current" />
-                          )}
-                          {act.label}
-                        </Button>
-                      ))}
+                          {cleanText}
+                        </div>
+                      </div>
+
+                      {/* One-Click Action Buttons if available */}
+                      {actions.length > 0 && (
+                        <div className="ml-7 mt-1 space-y-1.5">
+                          {actions.map((act, aIdx) => (
+                            <Button
+                              key={aIdx}
+                              onClick={() => void handleApplyIntakeAction(act)}
+                              disabled={Boolean(applyingAction)}
+                              className="h-7 text-[11px] font-semibold bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1.5 shadow-sm"
+                            >
+                              {applyingAction === act.key ? (
+                                <Loader2 className="size-3 animate-spin" />
+                              ) : (
+                                <Zap className="size-3 fill-current" />
+                              )}
+                              {act.label}
+                            </Button>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                  )}
+                  );
+                })}
+
+                {sending && (
+                  <div className="flex gap-2 items-center text-muted-foreground text-[11px] pl-1">
+                    <Loader2 className="size-3 animate-spin text-primary" />
+                    <span>AI assistant is formulating response...</span>
+                  </div>
+                )}
+
+                {error && (
+                  <div className="rounded-lg bg-rose-500/10 border border-rose-500/20 p-2 text-rose-600 text-[11px]">
+                    {error}
+                  </div>
+                )}
+                <div ref={messagesEndRef} />
+              </div>
+
+              {/* Quick Prompts Suggestions */}
+              {messages.length <= 2 && (
+                <div className="px-2.5 py-1.5 border-t bg-muted/20 flex flex-wrap gap-1 shrink-0">
+                  {quickPrompts.slice(0, 3).map((prompt) => (
+                    <button
+                      key={prompt}
+                      onClick={() => void handleSend(prompt)}
+                      disabled={sending || Boolean(applyingAction)}
+                      className="rounded-full border bg-background px-2 py-0.5 text-[10px] text-muted-foreground hover:border-primary hover:text-primary transition-colors text-left truncate max-w-full"
+                    >
+                      {prompt}
+                    </button>
+                  ))}
                 </div>
-              );
-            })}
+              )}
 
-            {sending && (
-              <div className="flex gap-2.5 items-center text-muted-foreground text-xs pl-2">
-                <Loader2 className="size-3.5 animate-spin text-primary" />
-                <span>AI assistant is formulating response...</span>
-              </div>
-            )}
-
-            {error && (
-              <div className="rounded-lg bg-rose-500/10 border border-rose-500/20 p-2.5 text-rose-600 text-xs">
-                {error}
-              </div>
-            )}
-            <div ref={messagesEndRef} />
-          </div>
-
-          {/* Quick Prompts Suggestions */}
-          {messages.length <= 2 && (
-            <div className="px-3 py-2 border-t bg-muted/20 flex flex-wrap gap-1.5">
-              {quickPrompts.map((prompt) => (
-                <button
-                  key={prompt}
-                  onClick={() => void handleSend(prompt)}
-                  disabled={sending || Boolean(applyingAction)}
-                  className="rounded-full border bg-background px-2.5 py-1 text-[11px] text-muted-foreground hover:border-primary hover:text-primary transition-colors text-left"
+              {/* Footer Input Form */}
+              <div className="border-t bg-background p-2.5 shrink-0">
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    void handleSend();
+                  }}
+                  className="flex items-center gap-1.5"
                 >
-                  {prompt}
-                </button>
-              ))}
-            </div>
-          )}
-
-          {/* Footer Input */}
-          <div className="border-t bg-background p-3">
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                void handleSend();
-              }}
-              className="flex items-center gap-2"
-            >
-              <input
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                placeholder={
-                  visaCategory === "student"
-                    ? "Ask about COE, admission, tuition funds, or part-time work..."
-                    : visaCategory === "work"
-                    ? "Ask about employer category, tax proof, or contract renewal..."
-                    : visaCategory === "tourist"
-                    ? "Ask about itinerary, financial proof, or duration..."
-                    : "Ask any immigration or checklist question..."
-                }
-                className="flex-1 rounded-lg border bg-muted/30 px-3 py-2 text-xs outline-none focus:border-primary focus:bg-background focus:ring-1 focus:ring-primary"
-                disabled={sending || Boolean(applyingAction)}
-              />
-              <Button
-                type="submit"
-                disabled={sending || !input.trim() || Boolean(applyingAction)}
-                className="h-8 px-3 text-xs"
-              >
-                {sending ? <Loader2 className="size-3.5 animate-spin" /> : <Send className="size-3.5" />}
-              </Button>
-            </form>
-            <p className="mt-1.5 text-[10px] text-center text-muted-foreground/70">
-              Grounded in official immigration manuals · Can update intake answers
-            </p>
-          </div>
+                  <input
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    placeholder={
+                      visaCategory === "student"
+                        ? "Ask about COE, admission, part-time work..."
+                        : visaCategory === "work"
+                        ? "Ask about employer category, tax proof..."
+                        : visaCategory === "tourist"
+                        ? "Ask about itinerary, financial proof..."
+                        : "Ask any visa or checklist question..."
+                    }
+                    className="flex-1 rounded-lg border bg-muted/30 px-2.5 py-1.5 text-xs outline-none focus:border-primary focus:bg-background focus:ring-1 focus:ring-primary"
+                    disabled={sending || Boolean(applyingAction)}
+                  />
+                  <Button
+                    type="submit"
+                    disabled={sending || !input.trim() || Boolean(applyingAction)}
+                    className="h-7 px-2.5 text-xs shrink-0"
+                  >
+                    {sending ? <Loader2 className="size-3 animate-spin" /> : <Send className="size-3" />}
+                  </Button>
+                </form>
+                <div className="mt-1 flex items-center justify-between text-[9px] text-muted-foreground/70 px-0.5">
+                  <span>💡 Drag header to move anywhere</span>
+                  <span>Official immigration grounded</span>
+                </div>
+              </div>
         </div>
       )}
     </>

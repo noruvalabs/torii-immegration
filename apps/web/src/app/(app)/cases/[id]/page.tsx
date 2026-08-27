@@ -47,6 +47,7 @@ export default function CaseDetailPage() {
   const [stepError, setStepError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [profile, setProfile] = useState<User | null>(user);
+  const [intakeTargetKey, setIntakeTargetKey] = useState<string | null>(null);
   const stepInitializedRef = useRef(false);
 
   const loadCase = useCallback(async () => {
@@ -59,6 +60,9 @@ export default function CaseDetailPage() {
       ]);
       setCaseData(c);
       setGuidance(g);
+      if (c.packet_snapshot) {
+        setPacket(c.packet_snapshot as Record<string, unknown>);
+      }
       // Only jump to guidance phase on first load — never auto-advance mid-session.
       if (!stepInitializedRef.current) {
         setActiveStep(phaseToStep(g.phase));
@@ -82,7 +86,32 @@ export default function CaseDetailPage() {
     } else if (activeStep === "intake") {
       getIntake(token, caseId).then(setIntake).catch(() => setStepError("Intake questionnaire is not available for this case scope."));
     } else if (activeStep === "eligibility") {
-      getEligibility(token, caseId).then(setEligibility).catch(() => { setEligibility(null); setStepError(null); });
+      getEligibility(token, caseId)
+        .then((res) => {
+          setEligibility(res);
+          // If cached snapshot is out_of_scope (missing answers), auto-re-evaluate with fresh answers
+          if (res && res.result === "out_of_scope") {
+            void evaluateEligibility(token, caseId)
+              .then((fresh) => {
+                setEligibility(fresh);
+                void refreshGuidance();
+              })
+              .catch(() => {});
+          }
+        })
+        .catch(() => {
+          // If not evaluated yet, auto-evaluate
+          setSubmitting(true);
+          evaluateEligibility(token, caseId)
+            .then((fresh) => {
+              setEligibility(fresh);
+              void refreshGuidance();
+            })
+            .catch(() => {
+              setEligibility(null);
+            })
+            .finally(() => setSubmitting(false));
+        });
     } else if (activeStep === "checklist") {
       getChecklist(token, caseId).then(setChecklist).catch(() => setStepError("Checklist is not available for this case scope."));
     } else if (activeStep === "forms") {
@@ -90,9 +119,15 @@ export default function CaseDetailPage() {
     } else if (activeStep === "review") {
       setReview(null);
     } else if (activeStep === "packet") {
-      getPacket(token, caseId).then(setPacket).catch(() => { setPacket(null); });
+      getPacket(token, caseId)
+        .then(setPacket)
+        .catch(() => {
+          if (caseData?.packet_snapshot) {
+            setPacket(caseData.packet_snapshot as Record<string, unknown>);
+          }
+        });
     }
-  }, [token, caseId, activeStep, loading]);
+  }, [token, caseId, activeStep, loading, caseData?.packet_snapshot]);
 
   async function refreshGuidance() {
     if (!token) return;
@@ -144,7 +179,7 @@ export default function CaseDetailPage() {
       await refreshGuidance();
       // Do not auto-advance when intake completes — user clicks next.
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Answer failed");
+      throw e;
     }
   }
 
@@ -355,7 +390,9 @@ export default function CaseDetailPage() {
     guidance &&
     guidance.phase !== "blocked" &&
     guidance.phase !== "done" &&
+    activeStep !== "intake" &&
     activeStep !== "research" &&
+    activeStep !== "review" &&
     activeStep !== "packet";
 
   return (
@@ -393,8 +430,8 @@ export default function CaseDetailPage() {
                 <p className="mt-2 text-sm text-[var(--color-danger)]">{guidance.blocked_reason}</p>
               )}
             </div>
-            {guidance.phase !== "blocked" && (
-              <Button onClick={goToGuidancePhase}>
+            {guidance.phase !== "blocked" && phaseToStep(guidance.phase) !== activeStep && (
+              <Button onClick={goToGuidancePhase} className="shrink-0">
                 {guidance.cta_label}
               </Button>
             )}
@@ -450,7 +487,17 @@ export default function CaseDetailPage() {
             />
           )}
           {!stepError && activeStep === "intake" && intake && (
-            <IntakeStep state={intake} profile={profile || user} onAnswer={handleAnswer} />
+            <IntakeStep
+              state={intake}
+              profile={profile || user}
+              onAnswer={handleAnswer}
+              targetKey={intakeTargetKey}
+              onProceedToEligibility={() => {
+                setError(null);
+                setActiveStep("eligibility");
+                void handleEvaluateEligibility();
+              }}
+            />
           )}
           {!stepError && activeStep === "eligibility" && (
             <EligibilityStep
@@ -458,6 +505,13 @@ export default function CaseDetailPage() {
               loading={submitting}
               onEvaluate={handleEvaluateEligibility}
               jurisdictionCode={caseData?.reference ? caseData.reference.split("-")[0] : "JP"}
+              jurisdictionName={caseData?.scope_label ? caseData.scope_label.split("·")[0]?.trim() : undefined}
+              visaCategoryName={caseData?.scope_label || caseData?.visa_category_code || ""}
+              onReturnToIntake={(targetKey) => {
+                setError(null);
+                setIntakeTargetKey(targetKey || null);
+                setActiveStep("intake");
+              }}
             />
           )}
           {!stepError && activeStep === "checklist" && (

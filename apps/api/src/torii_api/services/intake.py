@@ -5,21 +5,29 @@ Framework-free so routers, seeds, and tests share the same deterministic rules (
 
 from __future__ import annotations
 
+import re
 from datetime import date
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
+from torii_api.services.citations import resolve_official_citation
 from torii_api.services.pack_exports import pack_questions
 
 QuestionType = Literal["boolean", "string", "integer", "enum", "date"]
 
 
 class ShowWhen(BaseModel):
-    """Reveal this question only when another answer equals ``equals``."""
+    """Reveal this question only when another answer matches.
+
+    ``equals`` is the single-value form. ``one_of`` is for the branching the ministry
+    forms print -- "fill in questions 18, 19 and 27 if you selected (2)" -- where one
+    item follows from any of several answers. Exactly one of the two is set.
+    """
 
     key: str
-    equals: bool | str | int
+    equals: bool | str | int | None = None
+    one_of: list[str] | None = None
 
 
 class IntakeQuestion(BaseModel):
@@ -29,6 +37,10 @@ class IntakeQuestion(BaseModel):
     prompt: str = Field(min_length=1, max_length=512)
     type: QuestionType
     options: list[str] | None = None
+    # The form's own wording for each option, keyed by option value. Set where the
+    # choice mirrors a printed tick-box group, so the applicant reads what the sheet
+    # says rather than a value derived from it.
+    option_labels: dict[str, str] | None = None
     required: bool = True
     show_when: ShowWhen | None = None
     min_length: int | None = None
@@ -36,6 +48,10 @@ class IntakeQuestion(BaseModel):
     min_value: int | None = None
     max_value: int | None = None
     section: str | None = None
+    # Why this question is being asked, shown under the prompt. Used where the answer
+    # feeds a specific box on an official form, so skipping it is a visible choice
+    # rather than an invisible blank on a signed sheet.
+    hint: str | None = None
     citation: dict[str, Any] | None = None
 
 
@@ -45,12 +61,23 @@ class IntakeProgress(BaseModel):
     complete: bool
 
 
+def _matches_token(given: Any, allowed: list[str]) -> bool:
+    """Whether an answer is one of ``allowed``, compared the way option tokens are written."""
+    if given is None:
+        return False
+    token = re.sub(r"[\s\-/]+", "_", str(given).strip().lower())
+    return token in {option.strip().lower() for option in allowed}
+
+
 def is_visible(question: IntakeQuestion, answers: dict[str, Any]) -> bool:
     """Whether ``question`` applies given current ``answers`` (US-02.2)."""
     rule = question.show_when
     if rule is None:
         return True
-    return answers.get(rule.key) == rule.equals
+    given = answers.get(rule.key)
+    if rule.one_of is not None:
+        return _matches_token(given, rule.one_of)
+    return given == rule.equals
 
 
 def visible_questions(
@@ -62,7 +89,7 @@ def visible_questions(
 
 def validate_answer(question: IntakeQuestion, value: Any) -> str | None:
     """Return an error message if ``value`` is invalid for ``question``, else ``None`` (US-02.3)."""
-    if value is None:
+    if value is None or (isinstance(value, str) and value.strip() == ""):
         return "answer is required" if question.required else None
 
     if question.type == "boolean":
@@ -86,8 +113,6 @@ def validate_answer(question: IntakeQuestion, value: Any) -> str | None:
             return f"must be at least {question.min_length} characters"
         if question.max_length is not None and len(value) > question.max_length:
             return f"must be at most {question.max_length} characters"
-        if question.required and value.strip() == "":
-            return "answer is required"
         return None
 
     if question.type == "enum":
@@ -124,18 +149,81 @@ def prune_answers(questions: list[IntakeQuestion], answers: dict[str, Any]) -> d
 def progress_for(questions: list[IntakeQuestion], answers: dict[str, Any]) -> IntakeProgress:
     """Count answered vs visible questions for progress UI (US-02.4)."""
     visible = visible_questions(questions, answers)
-    answered = sum(1 for q in visible if q.key in answers and answers[q.key] is not None)
-    total = len(visible)
-    return IntakeProgress(answered=answered, total=total, complete=total > 0 and answered == total)
+    required_visible = [q for q in visible if q.required]
+
+    answered_required = sum(
+        1 for q in required_visible if q.key in answers and answers[q.key] not in (None, "")
+    )
+    total_required = len(required_visible)
+
+    answered_all = sum(1 for q in visible if q.key in answers and answers[q.key] not in (None, ""))
+    total_all = len(visible)
+
+    is_complete = total_required > 0 and answered_required >= total_required
+    return IntakeProgress(answered=answered_all, total=total_all, complete=is_complete)
 
 
-def parse_questions(raw: list[dict[str, Any]] | list[IntakeQuestion]) -> list[IntakeQuestion]:
-    """Normalize stored JSON (or models) into typed questions."""
+def _default_citation_for_question(
+    q: IntakeQuestion,
+    jurisdiction_code: str = "JP",
+    visa_category: str = "",
+) -> dict[str, str]:
+    """Provide an official statutory citation for an intake question."""
+    # The jurisdiction is the case's, not a guess from words in the question key. The
+    # replaced version read "cas" out of any key containing those letters and cited the
+    # UK for it, so a Japanese applicant could be shown a gov.uk page.
+    cit = resolve_official_citation(
+        jurisdiction_code=jurisdiction_code,
+        visa_category=visa_category,
+        existing_citation=q.citation if isinstance(q.citation, dict) else None,
+    )
+    return {
+        "authority": str(cit.get("authority", "")),
+        "title": str(cit.get("title", "")),
+        "url": str(cit.get("url", "")),
+    }
+
+
+def _normalize_raw_question(item: dict[str, Any]) -> dict[str, Any]:
+    d = dict(item)
+    qtype = str(d.get("type", "string")).lower().strip()
+    if qtype in ("choice", "select", "radio", "dropdown"):
+        d["type"] = "enum"
+    elif qtype in ("number", "numeric", "float"):
+        d["type"] = "integer"
+    elif qtype not in ("boolean", "string", "integer", "enum", "date"):
+        d["type"] = "string"
+
+    opts = d.get("options")
+    if isinstance(opts, list):
+        norm_opts: list[str] = []
+        for opt in opts:
+            if isinstance(opt, dict):
+                norm_opts.extend([str(k) for k in opt.keys()])
+            elif isinstance(opt, str):
+                norm_opts.append(opt)
+            else:
+                norm_opts.append(str(opt))
+        d["options"] = norm_opts
+    return d
+
+
+def parse_questions(
+    raw: list[dict[str, Any]] | list[IntakeQuestion],
+    jurisdiction_code: str = "JP",
+    visa_category: str = "",
+) -> list[IntakeQuestion]:
+    """Normalize stored JSON (or models) into typed questions with accurate citations."""
     out: list[IntakeQuestion] = []
     for item in raw:
-        q = item if isinstance(item, IntakeQuestion) else IntakeQuestion.model_validate(item)
+        if isinstance(item, IntakeQuestion):
+            q = item
+        else:
+            norm = _normalize_raw_question(item)
+            q = IntakeQuestion.model_validate(norm)
         if q.type == "enum" and not q.options:
             raise ValueError(f"enum question '{q.key}' requires options")
+        q.citation = _default_citation_for_question(q, jurisdiction_code, visa_category)
         out.append(q)
     return out
 

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from torii_api.services.submission_kit import build_submission_kit
+
 
 def resolve_jurisdiction_submission_kit(
     jurisdiction_code: str | None = None,
@@ -20,35 +22,51 @@ def resolve_jurisdiction_submission_kit(
             [
                 {
                     "step": 1,
-                    "title": "Complete DS-160 Form on US CEAC Portal",
+                    "title": "Complete Online DS-160 Form on US CEAC Portal",
                     "description": (
                         "Fill out all required fields on the official US Department of State CEAC portal "
-                        "(https://ceac.state.gov/genniv/) using your Torii Field Guide. Save your DS-160 Barcode Confirmation."
+                        "using your Torii Section-by-Section Field Guide. Save your DS-160 Barcode Confirmation."
                     ),
+                    "portal_url": "https://ceac.state.gov/genniv/",
+                    "authority": "U.S. Department of State (Consular Electronic Application Center)",
+                    "official_citation_url": "https://travel.state.gov/content/travel/en/us-visas/visa-information-resources/forms/ds-160-online-nonimmigrant-visa-application.html",
+                    "category": "online_portal",
                 },
                 {
                     "step": 2,
                     "title": "Pay MRV Visa Fee ($185 USD)",
                     "description": (
-                        "Create an account on the official US visa scheduling service portal (e.g. US Travel Docs / CGI Federal) "
-                        "and pay the $185 MRV visa fee. Print your payment receipt."
+                        "Create an account on the official US visa scheduling service portal (US Travel Docs / CGI Federal) "
+                        "and pay the $185 MRV visa fee. Print your official fee payment receipt."
                     ),
+                    "portal_url": "https://www.ustraveldocs.com/",
+                    "authority": "U.S. Department of State / CGI Federal",
+                    "official_citation_url": "https://travel.state.gov/content/travel/en/us-visas/visa-information-resources/fees/fees-visa-services.html",
+                    "category": "fee_payment",
                 },
                 {
                     "step": 3,
                     "title": "Schedule Biometrics (OFC/VAC) & Consular Interview",
                     "description": (
                         "Book your appointment at the Visa Application Center (VAC / OFC) for biometrics "
-                        "(photo & fingerprints) and your US Embassy / Consulate General interview."
+                        "(photo & fingerprints) and schedule your consular interview at the U.S. Embassy or Consulate."
                     ),
+                    "portal_url": "https://www.ustraveldocs.com/",
+                    "authority": "U.S. Embassy / Consular Section",
+                    "official_citation_url": "https://travel.state.gov/content/travel/en/us-visas/tourism-visit/visitor.html",
+                    "category": "biometrics_appointment",
                 },
                 {
                     "step": 4,
                     "title": "Attend Appointment with Ordered Physical Dossier",
                     "description": (
-                        "Bring your DS-160 confirmation, appointment receipt, valid passport, and supporting financial "
-                        "documents ordered as specified in your Torii filing kit."
+                        "Bring your printed DS-160 confirmation, appointment receipt, valid passport, and supporting financial "
+                        "documents stacked in the exact order specified in your Torii filing kit."
                     ),
+                    "portal_url": "https://ceac.state.gov/CEACStatTracker/Status.aspx",
+                    "authority": "U.S. Embassy & Consulates",
+                    "official_citation_url": "https://travel.state.gov/content/travel/en/us-visas.html",
+                    "category": "physical_submission",
                 },
             ],
             [
@@ -69,26 +87,38 @@ def resolve_jurisdiction_submission_kit(
             [
                 {
                     "step": 1,
-                    "title": "Complete GOV.UK Visa Application",
+                    "title": "Complete Online Application on GOV.UK Portal",
                     "description": (
-                        "Submit your online application on the official GOV.UK portal "
-                        "(https://www.gov.uk/standard-visitor-visa/apply)."
+                        "Submit your online application on the official GOV.UK Access UK portal "
+                        "using your Torii verified field data sheet."
                     ),
+                    "portal_url": "https://www.gov.uk/standard-visitor/apply",
+                    "authority": "UK Visas and Immigration (Home Office)",
+                    "official_citation_url": "https://www.gov.uk/standard-visitor",
+                    "category": "online_portal",
                 },
                 {
                     "step": 2,
-                    "title": "Pay Application Fee & IHS Surcharge",
+                    "title": "Pay Application Fee (£115 GBP) & IHS Surcharge",
                     "description": (
-                        "Pay the £115 application fee (and Immigration Health Surcharge if applicable) online via GOV.UK."
+                        "Pay the statutory visa fee (and Immigration Health Surcharge if on a work/study route) online via GOV.UK."
                     ),
+                    "portal_url": "https://www.gov.uk/visa-fees",
+                    "authority": "UKVI / Home Office Official Fees",
+                    "official_citation_url": "https://www.gov.uk/visa-fees",
+                    "category": "fee_payment",
                 },
                 {
                     "step": 3,
-                    "title": "Upload Digital Documents & Book Biometrics",
+                    "title": "Upload Digital Documents & Book Biometrics at VFS/TLS",
                     "description": (
                         "Upload your scanned supporting documents to the official VFS Global or TLScontact portal, "
                         "then schedule your biometrics appointment."
                     ),
+                    "portal_url": "https://www.vfsglobal.co.uk/",
+                    "authority": "VFS Global / TLScontact UK Commercial Partner",
+                    "official_citation_url": "https://www.gov.uk/find-a-visa-application-centre",
+                    "category": "biometrics_appointment",
                 },
                 {
                     "step": 4,
@@ -96,6 +126,10 @@ def resolve_jurisdiction_submission_kit(
                     "description": (
                         "Attend your appointment with your original valid passport and printed checklist to complete biometrics."
                     ),
+                    "portal_url": "https://www.gov.uk/track-your-visa-application",
+                    "authority": "UK Visas and Immigration (UKVI)",
+                    "official_citation_url": "https://www.gov.uk/standard-visitor",
+                    "category": "physical_submission",
                 },
             ],
             [
@@ -122,6 +156,10 @@ def resolve_jurisdiction_submission_kit(
                     "description": (
                         "Fill out the official Schengen visa form on the national portal (e.g. France-Visas, VIDEX Germany)."
                     ),
+                    "portal_url": "https://france-visas.gouv.fr/",
+                    "authority": "European Commission / National Consular Portal",
+                    "official_citation_url": "https://home-affairs.ec.europa.eu/policies/schengen-borders-and-visa/visa-policy/applying-schengen-visa_en",
+                    "category": "online_portal",
                 },
                 {
                     "step": 2,
@@ -129,6 +167,10 @@ def resolve_jurisdiction_submission_kit(
                     "description": (
                         "Secure compliant travel insurance covering minimum €30,000 emergency medical care and repatriation."
                     ),
+                    "portal_url": "https://home-affairs.ec.europa.eu/",
+                    "authority": "European Union Visa Code Regulation",
+                    "official_citation_url": "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=celex%3A32009R0810",
+                    "category": "fee_payment",
                 },
                 {
                     "step": 3,
@@ -136,6 +178,10 @@ def resolve_jurisdiction_submission_kit(
                     "description": (
                         "Book an in-person submission appointment with the designated external visa service provider."
                     ),
+                    "portal_url": "https://www.vfsglobal.com/",
+                    "authority": "Designated External Service Provider (VFS / TLScontact / BLS)",
+                    "official_citation_url": "https://home-affairs.ec.europa.eu/policies/schengen-borders-and-visa/visa-policy_en",
+                    "category": "biometrics_appointment",
                 },
                 {
                     "step": 4,
@@ -143,6 +189,10 @@ def resolve_jurisdiction_submission_kit(
                     "description": (
                         "Attend your appointment in person to submit the paper dossier, pay the €90 visa fee, and capture biometrics."
                     ),
+                    "portal_url": "https://www.vfsglobal.com/",
+                    "authority": "Consular Section / VAC",
+                    "official_citation_url": "https://home-affairs.ec.europa.eu/policies/schengen-borders-and-visa/visa-policy_en",
+                    "category": "physical_submission",
                 },
             ],
             [
@@ -157,42 +207,120 @@ def resolve_jurisdiction_submission_kit(
             ],
         )
 
-    # 4. JAPAN (JP / Japan Visa)
+    # 4. JAPAN (JP / Japan Visa & Domestic ISA)
     if "jp" in code or "japan" in combined:
+        is_domestic = "renewal" in combined or "extension" in combined or "change" in combined
+        if is_domestic:
+            return (
+                [
+                    {
+                        "step": 1,
+                        "title": "Complete ISA Official Application Form (在留関係申請書)",
+                        "description": (
+                            "Verify your pre-filled 3-4 page official Ministry of Justice application form (申請人等作成用 & 所属機関等作成用) "
+                            "and affix your 40mm x 30mm residence photo."
+                        ),
+                        "portal_url": "https://www.moj.go.jp/isa/applications/procedures/16-3.html",
+                        "authority": "Immigration Services Agency of Japan (出入国在留管理庁)",
+                        "official_citation_url": "https://www.moj.go.jp/isa/applications/procedures/16-3.html",
+                        "category": "online_portal",
+                    },
+                    {
+                        "step": 2,
+                        "title": "Collect Sponsoring Company & Municipal Tax Documents",
+                        "description": (
+                            "Obtain municipal Resident Tax certificates (住民税の課税・納税証明書) from city hall and the "
+                            "Statutory Total Sheet (法定調書合計表) from your sponsoring employer."
+                        ),
+                        "portal_url": "https://www.moj.go.jp/isa/applications/status/gijinkoku.html",
+                        "authority": "National Tax Agency / Ministry of Justice",
+                        "official_citation_url": "https://www.moj.go.jp/isa/applications/status/gijinkoku.html",
+                        "category": "fee_payment",
+                    },
+                    {
+                        "step": 3,
+                        "title": "File at Regional Immigration Bureau or Online ISA System",
+                        "description": (
+                            "Submit your application at the Regional Immigration Services Bureau (Tokyo/Shinagawa, Osaka, Nagoya) "
+                            "or via the ISA Online Electronic Filing System (online discount applicable)."
+                        ),
+                        "portal_url": "https://www.ras-immi.moj.go.jp/",
+                        "authority": "Regional Immigration Services Bureau (地方出入国在留管理局)",
+                        "official_citation_url": "https://www.moj.go.jp/isa/applications/guide/onlineshinsei.html",
+                        "category": "biometrics_appointment",
+                    },
+                    {
+                        "step": 4,
+                        "title": "Receive Notification & Collect New Residence Card",
+                        "description": (
+                            "Upon receiving the approval postcard (ハガキ) or online notification, present your revenue stamp (収入印紙) "
+                            "and original passport to receive your new Residence Card."
+                        ),
+                        "portal_url": "https://www.moj.go.jp/isa/applications/procedures/index.html",
+                        "authority": "Immigration Services Agency of Japan",
+                        "official_citation_url": "https://www.moj.go.jp/isa/index.html",
+                        "category": "physical_submission",
+                    },
+                ],
+                [
+                    "1. Official Application Form for Extension/Change (Signed with 40x30mm photo)",
+                    "2. Formal Cover Letter & Submission Index (Generated by Torii)",
+                    "3. Original Passport & Current Residence Card (在留カード)",
+                    "4. Municipal Resident Tax & Income Proof (住民税の課税・納税証明書)",
+                    "5. Certificate of Employment (在職証明書) from Employer",
+                    "6. Sponsoring Employer Statutory Total Table (法定調書合計表)",
+                ],
+            )
         return (
             [
                 {
                     "step": 1,
-                    "title": "Complete Official Application Form for Japan",
+                    "title": "Complete Official MOFA Application Form for Japan",
                     "description": (
-                        "Fill out the official Japan Visa Application Form and attach your 45mm x 35mm passport photo."
+                        "Fill out the official Ministry of Foreign Affairs (MOFA) Japan Visa Application Form and attach your 45mm x 35mm passport photo."
                     ),
+                    "portal_url": "https://www.mofa.go.jp/j_info/visit/visa/index.html",
+                    "authority": "Ministry of Foreign Affairs of Japan (MOFA)",
+                    "official_citation_url": "https://www.mofa.go.jp/j_info/visit/visa/index.html",
+                    "category": "online_portal",
                 },
                 {
                     "step": 2,
-                    "title": "Prepare 'Schedule of Stay' (Itinerary Table)",
+                    "title": "Prepare 'Schedule of Stay' (滞在予定表) & Financial Guarantee",
                     "description": (
-                        "Prepare a detailed daily schedule of stay outlining your daily activities, hotel names, and contact details."
+                        "Prepare a detailed daily schedule of stay outlining your daily activities, hotel names, and financial coverage (generated by Torii)."
                     ),
+                    "portal_url": "https://www.mofa.go.jp/j_info/visit/visa/short/novisa.html",
+                    "authority": "MOFA Consular Affairs Bureau",
+                    "official_citation_url": "https://www.mofa.go.jp/j_info/visit/visa/index.html",
+                    "category": "fee_payment",
                 },
                 {
                     "step": 3,
-                    "title": "Submit Paper Dossier to Embassy of Japan / VFS",
+                    "title": "Submit Paper Dossier to Embassy of Japan / Accredited VAC",
                     "description": (
-                        "Submit your physical paper dossier to the nearest Embassy of Japan or accredited VFS Japan center."
+                        "Submit your physical paper dossier to the nearest Embassy of Japan or accredited VFS Japan application center."
                     ),
+                    "portal_url": "https://www.mofa.go.jp/about/emb_cons/over/index.html",
+                    "authority": "Embassy of Japan / Consular Mission",
+                    "official_citation_url": "https://www.mofa.go.jp/about/emb_cons/over/index.html",
+                    "category": "biometrics_appointment",
                 },
                 {
                     "step": 4,
-                    "title": "Collect Stamped Passport",
+                    "title": "Collect Stamped Passport with Visa Sticker",
                     "description": (
                         "Track application progress online and collect your passport with visa sticker upon issuance."
                     ),
+                    "portal_url": "https://www.mofa.go.jp/j_info/visit/visa/index.html",
+                    "authority": "Ministry of Foreign Affairs of Japan",
+                    "official_citation_url": "https://www.mofa.go.jp/j_info/visit/visa/index.html",
+                    "category": "physical_submission",
                 },
             ],
             [
                 "1. Official Application Form for Issuance of Visa (With photo attached)",
-                "2. Day-by-Day Schedule of Stay (Schedule of Stay Table)",
+                "2. Day-by-Day Schedule of Stay (Schedule of Stay Table - 滞在予定表)",
                 "3. Official Embassy Cover Letter (Generated by Torii)",
                 "4. Original Valid Passport & Clear Photocopy of Bio-Data Page",
                 "5. Official Bank Certificate & Bank Statements (Last 3 months)",
@@ -209,6 +337,10 @@ def resolve_jurisdiction_submission_kit(
                 "description": (
                     "Fill out the official government visa application form using your verified Torii field guide."
                 ),
+                "portal_url": "https://www.mofa.go.jp/",
+                "authority": "National Immigration Authority",
+                "official_citation_url": "https://www.mofa.go.jp/",
+                "category": "online_portal",
             },
             {
                 "step": 2,
@@ -216,6 +348,10 @@ def resolve_jurisdiction_submission_kit(
                 "description": (
                     "Pay the required filing fee through the official gateway and retain the official payment receipt."
                 ),
+                "portal_url": None,
+                "authority": "Official Treasury Gateway",
+                "official_citation_url": "https://www.mofa.go.jp/",
+                "category": "fee_payment",
             },
             {
                 "step": 3,
@@ -223,6 +359,10 @@ def resolve_jurisdiction_submission_kit(
                 "description": (
                     "Book your appointment at the designated embassy, consulate, or visa application center."
                 ),
+                "portal_url": None,
+                "authority": "Consular Affairs Section",
+                "official_citation_url": "https://www.mofa.go.jp/",
+                "category": "biometrics_appointment",
             },
             {
                 "step": 4,
@@ -230,6 +370,10 @@ def resolve_jurisdiction_submission_kit(
                 "description": (
                     "Arrange your physical documents in the exact order specified in your Torii filing kit."
                 ),
+                "portal_url": None,
+                "authority": "Immigration & Consular Authority",
+                "official_citation_url": "https://www.mofa.go.jp/",
+                "category": "physical_submission",
             },
         ],
         [
@@ -251,11 +395,30 @@ def assemble_packet(
     submission_reference: str | None = None,
     jurisdiction_code: str | None = None,
     scope_label: str | None = None,
+    visa_category: str | None = None,
+    action: str | None = None,
 ) -> dict[str, Any]:
-    steps, dossier_order = resolve_jurisdiction_submission_kit(
+    """The packet snapshot, with filing steps for this specific application type.
+
+    Steps come from :mod:`torii_api.services.submission_kit` when the scope codes are
+    known, which is what makes them procedure-specific rather than country-generic. The
+    legacy string-sniffing resolver remains only as a fallback for callers that have a
+    label but no codes.
+    """
+    kit = build_submission_kit(
         jurisdiction_code=jurisdiction_code,
-        scope_label=scope_label,
+        visa_category=visa_category,
+        action=action,
+        checklist=checklist,
     )
+    if kit is not None:
+        steps = [step.as_dict() for step in kit.steps]
+        dossier_order = list(kit.stacking_order)
+    else:
+        steps, dossier_order = resolve_jurisdiction_submission_kit(
+            jurisdiction_code=jurisdiction_code,
+            scope_label=scope_label,
+        )
     return {
         "case_reference": case_reference,
         "submission_reference": submission_reference,
