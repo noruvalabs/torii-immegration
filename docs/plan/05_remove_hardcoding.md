@@ -93,6 +93,14 @@ add one asserting an item's own citation wins over the topic table.
 
 **Size:** ~1 day, mostly deleting.
 
+**Done.** 359 lines to 143. The item's own citation now always wins, and the override that
+replaced an authored citation whenever its URL looked "generic" to a heuristic is gone —
+that one was showing applicants a source the item had never been checked against. What
+remains is a fallback keyed on the scope the case is in, not on words in an item's key,
+and the resolver no longer accepts an item key at all so the behaviour cannot creep back
+in through a caller. `intake.py` also stopped guessing the jurisdiction from the key; it
+read "cas" out of any key containing those letters and cited gov.uk for it.
+
 ---
 
 ## Step 3 — Form catalogue → agent-discovered content IDs
@@ -125,6 +133,11 @@ catalogue.
 
 **Size:** ~2 hours. Pure deletion.
 
+**Done.** The packs already author `official_title` and a citation per form; the API now
+resolves that title at read time and the browser renders the publisher and revision from
+the citation. The catalogue lookup by form code went with it — `official-forms` is keyed by
+ministry code and generated rows by pack code, so it never matched anything.
+
 ---
 
 ## Step 5 — Tick-box options → ops YAML (tier B)
@@ -136,6 +149,18 @@ with the layout) and *what each box means* (tier B — "Doctor", "Master", "Bach
 a release.
 
 **Size:** folded into the layout work, no separate cost.
+
+**Done.** All fifteen groups are authored and marked from the applicant's answer, with the
+option labels in `_form_questions.yml` carrying the form's own printed wording. Three
+mechanisms came out of it, all in the layout rather than in code:
+
+- `ChoiceField(style="tick")` beside the existing circle, and generic option matching, so a
+  thirty-box group needs no per-key branch in the filler.
+- `Flag` for the groups marked 複数選択可, where each box has its own amount line beside it.
+  The box follows the amount and a zero leaves it clear.
+- `Gate(key, values)` beside the boolean `depends_on`, for the 特定活動 sheet's routing
+  table — "if you selected (2), fill in questions 18, 19, 27 and the signature" — carried
+  into intake as `show_when.one_of`.
 
 ---
 
@@ -159,13 +184,26 @@ proposal is a rejected diff, not a live regression.
 | Step | Cost | Payoff |
 |---|---|---|
 | ~~1. Consume `process`/`fees`/`filing_channel`~~ | **done** | Largest hardcoded table now agent-driven, citation-gated |
-| 4. Delete `getFormMetadata()` | 2 hours | Pure deletion |
-| 2. Per-item citations | 1 day | Removes 359 lines and an NF-2 hazard |
+| ~~4. Delete `getFormMetadata()`~~ | **done** | 100 lines of guessed titles gone |
+| ~~2. Per-item citations~~ | **done** | 359 lines to 143, and an NF-2 hazard removed |
+| ~~5. Tick-box labels~~ | **done** | All 15 groups authored, labels in ops YAML |
 | 3. Form revision discovery | 2 days | Ministry revisions become a queued review, not a silent break |
 | 6. Propose/promote loop | 3 days | Makes 1–3 safe unattended |
-| 5. Tick-box labels | — | Folded into layout work |
 
-About **6 days** left to get every tier-A table out of code. Tier C stays, deliberately.
+About **5 days** left. Tier C stays, deliberately.
+
+### Geometry: no longer outstanding
+
+The 13 layouts and 15 tick-box groups this doc listed as remaining manual work are
+authored. Every applicant sheet of every Japanese scope now fills and renders with each
+value inside its printed box — 21 scopes, no unauthored pages. What is still the
+applicant's own hand is named on the sheet: the work-history tables (intake has no
+list-valued answer), the free-text box beside each 「その他」, and the signature date, which
+the form itself requires the applicant to write.
+
+Geometry is read with pdfium per-character boxes rather than the PDF text matrix, which
+drifts by up to 80pt inside a kerned run. That is what made the tick-box groups tractable;
+the earlier label-derived approach silently mis-anchored and was rejected for it.
 
 ---
 
