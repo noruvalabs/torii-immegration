@@ -9,6 +9,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
+from torii_api.services.intake import _matches_token
 from torii_api.services.pack_exports import pack_documents
 
 ChecklistStatus = Literal["needed", "gathered", "uploaded"]
@@ -62,12 +63,25 @@ def visible_requirement_items(
         except Exception:
             continue
 
-    return [
-        item
-        for item in items
-        if item.show_when is None
-        or answers.get(str(item.show_when["key"])) == item.show_when.get("equals")
-    ]
+    return [item for item in items if _applies(item, answers)]
+
+
+def _applies(item: ChecklistDefinitionItem, answers: dict[str, Any]) -> bool:
+    """Whether a conditional document is one this applicant actually has to gather.
+
+    ``equals`` covers "only if you answered yes". ``one_of`` covers the shape the ministry
+    actually publishes: the 技人国 certificate asks for a different bundle depending on
+    which of four categories the employer falls into, and categories 3 and 4 share most of
+    theirs. Listing such a document twice would show it to the applicant twice.
+    """
+    rule = item.show_when
+    if rule is None:
+        return True
+    given = answers.get(str(rule.get("key")))
+    allowed = rule.get("one_of")
+    if isinstance(allowed, list):
+        return _matches_token(given, [str(option) for option in allowed])
+    return given == rule.get("equals")
 
 
 def update_status(current: str, requested: ChecklistStatus) -> ChecklistStatus:

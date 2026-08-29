@@ -34,9 +34,14 @@ categories:
   - code: student
     name: Student Visa - 留学 (Study at a university, college, or language school)
     is_live: true
+  # Parked. A short stay is visa-free for most nationalities, and where a visa is needed
+  # the mission usually requires it be filed through an accredited agency rather than by
+  # the applicant — which is what this product does. Its extension and change-of-status
+  # forms are also unauthored. The packs stay in the tree; flip this back when the
+  # 短期滞在 sheets (930004060 / 930004090) are authored and an agency route makes sense.
   - code: tourist
     name: Tourist / Temporary Visitor - 短期滞在 (Short-term travel, business, visiting relatives)
-    is_live: true
+    is_live: false
 actions:
   - code: renewal
     name: Renewal / Extension
