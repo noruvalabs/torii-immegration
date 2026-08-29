@@ -25,6 +25,7 @@ import {
   STEPS, phaseToStep, canVisitStep, nextWorkflowStep,
   type Step,
 } from "@/components/applicant/steps";
+import { AppBreadcrumb } from "@/components/breadcrumb-nav";
 
 
 export default function CaseDetailPage() {
@@ -397,6 +398,14 @@ export default function CaseDetailPage() {
 
   return (
     <div className="w-full max-w-7xl mx-auto space-y-6">
+      <AppBreadcrumb
+        items={[
+          { label: "Dashboard", href: "/dashboard" },
+          { label: "Cases", href: "/cases" },
+          { label: caseData.reference, active: true },
+        ]}
+      />
+
       <div className="flex items-start gap-4">
         <Link href="/cases" className="mt-1 text-muted-foreground hover:text-foreground">
           <ArrowLeft className="size-5" />

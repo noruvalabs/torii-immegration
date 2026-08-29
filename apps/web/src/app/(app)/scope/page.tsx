@@ -21,6 +21,7 @@ import {
 } from "@/lib/api/cases";
 import { CountrySelector } from "@/components/ui/country-selector";
 import { matchCountry } from "@/lib/countries";
+import { AppBreadcrumb } from "@/components/breadcrumb-nav";
 
 type CaseResult = { id: number; reference: string; status: string };
 
@@ -258,6 +259,8 @@ export default function ScopePage() {
 
   return (
     <div className="w-full max-w-7xl mx-auto space-y-6 py-6">
+      <AppBreadcrumb />
+
       <div>
         <h2 className="text-2xl font-semibold tracking-tight">
           Start a new application

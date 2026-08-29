@@ -3,6 +3,7 @@ import { ThemeToggle } from "./theme-toggle";
 import { useAuth } from "@/lib/auth-context";
 import { useI18n, LanguageSwitcher } from "@/lib/i18n";
 import { useRouter } from "next/navigation";
+import { AppBreadcrumb } from "@/components/breadcrumb-nav";
 
 export function Topbar({ title }: { title: string }) {
   const { user, logout } = useAuth();
@@ -16,7 +17,9 @@ export function Topbar({ title }: { title: string }) {
 
   return (
     <header className="flex h-16 items-center gap-4 border-b bg-card/60 px-6 backdrop-blur sticky top-0 z-30">
-      <h1 className="text-base font-bold tracking-tight text-foreground">{title}</h1>
+      <div className="flex flex-col justify-center min-w-0">
+        <AppBreadcrumb />
+      </div>
 
       <div className="ml-auto flex items-center gap-3">
         <div className="relative hidden md:block">

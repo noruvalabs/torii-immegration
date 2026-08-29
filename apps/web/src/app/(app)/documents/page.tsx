@@ -34,6 +34,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { PaginationBar } from "@/components/ui/pagination";
+import { AppBreadcrumb } from "@/components/breadcrumb-nav";
 import { useAuth } from "@/lib/auth-context";
 import { formatErrorMessage } from "@/lib/api/errors";
 import {
@@ -309,6 +310,8 @@ export default function DocumentVaultPage() {
 
   return (
     <div className="w-full max-w-7xl mx-auto space-y-6">
+      <AppBreadcrumb />
+
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Document Vault</h1>
