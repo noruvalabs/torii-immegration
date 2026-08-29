@@ -182,13 +182,56 @@ def test_the_category_question_is_asked_before_its_documents_are_gated_on_it() -
     assert gated_on <= asked, f"gated on unasked answers: {gated_on - asked}"
 
 
-def test_tourist_is_parked_but_its_packs_are_still_there() -> None:
-    """Turning a category off is a flag, not a deletion — it flips back in one line."""
+def test_every_japanese_category_is_offered() -> None:
+    """Short stay included: a Bangladeshi national filing from Dhaka is the founding case."""
     import yaml
 
     meta = yaml.safe_load((PACKS / "jp" / "_jurisdiction.yml").read_text(encoding="utf-8"))
     live = {c["code"] for c in meta["categories"] if c["is_live"]}
-    assert "tourist" not in live
-    assert {"work", "student", "dependent", "permanent_resident"} <= live
-    # The content survives the flag, so nothing has to be rebuilt to turn it back on.
-    assert (PACKS / "jp" / "tourist.new_application.yml").exists()
+    assert {
+        "work",
+        "student",
+        "dependent",
+        "permanent_resident",
+        "spouse",
+        "hsp",
+        "designated_activities",
+        "tourist",
+    } <= live
+
+
+def test_the_change_of_status_scope_has_a_checklist_too() -> None:
+    """It was live with an empty one, exactly as the certificate scope was."""
+    import yaml
+
+    items = yaml.safe_load(
+        (PACKS / "jp" / "work.change_of_status.yml").read_text(encoding="utf-8")
+    )["documents"]["items"]
+    assert len(items) >= 10
+    codes = {item["code"] for item in items}
+    # What the ministry prints differently for somebody already in Japan.
+    assert "passport_and_residence_card" in codes
+    assert "return_envelope" not in codes, "the certificate is posted back; this is not"
+    for item in items:
+        assert str((item.get("citation") or {}).get("url", "")).startswith("http")
+
+
+def test_the_two_work_scopes_share_the_employer_category_bundle() -> None:
+    """They are the same requirement, so they must not drift apart."""
+    import yaml
+
+    def codes(scope: str) -> set[str]:
+        items = yaml.safe_load(
+            (PACKS / "jp" / f"{scope}.yml").read_text(encoding="utf-8")
+        )["documents"]["items"]
+        return {item["code"] for item in items if item.get("show_when")}
+
+    assert codes("work.new_application") == codes("work.change_of_status")
+
+
+def test_the_short_stay_actions_with_no_form_are_parked() -> None:
+    """A live scope that hands over nothing is worse than one that is not offered."""
+    rows = {row["scope_id"] for row in workflow_rows_from_packs(load_all_packs())}
+    assert "jp/tourist.new_application" in rows, "the BD->JP corridor this was built for"
+    assert "jp/tourist.renewal" not in rows
+    assert "jp/tourist.change_of_status" not in rows

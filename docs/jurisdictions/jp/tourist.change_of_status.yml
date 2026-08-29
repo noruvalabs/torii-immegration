@@ -2,7 +2,9 @@ scope:
   jurisdiction: JP
   visa_category: tourist
   action: change_of_status
-  is_live: true
+  # Parked: no authored form and no checklist yet. Form 930004060 is published;
+  # page 1 already fits the shared layout and page 3 (form H) needs authoring.
+  is_live: false
   name: Japan Change of Status to Temporary Visitor for Departure Preparation (在留資格変更許可申請・出国準備)
 
 stages:
