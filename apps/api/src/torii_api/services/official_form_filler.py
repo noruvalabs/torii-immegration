@@ -557,10 +557,9 @@ def fill_flat_form(
             _draw_tick(pdf, sheet_fit, form.purpose_checkbox)
             filled["11 Purpose of entry"] = form.title_ja
         if sheet.photo is not None:
-            if photo and _draw_photo(pdf, sheet_fit, sheet.photo, photo):
-                filled["Photo"] = "attached"
-            else:
-                notes.append("Affix a 40mm × 30mm photograph in the printed panel before filing.")
+            # Official forms provided by the government require a physical photograph affixed
+            # to the printed panel before filing; digital user images are not drawn onto the form.
+            notes.append("Affix a 40mm × 30mm photograph in the printed panel before filing.")
 
         unsupported.extend(f"page {index + 1}: {item}" for item in sheet.unsupported_items)
         pdf.save()

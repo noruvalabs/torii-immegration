@@ -310,3 +310,49 @@ def test_the_resolver_cannot_be_handed_an_item_key() -> None:
         and any(isinstance(op, ast.In) for op in node.ops)
     ]
     assert membership == []
+
+
+# ── Japanese answers must survive every form path ──────────────────────────────────
+# The consular form is printed in English, but several of its boxes ask for facts that
+# are Japanese: where the applicant will stay, who invites them, the guarantor. Helvetica
+# has no glyph for a kanji and reportlab raises nothing -- it draws a black box per
+# character -- so this failed silently and the applicant downloaded ■■■ where a name
+# should be.
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "田中 由紀",
+        "東京都新宿区西新宿1-1-7",
+        "Aurora Systems 株式会社",
+        "ダッカ日本語センター",
+    ],
+)
+def test_a_japanese_answer_is_not_drawn_as_black_boxes(value: str) -> None:
+    import io
+
+    import pypdf
+    from reportlab.pdfgen import canvas
+
+    from torii_api.services.acroform_flatten import _draw_value
+
+    buffer = io.BytesIO()
+    pdf = canvas.Canvas(buffer)
+    _draw_value(pdf, [50.0, 700.0, 400.0, 716.0], value)
+    pdf.save()
+    buffer.seek(0)
+
+    text = pypdf.PdfReader(buffer).pages[0].extract_text() or ""
+    assert "■" not in text, f"{value!r} rendered as tofu"
+    # The characters themselves reached the page, not just "something non-empty".
+    assert value.split()[0] in text
+
+
+def test_both_form_paths_agree_on_which_face_can_draw_a_value() -> None:
+    """The consular form and the residence forms must not disagree about a kanji."""
+    from torii_api.services.acroform_flatten import _font_for as consular_font
+    from torii_api.services.official_form_filler import _font_for as residence_font
+
+    for value in ("Md Hojayfa Rahman", "田中 由紀", "Aurora Systems 株式会社"):
+        assert consular_font(value) == residence_font(value)

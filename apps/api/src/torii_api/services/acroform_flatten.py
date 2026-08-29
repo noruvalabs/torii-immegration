@@ -20,15 +20,48 @@ import structlog
 from pypdf.generic import ArrayObject, NameObject
 from reportlab.lib.colors import Color
 from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.cidfonts import UnicodeCIDFont
 from reportlab.pdfgen import canvas
 
 log = structlog.get_logger(__name__)
 
 INK = Color(0.05, 0.11, 0.42)
-FONT = "Helvetica"
+LATIN_FONT = "Helvetica"
+CJK_FONT = "HeiseiKakuGo-W5"
 MAX_FONT_SIZE = 9.5
 MIN_FONT_SIZE = 5.5
 PADDING = 2.5
+
+_cjk_registered = False
+
+
+def _cjk_font() -> str | None:
+    """Register the CJK face lazily; ``None`` if this reportlab build lacks it."""
+    global _cjk_registered
+    if _cjk_registered:
+        return CJK_FONT
+    try:
+        pdfmetrics.registerFont(UnicodeCIDFont(CJK_FONT))
+    except Exception as exc:  # pragma: no cover - depends on the reportlab build
+        log.warning("acroform.cjk_font_unavailable", error=str(exc))
+        return None
+    _cjk_registered = True
+    return CJK_FONT
+
+
+def _font_for(value: str) -> str:
+    """The face that can actually draw ``value``.
+
+    Helvetica has no glyph for a kanji and reportlab does not complain: it draws a black
+    box per character. This form is printed in English but several of its boxes ask for
+    Japanese facts -- the address of the hotel, the inviter, the guarantor -- so a value
+    that Latin-1 cannot hold goes to the CJK face.
+    """
+    try:
+        value.encode("latin-1")
+    except UnicodeEncodeError:
+        return _cjk_font() or LATIN_FONT
+    return LATIN_FONT
 
 
 def _field_name(annotation: Any) -> str:
@@ -61,10 +94,11 @@ def _draw_value(pdf: canvas.Canvas, rect: list[float], text: str) -> None:
     x0, y0, x1, y1 = rect
     width = max(8.0, (x1 - x0) - PADDING * 2)
     height = y1 - y0
+    font = _font_for(text)
     size = min(MAX_FONT_SIZE, max(MIN_FONT_SIZE, height - 3.5))
-    while size > MIN_FONT_SIZE and pdfmetrics.stringWidth(text, FONT, size) > width:
+    while size > MIN_FONT_SIZE and pdfmetrics.stringWidth(text, font, size) > width:
         size -= 0.25
-    pdf.setFont(FONT, size)
+    pdf.setFont(font, size)
     # Sit on the baseline of a vertically centred line box.
     pdf.drawString(x0 + PADDING, y0 + (height - size) / 2.0 + 1.2, text)
 
