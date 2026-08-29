@@ -466,14 +466,18 @@ export function IntakeStep({ state, profile, onAnswer, onProceedToEligibility, t
 
     const isDateInput =
       q.type === "date" ||
-      q.key.includes("date") ||
-      q.key.includes("expiry") ||
-      q.key.includes("expiration") ||
-      q.key.includes("dob") ||
-      q.key.includes("birth") ||
-      q.prompt.toLowerCase().includes("yyyy-mm-dd") ||
-      q.prompt.toLowerCase().includes("date of birth") ||
-      q.prompt.toLowerCase().includes("expiry date");
+      ((q.key.includes("date") ||
+        q.key.includes("expiry") ||
+        q.key.includes("expiration") ||
+        q.key === "dob" ||
+        q.key.includes("date_of_birth") ||
+        q.key.includes("birth_date") ||
+        q.prompt.toLowerCase().includes("yyyy-mm-dd") ||
+        q.prompt.toLowerCase().includes("date of birth") ||
+        q.prompt.toLowerCase().includes("expiry date")) &&
+        !q.key.includes("place") &&
+        !q.prompt.toLowerCase().includes("where were you born") &&
+        !q.prompt.toLowerCase().includes("place of birth"));
 
     const isFullWidth = hasOptions && optionsCount > 8;
 
