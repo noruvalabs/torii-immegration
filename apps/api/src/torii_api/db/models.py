@@ -206,6 +206,31 @@ class DocumentRequirementSet(TimestampMixin, Base):
     case_action: Mapped[CaseAction] = relationship(back_populates="document_requirement_sets")
 
 
+class PackOverride(TimestampMixin, Base):
+    """One admin edit to seeded pack content, kept beside the seeded row rather than in it.
+
+    ``seed()`` rewrites the seeded rows from ``docs/jurisdictions`` on every run, so an
+    edit stored in those rows is destroyed on the next boot. These survive it and are
+    re-applied on read — see ``torii_api.services.pack_overrides``.
+    """
+
+    __tablename__ = "pack_overrides"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    jurisdiction_id: Mapped[int] = mapped_column(ForeignKey("jurisdictions.id"), index=True)
+    visa_category_id: Mapped[int] = mapped_column(ForeignKey("visa_categories.id"), index=True)
+    case_action_id: Mapped[int] = mapped_column(ForeignKey("case_actions.id"), index=True)
+    # The pack path this edits, in the grammar pack_proposals uses:
+    # ``intake.questions[key=full_name].prompt``.
+    path: Mapped[str] = mapped_column(String(256), index=True)
+    # JSON, because the value at a path is a string, a bool, a list or a nested object
+    # depending on which field it is.
+    value: Mapped[Any] = mapped_column(SAJSON, default=None)
+    # Why the edit was made, and by whom. An override outlives the person who made it.
+    reason: Mapped[str] = mapped_column(Text, default="")
+    created_by: Mapped[str] = mapped_column(String(256), default="")
+
+
 class FormTemplate(TimestampMixin, Base):
     """Versioned official form definition and explicit intake field mappings."""
 
@@ -581,13 +606,16 @@ class CreditTransaction(TimestampMixin, Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
-    amount: Mapped[int] = mapped_column(Integer)  # +50, +200 on top-up; -2 on OCR; -30 on case unlock
+    amount: Mapped[int] = mapped_column(
+        Integer
+    )  # +50, +200 on top-up; -2 on OCR; -30 on case unlock
     balance_after: Mapped[int] = mapped_column(Integer)
-    feature: Mapped[str] = mapped_column(String(64))  # "welcome_bonus", "top_up", "ocr_extraction", "ai_query", "case_unlock"
+    feature: Mapped[str] = mapped_column(
+        String(64)
+    )  # "welcome_bonus", "top_up", "ocr_extraction", "ai_query", "case_unlock"
     case_id: Mapped[int | None] = mapped_column(ForeignKey("cases.id"), nullable=True, index=True)
     description: Mapped[str] = mapped_column(String(256))
     reference_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
 
     user: Mapped[User] = relationship(back_populates="credit_transactions")
     case: Mapped[Case | None] = relationship()
-

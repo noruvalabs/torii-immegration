@@ -27,6 +27,7 @@ from torii_api.db.models import (
     EligibilityRuleSet,
     FormTemplate,
     Jurisdiction,
+    PackOverride,
     User,
 )
 from torii_api.db.session import get_session
@@ -46,6 +47,11 @@ from torii_api.services.official_form_service import (
     describe_scope_forms,
     render_form,
     render_primary_form,
+)
+from torii_api.services.pack_overrides import (
+    SECTION_DOCUMENTS,
+    SECTION_RULES,
+    apply_overrides,
 )
 from torii_api.services.packet import assemble_packet
 from torii_api.services.payment import case_has_packet_entitlement
@@ -196,6 +202,26 @@ async def _resolve_action_ids(
     return action_ids
 
 
+async def _overrides_for_case(session: AsyncSession, case: Case) -> list[dict[str, Any]]:
+    """Admin edits stored against this case's scope.
+
+    Seed rewrites the seeded rows from the packs on every run, so an ops edit is kept
+    beside them and re-applied here instead of being written into the row it would be
+    erased from.
+    """
+    if case.visa_category_id is None or case.case_action_id is None:
+        return []
+    action_ids = await _resolve_action_ids(session, case.jurisdiction_id, case.case_action_id)
+    rows = await session.scalars(
+        select(PackOverride).where(
+            PackOverride.jurisdiction_id == case.jurisdiction_id,
+            PackOverride.visa_category_id == case.visa_category_id,
+            PackOverride.case_action_id.in_(action_ids),
+        )
+    )
+    return [{"path": row.path, "value": row.value} for row in rows]
+
+
 async def _effective_rules(session: AsyncSession, case: Case) -> list[dict[str, Any]]:
     """Eligibility rules for the case: live definition if available, else research snapshot fallback."""
     if case.visa_category_id is not None and case.case_action_id is not None:
@@ -209,7 +235,11 @@ async def _effective_rules(session: AsyncSession, case: Case) -> list[dict[str, 
             )
         )
         if definition is not None and definition.rules:
-            return list(definition.rules)
+            return apply_overrides(
+                list(definition.rules),
+                await _overrides_for_case(session, case),
+                section=SECTION_RULES,
+            )
 
     research = await _research_for_case(session, case)
     if research is not None and research_is_usable(research):
@@ -232,7 +262,11 @@ async def _effective_documents(session: AsyncSession, case: Case) -> list[dict[s
             )
         )
         if definition is not None and definition.items:
-            return list(definition.items)
+            return apply_overrides(
+                list(definition.items),
+                await _overrides_for_case(session, case),
+                section=SECTION_DOCUMENTS,
+            )
 
     research = await _research_for_case(session, case)
     if research is not None and research_is_usable(research):

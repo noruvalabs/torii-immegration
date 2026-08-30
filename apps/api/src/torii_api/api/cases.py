@@ -27,6 +27,7 @@ from torii_api.db.models import (
     IntakeDefinition,
     Jurisdiction,
     OutboxEvent,
+    PackOverride,
     ScopeResearch,
     ScopeResearchStatus,
     User,
@@ -46,6 +47,7 @@ from torii_api.services.intake import (
     visible_questions,
 )
 from torii_api.services.jp_official_forms import merge_form_questions
+from torii_api.services.pack_overrides import SECTION_INTAKE, apply_overrides
 from torii_api.services.research import (
     find_research,
     research_documents,
@@ -556,7 +558,12 @@ async def _intake_questions_for_case(session: AsyncSession, case: Case) -> list[
         )
     )
     if definition is not None and definition.questions:
-        return await _with_official_form_questions(session, case, list(definition.questions))
+        questions = apply_overrides(
+            list(definition.questions),
+            await _pack_overrides_for_case(session, case, action_ids),
+            section=SECTION_INTAKE,
+        )
+        return await _with_official_form_questions(session, case, questions)
 
     research = await _research_for_case(session, case)
     if research is not None and _effective_research_status(research) == "completed":
@@ -568,6 +575,22 @@ async def _intake_questions_for_case(session: AsyncSession, case: Case) -> list[
         status_code=status.HTTP_404_NOT_FOUND,
         detail="no intake definition for this case scope",
     )
+
+
+async def _pack_overrides_for_case(
+    session: AsyncSession, case: Case, action_ids: list[int]
+) -> list[dict[str, Any]]:
+    """Admin edits stored against this case's scope, which a reseed does not erase."""
+    if case.visa_category_id is None:
+        return []
+    rows = await session.scalars(
+        select(PackOverride).where(
+            PackOverride.jurisdiction_id == case.jurisdiction_id,
+            PackOverride.visa_category_id == case.visa_category_id,
+            PackOverride.case_action_id.in_(action_ids),
+        )
+    )
+    return [{"path": row.path, "value": row.value} for row in rows]
 
 
 async def _with_official_form_questions(
@@ -592,7 +615,9 @@ def _intake_state(
     jurisdiction_code: str = "JP",
     visa_category: str = "",
 ) -> IntakeStateOut:
-    parsed = parse_questions(questions, jurisdiction_code=jurisdiction_code, visa_category=visa_category)
+    parsed = parse_questions(
+        questions, jurisdiction_code=jurisdiction_code, visa_category=visa_category
+    )
     answers = dict(case.intake_answers or {})
     return IntakeStateOut(
         case_id=case.id,
@@ -884,7 +909,9 @@ async def get_intake(
     current_answers = dict(case.intake_answers or {})
     needs_flush = False
     for k, v in profile_prefill.items():
-        if (k not in current_answers or current_answers[k] is None or current_answers[k] == "") and v:
+        if (
+            k not in current_answers or current_answers[k] is None or current_answers[k] == ""
+        ) and v:
             current_answers[k] = v
             needs_flush = True
     if needs_flush:
@@ -981,14 +1008,18 @@ async def answer_intake(
             required_fields = ["full_name", "nationality", "passport_number", "current_country"]
             user.profile_complete = all(bool(getattr(user, f, None)) for f in required_fields)
 
-    state = _intake_state(case, [q.model_dump() for q in questions], jurisdiction_code=j_code, visa_category=v_code)
+    state = _intake_state(
+        case, [q.model_dump() for q in questions], jurisdiction_code=j_code, visa_category=v_code
+    )
     if state.progress.complete:
         new_status = next_status_for_phase("eligibility", case.status)
         if new_status is not None:
             case.status = new_status
     await session.flush()
     await session.refresh(case)
-    return _intake_state(case, [q.model_dump() for q in questions], jurisdiction_code=j_code, visa_category=v_code)
+    return _intake_state(
+        case, [q.model_dump() for q in questions], jurisdiction_code=j_code, visa_category=v_code
+    )
 
 
 @router.get("/{case_id}/guidance", response_model=GuidanceOut)

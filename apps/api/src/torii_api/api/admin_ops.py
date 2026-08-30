@@ -21,11 +21,22 @@ from torii_api.db.models import (
     FormTemplate,
     IntakeDefinition,
     Jurisdiction,
+    PackOverride,
     UserRole,
     VisaCategory,
 )
 from torii_api.db.session import get_session
 from torii_api.services.form_revisions import load_revisions, pending_reviews
+from torii_api.services.pack_overrides import (
+    SECTION_DOCUMENTS,
+    SECTION_INTAKE,
+    SECTION_RULES,
+    OverrideError,
+    applies_to,
+    section_of,
+    stale_overrides,
+    validate_path,
+)
 from torii_api.services.pack_proposals import (
     Change,
     Proposal,
@@ -140,7 +151,6 @@ class PackProposalIn(BaseModel):
 class PackDecisionIn(BaseModel):
     accept: bool
     note: str = Field(default="", max_length=500)
-
 
 
 @router.post("/eligibility-rules")
@@ -421,3 +431,156 @@ async def decide_pack_proposal(
     except ProposalError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     return _proposal_out(proposal)
+
+
+# ── Pack overrides ─────────────────────────────────────────────────────────────
+# The upserts above write into the seeded rows, which `seed()` rewrites from the packs on
+# every run — so an edit saved through them lives until the next boot and no longer. These
+# endpoints edit one value at a time, beside the seeded row rather than inside it, and
+# survive a reseed. See torii_api.services.pack_overrides.
+
+
+class PackOverrideIn(ScopeMixin):
+    path: str = Field(min_length=1, max_length=256)
+    value: Any = None
+    reason: str = Field(default="", max_length=2000)
+
+
+def _override_out(row: PackOverride) -> dict[str, Any]:
+    return {
+        "id": row.id,
+        "path": row.path,
+        "value": row.value,
+        "reason": row.reason,
+        "created_by": row.created_by,
+        "created_at": row.created_at.isoformat() if row.created_at else None,
+        "updated_at": row.updated_at.isoformat() if row.updated_at else None,
+    }
+
+
+@router.get("/pack-overrides")
+async def list_pack_overrides(
+    session: SessionDep,
+    _admin: AdminOpsDep,
+    jurisdiction_code: str,
+    visa_category: str,
+    action: str,
+) -> dict[str, Any]:
+    """Every admin edit live on a scope, and which of them no longer land.
+
+    A pack that moved on can leave an override addressing a question that no longer
+    exists. It is skipped at read time rather than applied to the wrong item, and named
+    here so that is visible instead of merely quiet.
+    """
+    jurisdiction, category, case_action = await _resolve_scope(
+        session, jurisdiction_code, visa_category, action
+    )
+    rows = list(
+        await session.scalars(
+            select(PackOverride).where(
+                PackOverride.jurisdiction_id == jurisdiction.id,
+                PackOverride.visa_category_id == category.id,
+                PackOverride.case_action_id == case_action.id,
+            )
+        )
+    )
+    overrides = [{"path": row.path, "value": row.value} for row in rows]
+
+    stale: list[str] = []
+    for model, attribute, section in (
+        (IntakeDefinition, "questions", SECTION_INTAKE),
+        (EligibilityRuleSet, "rules", SECTION_RULES),
+        (DocumentRequirementSet, "items", SECTION_DOCUMENTS),
+    ):
+        seeded = await session.scalar(
+            select(model).where(
+                model.jurisdiction_id == jurisdiction.id,
+                model.visa_category_id == category.id,
+                model.case_action_id == case_action.id,
+            )
+        )
+        items = list(getattr(seeded, attribute) or []) if seeded is not None else []
+        stale.extend(stale_overrides(items, overrides, section=section))
+
+    return {"overrides": [_override_out(row) for row in rows], "stale": stale}
+
+
+@router.put("/pack-overrides")
+async def upsert_pack_override(
+    payload: PackOverrideIn, session: SessionDep, user: AdminOpsDep
+) -> dict[str, Any]:
+    """Set one value on a scope, or change the value already set at that path.
+
+    The path is validated against the seeded content before it is stored: a path that
+    addresses nothing is refused here rather than accepted and silently never applied,
+    which is the failure this whole mechanism exists to stop happening quietly.
+    """
+    jurisdiction, category, case_action = await _resolve_scope(
+        session, payload.jurisdiction_code, payload.visa_category, payload.action
+    )
+    try:
+        section = section_of(payload.path)
+        validate_path(payload.path)
+    except OverrideError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    model, attribute = {
+        SECTION_INTAKE: (IntakeDefinition, "questions"),
+        SECTION_RULES: (EligibilityRuleSet, "rules"),
+        SECTION_DOCUMENTS: (DocumentRequirementSet, "items"),
+    }[section]
+    seeded = await session.scalar(
+        select(model).where(
+            model.jurisdiction_id == jurisdiction.id,
+            model.visa_category_id == category.id,
+            model.case_action_id == case_action.id,
+        )
+    )
+    items = list(getattr(seeded, attribute) or []) if seeded is not None else []
+    if not applies_to(items, payload.path):
+        raise HTTPException(
+            status_code=404,
+            detail=f"{payload.path} addresses nothing in this scope's {section}",
+        )
+
+    existing = await session.scalar(
+        select(PackOverride).where(
+            PackOverride.jurisdiction_id == jurisdiction.id,
+            PackOverride.visa_category_id == category.id,
+            PackOverride.case_action_id == case_action.id,
+            PackOverride.path == payload.path,
+        )
+    )
+    editor = getattr(user, "email", None) or str(getattr(user, "id", "ops"))
+    if existing is not None:
+        existing.value = payload.value
+        existing.reason = payload.reason
+        existing.created_by = editor
+        row = existing
+    else:
+        row = PackOverride(
+            jurisdiction_id=jurisdiction.id,
+            visa_category_id=category.id,
+            case_action_id=case_action.id,
+            path=payload.path,
+            value=payload.value,
+            reason=payload.reason,
+            created_by=editor,
+        )
+        session.add(row)
+    await session.flush()
+    # The timestamps come from the database clock, so they are unloaded until they are
+    # read back. Reading them lazily while serialising is synchronous IO on an async
+    # session, which raises MissingGreenlet rather than returning a row.
+    await session.refresh(row)
+    return _override_out(row)
+
+
+@router.delete("/pack-overrides/{override_id}", status_code=204)
+async def delete_pack_override(override_id: int, session: SessionDep, _admin: AdminOpsDep) -> None:
+    """Revert one edit. The pack's own value is what the scope shows again."""
+    row = await session.get(PackOverride, override_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="no such override")
+    await session.delete(row)
+    await session.flush()

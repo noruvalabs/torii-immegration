@@ -419,15 +419,25 @@ async def _ensure_action(
     return 1
 
 
-async def seed() -> None:
+async def seed(session_factory: Any | None = None) -> None:
+    """Load the content packs into the system of record.
+
+    ``session_factory`` is for callers that already have a database — the tests, which
+    run against a throwaway one. Left out, this opens its own from settings as the CLI
+    entry point needs.
+    """
     settings = get_settings()
-    engine = create_engine(to_async_url(settings.database_url))
-    session_factory = create_session_factory(engine)
+    engine = create_engine(to_async_url(settings.database_url)) if session_factory is None else None
+    owns_engine = engine is not None
+    if session_factory is None:
+        assert engine is not None
+        session_factory = create_session_factory(engine)
     packs = load_all_packs()
     pack_jurisdictions = list_jurisdiction_metas()
 
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    if engine is not None:
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
 
     async with session_factory() as session:
         created_users = 0
@@ -553,7 +563,8 @@ async def seed() -> None:
 
         await session.commit()
 
-    await engine.dispose()
+    if owns_engine and engine is not None:
+        await engine.dispose()
     print(
         f"Seeded {created_users} users, {created_jurisdictions} jurisdictions, "
         f"{created_categories} visa categories, {created_actions} case actions, "
