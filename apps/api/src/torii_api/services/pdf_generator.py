@@ -1228,6 +1228,49 @@ def generate_dossier_packet_pdf(
     return buffer.getvalue()
 
 
+# The consular form is read by a visa officer, not by this service. An answer stored as
+# an enum token or an ISO code has to reach the printed box as the words that box asks
+# for -- "Bangladesh", not "BD"; "Visiting relatives", not "visiting_family".
+_CONSULAR_PURPOSES: dict[str, str] = {
+    "tourism": "Tourism",
+    "visiting_family": "Visiting relatives",
+    "visiting_friends": "Visiting friends or acquaintances",
+    "commercial_business": "Commercial business",
+}
+
+
+def _consular_label(value: str) -> str:
+    """An enum answer as the words the form asks for."""
+    if not value:
+        return ""
+    token = value.strip().lower()
+    labelled = _CONSULAR_PURPOSES.get(token)
+    if labelled is not None:
+        return labelled
+    # Any other pack's token still reaches the sheet as words rather than as a key. An
+    # answer that is already prose is left exactly as the applicant wrote it.
+    if "_" in token:
+        return token.replace("_", " ").capitalize()
+    return value
+
+
+def _consular_country(value: str) -> str:
+    """A nationality answer as a country name.
+
+    Packs store nationality as an ISO code because the eligibility rules match on codes.
+    The form asks for the country, so the code is resolved back to its name here. Anything
+    that is not a two-letter code -- the shared question asks for the name as printed in
+    the passport -- is already what the box wants and passes through untouched.
+    """
+    from torii_api.services.geolocation import resolve_country_meta
+
+    code = value.strip()
+    if len(code) != 2 or not code.isalpha():
+        return value
+    resolved = resolve_country_meta(code)["name"]
+    return value if resolved == code.upper() else resolved
+
+
 def generate_official_japan_visa_form_pdf(
     case_reference: str,
     answers: dict[str, Any],
@@ -1291,11 +1334,17 @@ def generate_official_japan_visa_form_pdf(
             given_names = ""
 
         nationality = answer("nationality", "visitor_nationality", "country_of_citizenship")
+        if nationality.strip().lower() == "other":
+            # The enum lists the nationalities the eligibility rules match on. Anything
+            # outside it is named in the free-text follow-up, because "other" is not an
+            # answer to "Nationality or citizenship" on a form the applicant signs.
+            nationality = answer("nationality_other", "country_of_citizenship")
+        nationality = _consular_country(nationality)
         passport_no = answer("passport_number", "passport_no", "visitor_passport_number")
         dob = consular_date("date_of_birth", "birth_date")
         passport_expiry = consular_date("passport_expiry_date", "passport_expiry")
         passport_authority = answer("passport_issuing_authority")
-        purpose = answer("purpose_of_visit", "main_purpose", "purpose_of_stay")
+        purpose = _consular_label(answer("purpose_of_visit", "main_purpose", "purpose_of_stay"))
         stay_days = answer(
             "intended_length_of_stay", "intended_length_of_stay_days", "stay_duration_days"
         )

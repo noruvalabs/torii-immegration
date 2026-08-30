@@ -100,6 +100,14 @@ SUPPORTED_NATIONALITIES: dict[str, dict[str, str]] = {
     "EG": {"name": "Egypt", "currency": "EGP", "flag": "🇪🇬"},
     "SA": {"name": "Saudi Arabia", "currency": "SAR", "flag": "🇸🇦"},
     "AE": {"name": "United Arab Emirates", "currency": "AED", "flag": "🇦🇪"},
+    # Visa-waiver nationalities the Japanese short-stay pack offers as answers. Without a
+    # name here the consular form prints the bare ISO code in "Nationality or citizenship".
+    "CA": {"name": "Canada", "currency": "CAD", "flag": "🇨🇦"},
+    "AU": {"name": "Australia", "currency": "AUD", "flag": "🇦🇺"},
+    "DE": {"name": "Germany", "currency": "EUR", "flag": "🇩🇪"},
+    "FR": {"name": "France", "currency": "EUR", "flag": "🇫🇷"},
+    "SG": {"name": "Singapore", "currency": "SGD", "flag": "🇸🇬"},
+    "KR": {"name": "South Korea", "currency": "KRW", "flag": "🇰🇷"},
 }
 
 # Visa types

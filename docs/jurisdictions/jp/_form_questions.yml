@@ -313,6 +313,12 @@ questions:
     section: "Guarantor or inviter in Japan"
     max_length: 200
     show_when: { key: has_inviter, equals: true }
+  relationship_to_inviter:
+    prompt: "What is the inviter's relationship to you?"
+    type: string
+    section: "Guarantor or inviter in Japan"
+    max_length: 80
+    show_when: { key: has_inviter, equals: true }
   imprisoned_one_year_or_more:
     prompt: "Have you ever been sentenced to imprisonment for one year or more in any country?"
     type: boolean

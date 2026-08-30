@@ -375,6 +375,7 @@ CONSULAR_VISA_FORM = OfficialForm(
         ("Inviter in Japan — name", "inviter_name"),
         ("Inviter in Japan — tel.", "inviter_tel"),
         ("Inviter in Japan — address", "inviter_address"),
+        ("Inviter in Japan — relationship", "relationship_to_inviter"),
         ("Have you ever been convicted of a crime or offence in any country?", "criminal_record"),
         (
             "Have you ever been sentenced to imprisonment for 1 year or more?",

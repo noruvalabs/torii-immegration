@@ -53,6 +53,21 @@ intake:
         title: Visa Requirement Guidelines by Country
         url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
 
+    - key: nationality_other
+      section: Personal & Identity
+      prompt: Which country issued your passport?
+      type: string
+      min_length: 2
+      max_length: 64
+      required: true
+      show_when:
+        key: nationality
+        equals: other
+      citation:
+        authority: Ministry of Foreign Affairs (MOFA)
+        title: Official Visa Application Form Item 6 (Nationality or citizenship)
+        url: https://www.mofa.go.jp/j_info/visit/visa/index.html
+
     - key: date_of_birth
       section: Personal & Identity
       prompt: What is your date of birth (YYYY-MM-DD)?
@@ -175,6 +190,21 @@ intake:
         title: Bank Balance Certificate Requirements
         url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
 
+    - key: employment_status
+      section: Financial Solvency & Funding
+      prompt: What is your employment status in your home country?
+      type: enum
+      options:
+        - employed
+        - self_employed
+        - student
+        - not_working
+      required: true
+      citation:
+        authority: Ministry of Foreign Affairs (MOFA)
+        title: Short-Term Stay Visa - Documents Establishing Occupation and Social Ties
+        url: https://www.mofa.go.jp/j_info/visit/visa/short/index.html
+
     - key: occupation
       section: Financial Solvency & Funding
       prompt: What is your current profession or employment status in your home country?
@@ -210,7 +240,7 @@ intake:
 
 eligibility:
   rules:
-    - key: visitor_nationality
+    - key: nationality
       operator: nationality_in
       value:
         - US
@@ -241,72 +271,263 @@ eligibility:
     - key: criminal_record
       operator: equals
       value: false
-      failure_status: fail
-      message: Prior criminal convictions may result in denial of landing under Immigration Control Act Article 5.
+      failure_status: at_risk
+      message: A conviction has to be declared on the visa application form and described in the
+        details box beneath the declarations. A conviction is not by itself a ground for denial of
+        landing — Article 5(1) turns on the sentence passed and the offence committed.
       citation:
-        authority: Immigration Services Agency of Japan (MOJ)
-        title: Denial of Landing Criteria (Article 5)
-        url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
+        authority: Immigration Control and Refugee Recognition Act (Article 5)
+        title: Grounds for denial of landing — Article 5(1)
+        url: https://www.japaneselawtranslation.go.jp/en/laws/view/3624/tb
+        source_version: 2026-04
+
+    - key: imprisoned_one_year_or_more
+      operator: equals
+      value: false
+      failure_status: fail
+      show_when:
+        key: criminal_record
+        equals: true
+      message: A sentence of imprisonment of one year or more, in any country, is a statutory ground
+        for denial of landing under Article 5(1)(iv). Political offences are excepted, and the ground
+        can otherwise be set aside only by special permission under Article 5-2.
+      citation:
+        authority: Immigration Control and Refugee Recognition Act (Article 5)
+        title: Denial of landing — Article 5(1)(iv), imprisonment for one year or more
+        url: https://www.japaneselawtranslation.go.jp/en/laws/view/3624/tb
+        source_version: 2026-04
+
+    - key: drug_offence_conviction
+      operator: equals
+      value: false
+      failure_status: fail
+      show_when:
+        key: criminal_record
+        equals: true
+      message: A conviction under a narcotics, cannabis, opium, stimulant or psychotropic-substance
+        law is a ground for denial of landing under Article 5(1)(v) whatever sentence was passed.
+        There is no minimum, and a suspended sentence is still a sentence.
+      citation:
+        authority: Immigration Control and Refugee Recognition Act (Article 5)
+        title: Denial of landing — Article 5(1)(v), narcotics and stimulant offences
+        url: https://www.japaneselawtranslation.go.jp/en/laws/view/3624/tb
+        source_version: 2026-04
 
     - key: prior_deportation
       operator: equals
       value: false
-      failure_status: fail
-      message: Past deportation orders require statutory landing permission review under Article 5.
+      failure_status: at_risk
+      message: Removal bars landing for a fixed period counted from the date you left — five years,
+        ten if you had been deported before that, and one year where you left under a departure
+        order (Article 5(1)(ix)). Check your date against those periods before filing.
       citation:
-        authority: Immigration Services Agency of Japan (MOJ)
-        title: Entry Ban & Deportation History Verification
-        url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
+        authority: Immigration Control and Refugee Recognition Act (Article 5)
+        title: Denial of landing — Article 5(1)(ix), periods following removal
+        url: https://www.japaneselawtranslation.go.jp/en/laws/view/3624/tb
+        source_version: 2026-04
 
 documents:
   requirements:
     - code: passport_original
-      name: Original Valid Passport (with at least 2 blank visa pages)
+      name:
+        en: Original passport, valid for the whole stay, with at least two blank pages
+        ja: 旅券（原本）
+      how_to_obtain:
+        en: Bring the passport itself. Renew it first if it expires before your planned departure from
+          Japan.
+      why_required:
+        en: The visa is affixed to a page of this passport, so the mission needs the book, not a copy.
       is_required: true
-      citation:
-        authority: Ministry of Foreign Affairs (MOFA)
-        title: Standard Visa Submission Dossier
-        url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
+      citation: &mofa_short_stay
+        authority: Ministry of Foreign Affairs of Japan (外務省)
+        title: Short-Term Stay Visa (短期滞在) — documents to submit
+        url: https://www.mofa.go.jp/j_info/visit/visa/short/index.html
+        source_version: 2026-04
 
     - code: visa_application_form
-      name: Official Japan Visa Application Form with 45x35mm Photo
+      name:
+        en: Completed visa application form with one 45mm x 35mm photograph affixed
+        ja: 査証申請書・写真１葉（45mm×35mm）
+      how_to_obtain:
+        en: Torii fills this form from your answers. Print it, affix a photograph taken within the last
+          six months to the panel, and sign it by hand.
+      why_required:
+        en: This is the application itself. The photograph panel is printed on the form, and an unsigned
+          sheet is handed back.
       is_required: true
-      citation:
-        authority: Ministry of Foreign Affairs (MOFA)
-        title: Visa Application Form Format
-        url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
+      citation: *mofa_short_stay
 
     - code: schedule_of_stay
-      name: Day-by-Day Schedule of Stay (滞在予定表)
+      name:
+        en: Day-by-day schedule of stay
+        ja: 滞在予定表
+      how_to_obtain:
+        en: Write out each day of the trip — where you will be and how you can be reached — on the
+          ministry's published template.
+      why_required:
+        en: A short stay is judged on whether the stated plan is coherent and genuinely short.
       is_required: true
-      citation:
-        authority: Ministry of Foreign Affairs (MOFA)
-        title: Schedule of Stay Official Template
-        url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
-
-    - code: bank_solvency_certificate
-      name: Bank Solvency Certificate & Last 6 Months Bank Statement
-      is_required: true
-      citation:
-        authority: Embassy of Japan Consular Section
-        title: Proof of Sufficient Funds for Travel
-        url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
-
-    - code: employment_certificate
-      name: Certificate of Employment / Leave Approval Letter
-      is_required: true
-      citation:
-        authority: Embassy of Japan Consular Section
-        title: Proof of Employment and Social Ties
-        url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
+      citation: *mofa_short_stay
 
     - code: flight_hotel_reservations
-      name: Flight Itinerary & Hotel Booking Confirmations
+      name:
+        en: Flight itinerary and accommodation bookings covering the whole stay
+        ja: 航空券予約確認書・宿泊予約確認書
+      how_to_obtain:
+        en: A reservation confirmation from the airline or agency, and the hotel booking. The return or
+          onward flight has to be shown, not only the inbound one.
+      why_required:
+        en: A short stay is granted against a departure that is already booked.
       is_required: true
-      citation:
-        authority: Ministry of Foreign Affairs (MOFA)
-        title: Travel Proof Document Requirements
-        url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
+      citation: *mofa_short_stay
+
+    - code: bank_solvency_certificate
+      name:
+        en: Bank balance certificate and the last six months of statements
+        ja: 預金残高証明書・過去６か月分の取引明細
+      how_to_obtain:
+        en: Ask your bank for a balance certificate and printed statements. The statements matter as much
+          as the balance, because a sum deposited days before the application reads as borrowed.
+      why_required:
+        en: You are declaring that you pay for this trip yourself, and this is what that rests on.
+      is_required: true
+      show_when:
+        key: trip_payer
+        one_of:
+          - self_funded
+          - both
+      citation: *mofa_short_stay
+
+    - code: employment_certificate
+      name:
+        en: Certificate of employment and approved leave for the dates of the trip
+        ja: 在職証明書・休暇承認書
+      how_to_obtain:
+        en: Ask your employer for both on company letterhead, naming your position, length of service and
+          the approved leave dates.
+      why_required:
+        en: A job to return to is what shows the stay will end when it says it will.
+      is_required: true
+      show_when:
+        key: employment_status
+        equals: employed
+      citation: *mofa_short_stay
+
+    - code: student_enrolment_certificate
+      name:
+        en: Certificate of enrolment from your school or university
+        ja: 在学証明書
+      how_to_obtain:
+        en: Ask your institution's registrar. If you are travelling in term time, add the school's approval
+          of the absence.
+      why_required:
+        en: It stands where the employment certificate would, because enrolment is what you are
+          returning to.
+      is_required: true
+      show_when:
+        key: employment_status
+        equals: student
+      citation: *mofa_short_stay
+
+    - code: business_registration_evidence
+      name:
+        en: Business registration or trade licence, with your most recent tax return
+        ja: 営業許可証の写し・確定申告書の写し
+      how_to_obtain:
+        en: A copy of the registration or licence in your own name, plus the tax return you last filed.
+      why_required:
+        en: A self-employed applicant has no employer to certify the job, so the business does it instead.
+      is_required: true
+      show_when:
+        key: employment_status
+        equals: self_employed
+      citation: *mofa_short_stay
+
+    - code: letter_of_invitation
+      name:
+        en: Letter of reason for invitation from the person you are visiting
+        ja: 招へい理由書
+      how_to_obtain:
+        en: The person in Japan writes it on the ministry's template, addressed to the ambassador or
+          consul-general, stating how they know you and what the visit is for, and signs it.
+      why_required:
+        en: A visit to a named person is judged on that person's account of why you are coming, not only
+          on yours.
+      is_required: true
+      show_when:
+        key: purpose_of_visit
+        one_of:
+          - visiting_family
+          - visiting_friends
+      citation: *mofa_short_stay
+
+    - code: inviter_residence_certificate
+      name:
+        en: Inviter's certificate of residence, or a copy of their residence card
+        ja: 招へい人の住民票（世帯全員）又は在留カードの写し
+      how_to_obtain:
+        en: The inviter obtains it from their municipal office. A foreign resident of Japan submits a copy
+          of their residence card instead.
+      why_required:
+        en: It establishes that the person inviting you is who, and where, the invitation says they are.
+      is_required: true
+      show_when:
+        key: purpose_of_visit
+        one_of:
+          - visiting_family
+          - visiting_friends
+      citation: *mofa_short_stay
+
+    - code: relationship_evidence
+      name:
+        en: Evidence of your relationship to the person you are visiting
+        ja: 続柄を確認できる書類（戸籍謄本・出生証明書等）
+      how_to_obtain:
+        en: A family register extract, a birth or marriage certificate, or the equivalent civil record
+          naming you both.
+      why_required:
+        en: The visit rests on a family tie, so the tie itself has to be documented.
+      is_required: true
+      show_when:
+        key: purpose_of_visit
+        equals: visiting_family
+      citation: *mofa_short_stay
+
+    - code: letter_of_guarantee
+      name:
+        en: Letter of guarantee from the person or company covering your costs
+        ja: 身元保証書
+      how_to_obtain:
+        en: The guarantor completes the ministry's template, which commits them to your living costs,
+          medical costs and return travel, and signs it.
+      why_required:
+        en: You have said someone else is paying. This is the undertaking that makes that a fact the
+          mission can rely on.
+      is_required: true
+      show_when:
+        key: trip_payer
+        one_of:
+          - guarantor_in_japan
+          - employer_sponsor
+          - both
+      citation: *mofa_short_stay
+
+    - code: guarantor_income_evidence
+      name:
+        en: Guarantor's proof of income — a tax, tax-payment or employment certificate
+        ja: 身元保証人の課税（所得）証明書・納税証明書又は在職証明書
+      how_to_obtain:
+        en: The guarantor obtains a taxation or tax-payment certificate from their municipal office, or a
+          certificate of employment from their employer.
+      why_required:
+        en: A guarantee is worth what the guarantor can actually cover, which is what this shows.
+      is_required: true
+      show_when:
+        key: trip_payer
+        one_of:
+          - guarantor_in_japan
+          - both
+      citation: *mofa_short_stay
 
 forms:
   - code: japan_visa_app_form
