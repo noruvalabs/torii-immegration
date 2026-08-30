@@ -12,7 +12,6 @@ from __future__ import annotations
 import base64
 import io
 import os
-import tempfile
 from datetime import UTC, datetime
 from typing import Any
 
@@ -1255,30 +1254,9 @@ def generate_official_japan_visa_form_pdf(
         writer = pypdf.PdfWriter()
         writer.append(reader)
 
-        # Build photo overlay for Page 1 if photo is provided
-        img_bytes = _extract_image_bytes(photo_data)
-        if img_bytes:
-            try:
-                from reportlab.pdfgen import canvas
-
-                overlay_buf = io.BytesIO()
-                c = canvas.Canvas(overlay_buf, pagesize=(595.321, 841.921))
-                with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
-                    tmp.write(img_bytes)
-                    tmp_path = tmp.name
-                try:
-                    # MOFA photo box: x=422, y=588, width=88, height=118
-                    c.drawImage(tmp_path, 422, 588, width=88, height=118)
-                    c.save()
-                    overlay_buf.seek(0)
-                    overlay_reader = pypdf.PdfReader(overlay_buf)
-                    if overlay_reader.pages:
-                        writer.pages[0].merge_page(overlay_reader.pages[0])
-                finally:
-                    if os.path.exists(tmp_path):
-                        os.remove(tmp_path)
-            except Exception as exc:
-                print(f"Warning: failed to build photo overlay for MOFA template: {exc}")
+        # For the official MOFA visa application form, physical photographs (45mm × 35mm)
+        # must be affixed by the applicant in the designated printed box; digital user images
+        # are not overlaid onto the official form.
 
         # Only what the applicant actually told us reaches the form. A Japanese visa
         # application is a signed declaration, so an invented employer telephone or a
