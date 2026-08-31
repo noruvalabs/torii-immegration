@@ -432,9 +432,9 @@ async def create_visa_category(
             detail="jurisdiction not found",
         )
     code = payload.code.lower()
-    # No unique index backs (jurisdiction_id, code) — the tables predate one and existing
-    # deployments may already hold duplicates — so the conflict is checked here rather than
-    # caught from the flush, which would never raise.
+    # Checked here, and backed by a unique index (migration 0016). The check gives the admin
+    # the 409 that says which code clashed; the index is what makes it true under a race or
+    # a raw-SQL writer.
     clash = await session.scalar(
         select(VisaCategory.id)
         .where(VisaCategory.jurisdiction_id == jurisdiction_id)
@@ -572,7 +572,7 @@ async def create_case_action(
             detail="jurisdiction not found",
         )
     code = payload.code.lower()
-    # Checked here for the same reason as visa categories above.
+    # Same as visa categories above: an explicit 409, with the index behind it.
     clash = await session.scalar(
         select(CaseAction.id)
         .where(CaseAction.jurisdiction_id == jurisdiction_id)

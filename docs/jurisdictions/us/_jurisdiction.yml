@@ -12,32 +12,42 @@ notes: >
 categories:
   - code: h1b
     name: H-1B Specialty Occupations
+    description: Specialty-occupation employment, petitioned by a US employer.
     is_live: true
   - code: tourist
     name: Tourist / Visitor Visa (B1/B2)
+    description: Short visits for tourism, business, or seeing family (B1/B2).
     is_live: true
   - code: student
     name: Student Visa (F-1)
+    description: Academic study at an approved US institution (F-1).
     is_live: true
   - code: work
     name: Work Visa (H-1B)
+    description: Specialty-occupation employment, petitioned by a US employer.
     is_live: true
   - code: f1
     name: Student Visa (F-1)
+    description: Academic study at an approved US institution.
     is_live: true
   - code: b1b2
     name: Tourist / Business Visa (B1/B2)
+    description: Short visits for business or tourism.
     is_live: true
 actions:
   - code: renewal
     name: Renewal / Extension
+    description: Renew an existing visa, sometimes without a new interview.
     is_live: true
   - code: new_application
     name: New application
+    description: First-time application, including the consular interview.
     is_live: true
   - code: new
     name: New Visa
+    description: First-time application, including the consular interview.
     is_live: true
   - code: change_of_status
     name: Change of status
+    description: Change status from inside the United States, filed with USCIS.
     is_live: true

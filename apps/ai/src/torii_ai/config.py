@@ -24,12 +24,16 @@ class Settings(BaseSettings):
     docs_enabled: bool = True
 
     # --- Groq (OpenAI-compatible) ---------------------------------------------
+    # Groq retires model names on its own schedule, and a retired name answers 404
+    # model_not_found rather than degrading — so when a call starts failing that way, check
+    # https://console.groq.com/docs/models rather than the code. Both names below were
+    # current at 2026-08.
     groq_api_key: str = ""
-    groq_model: str = "qwen-qwq-32b"
+    groq_model: str = "qwen/qwen3.8-27b"
     # Optional non-reasoning model used for structured extraction. Reasoning models
     # (e.g. qwen3.6-27b) emit large <think> blocks that exceed the Groq TPM ceiling on
     # multi-page scrapes and truncate before producing JSON; a direct extractor avoids that.
-    groq_extract_model: str = "llama-3.3-70b-versatile"
+    groq_extract_model: str = "openai/gpt-oss-120b"
     groq_base_url: str = "https://api.groq.com/openai/v1"
     groq_timeout_seconds: float = 60.0
     # Explicit completion budget — reasoning models emit <think> blocks and otherwise
