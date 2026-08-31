@@ -139,6 +139,8 @@ class VisaCategoryOut(BaseModel):
     name: str
     is_live: bool
     research_enabled: bool = False
+    # One line for the applicant, under the route name on the visa-type step.
+    description: str = ""
 
 
 class CaseActionOut(BaseModel):
@@ -150,6 +152,7 @@ class CaseActionOut(BaseModel):
     name: str
     is_live: bool
     research_enabled: bool = False
+    description: str = ""
 
 
 class ScopeIn(BaseModel):
@@ -245,7 +248,7 @@ async def list_visa_categories(
     jurisdiction_code: str = Query(..., min_length=2, max_length=8),
     live_only: bool = False,
 ) -> list[VisaCategory]:
-    """List visa categories for a jurisdiction. ``live_only=true`` returns only live ones."""
+    """List visa categories for a jurisdiction. ``live_only=true`` = what an applicant is offered."""
     jurisdiction = await session.scalar(
         select(Jurisdiction).where(Jurisdiction.code == jurisdiction_code.upper())
     )
@@ -260,7 +263,12 @@ async def list_visa_categories(
         .order_by(VisaCategory.code)
     )
     if live_only:
-        stmt = stmt.where(VisaCategory.is_live.is_(True) | VisaCategory.research_enabled.is_(True))
+        # The admin switch first, then how the content is produced — see the module docstring
+        # in ``api/jurisdictions.py`` for why those are separate questions.
+        stmt = stmt.where(
+            VisaCategory.is_enabled.is_(True),
+            VisaCategory.is_live.is_(True) | VisaCategory.research_enabled.is_(True),
+        )
     result = await session.execute(stmt)
     return list(result.scalars().all())
 
@@ -274,7 +282,7 @@ async def list_case_actions(
     jurisdiction_code: str = Query(..., min_length=2, max_length=8),
     live_only: bool = False,
 ) -> list[CaseAction]:
-    """List case actions for a jurisdiction. ``live_only=true`` returns only live ones."""
+    """List case actions for a jurisdiction. ``live_only=true`` = what an applicant is offered."""
     jurisdiction = await session.scalar(
         select(Jurisdiction).where(Jurisdiction.code == jurisdiction_code.upper())
     )
@@ -289,7 +297,10 @@ async def list_case_actions(
         .order_by(CaseAction.code)
     )
     if live_only:
-        stmt = stmt.where(CaseAction.is_live.is_(True) | CaseAction.research_enabled.is_(True))
+        stmt = stmt.where(
+            CaseAction.is_enabled.is_(True),
+            CaseAction.is_live.is_(True) | CaseAction.research_enabled.is_(True),
+        )
     result = await session.execute(stmt)
     return list(result.scalars().all())
 
@@ -305,7 +316,8 @@ async def scope_case(
 ) -> Case:
     """Create a new case scoped to a jurisdiction + visa category + action (US-01).
 
-    A scope is selectable when it has a live content pack **or** is research-enabled
+    A scope is selectable when the admin has it switched on (``is_enabled`` on the country,
+    the route and the procedure) **and** it has a live content pack or is research-enabled
     (requirements produced on demand by the live-research pipeline). Cross-border cases
     record ``origin_country`` / ``residence_country``. Returns the case in ``draft`` status.
     """
@@ -345,9 +357,15 @@ async def scope_case(
             detail=f"action '{payload.action_code}' is not available in {jurisdiction.code}",
         )
 
+    # The admin switch is checked here and not only in the listing: an applicant who kept a
+    # tab open, or posted the scope directly, must not get a case on a route ops has since
+    # switched off.
+    is_enabled_scope = (
+        jurisdiction.is_enabled and visa_category.is_enabled and case_action.is_enabled
+    )
     is_live_scope = jurisdiction.is_live and visa_category.is_live and case_action.is_live
     is_research_scope = visa_category.research_enabled and case_action.research_enabled
-    if not is_live_scope and not is_research_scope:
+    if not is_enabled_scope or not (is_live_scope or is_research_scope):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="this case scope is not available",

@@ -2,6 +2,7 @@
 
 Endpoints:
 - POST /ai/ops/scrape — trigger a scrape job for a jurisdiction
+- POST /ai/ops/discover-scopes — list the visa routes a destination publishes (US-29)
 - POST /ai/ops/ingest — receive scraped data and forward to the system-of-record API
 - GET  /ai/ops/status — check worker status and last scrape time
 """
@@ -19,6 +20,7 @@ from torii_ai.config import Settings, get_settings
 from torii_ai.llm.groq import FakeChatClient, GroqChatClient
 from torii_ai.llm.nvidia import NvidiaChatClient
 from torii_ai.services.ops_scraper import OpsScraper
+from torii_ai.services.scope_discovery import ScopeDiscovery
 from torii_ai.tools.tavily import FakeSearchClient, TavilyClient
 
 log = structlog.get_logger()
@@ -27,6 +29,13 @@ router = APIRouter(prefix="/ai/ops", tags=["ops"])
 
 # In-memory status tracking (process-local, like sessions)
 _last_scrape: dict[str, Any] = {}
+
+# A discovery reply is a list of routes and procedures, each a handful of short fields, so it
+# reserves a fraction of what requirement extraction needs. This matters beyond cost: Groq
+# counts the reserved output against the tokens-per-minute allowance, so a budget sized to
+# the reply is the difference between an answer and a 413. A floor under the configured
+# budget: a deployment that allows less gets less.
+DISCOVERY_MAX_TOKENS = 4000
 
 
 class ScrapeRequest(BaseModel):
@@ -68,6 +77,28 @@ class IngestRequest(BaseModel):
     scraped_at: str = ""
 
 
+class DiscoverScopesRequest(BaseModel):
+    jurisdiction_code: str = Field(min_length=2, max_length=8, examples=["CA"])
+    # The applicant nationality a mission-in-origin-country page would be published for;
+    # widens the search to that embassy's domain when the destination has one.
+    origin_country: str | None = Field(default=None, max_length=8)
+
+
+class DiscoveredScope(BaseModel):
+    code: str
+    name: str
+    description: str = ""
+    citation: dict[str, Any] = Field(default_factory=dict)
+
+
+class DiscoverScopesResponse(BaseModel):
+    jurisdiction_code: str
+    visa_categories: list[DiscoveredScope] = Field(default_factory=list)
+    case_actions: list[DiscoveredScope] = Field(default_factory=list)
+    source_pages: list[dict[str, Any]] = Field(default_factory=list)
+    discovered_at: str = ""
+
+
 class StatusResponse(BaseModel):
     running: bool
     last_scrape: dict[str, Any]
@@ -93,6 +124,28 @@ def _build_scraper(settings: Settings) -> OpsScraper:
         chat = FakeChatClient()
         extract_chat = None
     return OpsScraper(search=search, chat=chat, settings=settings, extract_chat=extract_chat)
+
+
+def _build_discovery(settings: Settings) -> ScopeDiscovery:
+    """Build a ScopeDiscovery with real or fake clients based on config.
+
+    Extraction here is a plain list, not reasoning, so it takes the same non-reasoning model
+    preference ``_build_scraper`` applies to its structured pass — and its own, much smaller
+    output budget, because the reply is a few dozen short objects rather than a full set of
+    requirements. See :data:`DISCOVERY_MAX_TOKENS`.
+    """
+    search = TavilyClient(settings) if settings.tavily_api_key else FakeSearchClient()
+    if settings.groq_api_key:
+        chat = GroqChatClient(
+            settings,
+            model=settings.groq_extract_model or None,
+            max_tokens=min(DISCOVERY_MAX_TOKENS, settings.groq_max_tokens),
+        )
+    elif settings.nvidia_api_key:
+        chat = NvidiaChatClient(settings)
+    else:
+        chat = FakeChatClient()
+    return ScopeDiscovery(search=search, chat=chat, settings=settings)
 
 
 @router.post("/scrape", response_model=ScrapeResponse)
@@ -361,4 +414,40 @@ async def get_status() -> StatusResponse:
         last_scrape=_last_scrape,
         tavily_configured=bool(settings.tavily_api_key),
         nvidia_configured=bool(settings.nvidia_api_key),
+    )
+
+
+@router.post("/discover-scopes", response_model=DiscoverScopesResponse)
+async def discover_scopes(payload: DiscoverScopesRequest) -> DiscoverScopesResponse:
+    """List the visa routes and application procedures a destination publishes.
+
+    Called when an admin adds a country, so the panel can offer that country's real routes
+    to switch on instead of a hardcoded guess. Every returned route carries the official
+    page it was read off; ones that could not be cited are not returned (NF-2).
+    """
+    settings = get_settings()
+    discovery = _build_discovery(settings)
+
+    log.info("ops.discover.start", jurisdiction=payload.jurisdiction_code)
+    try:
+        result = await discovery.discover(
+            jurisdiction_code=payload.jurisdiction_code,
+            origin_country=payload.origin_country,
+        )
+    except Exception as exc:
+        log.error("ops.discover.failed", error=str(exc))
+        raise HTTPException(status_code=500, detail=f"Discovery failed: {exc}") from exc
+
+    log.info(
+        "ops.discover.done",
+        jurisdiction=result.jurisdiction_code,
+        categories=len(result.visa_categories),
+        actions=len(result.case_actions),
+    )
+    return DiscoverScopesResponse(
+        jurisdiction_code=result.jurisdiction_code,
+        visa_categories=[DiscoveredScope(**c) for c in result.visa_categories],
+        case_actions=[DiscoveredScope(**a) for a in result.case_actions],
+        source_pages=result.source_pages,
+        discovered_at=result.discovered_at,
     )

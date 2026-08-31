@@ -87,6 +87,10 @@ class Jurisdiction(TimestampMixin, Base):
     code: Mapped[str] = mapped_column(String(8), unique=True, index=True)
     name: Mapped[str] = mapped_column(String(128))
     is_live: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    # The admin's own on/off switch, deliberately not ``is_live``. ``seed()`` rewrites
+    # ``is_live`` from ``docs/jurisdictions`` on every run, so a country switched off
+    # through it would be switched back on by the next deploy. Nothing seeds this column.
+    is_enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1")
     efile_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
 
     cases: Mapped[list[Case]] = relationship(back_populates="jurisdiction")
@@ -112,9 +116,23 @@ class VisaCategory(TimestampMixin, Base):
     code: Mapped[str] = mapped_column(String(32), index=True)
     name: Mapped[str] = mapped_column(String(128))
     is_live: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    # The admin's on/off switch for this route, held apart from the two flags that say
+    # *how* its content is produced — see :class:`Jurisdiction.is_enabled` for why.
+    is_enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1")
     # True when a scope with no seeded content pack can still be offered, with
     # requirements produced on demand by the live-research pipeline (NF-2 gated).
     research_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    # One line for the applicant, shown under the route name on the visa-type step.
+    description: Mapped[str] = mapped_column(String(512), default="", server_default="")
+    # Where this route came from: "pack" (docs/jurisdictions), "discovered" (read off an
+    # official page by scope discovery), or "manual" (typed in by an admin).
+    source: Mapped[str] = mapped_column(String(16), default="manual", server_default="manual")
+    # The official page a discovered route was read off, so every route can answer where it
+    # came from (NF-2). Empty ``{}`` for pack and manual rows — and a server default, not
+    # only a Python one, so a raw-SQL writer cannot leave it NULL and make readers nullable.
+    citation: Mapped[dict[str, Any]] = mapped_column(
+        SAJSON, default=dict, server_default="{}", nullable=False
+    )
 
     jurisdiction: Mapped[Jurisdiction] = relationship(back_populates="visa_categories")
     cases: Mapped[list[Case]] = relationship(back_populates="visa_category")
@@ -140,7 +158,14 @@ class CaseAction(TimestampMixin, Base):
     code: Mapped[str] = mapped_column(String(32), index=True)
     name: Mapped[str] = mapped_column(String(128))
     is_live: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    # See :class:`VisaCategory.is_enabled`.
+    is_enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1")
     research_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    description: Mapped[str] = mapped_column(String(512), default="", server_default="")
+    source: Mapped[str] = mapped_column(String(16), default="manual", server_default="manual")
+    citation: Mapped[dict[str, Any]] = mapped_column(
+        SAJSON, default=dict, server_default="{}", nullable=False
+    )
 
     jurisdiction: Mapped[Jurisdiction] = relationship(back_populates="case_actions")
     cases: Mapped[list[Case]] = relationship(back_populates="case_action")

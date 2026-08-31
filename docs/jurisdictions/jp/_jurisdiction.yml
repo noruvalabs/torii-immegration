@@ -15,38 +15,50 @@ notes: >
 categories:
   - code: work
     name: Work Visa - 技術・人文知識・国際業務 (Engineer / Specialist in Humanities / International Services)
+    description: Employment in engineering, humanities, or international services with a sponsoring employer.
     is_live: true
   - code: hsp
     name: Highly Skilled Professional - 高度専門職 (Points-based fast track to PR)
+    description: Points-scored route for high earners and advanced qualifications, with a faster path to permanent residency.
     is_live: true
   - code: permanent_resident
     name: Permanent Residency - 永住許可 (PR status & fast-track paths)
+    description: Apply for permanent resident status once the required years of residence are met.
     is_live: true
   - code: spouse
     name: Spouse / Child of Japanese National or PR - 日本人の配偶者等 / 永住者の配偶者等
+    description: For the spouse or child of a Japanese national or a permanent resident.
     is_live: true
   - code: dependent
     name: Dependent Visa - 家族滞在 (Spouse & children of work/student residents)
+    description: For the spouse and children of someone already holding a work or student status.
     is_live: true
   - code: designated_activities
     name: Designated Activities - 特定活動 (Article 46 graduates, job hunting, internships)
+    description: Graduate job hunting, internships, and other activities designated case by case.
     is_live: true
   - code: student
     name: Student Visa - 留学 (Study at a university, college, or language school)
+    description: Study at a university, college, vocational school, or language school.
     is_live: true
   - code: tourist
     name: Tourist / Temporary Visitor - 短期滞在 (Short-term travel, business, visiting relatives)
+    description: Short stays for tourism, business trips, or visiting family and friends.
     is_live: true
 actions:
   - code: renewal
     name: Renewal / Extension
+    description: Extend the status of residence you already hold, before it expires.
     is_live: true
   - code: new_application
     name: New application
+    description: First-time application, including the Certificate of Eligibility your sponsor files.
     is_live: true
   - code: change_of_status
     name: Change of status
+    description: Switch to a different status of residence while staying in Japan.
     is_live: true
   - code: new
     name: New Visa
+    description: First-time application made from outside Japan.
     is_live: true
