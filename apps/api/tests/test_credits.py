@@ -8,7 +8,7 @@ from httpx import AsyncClient
 
 @pytest.mark.asyncio
 async def test_credits_balance_and_initial_grant(client: AsyncClient) -> None:
-    # 1. Register a new user (receives 10 welcome credits by default)
+    # 1. Register a new user (receives 3 welcome credits by default)
     reg = await client.post(
         "/v1/auth/register",
         json={"email": "credit_test@example.com", "password": "password123"},
@@ -21,7 +21,7 @@ async def test_credits_balance_and_initial_grant(client: AsyncClient) -> None:
     bal_res = await client.get("/v1/credits/balance", headers=headers)
     assert bal_res.status_code == 200
     bal_data = bal_res.json()
-    assert bal_data["credit_balance"] == 10
+    assert bal_data["credit_balance"] == 3
     assert len(bal_data["packs"]) == 3
 
 
@@ -46,7 +46,7 @@ async def test_credits_consume_and_insufficient_balance(client: AsyncClient) -> 
     )
     assert ocr_res.status_code == 200
     assert ocr_res.json()["credits_consumed"] == 2
-    assert ocr_res.json()["credit_balance"] == 8
+    assert ocr_res.json()["credit_balance"] == 1
 
     # 2. Consume 1 credit for AI Q&A
     ai_res = await client.post(
@@ -59,7 +59,7 @@ async def test_credits_consume_and_insufficient_balance(client: AsyncClient) -> 
         headers=headers,
     )
     assert ai_res.status_code == 200
-    assert ai_res.json()["credit_balance"] == 7
+    assert ai_res.json()["credit_balance"] == 0
 
     # 3. Attempt to consume more credits than balance (e.g. 50) -> HTTP 402
     over_res = await client.post(
@@ -92,7 +92,7 @@ async def test_credits_top_up(client: AsyncClient) -> None:
     assert top_res.status_code == 200
     data = top_res.json()
     assert data["credits_added"] == 3
-    assert data["credit_balance"] == 13  # 10 initial + 3
+    assert data["credit_balance"] == 6  # 3 initial + 3
 
     # Balance ledger check
     bal_res = await client.get("/v1/credits/balance", headers=headers)

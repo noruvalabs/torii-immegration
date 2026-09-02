@@ -69,7 +69,7 @@ class User(TimestampMixin, Base):
     current_country: Mapped[str | None] = mapped_column(String(100), nullable=True)
     avatar_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
     profile_complete: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
-    credit_balance: Mapped[int] = mapped_column(Integer, default=10, server_default="10")
+    credit_balance: Mapped[int] = mapped_column(Integer, default=3, server_default="3")
 
     cases: Mapped[list[Case]] = relationship(back_populates="owner")
     credit_transactions: Mapped[list[CreditTransaction]] = relationship(
