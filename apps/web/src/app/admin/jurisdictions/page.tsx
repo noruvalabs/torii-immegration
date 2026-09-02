@@ -1,8 +1,7 @@
 "use client";
 
-import { type FormEvent, useCallback, useEffect, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import {
-  CheckCircle2,
   ChevronDown,
   ChevronRight,
   ExternalLink,
@@ -10,14 +9,17 @@ import {
   Loader2,
   Plus,
   Radar,
+  Search,
   Trash2,
-  XCircle,
+  X,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { toast } from "@/components/ui/sonner";
 import { useAuth } from "@/lib/auth-context";
-import { matchCountry } from "@/lib/countries";
+import { CountrySelector } from "@/components/ui/country-selector";
+import { getCountryByName, isSameCountry, matchCountry } from "@/lib/countries";
 import { formatErrorMessage } from "@/lib/api/errors";
 import {
   type AdminJurisdiction,
@@ -37,7 +39,7 @@ import {
 
 const POPULAR_PRESETS = [
   { code: "JP", name: "Japan" },
-  { code: "GB", name: "United Kingdom" },
+  { code: "UK", name: "United Kingdom" },
   { code: "US", name: "United States" },
   { code: "CA", name: "Canada" },
   { code: "AU", name: "Australia" },
@@ -55,8 +57,6 @@ const SOURCE_LABEL: Record<string, string> = {
 export default function JurisdictionsPage() {
   const { token } = useAuth();
   const [items, setItems] = useState<AdminJurisdiction[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [code, setCode] = useState("");
   const [name, setName] = useState("");
@@ -66,11 +66,10 @@ export default function JurisdictionsPage() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    setError(null);
     try {
       setItems(await listJurisdictions(token));
     } catch (e) {
-      setError(formatErrorMessage(e));
+      toast.error(formatErrorMessage(e));
     } finally {
       setLoading(false);
     }
@@ -85,9 +84,18 @@ export default function JurisdictionsPage() {
     const targetName = (presetName || name).trim();
     if (!targetCode || !targetName) return;
 
+    // Check if this country (or its alias) is already configured
+    const existing = items.find(
+      (i) => isSameCountry(i.code, targetCode) || isSameCountry(i.name, targetName),
+    );
+    if (existing) {
+      toast.error(
+        `${targetName} (${targetCode}) is already configured as ${existing.name} (${existing.code}).`,
+      );
+      return;
+    }
+
     setSubmitting(true);
-    setError(null);
-    setSuccessMsg(null);
     try {
       const created = await createJurisdiction(token, {
         code: targetCode,
@@ -96,7 +104,7 @@ export default function JurisdictionsPage() {
       });
       setCode("");
       setName("");
-      setSuccessMsg(
+      toast.success(
         `Added ${targetName} (${targetCode}). Every route starts switched off — open it to see` +
           " what the country publishes and choose what to offer.",
       );
@@ -105,42 +113,48 @@ export default function JurisdictionsPage() {
       // know that themselves. The card opens on the answer.
       setJustDiscovered(created.id);
     } catch (e) {
-      setError(formatErrorMessage(e));
+      toast.error(formatErrorMessage(e));
     } finally {
       setSubmitting(false);
     }
   }
 
   async function toggleCountry(j: AdminJurisdiction) {
-    setError(null);
-    setSuccessMsg(null);
     try {
       await updateJurisdiction(token, j.id, { is_enabled: !j.is_enabled });
-      setSuccessMsg(
+      toast.success(
         `${j.name} is now ${
           !j.is_enabled ? "open for applications" : "closed — hidden from applicants"
         }.`,
       );
       await load();
     } catch (e) {
-      setError(formatErrorMessage(e));
+      toast.error(formatErrorMessage(e));
     }
   }
 
   async function removeCountry(j: AdminJurisdiction) {
     if (!confirm(`Remove ${j.name} (${j.code}) and all of its routes?`)) return;
-    setError(null);
-    setSuccessMsg(null);
     try {
       await deleteJurisdiction(token, j.id);
-      setSuccessMsg(`Removed ${j.name} (${j.code}).`);
+      toast.success(`Removed ${j.name} (${j.code}).`);
       await load();
     } catch (e) {
-      setError(formatErrorMessage(e));
+      toast.error(formatErrorMessage(e));
     }
   }
 
   const openCount = items.filter((j) => j.is_enabled && j.is_live).length;
+
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const filteredItems = useMemo(() => {
+    if (!searchQuery.trim()) return items;
+    const q = searchQuery.trim().toLowerCase();
+    return items.filter(
+      (j) => j.name.toLowerCase().includes(q) || j.code.toLowerCase().includes(q),
+    );
+  }, [items, searchQuery]);
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
@@ -166,33 +180,13 @@ export default function JurisdictionsPage() {
         </div>
       </div>
 
-      {/* ── Messages ───────────────────────────────────────────────────────── */}
-      {error && (
-        <div
-          role="alert"
-          className="flex items-start gap-2 rounded-[var(--radius)] border border-[var(--color-danger)]/30 bg-[var(--color-danger)]/10 px-4 py-3 text-xs text-[var(--color-danger)]"
-        >
-          <XCircle className="mt-0.5 size-4 shrink-0" />
-          <span>{error}</span>
-        </div>
-      )}
-      {successMsg && (
-        <div
-          role="status"
-          className="flex items-start gap-2 rounded-[var(--radius)] border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-xs text-emerald-700 dark:text-emerald-300"
-        >
-          <CheckCircle2 className="mt-0.5 size-4 shrink-0" />
-          <span>{successMsg}</span>
-        </div>
-      )}
-
       {/* ── Add a country ──────────────────────────────────────────────────── */}
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-sm font-bold text-foreground">Add a country</CardTitle>
           <p className="text-xs text-muted-foreground">
-            Adding a country reads its own immigration pages to find out which visa routes and
-            procedures it publishes. You then choose which of them to offer.
+            Search any country or choose from quick presets. Adding a country reads its official
+            immigration pages to discover published visa routes and procedures.
           </p>
         </CardHeader>
         <CardContent className="space-y-4 pt-0">
@@ -203,7 +197,7 @@ export default function JurisdictionsPage() {
             <div className="mt-1.5 flex flex-wrap gap-2">
               {POPULAR_PRESETS.map((preset) => {
                 const existing = items.find(
-                  (i) => i.code.toUpperCase() === preset.code.toUpperCase(),
+                  (i) => isSameCountry(i.code, preset.code) || isSameCountry(i.name, preset.name),
                 );
                 return (
                   <button
@@ -235,49 +229,97 @@ export default function JurisdictionsPage() {
               e.preventDefault();
               void create();
             }}
-            className="flex flex-wrap items-end gap-3 border-t pt-3"
+            className="space-y-3 border-t pt-3"
           >
-            <label className="flex flex-col gap-1 text-xs">
-              <span className="font-medium text-muted-foreground">ISO country code</span>
-              <input
-                required
+            <div className="flex flex-col gap-1 text-xs">
+              <span className="font-medium text-muted-foreground">Search country</span>
+              <CountrySelector
                 value={code}
-                onChange={(e) => {
-                  const val = e.target.value.toUpperCase();
-                  setCode(val);
-                  if (val.length === 2 && !name) {
-                    const matched = matchCountry(val);
-                    if (matched?.name) setName(matched.name);
-                  }
+                valueType="code"
+                placeholder="Search all 240+ countries (e.g. Canada, Germany, France, CA)..."
+                onChange={(_val, country) => {
+                  const canonicalCode = country.code === "GB" ? "UK" : country.code;
+                  setCode(canonicalCode);
+                  setName(country.name);
                 }}
-                placeholder="e.g. CA"
-                maxLength={8}
-                className="h-9 w-28 rounded-[var(--radius)] border bg-background px-3 font-mono text-xs uppercase outline-none focus-visible:ring-2 focus-visible:ring-ring"
               />
-            </label>
-            <label className="flex flex-1 flex-col gap-1 text-xs">
-              <span className="font-medium text-muted-foreground">Country name</span>
-              <input
-                required
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="e.g. Canada"
-                className="h-9 min-w-44 rounded-[var(--radius)] border bg-background px-3 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              />
-            </label>
-            <Button type="submit" size="sm" disabled={submitting || !code || !name} className="h-9 gap-1.5">
-              {submitting ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
-              {submitting ? "Adding…" : "Add country"}
-            </Button>
+            </div>
+
+            <div className="flex flex-wrap items-end gap-3">
+              <label className="flex flex-col gap-1 text-xs">
+                <span className="font-medium text-muted-foreground">ISO country code</span>
+                <input
+                  required
+                  value={code}
+                  onChange={(e) => {
+                    const val = e.target.value.toUpperCase();
+                    setCode(val);
+                    if (val.length >= 2) {
+                      const matched = matchCountry(val);
+                      if (matched?.name) setName(matched.name);
+                    }
+                  }}
+                  placeholder="e.g. CA"
+                  maxLength={8}
+                  className="h-9 w-28 rounded-[var(--radius)] border bg-background px-3 font-mono text-xs uppercase outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                />
+              </label>
+              <label className="flex flex-1 flex-col gap-1 text-xs">
+                <span className="font-medium text-muted-foreground">Country name</span>
+                <input
+                  required
+                  value={name}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setName(val);
+                    if (!code || code.length < 2) {
+                      const matched = getCountryByName(val);
+                      if (matched) setCode(matched.code === "GB" ? "UK" : matched.code);
+                    }
+                  }}
+                  placeholder="e.g. Canada"
+                  className="h-9 min-w-44 rounded-[var(--radius)] border bg-background px-3 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                />
+              </label>
+              <Button type="submit" size="sm" disabled={submitting || !code || !name} className="h-9 gap-1.5">
+                {submitting ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
+                {submitting ? "Adding…" : "Add country"}
+              </Button>
+            </div>
           </form>
         </CardContent>
       </Card>
 
       {/* ── Configured countries ───────────────────────────────────────────── */}
       <div className="space-y-3">
-        <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">
-          Configured countries ({items.length})
-        </h2>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">
+            Configured countries ({items.length})
+          </h2>
+
+          {items.length > 0 && (
+            <div className="relative w-full sm:w-64">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search configured countries..."
+                className="h-8 w-full rounded-md border bg-background pl-8 pr-7 text-xs outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  aria-label="Clear search"
+                >
+                  <X className="size-3" />
+                </button>
+              )}
+            </div>
+          )}
+        </div>
 
         {loading ? (
           <p className="py-4 text-xs text-muted-foreground">Loading countries…</p>
@@ -287,8 +329,14 @@ export default function JurisdictionsPage() {
               No countries configured yet. Use quick add above.
             </CardContent>
           </Card>
+        ) : filteredItems.length === 0 ? (
+          <Card>
+            <CardContent className="py-8 text-center text-xs text-muted-foreground">
+              No countries match &ldquo;{searchQuery}&rdquo;.
+            </CardContent>
+          </Card>
         ) : (
-          items.map((j) => (
+          filteredItems.map((j) => (
             <JurisdictionCard
               key={j.id}
               jurisdiction={j}
@@ -297,7 +345,6 @@ export default function JurisdictionsPage() {
               onAutoDiscoverDone={() => setJustDiscovered(null)}
               onToggle={() => void toggleCountry(j)}
               onDelete={() => void removeCountry(j)}
-              onError={setError}
             />
           ))
         )}
@@ -315,7 +362,6 @@ function JurisdictionCard({
   onAutoDiscoverDone,
   onToggle,
   onDelete,
-  onError,
 }: {
   jurisdiction: AdminJurisdiction;
   token: string | null;
@@ -323,7 +369,6 @@ function JurisdictionCard({
   onAutoDiscoverDone: () => void;
   onToggle: () => void;
   onDelete: () => void;
-  onError: (msg: string | null) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [categories, setCategories] = useState<Scope[]>([]);
@@ -342,9 +387,9 @@ function JurisdictionCard({
       setCategories(cats);
       setActions(acts);
     } catch (e) {
-      onError(formatErrorMessage(e));
+      toast.error(formatErrorMessage(e));
     }
-  }, [token, j.id, onError]);
+  }, [token, j.id]);
 
   useEffect(() => {
     if (expanded) void loadScopes();
@@ -353,17 +398,17 @@ function JurisdictionCard({
   const runDiscovery = useCallback(async () => {
     setDiscovering(true);
     setDiscovery(null);
-    onError(null);
     try {
       const result = await discoverScopes(token, j.id);
       setDiscovery(result);
+      toast.success(result.message || `Found routes for ${j.name}`);
       await loadScopes();
     } catch (e) {
-      onError(formatErrorMessage(e));
+      toast.error(formatErrorMessage(e));
     } finally {
       setDiscovering(false);
     }
-  }, [token, j.id, loadScopes, onError]);
+  }, [token, j.id, loadScopes, j.name]);
 
   useEffect(() => {
     if (!autoDiscover) return;
@@ -494,7 +539,6 @@ function JurisdictionCard({
             codePlaceholder="code (e.g. work)"
             namePlaceholder="Route name (e.g. Skilled Worker)"
             onChanged={loadScopes}
-            onError={onError}
           />
 
           <ScopeSection
@@ -507,7 +551,6 @@ function JurisdictionCard({
             codePlaceholder="code (e.g. renewal)"
             namePlaceholder="Application type (e.g. Renewal / Extension)"
             onChanged={loadScopes}
-            onError={onError}
           />
         </div>
       )}
@@ -527,7 +570,6 @@ function ScopeSection({
   codePlaceholder,
   namePlaceholder,
   onChanged,
-  onError,
 }: {
   heading: string;
   emptyLabel: string;
@@ -538,7 +580,6 @@ function ScopeSection({
   codePlaceholder: string;
   namePlaceholder: string;
   onChanged: () => Promise<void>;
-  onError: (msg: string | null) => void;
 }) {
   const [newCode, setNewCode] = useState("");
   const [newName, setNewName] = useState("");
@@ -546,7 +587,6 @@ function ScopeSection({
 
   async function add(e: FormEvent) {
     e.preventDefault();
-    onError(null);
     setBusy("new");
     try {
       await createScope(token, jurisdictionId, kind, {
@@ -557,37 +597,38 @@ function ScopeSection({
         is_enabled: true,
         research_enabled: true,
       });
+      toast.success(`Added ${newName.trim()} (${newCode.trim().toLowerCase()}).`);
       setNewCode("");
       setNewName("");
       await onChanged();
     } catch (err) {
-      onError(formatErrorMessage(err));
+      toast.error(formatErrorMessage(err));
     } finally {
       setBusy(null);
     }
   }
 
   async function toggle(scope: Scope) {
-    onError(null);
     setBusy(scope.id);
     try {
       await updateScope(token, jurisdictionId, kind, scope.id, { is_enabled: !scope.is_enabled });
+      toast.success(`${scope.name} is now ${!scope.is_enabled ? "enabled" : "disabled"}.`);
       await onChanged();
     } catch (err) {
-      onError(formatErrorMessage(err));
+      toast.error(formatErrorMessage(err));
     } finally {
       setBusy(null);
     }
   }
 
   async function remove(scope: Scope) {
-    onError(null);
     setBusy(scope.id);
     try {
       await deleteScope(token, jurisdictionId, kind, scope.id);
+      toast.success(`Removed ${scope.name}.`);
       await onChanged();
     } catch (err) {
-      onError(formatErrorMessage(err));
+      toast.error(formatErrorMessage(err));
     } finally {
       setBusy(null);
     }

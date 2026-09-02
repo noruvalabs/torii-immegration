@@ -248,3 +248,17 @@ export function searchCountries(query: string, limit?: number): Country[] {
   );
   return limit ? filtered.slice(0, limit) : filtered;
 }
+
+export function isSameCountry(
+  a: string | null | undefined,
+  b: string | null | undefined,
+): boolean {
+  if (!a || !b) return false;
+  const cleanA = a.trim().toUpperCase();
+  const cleanB = b.trim().toUpperCase();
+  if (cleanA === cleanB) return true;
+  if ((cleanA === "UK" && cleanB === "GB") || (cleanA === "GB" && cleanB === "UK")) return true;
+  const countryA = getCountryByCode(cleanA) || getCountryByName(a);
+  const countryB = getCountryByCode(cleanB) || getCountryByName(b);
+  return Boolean(countryA && countryB && countryA.code === countryB.code);
+}

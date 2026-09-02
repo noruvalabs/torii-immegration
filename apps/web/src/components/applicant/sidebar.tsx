@@ -9,15 +9,11 @@ import { APPLICANT_NAV } from "./nav";
 import { cn } from "@/lib/utils";
 import {
   LogOut,
-  UserCircle,
   Menu,
   X,
-  Sparkles,
-  Clock,
-  User,
-  Settings,
-  HelpCircle,
   ChevronRight,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from "lucide-react";
 
 import { CreditBalanceBadge } from "@/components/credits/CreditBalanceBadge";
@@ -25,14 +21,33 @@ import { CreditBalanceBadge } from "@/components/credits/CreditBalanceBadge";
 export function ApplicantSidebar() {
   const pathname = usePathname();
   const { user, logout } = useAuth();
-  const { lang, t } = useI18n();
+  const { lang } = useI18n();
   const router = useRouter();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
 
+  // Load user collapse preference
+  useEffect(() => {
+    const saved = localStorage.getItem("torii_user_sidebar_collapsed");
+    if (saved !== null) {
+      setCollapsed(saved === "true");
+    }
+  }, []);
+
+  function toggleCollapsed() {
+    setCollapsed((prev) => {
+      const next = !prev;
+      localStorage.setItem("torii_user_sidebar_collapsed", String(next));
+      return next;
+    });
+  }
+
+  // Close mobile drawer on route change
   useEffect(() => {
     setMobileOpen(false);
   }, [pathname]);
 
+  // Handle ESC key for mobile drawer
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if (e.key === "Escape") setMobileOpen(false);
@@ -74,9 +89,9 @@ export function ApplicantSidebar() {
     user?.full_name || user?.username || user?.email?.split("@")[0] || "User";
   const userPlan = user?.role === "admin" ? "Admin" : user?.role === "ops" ? "Operations" : "Free";
 
-  const renderNavContent = (onItemClick?: () => void) => (
+  const renderNavContent = (onItemClick?: () => void, isCompact = false) => (
     <>
-      <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
+      <nav className={cn("flex-1 space-y-1.5 overflow-y-auto py-4", isCompact ? "px-2" : "px-3")}>
         {APPLICANT_NAV.map((item) => {
           const active =
             item.href === "/dashboard"
@@ -84,6 +99,26 @@ export function ApplicantSidebar() {
               : pathname.startsWith(item.href);
           const Icon = item.icon;
           const label = lang === "ja" && item.label_ja ? item.label_ja : item.label;
+
+          if (isCompact) {
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={onItemClick}
+                title={label}
+                className={cn(
+                  "group relative flex size-11 items-center justify-center rounded-xl transition-all mx-auto",
+                  active
+                    ? "bg-primary text-primary-foreground shadow-xs font-bold"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                )}
+              >
+                <Icon className="size-5 shrink-0" />
+              </Link>
+            );
+          }
+
           return (
             <Link
               key={item.href}
@@ -103,11 +138,16 @@ export function ApplicantSidebar() {
         })}
       </nav>
 
-      {/* ChatGPT-style Popup User Profile & Logout Menu */}
-      <div className="relative border-t p-3 bg-muted/10" ref={menuRef}>
+      {/* User Profile & Logout Menu */}
+      <div className={cn("relative border-t bg-muted/10", isCompact ? "p-2 flex flex-col items-center gap-2" : "p-3")} ref={menuRef}>
         {/* Floating Popover Menu */}
         {menuOpen && (
-          <div className="absolute bottom-full left-3 right-3 mb-2 z-50 rounded-2xl border bg-popover/95 text-popover-foreground shadow-2xl backdrop-blur-xl animate-in fade-in slide-in-from-bottom-2 duration-150 p-1.5 space-y-1">
+          <div
+            className={cn(
+              "absolute bottom-full mb-2 z-50 rounded-2xl border bg-popover/95 text-popover-foreground shadow-2xl backdrop-blur-xl animate-in fade-in slide-in-from-bottom-2 duration-150 p-1.5 space-y-1",
+              isCompact ? "left-2 w-56" : "left-3 right-3",
+            )}
+          >
             {/* Account / Profile Item */}
             <Link
               href="/profile"
@@ -145,32 +185,52 @@ export function ApplicantSidebar() {
           </div>
         )}
 
-        {/* Trigger Button Matching Screenshot */}
-        <button
-          type="button"
-          onClick={() => setMenuOpen(!menuOpen)}
-          className={cn(
-            "flex w-full items-center justify-between gap-2.5 rounded-xl p-2 transition-all border text-left",
-            menuOpen
-              ? "bg-muted border-border shadow-xs"
-              : "border-transparent hover:bg-muted/50 hover:border-border/60",
-          )}
-        >
-          <div className="flex items-center gap-2.5 min-w-0">
-            <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-amber-600 to-orange-500 text-white font-bold text-xs shadow-xs">
-              {initials}
+        {isCompact ? (
+          <>
+            <CreditBalanceBadge compact />
+            <button
+              type="button"
+              onClick={() => setMenuOpen(!menuOpen)}
+              title={displayName}
+              className={cn(
+                "flex size-10 items-center justify-center rounded-xl transition-all border",
+                menuOpen
+                  ? "bg-muted border-border shadow-xs"
+                  : "border-transparent hover:bg-muted/50 hover:border-border/60",
+              )}
+            >
+              <div className="flex size-8 items-center justify-center rounded-full bg-gradient-to-br from-amber-600 to-orange-500 text-white font-bold text-xs shadow-xs">
+                {initials}
+              </div>
+            </button>
+          </>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setMenuOpen(!menuOpen)}
+            className={cn(
+              "flex w-full items-center justify-between gap-2.5 rounded-xl p-2 transition-all border text-left",
+              menuOpen
+                ? "bg-muted border-border shadow-xs"
+                : "border-transparent hover:bg-muted/50 hover:border-border/60",
+            )}
+          >
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-amber-600 to-orange-500 text-white font-bold text-xs shadow-xs">
+                {initials}
+              </div>
+              <div className="flex flex-col min-w-0">
+                <span className="truncate text-xs font-semibold text-foreground leading-tight">
+                  {displayName}
+                </span>
+                <span className="truncate text-[10px] text-muted-foreground leading-tight mt-0.5">
+                  {userPlan}
+                </span>
+              </div>
             </div>
-            <div className="flex flex-col min-w-0">
-              <span className="truncate text-xs font-semibold text-foreground leading-tight">
-                {displayName}
-              </span>
-              <span className="truncate text-[10px] text-muted-foreground leading-tight mt-0.5">
-                {userPlan}
-              </span>
-            </div>
-          </div>
-          <ChevronRight className={`size-4 text-muted-foreground transition-transform duration-200 ${menuOpen ? "rotate-90" : ""}`} />
-        </button>
+            <ChevronRight className={`size-4 text-muted-foreground transition-transform duration-200 ${menuOpen ? "rotate-90" : ""}`} />
+          </button>
+        )}
       </div>
     </>
   );
@@ -190,7 +250,7 @@ export function ApplicantSidebar() {
           <button
             type="button"
             onClick={() => setMobileOpen(true)}
-            className="inline-flex size-9 items-center justify-center rounded-[var(--radius)] text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+            className="inline-flex size-9 items-center justify-center rounded-[var(--radius)] text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
             aria-label="Open navigation menu"
           >
             <Menu className="size-5" />
@@ -201,7 +261,7 @@ export function ApplicantSidebar() {
       {/* Mobile Drawer Backdrop */}
       {mobileOpen && (
         <div
-          className="fixed inset-0 z-40 bg-background/80 backdrop-blur-sm md:hidden"
+          className="fixed inset-0 z-40 bg-background/80 backdrop-blur-sm md:hidden animate-in fade-in duration-200"
           onClick={() => setMobileOpen(false)}
           aria-hidden="true"
         />
@@ -210,7 +270,7 @@ export function ApplicantSidebar() {
       {/* Mobile Drawer Panel */}
       <div
         className={cn(
-          "fixed inset-y-0 left-0 z-50 flex w-72 flex-col border-r bg-card shadow-2xl transition-transform duration-200 ease-in-out md:hidden",
+          "fixed inset-y-0 left-0 z-50 flex w-72 flex-col border-r bg-card shadow-2xl transition-transform duration-300 ease-in-out md:hidden",
           mobileOpen ? "translate-x-0" : "-translate-x-full",
         )}
       >
@@ -226,28 +286,57 @@ export function ApplicantSidebar() {
             <button
               type="button"
               onClick={() => setMobileOpen(false)}
-              className="inline-flex size-8 items-center justify-center rounded-[var(--radius)] text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+              className="inline-flex size-8 items-center justify-center rounded-[var(--radius)] text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
               aria-label="Close navigation menu"
             >
               <X className="size-5" />
             </button>
           </div>
         </div>
-        {renderNavContent(() => setMobileOpen(false))}
+        {renderNavContent(() => setMobileOpen(false), false)}
       </div>
 
       {/* Desktop Sidebar */}
-      <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r bg-card md:flex">
-        <div className="flex h-16 items-center justify-between border-b px-5">
-          <div className="flex items-center gap-2">
-            <span className="text-xl" aria-hidden>
-              ⛩️
-            </span>
-            <span className="text-lg font-bold tracking-tight">Torii</span>
-          </div>
-          <CreditBalanceBadge />
+      <aside
+        className={cn(
+          "sticky top-0 hidden h-screen shrink-0 flex-col border-r bg-card transition-[width] duration-300 ease-in-out md:flex",
+          collapsed ? "w-[68px]" : "w-64",
+        )}
+      >
+        {/* Desktop Header */}
+        <div className={cn("flex h-16 items-center border-b", collapsed ? "justify-center px-2" : "justify-between px-4")}>
+          {collapsed ? (
+            <button
+              type="button"
+              onClick={toggleCollapsed}
+              title={lang === "ja" ? "サイドバーを展開" : "Expand sidebar"}
+              className="flex size-9 items-center justify-center rounded-xl text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+            >
+              <PanelLeftOpen className="size-5" />
+            </button>
+          ) : (
+            <>
+              <div className="flex items-center gap-2">
+                <span className="text-xl" aria-hidden>
+                  ⛩️
+                </span>
+                <span className="text-lg font-bold tracking-tight">Torii</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <CreditBalanceBadge />
+                <button
+                  type="button"
+                  onClick={toggleCollapsed}
+                  title={lang === "ja" ? "サイドバーを折りたたむ" : "Collapse sidebar"}
+                  className="flex size-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+                >
+                  <PanelLeftClose className="size-4.5" />
+                </button>
+              </div>
+            </>
+          )}
         </div>
-        {renderNavContent()}
+        {renderNavContent(undefined, collapsed)}
       </aside>
     </>
   );

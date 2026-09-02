@@ -72,11 +72,11 @@ export function stepIndex(step: Step): number {
   return STEP_ORDER.indexOf(step);
 }
 
-/** True when the step is at or before the guidance phase (manual nav only). */
+/** True when the step can be visited by the applicant. */
 export function canVisitStep(target: Step, guidancePhase: string): boolean {
-  const max = maxReachableStep(guidancePhase);
-  if (target === "research") return guidancePhase === "research";
-  return stepIndex(target) <= stepIndex(max) && stepIndex(target) >= stepIndex("intake");
+  if (guidancePhase === "research") return target === "research";
+  if (guidancePhase === "blocked") return target === "intake";
+  return stepIndex(target) >= stepIndex("intake");
 }
 
 export function nextWorkflowStep(step: Step): Step | null {

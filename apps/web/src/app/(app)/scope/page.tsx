@@ -448,7 +448,9 @@ export default function ScopePage() {
               >
                 <div className="flex-1">
                   <p className="font-medium">{v.name}</p>
-                  <p className="text-xs text-muted-foreground">{v.description}</p>
+                  {v.description && v.description !== v.name && (
+                    <p className="text-xs text-muted-foreground mt-0.5">{v.description}</p>
+                  )}
                 </div>
                 <ArrowRight className="size-4 text-muted-foreground" />
               </button>
@@ -472,7 +474,7 @@ export default function ScopePage() {
             </div>
           ) : appTypes.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              No application types available for this destination.
+              No application types available for this visa type.
             </p>
           ) : (
             appTypes.map((a) => (
@@ -483,7 +485,9 @@ export default function ScopePage() {
               >
                 <div className="flex-1">
                   <p className="font-medium">{a.name}</p>
-                  <p className="text-xs text-muted-foreground">{a.description}</p>
+                  {a.description && a.description !== a.name && (
+                    <p className="text-xs text-muted-foreground mt-0.5">{a.description}</p>
+                  )}
                 </div>
                 <ArrowRight className="size-4 text-muted-foreground" />
               </button>

@@ -9,6 +9,7 @@ import {
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 import { useAuth } from "@/lib/auth-context";
 import { getProfile, type User } from "@/lib/api/auth";
 import {
@@ -150,18 +151,17 @@ export default function CaseDetailPage() {
   }, [token, caseId]);
 
   function trySetStep(step: Step) {
-    if (!guidance) {
-      setActiveStep(step);
-      return;
-    }
-    if (!canVisitStep(step, guidance.phase)) {
-      setError(
-        `Complete the current phase first (${guidance.title}). Required steps cannot be skipped.`,
-      );
+    if (guidance?.phase === "research" && step !== "research") {
+      toast.error("Requirements research is currently in progress. Please wait a moment.", {
+        id: "research-in-progress",
+      });
       return;
     }
     setError(null);
     setActiveStep(step);
+    if (step === "eligibility" && !eligibility) {
+      void handleEvaluateEligibility();
+    }
   }
 
   function goToGuidancePhase() {
@@ -176,6 +176,9 @@ export default function CaseDetailPage() {
     try {
       const state = await answerIntake(token, caseId, key, value);
       setIntake(state);
+      if (state.progress.complete) {
+        toast.dismiss("incomplete-intake-warning");
+      }
       await refreshGuidance();
       // Do not auto-advance when intake completes — user clicks next.
     } catch (e) {
@@ -310,60 +313,20 @@ export default function CaseDetailPage() {
 
   /** Whether the current view is complete enough to move to the server next phase. */
   function canAdvanceFromCurrent(): boolean {
-    if (!guidance) return false;
-    const phaseStep = phaseToStep(guidance.phase);
-    // Guidance already moved past this step → phase work is done.
-    if (activeStep === "intake") {
-      return Boolean(intake?.progress.complete);
-    }
-    if (activeStep === "eligibility") {
-      return eligibility !== null;
-    }
-    if (activeStep === "checklist") {
-      const requiredOpen = checklist.filter((i) => i.is_required && i.status === "needed");
-      return checklist.length > 0 && requiredOpen.length === 0;
-    }
-    if (activeStep === "forms") {
-      return forms.length > 0;
-    }
-    if (activeStep === "review") {
-      return review !== null && (review.ready || Boolean(guidance.phase === "packet" || guidance.phase === "done"));
-    }
-    // If actively viewing a step behind guidance, allow jump to guidance phase.
-    return activeStep !== phaseStep;
+    return true;
   }
 
   function continueNext() {
-    if (!guidance) return;
     setError(null);
-
-    if (!canAdvanceFromCurrent()) {
-      if (activeStep === "intake") {
-        setError("Answer all required intake questions before continuing.");
-      } else if (activeStep === "eligibility") {
-        setError("Run eligibility screening before continuing.");
-      } else if (activeStep === "checklist") {
-        setError("Gather all required documents before continuing.");
-      } else if (activeStep === "forms") {
-        setError("Generate forms before continuing.");
-      } else if (activeStep === "review") {
-        setError("Run review (and acknowledge flags if needed) before continuing.");
+    const next = nextWorkflowStep(activeStep);
+    if (next) {
+      setActiveStep(next);
+      if (next === "eligibility" && !eligibility) {
+        void handleEvaluateEligibility();
       }
       return;
     }
-
-    const phaseStep = phaseToStep(guidance.phase);
-    // Prefer following guidance when it has advanced past the current step.
-    if (phaseStep !== activeStep && canVisitStep(phaseStep, guidance.phase)) {
-      setActiveStep(phaseStep);
-      return;
-    }
-    const next = nextWorkflowStep(activeStep);
-    if (next && canVisitStep(next, guidance.phase)) {
-      setActiveStep(next);
-      return;
-    }
-    // Fallback: go to whatever guidance recommends.
+    const phaseStep = phaseToStep(guidance?.phase || "intake");
     setActiveStep(phaseStep);
   }
 
@@ -471,6 +434,33 @@ export default function CaseDetailPage() {
         })}
       </div>
 
+      {intake && !intake.progress.complete && activeStep !== "intake" && activeStep !== "research" && (
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3.5 text-xs text-amber-900 dark:text-amber-200 shadow-xs">
+          <div className="flex items-start sm:items-center gap-2.5 min-w-0">
+            <AlertTriangle className="size-4 shrink-0 text-amber-600 dark:text-amber-400 mt-0.5 sm:mt-0" />
+            <div>
+              <p className="font-semibold text-amber-900 dark:text-amber-100">
+                Intake Questionnaire has {intake.progress.total - intake.progress.answered} incomplete question(s).
+              </p>
+              <p className="text-[11px] text-amber-700 dark:text-amber-300 mt-0.5">
+                You can preview eligibility, checklists, and forms, but all required fields must be answered before final packet submission.
+              </p>
+            </div>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setError(null);
+              setActiveStep("intake");
+            }}
+            className="h-7 text-xs border-amber-500/40 text-amber-800 dark:text-amber-200 hover:bg-amber-500/20 shrink-0 self-end sm:self-auto font-medium"
+          >
+            Return to Intake
+          </Button>
+        </div>
+      )}
+
       <Card>
         <CardContent className="pt-5">
           {stepError && (
@@ -496,6 +486,14 @@ export default function CaseDetailPage() {
                 setError(null);
                 setActiveStep("eligibility");
                 void handleEvaluateEligibility();
+                if (!intake.progress.complete) {
+                  const remaining = intake.progress.total - intake.progress.answered;
+                  toast.warning("Incomplete Intake Questionnaire", {
+                    id: "incomplete-intake-warning",
+                    description: `You have ${remaining} incomplete question(s). You can preview subsequent steps, but all required fields must be answered before final packet submission.`,
+                    duration: 4500,
+                  });
+                }
               }}
             />
           )}
@@ -567,7 +565,6 @@ export default function CaseDetailPage() {
           )}
         </CardContent>
       </Card>
-
     </div>
   );
 }

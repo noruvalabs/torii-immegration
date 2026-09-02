@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -576,7 +576,11 @@ async def upsert_pack_override(
     return _override_out(row)
 
 
-@router.delete("/pack-overrides/{override_id}", status_code=204)
+@router.delete(
+    "/pack-overrides/{override_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_class=Response,
+)
 async def delete_pack_override(override_id: int, session: SessionDep, _admin: AdminOpsDep) -> None:
     """Revert one edit. The pack's own value is what the scope shows again."""
     row = await session.get(PackOverride, override_id)

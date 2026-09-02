@@ -22,14 +22,26 @@ from __future__ import annotations
 
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import select
+from sqlalchemy import delete, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from torii_api.auth.deps import CurrentUserDep, require_roles
-from torii_api.db.models import CaseAction, Jurisdiction, UserRole, VisaCategory
+from torii_api.db.models import (
+    Case,
+    CaseAction,
+    DocumentRequirementSet,
+    EligibilityRuleSet,
+    FormTemplate,
+    IntakeDefinition,
+    Jurisdiction,
+    PackOverride,
+    ScopeResearch,
+    UserRole,
+    VisaCategory,
+)
 from torii_api.db.session import get_session
 from torii_api.services.scope_discovery import (
     SOURCE_MANUAL,
@@ -202,9 +214,30 @@ async def create_jurisdiction(
     uncited, and ``POST /{id}/discover`` is what fills in what the country actually
     publishes.
     """
+    code_upper = payload.code.strip().upper()
+    name_clean = payload.name.strip().lower()
+
+    # Prevent creating duplicates for the same jurisdiction (exact code, aliases like UK/GB, or name)
+    alias_codes = [code_upper]
+    if code_upper == "GB":
+        alias_codes.append("UK")
+    elif code_upper == "UK":
+        alias_codes.append("GB")
+
+    existing_alias = await session.scalar(
+        select(Jurisdiction).where(
+            (Jurisdiction.code.in_(alias_codes)) | (func.lower(Jurisdiction.name) == name_clean)
+        )
+    )
+    if existing_alias is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"jurisdiction '{code_upper}' already exists (as '{existing_alias.name}' [{existing_alias.code}])",
+        )
+
     jurisdiction = Jurisdiction(
-        code=payload.code.upper(),
-        name=payload.name,
+        code=code_upper,
+        name=payload.name.strip(),
         is_live=payload.is_live,
         is_enabled=payload.is_enabled,
     )
@@ -214,7 +247,7 @@ async def create_jurisdiction(
     except IntegrityError as exc:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"jurisdiction '{payload.code.upper()}' already exists",
+            detail=f"jurisdiction '{code_upper}' already exists",
         ) from exc
     await session.refresh(jurisdiction)
 
@@ -271,12 +304,16 @@ async def update_jurisdiction(
     return jurisdiction
 
 
-@router.delete("/{jurisdiction_id}")
+@router.delete(
+    "/{jurisdiction_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_class=Response,
+)
 async def delete_jurisdiction(
     jurisdiction_id: int,
     session: SessionDep,
     _admin: AdminDep,
-):
+) -> None:
     """Delete a jurisdiction (admin only). Fails if it has associated cases."""
     jurisdiction = await session.get(Jurisdiction, jurisdiction_id)
     if jurisdiction is None:
@@ -284,14 +321,27 @@ async def delete_jurisdiction(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="jurisdiction not found",
         )
-    await session.delete(jurisdiction)
-    try:
-        await session.flush()
-    except IntegrityError as exc:
+
+    has_cases = await session.scalar(
+        select(Case.id).where(Case.jurisdiction_id == jurisdiction_id).limit(1)
+    )
+    if has_cases is not None:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="cannot delete jurisdiction with associated records",
-        ) from exc
+            detail=f"cannot delete {jurisdiction.name} ({jurisdiction.code}): it has associated cases",
+        )
+
+    # Clean up associated configuration and definition records
+    await session.execute(delete(ScopeResearch).where(ScopeResearch.jurisdiction_id == jurisdiction_id))
+    await session.execute(delete(PackOverride).where(PackOverride.jurisdiction_id == jurisdiction_id))
+    await session.execute(delete(FormTemplate).where(FormTemplate.jurisdiction_id == jurisdiction_id))
+    await session.execute(delete(DocumentRequirementSet).where(DocumentRequirementSet.jurisdiction_id == jurisdiction_id))
+    await session.execute(delete(EligibilityRuleSet).where(EligibilityRuleSet.jurisdiction_id == jurisdiction_id))
+    await session.execute(delete(IntakeDefinition).where(IntakeDefinition.jurisdiction_id == jurisdiction_id))
+    await session.execute(delete(CaseAction).where(CaseAction.jurisdiction_id == jurisdiction_id))
+    await session.execute(delete(VisaCategory).where(VisaCategory.jurisdiction_id == jurisdiction_id))
+    await session.delete(jurisdiction)
+    await session.flush()
 
 
 # ── Admin: discover what a country offers ─────────────────────────────────────

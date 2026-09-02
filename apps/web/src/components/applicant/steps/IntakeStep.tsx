@@ -12,12 +12,13 @@ import {
   ListChecks,
   LayoutGrid,
   AlertCircle,
+  AlertTriangle,
   ShieldCheck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { matchCountry } from "@/lib/countries";
+import { ALL_COUNTRIES, matchCountry, searchCountries, type Country } from "@/lib/countries";
 import type { IntakeState, User } from "./types";
 
 type IntakeStepProps = {
@@ -527,109 +528,122 @@ export function IntakeStep({ state, profile, onAnswer, onProceedToEligibility, t
               rather than an invisible gap on a sheet the applicant signs. */}
           {q.hint && <p className="text-[11px] leading-snug text-muted-foreground">{q.hint}</p>}
 
-          {q.type === "enum" && q.options ? (
-            (() => {
-              const isCountryQuestion =
-                q.key.toLowerCase().includes("nationality") ||
-                q.key.toLowerCase().includes("citizenship") ||
-                q.key.toLowerCase().includes("country") ||
-                q.prompt.toLowerCase().includes("nationality") ||
-                q.prompt.toLowerCase().includes("passport country") ||
-                q.prompt.toLowerCase().includes("residence country");
+          {(() => {
+            const isCountryQuestion =
+              !["education_country", "study_location", "school_location"].includes(q.key) &&
+              (
+                q.key === "nationality" ||
+                q.key.endsWith("_nationality") ||
+                q.key === "citizenship" ||
+                q.key.endsWith("_citizenship") ||
+                q.key === "passport_country" ||
+                q.key === "birth_country" ||
+                q.key === "current_residence_country" ||
+                q.key === "residence_country" ||
+                q.prompt.toLowerCase().includes("what is your nationality") ||
+                q.prompt.toLowerCase().includes("supporter's nationality") ||
+                q.prompt.toLowerCase().includes("guarantor's nationality") ||
+                q.prompt.toLowerCase().includes("country of citizenship") ||
+                q.prompt.toLowerCase().includes("passport country")
+              );
 
-              const hasSelected = current !== undefined && current !== "" && current !== null;
-              const isEditing = openSelectorKey === q.key;
+            const hasSelected = current !== undefined && current !== "" && current !== null;
+            const isEditing = openSelectorKey === q.key;
 
-              // If country question and already selected: show full country with flag and Change button
-              if (isCountryQuestion) {
-                if (hasSelected && !isEditing) {
-                  const currentStr = String(current);
-                  const isOther = currentStr.toLowerCase() === "other";
-                  const cMeta = isOther
-                    ? { flag: "🌐", name: "Other / Not Listed", code: "other" }
-                    : matchCountry(currentStr);
-                  return (
-                    <div className={`flex items-center justify-between rounded-lg border p-3 text-xs shadow-xs ${fieldError ? "border-rose-500 bg-rose-500/5" : "border-primary/30 bg-primary/5"}`}>
-                      <div className="flex items-center gap-3 min-w-0">
-                        <span className="text-2xl shrink-0">{cMeta.flag}</span>
-                        <div className="min-w-0">
-                          <p className="font-bold text-sm text-foreground truncate">{cMeta.name}</p>
-                          <p className="text-[11px] text-muted-foreground font-mono">
-                            Selected Code: {currentStr.toUpperCase()}
-                          </p>
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setOpenSelectorKey(q.key);
-                          setEnumSearch((prev) => ({ ...prev, [q.key]: "" }));
-                        }}
-                        className="rounded-md border bg-background px-3 py-1.5 text-xs font-semibold text-primary hover:bg-accent shadow-xs transition-colors shrink-0"
-                      >
-                        Change
-                      </button>
-                    </div>
-                  );
-                }
-
-                // If not selected or user clicked "Change", show search bar and full country options
+            // ── 1. Genuine Country / Nationality Picker (Searches all 240+ countries) ──
+            if (isCountryQuestion) {
+              if (hasSelected && !isEditing) {
+                const currentStr = String(current);
+                const isOther = currentStr.toLowerCase() === "other";
+                const cMeta = isOther
+                  ? { flag: "🌐", name: "Other / Not Listed", code: "other" }
+                  : matchCountry(currentStr);
                 return (
-                  <div className="space-y-2 pt-1">
-                    <div className="relative">
-                      <Search className="absolute left-2.5 top-2.5 size-3.5 text-muted-foreground" />
-                      <input
-                        type="text"
-                        value={searchVal}
-                        onChange={(e) => setEnumSearch((prev) => ({ ...prev, [q.key]: e.target.value }))}
-                        placeholder="Search country name or code (e.g. Japan, US, Bangladesh)..."
-                        autoFocus={isEditing}
-                        className={`h-8 w-full rounded-md border bg-background pl-8 pr-3 text-xs outline-none focus-visible:ring-2 font-normal ${fieldError ? "border-rose-500 focus-visible:ring-rose-500/50" : "focus-visible:ring-ring"}`}
-                      />
+                  <div className={`flex items-center justify-between rounded-lg border p-3 text-xs shadow-xs ${fieldError ? "border-rose-500 bg-rose-500/5" : "border-primary/30 bg-primary/5"}`}>
+                    <div className="flex items-center gap-3 min-w-0">
+                      <span className="text-2xl shrink-0">{cMeta.flag}</span>
+                      <div className="min-w-0">
+                        <p className="font-bold text-sm text-foreground truncate">{cMeta.name}</p>
+                        <p className="text-[11px] text-muted-foreground font-mono">
+                          Selected Code: {cMeta.code || currentStr.toUpperCase()}
+                        </p>
+                      </div>
                     </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-52 overflow-y-auto pr-1">
-                      {q.options.map((opt) => {
-                        const isOther = opt.toLowerCase() === "other";
-                        const cMeta = isOther
-                          ? { flag: "🌐", name: "Other / Not Listed", code: "other" }
-                          : matchCountry(opt);
-                        const searchLower = searchVal.toLowerCase();
-                        if (
-                          searchVal &&
-                          !opt.toLowerCase().includes(searchLower) &&
-                          !cMeta.name.toLowerCase().includes(searchLower)
-                        ) {
-                          return null;
-                        }
-                        const isSelected = String(current).toUpperCase() === opt.toUpperCase();
-                        return (
-                          <button
-                            key={opt}
-                            type="button"
-                            onClick={() => {
-                              void handleDirectAnswer(q.key, opt);
-                              setOpenSelectorKey(null);
-                              setEnumSearch((prev) => ({ ...prev, [q.key]: "" }));
-                            }}
-                            className={`flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-left text-xs transition-all ${
-                              isSelected
-                                ? "border-primary bg-primary/10 text-primary font-semibold ring-1 ring-primary/40"
-                                : "hover:bg-accent text-foreground bg-background"
-                            }`}
-                          >
-                            <span className="text-base shrink-0">{cMeta.flag}</span>
-                            <span className="truncate flex-1 font-medium">{cMeta.name}</span>
-                            <span className="text-[10px] text-muted-foreground font-mono">{opt}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setOpenSelectorKey(q.key);
+                        setEnumSearch((prev) => ({ ...prev, [q.key]: "" }));
+                      }}
+                      className="rounded-md border bg-background px-3 py-1.5 text-xs font-semibold text-primary hover:bg-accent shadow-xs transition-colors shrink-0"
+                    >
+                      Change
+                    </button>
                   </div>
                 );
               }
 
-              // General small enum (<= 4 options)
+              const countriesToDisplay = searchVal
+                ? searchCountries(searchVal, 40)
+                : ALL_COUNTRIES.slice(0, 30);
+
+              return (
+                <div className="space-y-2 pt-1">
+                  <div className="relative">
+                    <Search className="absolute left-2.5 top-2.5 size-3.5 text-muted-foreground" />
+                    <input
+                      type="text"
+                      value={searchVal}
+                      onChange={(e) => setEnumSearch((prev) => ({ ...prev, [q.key]: e.target.value }))}
+                      placeholder="Search any country name or code (e.g. Bangladesh, Japan, US, Canada)..."
+                      autoFocus={isEditing}
+                      className={`h-8 w-full rounded-md border bg-background pl-8 pr-3 text-xs outline-none focus-visible:ring-2 font-normal ${fieldError ? "border-rose-500 focus-visible:ring-rose-500/50" : "focus-visible:ring-ring"}`}
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-56 overflow-y-auto pr-1">
+                    {countriesToDisplay.map((country) => {
+                      const isSelected =
+                        String(current).toUpperCase() === country.code.toUpperCase() ||
+                        String(current).toLowerCase() === country.name.toLowerCase();
+                      return (
+                        <button
+                          key={country.code}
+                          type="button"
+                          onClick={() => {
+                            const answerVal =
+                              q.type === "enum" && q.options && q.options.some((o) => o.toLowerCase() === country.name.toLowerCase())
+                                ? country.name
+                                : country.code;
+                            void handleDirectAnswer(q.key, answerVal);
+                            setOpenSelectorKey(null);
+                            setEnumSearch((prev) => ({ ...prev, [q.key]: "" }));
+                          }}
+                          className={`flex items-center gap-2 rounded-md border px-2.5 py-2 text-left text-xs transition-all ${
+                            isSelected
+                              ? "border-primary bg-primary/10 text-primary font-semibold ring-1 ring-primary/40"
+                              : "hover:bg-accent text-foreground bg-background"
+                          }`}
+                        >
+                          <span className="text-base shrink-0">{country.flag}</span>
+                          <span className="truncate flex-1 font-medium">{country.name}</span>
+                          <span className="text-[10px] text-muted-foreground font-mono">{country.code}</span>
+                        </button>
+                      );
+                    })}
+                    {countriesToDisplay.length === 0 && (
+                      <p className="col-span-2 text-center text-[11px] text-muted-foreground py-3">
+                        No countries match &ldquo;{searchVal}&rdquo;
+                      </p>
+                    )}
+                  </div>
+                </div>
+              );
+            }
+
+            // ── 2. Standard Enum Questions ──────────────────────────────────────
+            if (q.type === "enum" && q.options) {
+              // General small enum (<= 4 options, e.g. education_country, sex, etc.)
               if (optionsCount <= 4) {
                 return (
                   <div className="flex flex-wrap gap-1.5 pt-1">
@@ -709,55 +723,63 @@ export function IntakeStep({ state, profile, onAnswer, onProceedToEligibility, t
                   </div>
                 </div>
               );
-            })()
-          ) : q.type === "boolean" ? (
-            <div className="flex gap-2 pt-1">
-              <button
-                type="button"
-                onClick={() => void handleDirectAnswer(q.key, true)}
-                className={`flex-1 rounded-md border py-2 text-xs font-medium transition-all ${
-                  current === true
-                    ? "border-emerald-500 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 font-bold shadow-sm ring-1 ring-emerald-500/40"
-                    : "hover:bg-accent text-muted-foreground bg-background"
-                }`}
-              >
-                Yes
-              </button>
-              <button
-                type="button"
-                onClick={() => void handleDirectAnswer(q.key, false)}
-                className={`flex-1 rounded-md border py-2 text-xs font-medium transition-all ${
-                  current === false
-                    ? "border-rose-500 bg-rose-500/10 text-rose-700 dark:text-rose-300 font-bold shadow-sm ring-1 ring-rose-500/40"
-                    : "hover:bg-accent text-muted-foreground bg-background"
-                }`}
-              >
-                No
-              </button>
-            </div>
-          ) : (
-            <div className="pt-1">
-              <input
-                type={q.type === "integer" ? "number" : isDateInput ? "date" : "text"}
-                value={String(current ?? "")}
-                onChange={(e) => handleChange(q.key, e.target.value)}
-                onBlur={() => void handleSubmit(q.key)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    void handleSubmit(q.key);
-                    (e.target as HTMLInputElement).blur();
-                  }
-                }}
-                placeholder={`Enter ${q.key.replaceAll("_", " ")}...`}
-                className={`h-9 w-full rounded-md border bg-background px-3 text-xs outline-none focus-visible:ring-2 font-normal transition-colors ${
-                  fieldError
-                    ? "border-rose-500 focus-visible:ring-rose-500/50 bg-rose-500/[0.02]"
-                    : "focus-visible:ring-ring"
-                }`}
-              />
-            </div>
-          )}
+            }
+
+            // ── 3. Boolean Questions ────────────────────────────────────────────
+            if (q.type === "boolean") {
+              return (
+                <div className="flex gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => void handleDirectAnswer(q.key, true)}
+                    className={`flex-1 rounded-md border py-2 text-xs font-medium transition-all ${
+                      current === true
+                        ? "border-emerald-500 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 font-bold shadow-sm ring-1 ring-emerald-500/40"
+                        : "hover:bg-accent text-muted-foreground bg-background"
+                    }`}
+                  >
+                    Yes
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleDirectAnswer(q.key, false)}
+                    className={`flex-1 rounded-md border py-2 text-xs font-medium transition-all ${
+                      current === false
+                        ? "border-rose-500 bg-rose-500/10 text-rose-700 dark:text-rose-300 font-bold shadow-sm ring-1 ring-rose-500/40"
+                        : "hover:bg-accent text-muted-foreground bg-background"
+                    }`}
+                  >
+                    No
+                  </button>
+                </div>
+              );
+            }
+
+            // ── 4. Inputs: text, number, date ───────────────────────────────────
+            return (
+              <div className="pt-1">
+                <input
+                  type={q.type === "integer" ? "number" : isDateInput ? "date" : "text"}
+                  value={String(current ?? "")}
+                  onChange={(e) => handleChange(q.key, e.target.value)}
+                  onBlur={() => void handleSubmit(q.key)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      void handleSubmit(q.key);
+                      (e.target as HTMLInputElement).blur();
+                    }
+                  }}
+                  placeholder={`Enter ${q.key.replaceAll("_", " ")}...`}
+                  className={`h-9 w-full rounded-md border bg-background px-3 text-xs outline-none focus-visible:ring-2 font-normal transition-colors ${
+                    fieldError
+                      ? "border-rose-500 focus-visible:ring-rose-500/50 bg-rose-500/[0.02]"
+                      : "focus-visible:ring-ring"
+                  }`}
+                />
+              </div>
+            );
+          })()}
         </div>
 
         {fieldError && (
@@ -890,14 +912,34 @@ export function IntakeStep({ state, profile, onAnswer, onProceedToEligibility, t
 
           {/* View All Bottom Completion Banner */}
           <div className="rounded-[var(--radius)] border p-4 bg-muted/30 flex flex-col sm:flex-row items-center justify-between gap-3">
-            <div className="text-xs text-muted-foreground">
-              {state.progress.complete
-                ? "All required questions answered across all modules."
-                : `${state.progress.total - state.progress.answered} question(s) remaining.`}
+            <div className="text-xs text-muted-foreground flex items-center gap-2">
+              {!state.progress.complete && (
+                <AlertTriangle className="size-4 text-amber-500 shrink-0" />
+              )}
+              <span>
+                {state.progress.complete
+                  ? "All required questions answered across all modules."
+                  : `${state.progress.total - state.progress.answered} question(s) remaining. You may proceed to preview eligibility.`}
+              </span>
             </div>
-            {state.progress.complete && onProceedToEligibility && (
-              <Button onClick={onProceedToEligibility} className="gap-2 text-xs bg-emerald-600 hover:bg-emerald-700 text-white">
-                <CheckCircle2 className="size-4" /> Proceed to Eligibility Screening <ArrowRight className="size-4" />
+            {onProceedToEligibility && (
+              <Button
+                onClick={onProceedToEligibility}
+                className={`gap-2 text-xs font-semibold text-white shadow-sm ${
+                  state.progress.complete
+                    ? "bg-emerald-600 hover:bg-emerald-700"
+                    : "bg-primary hover:bg-primary/90"
+                }`}
+              >
+                {state.progress.complete ? (
+                  <CheckCircle2 className="size-4" />
+                ) : (
+                  <AlertTriangle className="size-3.5 text-amber-300" />
+                )}
+                {state.progress.complete
+                  ? "Proceed to Eligibility Screening"
+                  : `Proceed to Eligibility (${state.progress.total - state.progress.answered} incomplete)`}{" "}
+                <ArrowRight className="size-4" />
               </Button>
             )}
           </div>
@@ -932,39 +974,64 @@ export function IntakeStep({ state, profile, onAnswer, onProceedToEligibility, t
               </Button>
             ) : <div />}
 
-            <div className="flex flex-col sm:flex-row items-center gap-2">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
               {!isCurrentSectionComplete && (
-                <span className="text-xs text-muted-foreground font-medium">
+                <span className="text-xs text-muted-foreground font-medium text-center sm:text-left">
                   {remainingInCurrent} question(s) left in this module
                 </span>
               )}
 
               {currentSectionIndex < sectionKeys.length - 1 ? (
-                <Button
-                  onClick={() => setActiveSection(sectionKeys[currentSectionIndex + 1])}
-                  className="h-9 text-xs gap-1.5 px-4 font-semibold shadow-sm justify-center sm:justify-start"
-                >
-                  Continue to: {sectionKeys[currentSectionIndex + 1]} <ChevronRight className="size-3.5" />
-                </Button>
-              ) : state.progress.complete ? (
-                <Button
-                  onClick={onProceedToEligibility}
-                  className="h-9 text-xs gap-1.5 px-4 font-semibold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
-                >
-                  <CheckCircle2 className="size-4" /> All Sections Complete — Proceed to Eligibility <ArrowRight className="size-4" />
-                </Button>
-              ) : firstIncompleteSection && firstIncompleteSection !== currentSectionKey ? (
-                <Button
-                  variant="outline"
-                  onClick={() => setActiveSection(firstIncompleteSection)}
-                  className="h-9 text-xs gap-1.5 px-4 text-primary border-primary/30 hover:bg-primary/5"
-                >
-                  Go to Incomplete: {firstIncompleteSection} <ArrowRight className="size-3.5" />
-                </Button>
+                <div className="flex flex-wrap items-center gap-2 justify-end">
+                  <Button
+                    onClick={() => setActiveSection(sectionKeys[currentSectionIndex + 1])}
+                    className="h-9 text-xs gap-1.5 px-4 font-semibold shadow-sm justify-center sm:justify-start"
+                  >
+                    Continue to: {sectionKeys[currentSectionIndex + 1]} <ChevronRight className="size-3.5" />
+                  </Button>
+                  {onProceedToEligibility && (
+                    <Button
+                      variant="outline"
+                      onClick={onProceedToEligibility}
+                      className="h-9 text-xs gap-1.5 px-3 text-muted-foreground hover:text-foreground border-border/80"
+                      title="Preview Eligibility and subsequent steps"
+                    >
+                      Skip to Eligibility <ArrowRight className="size-3.5" />
+                    </Button>
+                  )}
+                </div>
               ) : (
-                <Badge tone="default" className="text-xs py-1.5 px-3">
-                  Please answer all required questions
-                </Badge>
+                <div className="flex flex-wrap items-center gap-2 justify-end">
+                  {firstIncompleteSection && firstIncompleteSection !== currentSectionKey && (
+                    <Button
+                      variant="outline"
+                      onClick={() => setActiveSection(firstIncompleteSection)}
+                      className="h-9 text-xs gap-1.5 px-3 text-primary border-primary/30 hover:bg-primary/5"
+                    >
+                      Review Incomplete: {firstIncompleteSection}
+                    </Button>
+                  )}
+                  {onProceedToEligibility && (
+                    <Button
+                      onClick={onProceedToEligibility}
+                      className={`h-9 text-xs gap-1.5 px-4 font-semibold text-white shadow-sm ${
+                        state.progress.complete
+                          ? "bg-emerald-600 hover:bg-emerald-700"
+                          : "bg-primary hover:bg-primary/90"
+                      }`}
+                    >
+                      {state.progress.complete ? (
+                        <CheckCircle2 className="size-4" />
+                      ) : (
+                        <AlertTriangle className="size-3.5 text-amber-300" />
+                      )}
+                      {state.progress.complete
+                        ? "All Sections Complete — Proceed to Eligibility"
+                        : `Proceed to Eligibility (${state.progress.total - state.progress.answered} incomplete)`}{" "}
+                      <ArrowRight className="size-4" />
+                    </Button>
+                  )}
+                </div>
               )}
             </div>
           </div>

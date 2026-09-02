@@ -167,7 +167,13 @@ def describe_scope_forms(
             "note": form.note,
         }
         if form.layout is not None:
-            entry["missing_answer_keys"] = missing_answer_keys(form.layout, answers)
-            entry["total_items"] = len(form.layout.keys)
+            all_layouts = (form.layout, *form.extra_layouts)
+            missing = []
+            total = 0
+            for lyt in all_layouts:
+                missing.extend(missing_answer_keys(lyt, answers))
+                total += len(lyt.keys)
+            entry["missing_answer_keys"] = list(dict.fromkeys(missing))
+            entry["total_items"] = total
         described.append(entry)
     return described

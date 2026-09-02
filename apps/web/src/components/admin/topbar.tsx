@@ -1,13 +1,17 @@
-import { LogOut, Search } from "lucide-react";
+"use client";
+
+import { LogOut, Menu, Search } from "lucide-react";
 import { ThemeToggle } from "./theme-toggle";
 import { useAuth } from "@/lib/auth-context";
 import { useI18n, LanguageSwitcher } from "@/lib/i18n";
 import { useRouter } from "next/navigation";
+import { useAdminSidebar } from "./admin-sidebar-context";
 
 export function Topbar({ title }: { title: string }) {
   const { user, logout } = useAuth();
   const { t } = useI18n();
   const router = useRouter();
+  const { setMobileOpen } = useAdminSidebar();
 
   function handleLogout() {
     logout();
@@ -15,8 +19,17 @@ export function Topbar({ title }: { title: string }) {
   }
 
   return (
-    <header className="flex h-16 items-center gap-4 border-b bg-card/60 px-6 backdrop-blur sticky top-0 z-30">
-      <h1 className="text-base font-bold tracking-tight text-foreground">{title}</h1>
+    <header className="flex h-16 items-center gap-3 border-b bg-card/60 px-4 sm:px-6 backdrop-blur sticky top-0 z-30">
+      <button
+        type="button"
+        onClick={() => setMobileOpen(true)}
+        className="inline-flex size-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground md:hidden transition-colors"
+        aria-label="Open navigation menu"
+      >
+        <Menu className="size-5" />
+      </button>
+
+      <h1 className="text-base font-bold tracking-tight text-foreground truncate">{title}</h1>
 
       <div className="ml-auto flex items-center gap-3">
         <div className="relative hidden md:block">
