@@ -137,12 +137,17 @@ def validate_answer(question: IntakeQuestion, value: Any) -> str | None:
 
 def prune_answers(questions: list[IntakeQuestion], answers: dict[str, Any]) -> dict[str, Any]:
     """Drop answers for questions that no longer apply after a branch change (US-02.5)."""
+    question_keys = {q.key for q in questions}
     kept: dict[str, Any] = {}
     for question in questions:
         if question.key not in answers:
             continue
         if is_visible(question, kept):
             kept[question.key] = answers[question.key]
+    # Preserve answers that are form fields or not part of the branching questionnaire
+    for key, val in answers.items():
+        if key not in question_keys:
+            kept[key] = val
     return kept
 
 

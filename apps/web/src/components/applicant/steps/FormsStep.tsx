@@ -19,7 +19,13 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth-context";
-import { answerIntake, downloadOfficialForm, getFiling, getOfficialForms } from "@/lib/api/cases";
+import {
+  answerIntake,
+  patchCase,
+  downloadOfficialForm,
+  getFiling,
+  getOfficialForms,
+} from "@/lib/api/cases";
 import type { FilingInfo, OfficialForm, PortalPack } from "@/lib/api/cases";
 import { toast } from "@/components/ui/sonner";
 import type { GeneratedForm } from "./types";
@@ -176,6 +182,98 @@ function getFieldControlSpec(key: string): FieldControlSpec {
   return { type: "text", placeholder: `Enter ${key.replace(/_/g, " ")}...` };
 }
 
+const STATUTORY_REQUIRED_FIELD_KEYS = new Set([
+  // Core Identity & Nationality
+  "full_name",
+  "applicant_name",
+  "nationality",
+  "country_of_citizenship",
+  "date_of_birth",
+  "birth_date",
+  "dob",
+  "sex",
+  "gender",
+  "marital_status",
+  "place_of_birth",
+  "passport_number",
+  "passport_expiry_date",
+  "passport_expiry",
+  // Status in Japan (Extension / Renewal / Change of Status)
+  "current_status_of_residence",
+  "current_visa_status",
+  "current_residence_status",
+  "current_period_of_stay",
+  "current_period_of_stay_years",
+  "current_status_expiry_date",
+  "current_stay_expiry_date",
+  "residence_card_expiry",
+  "residence_card_number",
+  "current_japan_address",
+  "registered_address_japan",
+  "address_in_japan",
+  "telephone_japan",
+  "phone_number",
+  "contact_phone",
+  // Application terms
+  "desired_period_of_stay",
+  "desired_period",
+  "reason_for_extension",
+  "reason_for_change",
+  "purpose_of_visit",
+  "main_purpose",
+  // Primary sponsor / school / employer
+  "employer_name",
+  "company_name",
+  "sponsor_name",
+  "employer_address",
+  "employer_phone",
+  "occupation",
+  "job_title",
+  "monthly_salary",
+  "salary",
+  "annual_salary",
+  "school_name",
+  "institution_name",
+  "education_level",
+  "major_field",
+  "field_of_study",
+]);
+
+export function isFieldRequired(key: string): boolean {
+  const cleanKey = key.split(".").pop()?.toLowerCase() || key.toLowerCase();
+  if (STATUTORY_REQUIRED_FIELD_KEYS.has(cleanKey)) return true;
+  if (
+    cleanKey.includes("test_") ||
+    cleanKey.includes("ability_other") ||
+    cleanKey.includes("high_school") ||
+    cleanKey.includes("study_from") ||
+    cleanKey.includes("study_to") ||
+    cleanKey.includes("supporter_") ||
+    cleanKey.includes("overseas_") ||
+    cleanKey.includes("remittance_") ||
+    cleanKey.includes("scholarship_") ||
+    cleanKey.includes("bank_balance") ||
+    cleanKey.includes("carrying_cash") ||
+    cleanKey.includes("co_inhabitant") ||
+    cleanKey.includes("representative_") ||
+    cleanKey.includes("criminal_") ||
+    cleanKey.includes("deportation_") ||
+    cleanKey.includes("departure_") ||
+    cleanKey.includes("room_") ||
+    cleanKey.includes("family_in_japan") ||
+    cleanKey.includes("relatives_") ||
+    cleanKey.includes("agent_") ||
+    cleanKey.includes("other_") ||
+    cleanKey.includes("note") ||
+    cleanKey.includes("sub_") ||
+    cleanKey.includes("part_time") ||
+    cleanKey.includes("license_")
+  ) {
+    return false;
+  }
+  return false;
+}
+
 function categorizeFields(filledFields: Record<string, unknown>): FormFieldGroup[] {
   const standardGroups: Array<{
     title: string;
@@ -312,6 +410,7 @@ export function FormsStep({
   const [filing, setFiling] = useState<FilingInfo | null>(null);
   const [expandedFormKeys, setExpandedFormKeys] = useState<Record<string, boolean>>({});
   const [fieldSearchQueries, setFieldSearchQueries] = useState<Record<string, string>>({});
+  const [missingFieldFilter, setMissingFieldFilter] = useState<Record<string, "all" | "required" | "optional">>({});
 
   useEffect(() => {
     if (!token || !caseId) return;
@@ -435,7 +534,14 @@ export function FormsStep({
 
     setSavingMissingField(cleanKey);
     try {
-      await answerIntake(token, caseId, cleanKey, val);
+      try {
+        await answerIntake(token, caseId, cleanKey, val);
+      } catch {
+        // Resilient fallback: patch case answers directly
+        await patchCase(token, caseId, {
+          intake_answers: { ...(intakeAnswers || {}), [cleanKey]: val },
+        });
+      }
       toast.success(`Saved ${cleanKey.replace(/_/g, " ")}! Forms re-filled.`);
       onGenerate();
     } catch (e) {
@@ -463,6 +569,12 @@ export function FormsStep({
         const missing = oform.missing_answer_keys && oform.missing_answer_keys.length > 0
           ? oform.missing_answer_keys
           : Array.from(allMissingFields);
+        const requiredMissing = oform.required_missing_keys && oform.required_missing_keys.length > 0
+          ? oform.required_missing_keys
+          : missing.filter((k) => isFieldRequired(k));
+        const optionalMissing = oform.optional_missing_keys && oform.optional_missing_keys.length > 0
+          ? oform.optional_missing_keys
+          : missing.filter((k) => !isFieldRequired(k));
         const total = oform.total_items || Object.keys(allFilledFields).length || 45;
 
         return {
@@ -475,6 +587,8 @@ export function FormsStep({
           authority: oform.authority || "Immigration Services Agency of Japan",
           sourceUrl: oform.source_page_url || oform.citation?.url,
           missingFields: missing,
+          requiredMissing,
+          optionalMissing,
           totalItems: total,
           filledFields: allFilledFields,
           isOfficialDownload: true,
@@ -493,6 +607,8 @@ export function FormsStep({
       authority: string;
       sourceUrl?: string;
       missingFields: string[];
+      requiredMissing: string[];
+      optionalMissing: string[];
       totalItems: number;
       filledFields: Record<string, unknown>;
       isOfficialDownload: boolean;
@@ -507,6 +623,8 @@ export function FormsStep({
       };
       const filled = gform.filled_fields || intakeAnswers || {};
       const missing = gform.missing_required_fields || [];
+      const requiredMissing = missing.filter((k) => isFieldRequired(k));
+      const optionalMissing = missing.filter((k) => !isFieldRequired(k));
       const total = Object.keys(filled).length + missing.length;
 
       list.push({
@@ -516,6 +634,8 @@ export function FormsStep({
         authority: citation.authority || "Official Authority",
         sourceUrl: citation.url,
         missingFields: missing,
+        requiredMissing,
+        optionalMissing,
         totalItems: total,
         filledFields: filled,
         isOfficialDownload: false,
@@ -653,16 +773,20 @@ export function FormsStep({
                         </Badge>
                       )}
                       <Badge
-                        tone={isComplete ? "success" : "warning"}
+                        tone={isComplete ? "success" : form.requiredMissing.length === 0 ? "success" : "warning"}
                         className="text-[10px] font-medium"
                       >
                         {isComplete ? (
                           <>
                             <CheckCircle2 className="mr-1 size-3 text-emerald-500" /> 100% Ready
                           </>
+                        ) : form.requiredMissing.length === 0 ? (
+                          <>
+                            <CheckCircle2 className="mr-1 size-3 text-emerald-500" /> All Required Complete ({form.optionalMissing.length} Optional)
+                          </>
                         ) : (
                           <>
-                            <AlertCircle className="mr-1 size-3 text-amber-500" /> {form.missingFields.length} field(s) missing
+                            <AlertCircle className="mr-1 size-3 text-amber-500" /> {form.requiredMissing.length} Required Missing ({form.optionalMissing.length} Optional)
                           </>
                         )}
                       </Badge>
@@ -709,112 +833,192 @@ export function FormsStep({
                   </p>
                 )}
 
-                {form.missingFields.length > 0 && (
-                  <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-4 space-y-3 text-xs">
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-amber-500/20 pb-2.5">
-                      <div className="flex items-center gap-2 text-amber-900 dark:text-amber-200 font-semibold">
-                        <AlertCircle className="size-4 shrink-0 text-amber-600 dark:text-amber-400" />
-                        <span>Missing Information on Official Form ({form.missingFields.length} items):</span>
-                      </div>
-                      <span className="text-[11px] text-muted-foreground">
-                        Fill in any statutory fields below to populate your official PDF:
-                      </span>
-                    </div>
+                {form.missingFields.length > 0 && (() => {
+                  const filter = missingFieldFilter[form.key] ?? "all";
+                  const displayedFields = form.missingFields.filter((f) => {
+                    const isReq = form.requiredMissing.includes(f) || isFieldRequired(f);
+                    if (filter === "required") return isReq;
+                    if (filter === "optional") return !isReq;
+                    return true;
+                  });
 
-                    <div className="grid gap-2.5 sm:grid-cols-2 md:grid-cols-3 max-h-80 overflow-y-auto p-1.5 pt-2">
-                      {form.missingFields.map((field) => {
-                        const cleanKey = field.split(".").pop() || field;
-                        const label = cleanKey.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-                        const spec = getFieldControlSpec(cleanKey);
-                        const val = missingFieldInputs[cleanKey] ?? "";
-                        const isSaving = savingMissingField === cleanKey;
+                  return (
+                    <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-4 space-y-3 text-xs">
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 border-b border-amber-500/20 pb-2.5">
+                        <div className="flex items-center gap-2 text-amber-900 dark:text-amber-200 font-semibold">
+                          <AlertCircle className="size-4 shrink-0 text-amber-600 dark:text-amber-400" />
+                          <span>
+                            {form.requiredMissing.length > 0 ? (
+                              <>Official Form Fields ({form.requiredMissing.length} Required · {form.optionalMissing.length} Optional):</>
+                            ) : (
+                              <>Optional Form Disclosures ({form.optionalMissing.length} items):</>
+                            )}
+                          </span>
+                        </div>
 
-                        return (
-                          <div
-                            key={field}
-                            className="flex flex-col justify-between rounded-lg border bg-card p-3 shadow-2xs space-y-2"
+                        {/* Filter Tabs */}
+                        <div className="flex items-center gap-1 bg-background/80 p-0.5 rounded-md border text-[11px] self-start sm:self-auto">
+                          <button
+                            type="button"
+                            onClick={() => setMissingFieldFilter((prev) => ({ ...prev, [form.key]: "all" }))}
+                            className={`px-2 py-0.5 rounded font-medium transition-colors cursor-pointer ${
+                              filter === "all"
+                                ? "bg-primary text-primary-foreground shadow-xs"
+                                : "text-muted-foreground hover:text-foreground"
+                            }`}
                           >
-                            <label className="text-[11px] font-semibold text-foreground leading-tight block truncate" title={label}>
-                              {label}
-                            </label>
+                            All ({form.missingFields.length})
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setMissingFieldFilter((prev) => ({ ...prev, [form.key]: "required" }))}
+                            className={`px-2 py-0.5 rounded font-medium transition-colors cursor-pointer ${
+                              filter === "required"
+                                ? "bg-amber-600 text-white shadow-xs"
+                                : "text-muted-foreground hover:text-foreground"
+                            }`}
+                          >
+                            Required ({form.requiredMissing.length})
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setMissingFieldFilter((prev) => ({ ...prev, [form.key]: "optional" }))}
+                            className={`px-2 py-0.5 rounded font-medium transition-colors cursor-pointer ${
+                              filter === "optional"
+                                ? "bg-slate-600 text-white shadow-xs"
+                                : "text-muted-foreground hover:text-foreground"
+                            }`}
+                          >
+                            Optional ({form.optionalMissing.length})
+                          </button>
+                        </div>
+                      </div>
 
-                            <div className="flex items-center gap-1.5">
-                              {spec.type === "date" ? (
-                                <input
-                                  type="date"
-                                  value={val}
-                                  onChange={(e) =>
-                                    setMissingFieldInputs((prev) => ({ ...prev, [cleanKey]: e.target.value }))
-                                  }
-                                  className="h-8 w-full rounded border bg-background px-2 text-xs outline-none focus:ring-1 focus:ring-primary text-foreground"
-                                />
-                              ) : spec.type === "select" ? (
-                                <select
-                                  value={val}
-                                  onChange={(e) => {
-                                    const nextVal = e.target.value;
-                                    setMissingFieldInputs((prev) => ({ ...prev, [cleanKey]: nextVal }));
-                                  }}
-                                  className="h-8 w-full rounded border bg-background px-2 text-xs outline-none focus:ring-1 focus:ring-primary text-foreground cursor-pointer"
-                                >
-                                  <option value="">Select...</option>
-                                  {spec.options?.map((opt) => (
-                                    <option key={opt.value} value={opt.value}>
-                                      {opt.label}
-                                    </option>
-                                  ))}
-                                </select>
-                              ) : spec.type === "number" ? (
-                                <input
-                                  type="number"
-                                  min={spec.min ?? 0}
-                                  max={spec.max}
-                                  placeholder={spec.placeholder || "Enter number..."}
-                                  value={val}
-                                  onChange={(e) =>
-                                    setMissingFieldInputs((prev) => ({ ...prev, [cleanKey]: e.target.value }))
-                                  }
-                                  onKeyDown={(e) => {
-                                    if (e.key === "Enter") handleSaveMissingField(cleanKey);
-                                  }}
-                                  className="h-8 w-full rounded border bg-background px-2 text-xs outline-none focus:ring-1 focus:ring-primary text-foreground"
-                                />
-                              ) : (
-                                <input
-                                  type="text"
-                                  placeholder={spec.placeholder || `Enter ${label}...`}
-                                  value={val}
-                                  onChange={(e) =>
-                                    setMissingFieldInputs((prev) => ({ ...prev, [cleanKey]: e.target.value }))
-                                  }
-                                  onKeyDown={(e) => {
-                                    if (e.key === "Enter") handleSaveMissingField(cleanKey);
-                                  }}
-                                  className="h-8 w-full rounded border bg-background px-2 text-xs outline-none focus:ring-1 focus:ring-primary text-foreground"
-                                />
-                              )}
+                      <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+                        <span>
+                          {filter === "required"
+                            ? "Mandatory statutory fields needed to legally issue this official application:"
+                            : filter === "optional"
+                            ? "Optional background disclosures — only complete if applicable to your situation:"
+                            : "Fields required by immigration are marked Required; secondary questions are marked Optional:"}
+                        </span>
+                      </div>
 
-                              <Button
-                                disabled={!val || isSaving}
-                                onClick={() => handleSaveMissingField(cleanKey)}
-                                size="sm"
-                                className="h-8 px-2.5 text-[10px] font-semibold shrink-0"
+                      {displayedFields.length === 0 ? (
+                        <div className="py-6 text-center text-muted-foreground text-xs italic">
+                          No {filter} fields missing.
+                        </div>
+                      ) : (
+                        <div className="grid gap-2.5 sm:grid-cols-2 md:grid-cols-3 max-h-80 overflow-y-auto p-1.5 pt-2">
+                          {displayedFields.map((field) => {
+                            const cleanKey = field.split(".").pop() || field;
+                            const label = cleanKey.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+                            const spec = getFieldControlSpec(cleanKey);
+                            const val = missingFieldInputs[cleanKey] ?? "";
+                            const isSaving = savingMissingField === cleanKey;
+                            const isReq = form.requiredMissing.includes(field) || isFieldRequired(cleanKey);
+
+                            return (
+                              <div
+                                key={field}
+                                className={`flex flex-col justify-between rounded-lg border bg-card p-3 shadow-2xs space-y-2 transition-all ${
+                                  isReq ? "border-amber-500/40 bg-amber-500/[0.02]" : "border-border/60"
+                                }`}
                               >
-                                {isSaving ? (
-                                  <Loader2 className="size-3 animate-spin" />
-                                ) : (
-                                  <>
-                                    <Zap className="mr-0.5 size-2.5 text-amber-300" /> Save
-                                  </>
-                                )}
-                              </Button>
-                            </div>
-                          </div>
-                        );
-                      })}
+                                <div className="flex items-center justify-between gap-1.5">
+                                  <label className="text-[11px] font-semibold text-foreground leading-tight block truncate" title={label}>
+                                    {label}
+                                  </label>
+                                  {isReq ? (
+                                    <span className="shrink-0 rounded px-1.5 py-0.5 text-[9px] font-bold bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-300 uppercase tracking-wider flex items-center gap-1">
+                                      <span className="size-1 rounded-full bg-amber-500" /> Required
+                                    </span>
+                                  ) : (
+                                    <span className="shrink-0 rounded px-1.5 py-0.5 text-[9px] font-medium bg-muted text-muted-foreground uppercase tracking-wider">
+                                      Optional
+                                    </span>
+                                  )}
+                                </div>
+
+                                <div className="flex items-center gap-1.5">
+                                  {spec.type === "date" ? (
+                                    <input
+                                      type="date"
+                                      value={val}
+                                      onChange={(e) =>
+                                        setMissingFieldInputs((prev) => ({ ...prev, [cleanKey]: e.target.value }))
+                                      }
+                                      className="h-8 w-full rounded border bg-background px-2 text-xs outline-none focus:ring-1 focus:ring-primary text-foreground"
+                                    />
+                                  ) : spec.type === "select" ? (
+                                    <select
+                                      value={val}
+                                      onChange={(e) => {
+                                        const nextVal = e.target.value;
+                                        setMissingFieldInputs((prev) => ({ ...prev, [cleanKey]: nextVal }));
+                                      }}
+                                      className="h-8 w-full rounded border bg-background px-2 text-xs outline-none focus:ring-1 focus:ring-primary text-foreground cursor-pointer"
+                                    >
+                                      <option value="">Select...</option>
+                                      {spec.options?.map((opt) => (
+                                        <option key={opt.value} value={opt.value}>
+                                          {opt.label}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  ) : spec.type === "number" ? (
+                                    <input
+                                      type="number"
+                                      min={spec.min ?? 0}
+                                      max={spec.max}
+                                      placeholder={spec.placeholder || "Enter number..."}
+                                      value={val}
+                                      onChange={(e) =>
+                                        setMissingFieldInputs((prev) => ({ ...prev, [cleanKey]: e.target.value }))
+                                      }
+                                      onKeyDown={(e) => {
+                                        if (e.key === "Enter") handleSaveMissingField(cleanKey);
+                                      }}
+                                      className="h-8 w-full rounded border bg-background px-2 text-xs outline-none focus:ring-1 focus:ring-primary text-foreground"
+                                    />
+                                  ) : (
+                                    <input
+                                      type="text"
+                                      placeholder={spec.placeholder || `Enter ${label}...`}
+                                      value={val}
+                                      onChange={(e) =>
+                                        setMissingFieldInputs((prev) => ({ ...prev, [cleanKey]: e.target.value }))
+                                      }
+                                      onKeyDown={(e) => {
+                                        if (e.key === "Enter") handleSaveMissingField(cleanKey);
+                                      }}
+                                      className="h-8 w-full rounded border bg-background px-2 text-xs outline-none focus:ring-1 focus:ring-primary text-foreground"
+                                    />
+                                  )}
+
+                                  <Button
+                                    disabled={!val || isSaving}
+                                    onClick={() => handleSaveMissingField(cleanKey)}
+                                    size="sm"
+                                    className="h-8 px-2.5 text-[10px] font-semibold shrink-0"
+                                  >
+                                    {isSaving ? (
+                                      <Loader2 className="size-3 animate-spin" />
+                                    ) : (
+                                      <>
+                                        <Zap className="mr-0.5 size-2.5 text-amber-300" /> Save
+                                      </>
+                                    )}
+                                  </Button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
 
                 {totalMappedCount > 0 && (
                   <div className="border-t pt-3">

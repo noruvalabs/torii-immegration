@@ -1,22 +1,13 @@
 "use client";
 
-import { LogOut, Menu, Search } from "lucide-react";
+import { Menu, Search } from "lucide-react";
 import { ThemeToggle } from "./theme-toggle";
-import { useAuth } from "@/lib/auth-context";
 import { useI18n, LanguageSwitcher } from "@/lib/i18n";
-import { useRouter } from "next/navigation";
 import { useAdminSidebar } from "./admin-sidebar-context";
 
 export function Topbar({ title }: { title: string }) {
-  const { user, logout } = useAuth();
   const { t } = useI18n();
-  const router = useRouter();
   const { setMobileOpen } = useAdminSidebar();
-
-  function handleLogout() {
-    logout();
-    router.push("/login");
-  }
 
   return (
     <header className="flex h-16 items-center gap-3 border-b bg-card/60 px-4 sm:px-6 backdrop-blur sticky top-0 z-30">
@@ -45,24 +36,6 @@ export function Topbar({ title }: { title: string }) {
         <LanguageSwitcher />
 
         <ThemeToggle />
-
-        {user && (
-          <div className="flex items-center gap-2 border-l pl-3">
-            <div className="flex flex-col text-right hidden sm:flex">
-              <span className="text-xs font-semibold text-foreground leading-tight">
-                {user.full_name || user.username || user.email.split("@")[0]}
-              </span>
-              <span className="text-[10px] text-muted-foreground leading-tight">{user.email}</span>
-            </div>
-            <button
-              onClick={handleLogout}
-              title={t("sign_out", "Sign out")}
-              className="inline-flex size-8.5 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-            >
-              <LogOut className="size-4" />
-            </button>
-          </div>
-        )}
       </div>
     </header>
   );

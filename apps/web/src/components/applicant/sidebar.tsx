@@ -18,7 +18,6 @@ import {
   BookOpen,
 } from "lucide-react";
 
-import { CreditBalanceBadge } from "@/components/credits/CreditBalanceBadge";
 import { useCredits } from "@/lib/credits-context";
 
 export function ApplicantSidebar() {
@@ -228,79 +227,49 @@ export function ApplicantSidebar() {
         )}
 
         {isCompact ? (
-          <div className="flex flex-col items-center gap-2">
-            <CreditBalanceBadge compact />
-            <button
-              type="button"
-              onClick={() => setMenuOpen(!menuOpen)}
-              title={`${displayName} (${balance} passes)`}
-              className={cn(
-                "flex size-10 items-center justify-center rounded-xl transition-all border",
-                menuOpen
-                  ? "bg-muted border-border shadow-xs"
-                  : "border-transparent hover:bg-muted/50 hover:border-border/60",
-              )}
-            >
-              <div className="flex size-8 items-center justify-center rounded-full bg-gradient-to-br from-amber-600 to-orange-500 text-white font-bold text-xs shadow-xs">
+          <button
+            type="button"
+            onClick={() => setMenuOpen(!menuOpen)}
+            title={`${displayName} (${balance} passes)`}
+            className={cn(
+              "flex size-10 items-center justify-center rounded-xl transition-all border",
+              menuOpen
+                ? "bg-muted border-border shadow-xs"
+                : "border-transparent hover:bg-muted/50 hover:border-border/60",
+            )}
+          >
+            <div className="flex size-8 items-center justify-center rounded-full bg-gradient-to-br from-amber-600 to-orange-500 text-white font-bold text-xs shadow-xs">
+              {initials}
+            </div>
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setMenuOpen(!menuOpen)}
+            className={cn(
+              "flex w-full items-center justify-between gap-2.5 rounded-xl p-2 transition-all border text-left",
+              menuOpen
+                ? "bg-muted border-border shadow-xs"
+                : "border-transparent hover:bg-muted/50 hover:border-border/60",
+            )}
+          >
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-amber-600 to-orange-500 text-white font-bold text-xs shadow-xs">
                 {initials}
               </div>
-            </button>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {/* Quick Credit Banner in Avatar Section */}
-            <Link
-              href="/credits"
-              onClick={() => {
-                if (onItemClick) onItemClick();
-              }}
-              className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl border border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 transition-all group shadow-xs"
-            >
-              <div className="flex items-center gap-2.5 min-w-0">
-                <div className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-amber-500 text-white shadow-xs group-hover:scale-105 transition-transform">
-                  <Coins className="size-4" />
-                </div>
-                <div className="flex flex-col min-w-0">
-                  <span className="text-xs font-bold leading-none truncate text-foreground">
-                    {balance} {balance === 1 ? "Pass" : "Passes"} Available
-                  </span>
-                  <span className="text-[10px] text-muted-foreground leading-tight mt-0.5 truncate">
-                    {lang === "ja" ? "残高確認・パス購入" : "View balance & top up"}
-                  </span>
-                </div>
+              <div className="flex flex-col min-w-0">
+                <span className="truncate text-xs font-semibold text-foreground leading-tight">
+                  {displayName}
+                </span>
+                <span className="truncate text-[10px] text-muted-foreground leading-tight mt-0.5 flex items-center gap-1.5">
+                  <span>{userPlan}</span>
+                  <span>•</span>
+                  <span className="text-amber-600 dark:text-amber-400 font-semibold">{balance} {balance === 1 ? "Pass" : "Passes"}</span>
+                </span>
               </div>
-              <ChevronRight className="size-3.5 text-muted-foreground group-hover:translate-x-0.5 transition-transform" />
-            </Link>
-
-            {/* Avatar Profile Button */}
-            <button
-              type="button"
-              onClick={() => setMenuOpen(!menuOpen)}
-              className={cn(
-                "flex w-full items-center justify-between gap-2.5 rounded-xl p-2 transition-all border text-left",
-                menuOpen
-                  ? "bg-muted border-border shadow-xs"
-                  : "border-transparent hover:bg-muted/50 hover:border-border/60",
-              )}
-            >
-              <div className="flex items-center gap-2.5 min-w-0">
-                <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-amber-600 to-orange-500 text-white font-bold text-xs shadow-xs">
-                  {initials}
-                </div>
-                <div className="flex flex-col min-w-0">
-                  <span className="truncate text-xs font-semibold text-foreground leading-tight">
-                    {displayName}
-                  </span>
-                  <span className="truncate text-[10px] text-muted-foreground leading-tight mt-0.5 flex items-center gap-1.5">
-                    <span>{userPlan}</span>
-                    <span>•</span>
-                    <span className="text-amber-600 dark:text-amber-400 font-semibold">{balance} {balance === 1 ? "Pass" : "Passes"}</span>
-                  </span>
-                </div>
-              </div>
-              <ChevronRight className={`size-4 text-muted-foreground transition-transform duration-200 ${menuOpen ? "rotate-90" : ""}`} />
-            </button>
-          </div>
+            </div>
+            <ChevronRight className={`size-4 text-muted-foreground transition-transform duration-200 ${menuOpen ? "rotate-90" : ""}`} />
+          </button>
         )}
       </div>
     </>
@@ -316,17 +285,14 @@ export function ApplicantSidebar() {
           </span>
           <span className="text-lg font-semibold tracking-tight">Torii</span>
         </div>
-        <div className="flex items-center gap-2">
-          <CreditBalanceBadge />
-          <button
-            type="button"
-            onClick={() => setMobileOpen(true)}
-            className="inline-flex size-9 items-center justify-center rounded-[var(--radius)] text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-            aria-label="Open navigation menu"
-          >
-            <Menu className="size-5" />
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={() => setMobileOpen(true)}
+          className="inline-flex size-9 items-center justify-center rounded-[var(--radius)] text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+          aria-label="Open navigation menu"
+        >
+          <Menu className="size-5" />
+        </button>
       </header>
 
       {/* Mobile Drawer Backdrop */}
@@ -352,17 +318,14 @@ export function ApplicantSidebar() {
             </span>
             <span className="text-lg font-semibold tracking-tight">Torii</span>
           </div>
-          <div className="flex items-center gap-2">
-            <CreditBalanceBadge />
-            <button
-              type="button"
-              onClick={() => setMobileOpen(false)}
-              className="inline-flex size-8 items-center justify-center rounded-[var(--radius)] text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-              aria-label="Close navigation menu"
-            >
-              <X className="size-5" />
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={() => setMobileOpen(false)}
+            className="inline-flex size-8 items-center justify-center rounded-[var(--radius)] text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+            aria-label="Close navigation menu"
+          >
+            <X className="size-5" />
+          </button>
         </div>
         {renderNavContent(() => setMobileOpen(false), false)}
       </div>
@@ -393,17 +356,14 @@ export function ApplicantSidebar() {
                 </span>
                 <span className="text-lg font-bold tracking-tight">Torii</span>
               </div>
-              <div className="flex items-center gap-1.5">
-                <CreditBalanceBadge />
-                <button
-                  type="button"
-                  onClick={toggleCollapsed}
-                  title={lang === "ja" ? "サイドバーを折りたたむ" : "Collapse sidebar"}
-                  className="flex size-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-                >
-                  <PanelLeftClose className="size-4.5" />
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={toggleCollapsed}
+                title={lang === "ja" ? "サイドバーを折りたたむ" : "Collapse sidebar"}
+                className="flex size-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+              >
+                <PanelLeftClose className="size-4.5" />
+              </button>
             </>
           )}
         </div>

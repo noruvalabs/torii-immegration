@@ -1,10 +1,13 @@
 "use client";
 
 import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import {
+  ArrowRight,
   ChevronDown,
   ChevronRight,
   ExternalLink,
+  FileText,
   Globe,
   Loader2,
   Plus,
@@ -536,6 +539,8 @@ function JurisdictionCard({
             scopes={categories}
             token={token}
             jurisdictionId={j.id}
+            jurisdictionCode={j.code}
+            availableActions={actions}
             codePlaceholder="code (e.g. work)"
             namePlaceholder="Route name (e.g. Skilled Worker)"
             onChanged={loadScopes}
@@ -567,6 +572,8 @@ function ScopeSection({
   scopes,
   token,
   jurisdictionId,
+  jurisdictionCode,
+  availableActions,
   codePlaceholder,
   namePlaceholder,
   onChanged,
@@ -577,6 +584,8 @@ function ScopeSection({
   scopes: Scope[];
   token: string | null;
   jurisdictionId: number;
+  jurisdictionCode?: string;
+  availableActions?: Scope[];
   codePlaceholder: string;
   namePlaceholder: string;
   onChanged: () => Promise<void>;
@@ -650,18 +659,18 @@ function ScopeSection({
       {scopes.length === 0 ? (
         <p className="mb-3 text-xs text-muted-foreground">{emptyLabel}</p>
       ) : (
-        <ul className="mb-3 space-y-1.5">
+        <ul className="mb-3 space-y-2">
           {scopes.map((scope) => (
             <li
               key={scope.id}
-              className="flex flex-col gap-2 rounded-md border bg-card px-3 py-2 text-xs sm:flex-row sm:items-center sm:justify-between"
+              className="flex flex-col gap-2 rounded-xl border bg-card p-3 text-xs shadow-2xs hover:border-primary/30 transition-all sm:flex-row sm:items-center sm:justify-between"
             >
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-mono text-[11px] font-semibold text-muted-foreground">
+                  <span className="font-mono text-[11px] font-semibold text-muted-foreground bg-muted/60 px-1.5 py-0.5 rounded">
                     {scope.code}
                   </span>
-                  <span className="font-medium text-foreground">{scope.name}</span>
+                  <span className="font-bold text-foreground text-sm">{scope.name}</span>
                   <Badge
                     tone={scope.source === "discovered" ? "info" : "muted"}
                     className="text-[10px]"
@@ -670,7 +679,7 @@ function ScopeSection({
                   </Badge>
                 </div>
                 {scope.description && (
-                  <p className="mt-0.5 text-[11px] text-muted-foreground">{scope.description}</p>
+                  <p className="mt-1 text-[11px] text-muted-foreground">{scope.description}</p>
                 )}
                 {scope.citation?.url && (
                   <a
@@ -685,9 +694,39 @@ function ScopeSection({
                     <ExternalLink className="size-3 shrink-0" />
                   </a>
                 )}
+
+                {/* Nested Application Types under Visa Category */}
+                {kind === "visa-categories" && availableActions && availableActions.length > 0 && (
+                  <div className="mt-2 flex flex-wrap items-center gap-1.5 pt-1.5 border-t border-border/60">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                      Application types:
+                    </span>
+                    {availableActions.map((act) => (
+                      <Link
+                        key={act.id}
+                        href={`/admin/jurisdictions/${jurisdictionCode}/routes/${scope.code}?action=${act.code}`}
+                        className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-0.5 text-[10px] font-medium text-foreground hover:bg-muted/80 hover:text-primary transition-colors"
+                      >
+                        <span>{act.name}</span>
+                        <span className="font-mono text-[9px] text-muted-foreground">({act.code})</span>
+                      </Link>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div className="flex shrink-0 items-center gap-2 self-end sm:self-auto">
+                {kind === "visa-categories" && jurisdictionCode && (
+                  <Link
+                    href={`/admin/jurisdictions/${jurisdictionCode}/routes/${scope.code}`}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-primary/30 bg-primary/10 px-3 py-1.5 text-xs font-bold text-primary transition-all hover:bg-primary/20 shadow-2xs"
+                  >
+                    <FileText className="size-3.5" />
+                    <span>Intake &amp; PDF Editor</span>
+                    <ChevronRight className="size-3" />
+                  </Link>
+                )}
+
                 <button
                   type="button"
                   onClick={() => void toggle(scope)}
@@ -698,7 +737,7 @@ function ScopeSection({
                       ? "Stop offering this to applicants"
                       : "Offer this to applicants"
                   }
-                  className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-semibold transition-all disabled:opacity-50 ${
+                  className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-all disabled:opacity-50 ${
                     scope.is_enabled
                       ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 hover:bg-emerald-500/20 dark:text-emerald-300"
                       : "border-border bg-muted text-muted-foreground hover:bg-muted/80"
@@ -720,7 +759,7 @@ function ScopeSection({
                   onClick={() => void remove(scope)}
                   disabled={busy === scope.id}
                   title={`Delete ${scope.name}`}
-                  className="text-muted-foreground transition-colors hover:text-[var(--color-danger)] disabled:opacity-50"
+                  className="text-muted-foreground transition-colors hover:text-[var(--color-danger)] disabled:opacity-50 p-1"
                 >
                   <Trash2 className="size-3.5" />
                 </button>

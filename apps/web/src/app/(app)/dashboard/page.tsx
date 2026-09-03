@@ -9,8 +9,6 @@ import {
   User,
   ShieldCheck,
   FileText,
-  Sparkles,
-  Bot,
   Globe2,
   AlertTriangle,
   CheckCircle2,
@@ -142,8 +140,8 @@ export default function DashboardPage() {
         </p>
       )}
 
-      {/* ── 3 STREAMLINED OVERVIEW CARDS ────────────────────────────────────── */}
-      <div className="grid gap-4 sm:grid-cols-3">
+      {/* ── 2 STREAMLINED OVERVIEW CARDS ────────────────────────────────────── */}
+      <div className="grid gap-4 sm:grid-cols-2">
         {/* Overview 1: Active Cases */}
         <Link href="/cases" className="group">
           <Card className="h-full transition-all hover:border-primary/40 hover:shadow-xs">
@@ -191,30 +189,6 @@ export default function DashboardPage() {
               </div>
               <div className="flex size-10 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-600">
                 <ShieldCheck className="size-5" />
-              </div>
-            </CardContent>
-          </Card>
-        </Link>
-
-        {/* Overview 3: AI Assistant Copilot */}
-        <Link href="/assistant" className="group">
-          <Card className="h-full transition-all hover:border-primary/40 hover:shadow-xs">
-            <CardContent className="p-4 flex items-center justify-between">
-              <div>
-                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
-                  AI Visa Copilot
-                </p>
-                <div className="flex items-center gap-1.5 mt-1">
-                  <span className="flex size-2 rounded-full bg-emerald-500 animate-pulse" />
-                  <p className="text-sm font-bold text-foreground">Ready to Help</p>
-                </div>
-                <p className="text-[11px] text-muted-foreground mt-0.5 flex items-center gap-1">
-                  <span>Ask rules &amp; requirements</span>
-                  <ArrowRight className="size-3 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
-                </p>
-              </div>
-              <div className="flex size-10 items-center justify-center rounded-lg bg-indigo-500/10 text-indigo-600">
-                <Sparkles className="size-5" />
               </div>
             </CardContent>
           </Card>
