@@ -17,6 +17,7 @@ from torii_ai.config import Settings, get_settings
 from torii_ai.llm.groq import FakeChatClient, GroqChatClient
 from torii_ai.llm.nvidia import NvidiaChatClient
 from torii_ai.services.agentic_research import AgenticStageResearcher, Stage, StageResearchRequest
+from torii_ai.services.case_plan import AICasePlanner, CasePlanRequest
 from torii_ai.services.doc_drafter import AIDocDrafter, AIDraftRequest
 from torii_ai.services.eligibility_evaluator import (
     AIElegibilityEvaluator,
@@ -85,6 +86,46 @@ class DraftDocumentOut(BaseModel):
     generated_at: str
 
 
+class CasePlanIn(BaseModel):
+    scope_label: str = Field(default="Immigration application", max_length=255)
+    destination_code: str = Field(default="", max_length=16)
+    nationality: str | None = Field(default=None, max_length=64)
+    residence_country: str | None = Field(default=None, max_length=64)
+    case_reference: str = Field(default="", max_length=64)
+    intake_answers: dict[str, Any] = Field(default_factory=dict)
+    checklist: list[dict[str, Any]] = Field(default_factory=list)
+    # The requirements that come from a bank, an airline, an employer or another
+    # government — their lead times are what the plan is ordered by.
+    external_tasks: list[dict[str, Any]] = Field(default_factory=list)
+    stages: list[dict[str, Any]] = Field(default_factory=list)
+    office: str | None = Field(default=None, max_length=500)
+    filed_by: str | None = Field(default=None, max_length=500)
+    fee_note: str | None = Field(default=None, max_length=500)
+    notes: list[str] = Field(default_factory=list)
+    submitted: bool = False
+    custom_instructions: str | None = Field(default=None, max_length=2000)
+    locale: str = Field(default="en", max_length=16)
+
+
+class PlanAction(BaseModel):
+    title: str
+    detail: str = ""
+    lead_time: str | None = None
+
+
+class CasePlanOut(BaseModel):
+    headline: str
+    ready_to_file: bool
+    time_to_ready: str | None = None
+    start_now: list[PlanAction] = Field(default_factory=list)
+    then: list[PlanAction] = Field(default_factory=list)
+    risks: list[PlanAction] = Field(default_factory=list)
+    questions: list[str] = Field(default_factory=list)
+    disclaimer: str
+    model_used: str
+    generated_at: str
+
+
 def _build_researcher(settings: Settings) -> AgenticStageResearcher:
     """Real Tavily/LLM clients when configured, fake stand-ins otherwise (local dev/tests)."""
     search = TavilyClient(settings) if settings.tavily_api_key else FakeSearchClient()
@@ -115,6 +156,27 @@ def _build_drafter(settings: Settings) -> AIDocDrafter:
     else:
         chat = FakeChatClient()
     return AIDocDrafter(chat=chat, settings=settings)
+
+
+def _build_planner(settings: Settings) -> AICasePlanner:
+    if settings.groq_api_key:
+        # The output budget is the whole story here. Groq counts the *reserved* budget
+        # against the tokens-per-minute allowance, so the account default of 8000 reserved
+        # the entire minute for one short reply — slow, and the next call comes back 429.
+        #
+        # It cannot go too low either: these are reasoning models that spend tokens on a
+        # <think> block before the JSON, and a budget that truncates mid-deliberation
+        # yields nothing parseable and silently falls back. 2500 leaves room for both.
+        chat = GroqChatClient(
+            settings,
+            model=settings.groq_extract_model or settings.groq_model,
+            max_tokens=2500,
+        )
+    elif settings.nvidia_api_key:
+        chat = NvidiaChatClient(settings)
+    else:
+        chat = FakeChatClient()
+    return AICasePlanner(chat=chat, settings=settings)
 
 
 @router.post("/research-stage", response_model=StageResearchOut)
@@ -224,3 +286,43 @@ async def draft_document_endpoint(payload: DraftDocumentIn) -> DraftDocumentOut:
         ) from exc
 
     return DraftDocumentOut(**result)
+
+
+@router.post("/case-plan", response_model=CasePlanOut)
+async def case_plan_endpoint(payload: CasePlanIn) -> CasePlanOut:
+    """Reduce a whole case to a short action plan: what to start today, then, and the risks.
+
+    The applicant's step view can draw every stage of the process, but sixteen numbered
+    steps is a diagram of the procedure rather than advice about their application. This
+    reads the same data — their answers, their outstanding documents, what has to come
+    from a bank or an airline and how long each takes, the cited filing route — and
+    returns the short version an adviser would actually say out loud.
+    """
+    settings = get_settings()
+    planner = _build_planner(settings)
+    request = CasePlanRequest(
+        scope_label=payload.scope_label,
+        destination_code=payload.destination_code,
+        nationality=payload.nationality,
+        residence_country=payload.residence_country,
+        case_reference=payload.case_reference,
+        intake_answers=payload.intake_answers,
+        checklist=payload.checklist,
+        external_tasks=payload.external_tasks,
+        stages=payload.stages,
+        office=payload.office,
+        filed_by=payload.filed_by,
+        fee_note=payload.fee_note,
+        notes=payload.notes,
+        submitted=payload.submitted,
+        custom_instructions=payload.custom_instructions,
+        locale=payload.locale,
+    )
+    log.info("agentic.case_plan.start", case=payload.case_reference, scope=payload.scope_label)
+    try:
+        result = await planner.plan(request)
+    except Exception as exc:
+        log.error("agentic.case_plan.failed", error=str(exc))
+        raise HTTPException(status_code=500, detail=f"AI case planning failed: {exc}") from exc
+
+    return CasePlanOut(**result)
