@@ -32,6 +32,7 @@ from torii_api.db.models import (
 )
 from torii_api.db.session import get_session
 from torii_api.services.agentic import find_admissibility, scope_key, stage_is_usable
+from torii_api.services.case_plan import build_payload, request_plan
 from torii_api.services.checklist import ChecklistStatus, update_status, visible_requirement_items
 from torii_api.services.citations import resolve_official_citation
 from torii_api.services.content_packs import load_jurisdiction_meta, load_pack_by_scope
@@ -1433,6 +1434,56 @@ async def get_case_journey(
     case = await _owned_case(session, case_id, user)
     journey, _j_code = await _journey_for(session, case)
     return journey
+
+
+@router.get("/{case_id}/plan")
+async def get_case_plan(
+    case_id: int, session: SessionDep, user: CurrentUserDep
+) -> dict[str, Any]:
+    """The plan already built for this case, if there is one.
+
+    Returned from the case rather than rebuilt, so opening the step again costs nothing
+    and shows the applicant the same words they read last time.
+    """
+    case = await _owned_case(session, case_id, user)
+    snapshot = case.packet_snapshot or {}
+    plan = snapshot.get("ai_plan") if isinstance(snapshot, dict) else None
+    return {"plan": plan if isinstance(plan, dict) else None}
+
+
+@router.post("/{case_id}/plan")
+async def build_case_plan(
+    case_id: int, session: SessionDep, user: CurrentUserDep
+) -> dict[str, Any]:
+    """Build the applicant's action plan once, and keep it on the case.
+
+    The case is reduced to the handful of facts a plan is made of before the model sees
+    it — the outstanding items and their lead times, the cited filing route, the answers
+    that say something — which is what makes this quick. The result is stored on the
+    packet snapshot, so it is built once rather than on every visit; assembling the packet
+    again clears it, because a packet that changed deserves a plan that did too.
+    """
+    case = await _owned_case(session, case_id, user)
+    journey, j_code = await _journey_for(session, case)
+    checklist = [
+        ChecklistItemOut.model_validate(item).model_dump(mode="json")
+        for item in await _checklist(session, case.id)
+    ]
+    payload = build_payload(
+        journey=journey,
+        checklist=checklist,
+        answers=dict(case.intake_answers or {}),
+        jurisdiction_code=j_code,
+        nationality=case.origin_country,
+        residence_country=case.residence_country,
+    )
+    plan = await request_plan(payload)
+
+    snapshot = dict(case.packet_snapshot or {})
+    snapshot["ai_plan"] = plan
+    case.packet_snapshot = snapshot
+    await session.flush()
+    return {"plan": plan}
 
 
 @router.post("/{case_id}/submit")

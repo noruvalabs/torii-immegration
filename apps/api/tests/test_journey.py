@@ -14,6 +14,7 @@ from httpx import AsyncClient
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from torii_api.services.case_plan import build_payload, offline_plan
 from torii_api.services.intake import JP_WORK_RENEWAL_QUESTIONS
 from torii_api.services.journey import build_journey, external_tasks
 
@@ -221,4 +222,135 @@ async def test_journey_endpoint_describes_the_whole_case(
         "authority",
         "third_party",
     }
+
+
+# -- The action plan -----------------------------------------------------------------
+
+
+def test_payload_sent_to_the_model_is_small_and_relevant() -> None:
+    """The prompt is the reason this was slow. Only what a plan is made of goes in."""
+    journey = _journey()
+    payload = build_payload(
+        journey=journey,
+        checklist=_CHECKLIST,
+        answers={
+            "full_name": "Hasib",
+            "planned_arrival_date": "",
+            "applicant_photo": "data:image/png;base64," + "A" * 50_000,
+            "occupation": "Student",
+        },
+        jurisdiction_code="jp",
+        nationality="BD",
+        residence_country="JP",
+    )
+
+    # An unanswered question and an uploaded photo cost thousands of tokens and say
+    # nothing a plan can act on.
+    assert payload["intake_answers"] == {"full_name": "Hasib", "occupation": "Student"}
+    assert payload["destination_code"] == "JP"
+    # Only the filing steps, not all seventeen stages of the procedure.
+    assert len(payload["stages"]) <= 6
+    assert all(len(stage["detail"]) <= 220 for stage in payload["stages"])
+    # Open items carry their lead time; held ones are named so the plan cannot re-ask.
+    open_titles = [t["title"] for t in payload["external_tasks"] if t.get("lead_time")]
+    assert "Flight itinerary and accommodation bookings covering the whole stay" in open_titles
+    held = [t for t in payload["external_tasks"] if t["status"] == "gathered"]
+    assert [t["title"] for t in held] == ["Original passport, valid for the whole stay"]
+
+
+def test_offline_plan_restates_the_case_rather_than_inventing_one() -> None:
+    payload = build_payload(
+        journey=_journey(),
+        checklist=_CHECKLIST,
+        answers={},
+        jurisdiction_code="JP",
+        nationality=None,
+        residence_country=None,
+    )
+    plan = offline_plan(payload)
+
+    assert plan["ready_to_file"] is False
+    assert "outstanding" in plan["headline"]
+    # Longest lead time first: build_payload preserves the journey's own ordering.
+    assert plan["start_now"][0]["title"].startswith("Flight itinerary")
+    # Nothing is asserted that the case did not already say.
+    assert plan["risks"] == []
+    assert plan["questions"] == []
+    assert "not legal advice" in plan["disclaimer"]
+
+
+def test_offline_plan_does_not_tell_a_filed_case_to_gather_documents() -> None:
+    payload = build_payload(
+        journey=_journey(case_status="submitted"),
+        checklist=_CHECKLIST,
+        answers={},
+        jurisdiction_code="JP",
+        nationality=None,
+        residence_country=None,
+    )
+    assert offline_plan(payload)["headline"].startswith("Filed.")
+
+
+async def test_plan_is_built_once_and_kept_on_the_case(
+    client: AsyncClient, engine: AsyncEngine
+) -> None:
+    """The applicant pays for the plan once; opening the step again reads it back."""
+    await _seed_scope(engine)
+    register = await client.post(
+        "/v1/auth/register", json={"email": "plan@example.com", "password": "secure-pass"}
+    )
+    headers = {"Authorization": f"Bearer {register.json()['access_token']}"}
+    scoped = await client.post(
+        "/v1/cases/scope",
+        json={
+            "jurisdiction_code": "JP",
+            "visa_category_code": "work",
+            "action_code": "renewal",
+            "locale": "en",
+        },
+        headers=headers,
+    )
+    case_id = scoped.json()["id"]
+
+    # Nothing built yet.
+    empty = await client.get(f"/v1/cases/{case_id}/plan", headers=headers)
+    assert empty.status_code == 200
+    assert empty.json()["plan"] is None
+
+    built = await client.post(f"/v1/cases/{case_id}/plan", headers=headers)
+    assert built.status_code == 200
+    plan = built.json()["plan"]
+    # No AI service is reachable from the tests, and the applicant still gets a plan
+    # rather than the 500 they used to be shown.
+    assert plan["headline"]
+    assert plan["disclaimer"]
+    assert plan["model_used"]
+
+    stored = await client.get(f"/v1/cases/{case_id}/plan", headers=headers)
+    assert stored.json()["plan"] == plan
+
+
+async def test_plan_is_scoped_to_the_owner(client: AsyncClient, engine: AsyncEngine) -> None:
+    await _seed_scope(engine)
+    owner = await client.post(
+        "/v1/auth/register", json={"email": "plan-owner@example.com", "password": "secure-pass"}
+    )
+    scoped = await client.post(
+        "/v1/cases/scope",
+        json={
+            "jurisdiction_code": "JP",
+            "visa_category_code": "work",
+            "action_code": "renewal",
+            "locale": "en",
+        },
+        headers={"Authorization": f"Bearer {owner.json()['access_token']}"},
+    )
+    intruder = await client.post(
+        "/v1/auth/register", json={"email": "plan-intruder@example.com", "password": "secure-pass"}
+    )
+    response = await client.post(
+        f"/v1/cases/{scoped.json()['id']}/plan",
+        headers={"Authorization": f"Bearer {intruder.json()['access_token']}"},
+    )
+    assert response.status_code == 404
 
