@@ -67,9 +67,9 @@ export default function RegisterPage() {
   return (
     <div className="w-full max-w-md space-y-4">
       <div className="flex items-center px-1">
-        <Link href="/" className="flex items-center gap-2.5 font-bold text-sm">
-          <ToriiLogo size={24} />
-          <span className="text-base tracking-tight">Torii</span>
+        <Link href="/" className="flex items-center gap-3 font-bold">
+          <ToriiLogo size={36} />
+          <span className="text-xl tracking-tight">Torii</span>
         </Link>
       </div>
 

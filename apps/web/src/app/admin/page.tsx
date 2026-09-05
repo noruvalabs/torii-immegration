@@ -166,7 +166,7 @@ export default function DashboardPage() {
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 relative z-10">
           <div>
             <div className="flex items-center gap-2 mb-1">
-              <ToriiLogo size={20} />
+              <ToriiLogo size={24} />
               <Badge tone="default" className="text-[10px] font-bold tracking-wider uppercase">
                 {lang === "ja" ? "法務省・出入国在留管理庁 基準準拠" : "ISA & Consular Regulatory Compliant"}
               </Badge>

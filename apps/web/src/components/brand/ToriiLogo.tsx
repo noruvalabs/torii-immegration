@@ -20,6 +20,9 @@ export const BRAND_ASSETS = {
 export interface ToriiLogoProps {
   className?: string;
   size?: number | string;
+  height?: number | string;
+  width?: number | string;
+  style?: React.CSSProperties;
   variant?: "image" | "vector" | "badge";
   withWordmark?: boolean;
   subtitle?: string;
@@ -32,47 +35,57 @@ export interface ToriiLogoProps {
  */
 export function ToriiLogo({
   className,
-  size = 26,
+  size = 36,
+  height,
+  width,
+  style,
   variant = "image",
   withWordmark = false,
   subtitle,
   wordmarkClassName,
 }: ToriiLogoProps) {
+  const h = height ?? size;
+  const dimensionStyle: React.CSSProperties = {
+    height: typeof h === "number" ? `${h}px` : h,
+    width: width ? (typeof width === "number" ? `${width}px` : width) : "auto",
+    aspectRatio: "1415 / 933",
+    ...style,
+  };
+
   const logoGraphic =
     variant === "image" ? (
-      <img
-        src={BRAND_ASSETS.iconPng}
-        alt="Torii Logo"
-        className={cn(
-          "shrink-0 object-contain drop-shadow-xs dark:brightness-0 dark:invert transition-all",
-          className,
-        )}
-        style={{ width: size, height: size }}
-      />
+      <>
+        {/* Light theme: Deep navy mark */}
+        <img
+          src={BRAND_ASSETS.glyphTransparent}
+          alt="Torii Logo"
+          className={cn("shrink-0 object-contain drop-shadow-xs dark:hidden transition-all", className)}
+          style={dimensionStyle}
+        />
+        {/* Dark theme: Clean white mark */}
+        <img
+          src={BRAND_ASSETS.glyphLightTransparent}
+          alt="Torii Logo"
+          className={cn("shrink-0 object-contain drop-shadow-xs hidden dark:block transition-all", className)}
+          style={dimensionStyle}
+        />
+      </>
     ) : variant === "badge" ? (
       <div
         className={cn(
-          "relative flex items-center justify-center rounded-xl bg-slate-900 p-1.5 shadow-md border border-white/10 shrink-0",
+          "relative flex items-center justify-center rounded-xl bg-slate-900 p-2 shadow-md border border-white/10 shrink-0",
           className,
         )}
-        style={{ width: size, height: size }}
+        style={{ width: dimensionStyle.height, height: dimensionStyle.height }}
       >
         <img
-          src={BRAND_ASSETS.logoLightPng}
+          src={BRAND_ASSETS.glyphLightTransparent}
           alt="Torii Logo"
           className="size-full object-contain drop-shadow-sm"
         />
       </div>
     ) : (
-      <img
-        src={BRAND_ASSETS.iconPng}
-        alt="Torii Logo"
-        className={cn(
-          "shrink-0 object-contain dark:brightness-0 dark:invert transition-all",
-          className,
-        )}
-        style={{ width: size, height: size }}
-      />
+      <ToriiLogoSvg className={className} size={h} style={style} />
     );
 
   if (!withWordmark) {
@@ -80,10 +93,10 @@ export function ToriiLogo({
   }
 
   return (
-    <div className="flex items-center gap-2.5">
+    <div className="flex items-center gap-3">
       {logoGraphic}
       <div className={cn("flex flex-col min-w-0 leading-none", wordmarkClassName)}>
-        <span className="text-lg font-bold tracking-tight">Torii</span>
+        <span className="text-xl font-bold tracking-tight">Torii</span>
         {subtitle && (
           <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase mt-0.5">
             {subtitle}
@@ -97,13 +110,20 @@ export function ToriiLogo({
 /**
  * Scalable Vector/SVG representation of the Torii mark.
  */
-export function ToriiLogoSvg({ className, ...props }: React.SVGProps<SVGSVGElement>) {
+export function ToriiLogoSvg({
+  className,
+  size = 36,
+  style,
+  ...props
+}: React.SVGProps<SVGSVGElement> & { size?: number | string }) {
+  const h = typeof size === "number" ? `${size}px` : size;
   return (
     <svg
       viewBox="0 0 1415 933"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
-      className={cn("size-6 object-contain", className)}
+      className={cn("shrink-0 object-contain", className)}
+      style={{ height: h, width: "auto", aspectRatio: "1415 / 933", ...style }}
       aria-label="Torii Logo"
       {...props}
     >

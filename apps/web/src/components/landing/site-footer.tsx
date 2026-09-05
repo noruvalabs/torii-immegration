@@ -20,9 +20,9 @@ export function SiteFooter() {
 
       <div className="relative mx-auto max-w-6xl px-6 pb-10 pt-16 sm:pt-20">
         <Reveal>
-          <div className="flex items-center gap-2.5">
-            <ToriiLogo size={24} />
-            <span className="font-bold tracking-tight">Torii</span>
+          <div className="flex items-center gap-3">
+            <ToriiLogo size={36} />
+            <span className="text-xl font-bold tracking-tight">Torii</span>
           </div>
 
           <h2 className="mt-6 max-w-2xl text-4xl font-semibold leading-[1.05] tracking-tight sm:text-6xl">

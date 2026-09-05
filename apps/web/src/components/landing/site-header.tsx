@@ -40,9 +40,9 @@ export function SiteHeader() {
             : "border-transparent bg-transparent shadow-none backdrop-blur-none",
         )}
       >
-        <Link href="/" className="flex items-center gap-2.5">
-          <ToriiLogo size={26} />
-          <span className="text-lg font-bold tracking-tight">Torii</span>
+        <Link href="/" className="flex items-center gap-3">
+          <ToriiLogo size={34} />
+          <span className="text-xl font-bold tracking-tight">Torii</span>
         </Link>
 
         <nav className="ml-8 hidden items-center gap-0.5 lg:flex">
