@@ -45,17 +45,17 @@ export function StartCaseButton({
       // better than sending someone to the wrong side of the auth wall.
       aria-busy={loading || undefined}
       className={cn(
-        "group inline-flex items-center justify-center gap-2 rounded-full px-6 py-3.5 text-sm font-medium transition-all",
+        "group relative isolate inline-flex items-center justify-center gap-2 overflow-hidden rounded-full px-6 py-3.5 text-sm font-medium transition-all duration-300",
         variant === "solid"
-          ? "bg-primary text-primary-foreground shadow-[0_1px_0_0_rgba(255,255,255,0.15)_inset,0_12px_24px_-8px_var(--color-primary)] hover:-translate-y-0.5 hover:shadow-[0_1px_0_0_rgba(255,255,255,0.15)_inset,0_16px_32px_-8px_var(--color-primary)]"
-          : "border hover:bg-accent",
+          ? "bg-primary text-primary-foreground shadow-[0_1px_0_0_rgba(255,255,255,0.15)_inset,0_12px_24px_-8px_var(--color-primary)] hover:-translate-y-0.5 hover:shadow-[0_1px_0_0_rgba(255,255,255,0.15)_inset,0_18px_36px_-8px_var(--color-primary)] motion-safe:animate-sheen"
+          : "border hover:-translate-y-0.5 hover:border-primary/40 hover:bg-accent",
         loading && "opacity-70",
         className,
       )}
     >
-      {label}
+      <span className="relative z-10">{label}</span>
       {showArrow && (
-        <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
+        <ArrowRight className="relative z-10 size-4 transition-transform group-hover:translate-x-1" />
       )}
     </Link>
   );

@@ -35,7 +35,7 @@ export function Hero() {
 
       <div className="relative mx-auto grid max-w-6xl gap-12 px-6 pb-20 pt-28 lg:grid-cols-[1.1fr_0.9fr] lg:items-center lg:pb-28 lg:pt-36">
         <Reveal>
-          <p className="inline-flex items-center gap-1.5 rounded-full border border-primary/25 bg-primary/8 px-3 py-1 text-xs font-medium text-primary">
+          <p className="inline-flex items-center gap-1.5 rounded-full border border-primary/25 bg-primary/8 px-3 py-1 text-xs font-medium text-primary transition-colors hover:border-primary/50">
             {t.hero.eyebrow}
           </p>
 
@@ -86,7 +86,9 @@ export function Hero() {
         </Reveal>
 
         <Reveal delay={150}>
-          <HeroDemo />
+          <div className="motion-safe:animate-float-y">
+            <HeroDemo />
+          </div>
         </Reveal>
       </div>
     </section>
