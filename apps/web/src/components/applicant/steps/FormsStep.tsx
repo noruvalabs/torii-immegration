@@ -99,6 +99,12 @@ function getFieldControlSpec(key: string): FieldControlSpec {
     k.includes("has_criminal") ||
     k.includes("has_sponsor") ||
     k.includes("has_relatives") ||
+    k.includes("deportation") ||
+    k.includes("offence") ||
+    k.includes("conviction") ||
+    k.includes("imprisoned") ||
+    k.includes("trafficking") ||
+    k.includes("prostitution") ||
     k.startsWith("is_") ||
     k.startsWith("has_")
   ) {
@@ -393,6 +399,80 @@ function categorizeFields(filledFields: Record<string, unknown>): FormFieldGroup
   return result;
 }
 
+const FIELD_ALIAS_GROUPS: string[][] = [
+  ["intended_length_of_stay_days", "stay_duration_days", "length_of_stay_days", "stay_days", "visit.length_of_stay_days", "duration_of_stay", "duration"],
+  ["support_type", "financial.support_type", "financial_support_type", "visitor_has_sufficient_funds", "has_sufficient_funds", "trip_payer"],
+  ["full_name", "applicant_name", "visitor_full_name", "visitor.full_name", "name", "legal_name", "full_legal_name"],
+  ["nationality", "visitor_nationality", "visitor.nationality", "country_of_citizenship", "citizenship", "primary_citizenship"],
+  ["passport_number", "passport_no", "visitor_passport_number", "visitor.passport_number", "passport_num", "travel_document_number"],
+  ["date_of_birth", "dob", "birth_date", "applicant_dob", "applicant_date_of_birth"],
+  ["passport_expiry_date", "passport_expiry", "passport_expiration_date", "passport_valid_until"],
+  ["purpose_of_visit", "main_purpose", "purpose", "visit.purpose", "purpose_of_stay", "trip_purpose"],
+  ["relationship", "relationship_to_visitor", "sponsor_relationship", "relationship_to_applicant"],
+  ["residence_card_number", "guarantor.residence_card_number", "residence_card_no", "zairyu_card_number", "alien_registration_number"],
+  ["current_japan_address", "registered_address_japan", "address_in_japan", "residential_address_japan", "japan_address"],
+  ["telephone_japan", "phone_number", "contact_phone", "phone_japan", "telephone_number"],
+  ["mobile_phone", "mobile_phone_japan", "cell_phone"],
+  ["current_residence_country", "residence_country", "country_of_residence", "current_location_country", "current_country"],
+  ["employer_name", "company_name", "sponsor_name", "sponsoring_organization", "host_company_name", "employer"],
+  ["corporate_number", "employer_corporate_number", "company_number", "organization_number"],
+  ["salary", "monthly_salary", "annual_salary_jpy", "salary_monthly", "income_monthly"],
+];
+
+function getCanonicalAliasGroup(key: string): string[] | null {
+  const norm = key.toLowerCase();
+  const clean = norm.split(".").pop() || norm;
+  for (const group of FIELD_ALIAS_GROUPS) {
+    if (group.some((g) => g.toLowerCase() === norm || g.toLowerCase() === clean)) {
+      return group;
+    }
+  }
+  return null;
+}
+
+function isFieldAlreadyAnswered(key: string, filledAnswers: Record<string, unknown>): boolean {
+  const norm = key.toLowerCase();
+  const clean = norm.split(".").pop() || norm;
+  if (filledAnswers[key] !== undefined && filledAnswers[key] !== null && filledAnswers[key] !== "") return true;
+  if (filledAnswers[clean] !== undefined && filledAnswers[clean] !== null && filledAnswers[clean] !== "") return true;
+
+  const group = getCanonicalAliasGroup(key);
+  if (group) {
+    for (const alias of group) {
+      const aliasClean = alias.split(".").pop() || alias;
+      if (
+        (filledAnswers[alias] !== undefined && filledAnswers[alias] !== null && filledAnswers[alias] !== "") ||
+        (filledAnswers[aliasClean] !== undefined && filledAnswers[aliasClean] !== null && filledAnswers[aliasClean] !== "")
+      ) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+function deduplicateMissingFields(fields: string[], filledAnswers: Record<string, unknown>): string[] {
+  const seenCanonical = new Set<string>();
+  const result: string[] = [];
+
+  for (const field of fields) {
+    const cleanKey = field.split(".").pop() || field;
+    if (isFieldAlreadyAnswered(field, filledAnswers)) {
+      continue;
+    }
+
+    const group = getCanonicalAliasGroup(field);
+    const canonicalKey = group ? group[0] : cleanKey.toLowerCase();
+
+    if (!seenCanonical.has(canonicalKey)) {
+      seenCanonical.add(canonicalKey);
+      result.push(field);
+    }
+  }
+
+  return result;
+}
+
 export function FormsStep({
   forms,
   loading,
@@ -406,6 +486,7 @@ export function FormsStep({
   const [downloadingPdf, setDownloadingPdf] = useState<string | null>(null);
   const [missingFieldInputs, setMissingFieldInputs] = useState<Record<string, string>>({});
   const [savingMissingField, setSavingMissingField] = useState<string | null>(null);
+  const [justSavedField, setJustSavedField] = useState<string | null>(null);
   const [officialForms, setOfficialForms] = useState<OfficialForm[]>([]);
   const [filing, setFiling] = useState<FilingInfo | null>(null);
   const [expandedFormKeys, setExpandedFormKeys] = useState<Record<string, boolean>>({});
@@ -505,10 +586,10 @@ export function FormsStep({
     setTimeout(() => setCopiedKey(null), 2000);
   }
 
-  async function handleSaveMissingField(fieldKey: string) {
+  async function handleSaveMissingField(fieldKey: string, explicitValue?: unknown) {
     if (!token || !caseId) return;
     const cleanKey = fieldKey.split(".").pop() || fieldKey;
-    let val: unknown = missingFieldInputs[cleanKey] ?? missingFieldInputs[fieldKey];
+    let val: unknown = explicitValue !== undefined ? explicitValue : (missingFieldInputs[cleanKey] ?? missingFieldInputs[fieldKey]);
     if (val === undefined || val === null || val === "") {
       toast.error(`Please enter a value for ${cleanKey.replace(/_/g, " ")}`);
       return;
@@ -534,15 +615,47 @@ export function FormsStep({
 
     setSavingMissingField(cleanKey);
     try {
+      // Gather all canonical aliases for synchronization
+      const group = getCanonicalAliasGroup(cleanKey) || getCanonicalAliasGroup(fieldKey);
+      const patchUpdates: Record<string, unknown> = { [cleanKey]: val };
+      if (group) {
+        for (const alias of group) {
+          const aClean = alias.split(".").pop() || alias;
+          patchUpdates[aClean] = val;
+        }
+      }
+
+      // Sync local missingFieldInputs for all aliases
+      const stringUpdates: Record<string, string> = {};
+      for (const [k, v] of Object.entries(patchUpdates)) {
+        stringUpdates[k] = String(v ?? "");
+      }
+      setMissingFieldInputs((prev) => ({ ...prev, ...stringUpdates }));
+
       try {
         await answerIntake(token, caseId, cleanKey, val);
       } catch {
         // Resilient fallback: patch case answers directly
         await patchCase(token, caseId, {
-          intake_answers: { ...(intakeAnswers || {}), [cleanKey]: val },
+          intake_answers: { ...(intakeAnswers || {}), ...patchUpdates },
         });
       }
-      toast.success(`Saved ${cleanKey.replace(/_/g, " ")}! Forms re-filled.`);
+
+      // If group has aliases, also ensure patchCase synchronizes them
+      if (group && group.length > 1) {
+        try {
+          await patchCase(token, caseId, {
+            intake_answers: { ...(intakeAnswers || {}), ...patchUpdates },
+          });
+        } catch {
+          // ignore
+        }
+      }
+
+      setJustSavedField(cleanKey);
+      setTimeout(() => setJustSavedField(null), 2500);
+
+      toast.success(`Saved ${cleanKey.replace(/_/g, " ")}!`, { duration: 1500 });
       onGenerate();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to save field");
@@ -566,14 +679,18 @@ export function FormsStep({
       }
 
       return officialForms.map((oform) => {
-        const missing = oform.missing_answer_keys && oform.missing_answer_keys.length > 0
+        const rawMissing = oform.missing_answer_keys && oform.missing_answer_keys.length > 0
           ? oform.missing_answer_keys
           : Array.from(allMissingFields);
+
+        // Deduplicate and filter out fields whose alias group is already answered
+        const missing = deduplicateMissingFields(rawMissing, allFilledFields);
+
         const requiredMissing = oform.required_missing_keys && oform.required_missing_keys.length > 0
-          ? oform.required_missing_keys
+          ? oform.required_missing_keys.filter((k) => missing.includes(k))
           : missing.filter((k) => isFieldRequired(k));
         const optionalMissing = oform.optional_missing_keys && oform.optional_missing_keys.length > 0
-          ? oform.optional_missing_keys
+          ? oform.optional_missing_keys.filter((k) => missing.includes(k))
           : missing.filter((k) => !isFieldRequired(k));
         const total = oform.total_items || Object.keys(allFilledFields).length || 45;
 
@@ -622,7 +739,8 @@ export function FormsStep({
         authority?: string;
       };
       const filled = gform.filled_fields || intakeAnswers || {};
-      const missing = gform.missing_required_fields || [];
+      const rawMissing = gform.missing_required_fields || [];
+      const missing = deduplicateMissingFields(rawMissing, filled);
       const requiredMissing = missing.filter((k) => isFieldRequired(k));
       const optionalMissing = missing.filter((k) => !isFieldRequired(k));
       const total = Object.keys(filled).length + missing.length;
@@ -902,6 +1020,9 @@ export function FormsStep({
                             ? "Optional background disclosures — only complete if applicable to your situation:"
                             : "Fields required by immigration are marked Required; secondary questions are marked Optional:"}
                         </span>
+                        <span className="hidden sm:inline text-[10px] text-muted-foreground/80 italic">
+                          Values auto-save on paste, select, &amp; blur
+                        </span>
                       </div>
 
                       {displayedFields.length === 0 ? (
@@ -916,6 +1037,7 @@ export function FormsStep({
                             const spec = getFieldControlSpec(cleanKey);
                             const val = missingFieldInputs[cleanKey] ?? "";
                             const isSaving = savingMissingField === cleanKey;
+                            const isJustSaved = justSavedField === cleanKey;
                             const isReq = form.requiredMissing.includes(field) || isFieldRequired(cleanKey);
 
                             return (
@@ -945,9 +1067,16 @@ export function FormsStep({
                                     <input
                                       type="date"
                                       value={val}
-                                      onChange={(e) =>
-                                        setMissingFieldInputs((prev) => ({ ...prev, [cleanKey]: e.target.value }))
-                                      }
+                                      onChange={(e) => {
+                                        const nextVal = e.target.value;
+                                        setMissingFieldInputs((prev) => ({ ...prev, [cleanKey]: nextVal }));
+                                        if (nextVal) {
+                                          void handleSaveMissingField(cleanKey, nextVal);
+                                        }
+                                      }}
+                                      onBlur={() => {
+                                        if (val) void handleSaveMissingField(cleanKey, val);
+                                      }}
                                       className="h-8 w-full rounded border bg-background px-2 text-xs outline-none focus:ring-1 focus:ring-primary text-foreground"
                                     />
                                   ) : spec.type === "select" ? (
@@ -956,6 +1085,9 @@ export function FormsStep({
                                       onChange={(e) => {
                                         const nextVal = e.target.value;
                                         setMissingFieldInputs((prev) => ({ ...prev, [cleanKey]: nextVal }));
+                                        if (nextVal) {
+                                          void handleSaveMissingField(cleanKey, nextVal);
+                                        }
                                       }}
                                       className="h-8 w-full rounded border bg-background px-2 text-xs outline-none focus:ring-1 focus:ring-primary text-foreground cursor-pointer"
                                     >
@@ -976,8 +1108,22 @@ export function FormsStep({
                                       onChange={(e) =>
                                         setMissingFieldInputs((prev) => ({ ...prev, [cleanKey]: e.target.value }))
                                       }
+                                      onPaste={(e) => {
+                                        const text = e.clipboardData.getData("text").trim();
+                                        if (text) {
+                                          setMissingFieldInputs((prev) => ({ ...prev, [cleanKey]: text }));
+                                          void handleSaveMissingField(cleanKey, text);
+                                        }
+                                      }}
+                                      onBlur={() => {
+                                        if (val) void handleSaveMissingField(cleanKey, val);
+                                      }}
                                       onKeyDown={(e) => {
-                                        if (e.key === "Enter") handleSaveMissingField(cleanKey);
+                                        if (e.key === "Enter") {
+                                          e.preventDefault();
+                                          void handleSaveMissingField(cleanKey);
+                                          (e.target as HTMLElement).blur();
+                                        }
                                       }}
                                       className="h-8 w-full rounded border bg-background px-2 text-xs outline-none focus:ring-1 focus:ring-primary text-foreground"
                                     />
@@ -989,8 +1135,22 @@ export function FormsStep({
                                       onChange={(e) =>
                                         setMissingFieldInputs((prev) => ({ ...prev, [cleanKey]: e.target.value }))
                                       }
+                                      onPaste={(e) => {
+                                        const text = e.clipboardData.getData("text").trim();
+                                        if (text) {
+                                          setMissingFieldInputs((prev) => ({ ...prev, [cleanKey]: text }));
+                                          void handleSaveMissingField(cleanKey, text);
+                                        }
+                                      }}
+                                      onBlur={() => {
+                                        if (val) void handleSaveMissingField(cleanKey, val);
+                                      }}
                                       onKeyDown={(e) => {
-                                        if (e.key === "Enter") handleSaveMissingField(cleanKey);
+                                        if (e.key === "Enter") {
+                                          e.preventDefault();
+                                          void handleSaveMissingField(cleanKey);
+                                          (e.target as HTMLElement).blur();
+                                        }
                                       }}
                                       className="h-8 w-full rounded border bg-background px-2 text-xs outline-none focus:ring-1 focus:ring-primary text-foreground"
                                     />
@@ -1000,10 +1160,19 @@ export function FormsStep({
                                     disabled={!val || isSaving}
                                     onClick={() => handleSaveMissingField(cleanKey)}
                                     size="sm"
-                                    className="h-8 px-2.5 text-[10px] font-semibold shrink-0"
+                                    className={`h-8 px-2.5 text-[10px] font-semibold shrink-0 transition-all ${
+                                      isJustSaved
+                                        ? "bg-emerald-600 hover:bg-emerald-600 text-white border-emerald-600"
+                                        : ""
+                                    }`}
+                                    title={isJustSaved ? "Saved" : "Save field value (auto-saves on paste/blur)"}
                                   >
                                     {isSaving ? (
                                       <Loader2 className="size-3 animate-spin" />
+                                    ) : isJustSaved ? (
+                                      <>
+                                        <Check className="mr-0.5 size-2.5" /> Saved
+                                      </>
                                     ) : (
                                       <>
                                         <Zap className="mr-0.5 size-2.5 text-amber-300" /> Save

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Check, Loader2, ArrowRight } from "lucide-react";
+import { ArrowLeft, Check, Loader2, ArrowRight, Search, X } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/lib/auth-context";
@@ -27,6 +27,31 @@ type CaseResult = { id: number; reference: string; status: string };
 /** Combined residence + nationality, then destination → visa → app → review */
 type Step = "identity" | "destination" | "visa_type" | "app_type" | "review";
 
+const STEP_ORDER: Step[] = ["identity", "destination", "visa_type", "app_type", "review"];
+
+/**
+ * True when a description adds something the name has not already said.
+ *
+ * Route names carry their own gloss — "Student Visa - 留学 (Study at a university, college,
+ * or language school)" — so a generic "Study at an educational institution" underneath is
+ * noise. Comparing for equality alone missed that, and left three rows in eight wearing a
+ * subtitle for no reason anyone reading the list could work out.
+ */
+function isExtraDetail(description: string, name: string): boolean {
+  const d = description.trim().toLowerCase();
+  if (!d) return false;
+  const n = name.trim().toLowerCase();
+  return d !== n && !n.includes(d);
+}
+
+const STEP_LABELS: Record<Step, string> = {
+  identity: "Residence & Nationality",
+  destination: "Destination",
+  visa_type: "Visa type",
+  app_type: "Application",
+  review: "Review",
+};
+
 export default function ScopePage() {
   const { token, user } = useAuth();
   const [step, setStep] = useState<Step>("identity");
@@ -46,7 +71,11 @@ export default function ScopePage() {
   const [createdCase, setCreatedCase] = useState<CaseResult | null>(null);
   const [dynamicVisaTypes, setDynamicVisaTypes] = useState<VisaType[] | null>(null);
   const [dynamicAppTypes, setDynamicAppTypes] = useState<ApplicationType[] | null>(null);
-  const [loadingOptions, setLoadingOptions] = useState(false);
+  // One flag per list. Sharing one meant a Back out of the application step, while its
+  // fetch was still in flight, put a spinner over an already-loaded visa-type list.
+  const [loadingVisaTypes, setLoadingVisaTypes] = useState(false);
+  const [loadingAppTypes, setLoadingAppTypes] = useState(false);
+  const [visaFilter, setVisaFilter] = useState("");
 
   // Seed residence/nationality once from profile — never re-run after Continue saves profile.
   const seededFromProfileRef = useRef(false);
@@ -86,22 +115,24 @@ export default function ScopePage() {
   }, [token]);
 
   useEffect(() => {
-    if (!selectedDestination) {
-      setDynamicVisaTypes(null);
-      setDynamicAppTypes(null);
-      return;
-    }
+    setDynamicVisaTypes(null);
+    setDynamicAppTypes(null);
+    if (!selectedDestination) return;
     let cancelled = false;
     void (async () => {
       try {
-        setLoadingOptions(true);
+        setLoadingVisaTypes(true);
         const vTypes = await getVisaTypes(selectedDestination.code);
         if (cancelled) return;
         setDynamicVisaTypes(vTypes);
       } catch {
-        // Fallback to static geoData options
+        // Leave the list cleared. Keeping the previous country's routes on screen is
+        // worse than showing nothing: every one of them would be refused at the end.
+        if (!cancelled) {
+          setError("Could not load visa types for this destination. Please try again.");
+        }
       } finally {
-        if (!cancelled) setLoadingOptions(false);
+        if (!cancelled) setLoadingVisaTypes(false);
       }
     })();
     return () => {
@@ -110,21 +141,21 @@ export default function ScopePage() {
   }, [selectedDestination]);
 
   useEffect(() => {
-    if (!selectedDestination || !selectedVisaType) {
-      setDynamicAppTypes(null);
-      return;
-    }
+    setDynamicAppTypes(null);
+    if (!selectedDestination || !selectedVisaType) return;
     let cancelled = false;
     void (async () => {
       try {
-        setLoadingOptions(true);
+        setLoadingAppTypes(true);
         const aTypes = await getApplicationTypes(selectedDestination.code, selectedVisaType.code);
         if (cancelled) return;
         setDynamicAppTypes(aTypes);
       } catch {
-        // Fallback to static geoData options
+        if (!cancelled) {
+          setError("Could not load application types for this visa. Please try again.");
+        }
       } finally {
-        if (!cancelled) setLoadingOptions(false);
+        if (!cancelled) setLoadingAppTypes(false);
       }
     })();
     return () => {
@@ -133,11 +164,15 @@ export default function ScopePage() {
   }, [selectedDestination, selectedVisaType]);
 
   function goBack() {
+    const i = STEP_ORDER.indexOf(step);
+    if (i > 0) goToStep(STEP_ORDER[i - 1]);
+  }
+
+  /** Jump to an earlier step. Forward moves stay with the step's own confirm action. */
+  function goToStep(target: Step) {
+    if (STEP_ORDER.indexOf(target) > STEP_ORDER.indexOf(step)) return;
     setError(null);
-    if (step === "destination") setStep("identity");
-    else if (step === "visa_type") setStep("destination");
-    else if (step === "app_type") setStep("visa_type");
-    else if (step === "review") setStep("app_type");
+    setStep(target);
   }
 
   async function confirmIdentity() {
@@ -163,13 +198,16 @@ export default function ScopePage() {
   }
 
   function selectDestination(d: Destination) {
+    setError(null);
     setSelectedDestination(d);
     setSelectedVisaType(null);
     setSelectedAppType(null);
+    setVisaFilter("");
     setStep("visa_type");
   }
 
   function selectVisaType(v: VisaType) {
+    setError(null);
     setSelectedVisaType(v);
     setSelectedAppType(null);
     setStep("app_type");
@@ -250,8 +288,26 @@ export default function ScopePage() {
   }
 
   const destinations = geoData?.destinations ?? [];
-  const visaTypes = dynamicVisaTypes ?? geoData?.visa_types ?? [];
-  const appTypes = dynamicAppTypes ?? geoData?.application_types ?? [];
+  // Only the bootstrap payload's generic list may stand in before a destination is picked.
+  // After one is, offering tourist/student/work for a country whose rows do not include
+  // them walks the applicant to a refusal on the last click.
+  const visaTypes = selectedDestination
+    ? (dynamicVisaTypes ?? [])
+    : (geoData?.visa_types ?? []);
+  const appTypes =
+    selectedDestination && selectedVisaType
+      ? (dynamicAppTypes ?? [])
+      : (geoData?.application_types ?? []);
+  const visaQuery = visaFilter.trim().toLowerCase();
+  const filteredVisaTypes = visaQuery
+    ? visaTypes.filter((v) =>
+        `${v.name} ${v.description} ${v.code}`.toLowerCase().includes(visaQuery),
+      )
+    : visaTypes;
+  const destinationFlag =
+    selectedDestination
+      ? selectedDestination.flag || matchCountry(selectedDestination.code).flag || "🌐"
+      : "";
   const nationalities = geoData?.nationalities ?? [];
   const residenceLabel = matchCountry(residenceCountry).name;
   const nationalityLabel = matchCountry(nationality).name;
@@ -267,32 +323,43 @@ export default function ScopePage() {
         </p>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2 text-sm">
-        {(["identity", "destination", "visa_type", "app_type", "review"] as Step[]).map(
-          (s, i) => (
-            <div key={s} className="flex items-center gap-2">
-              {i > 0 && <span className="text-muted-foreground">/</span>}
-              <span
-                className={
-                  step === s
-                    ? "font-medium text-foreground"
-                    : "text-muted-foreground"
-                }
-              >
-                {s === "identity"
-                  ? "Residence & Nationality"
-                  : s === "destination"
-                    ? "Destination"
-                    : s === "visa_type"
-                      ? "Visa type"
-                      : s === "app_type"
-                        ? "Application"
-                        : "Review"}
-              </span>
-            </div>
-          ),
-        )}
-      </div>
+      <nav aria-label="Application steps">
+        <ol className="flex flex-wrap items-center gap-2 text-sm">
+          {STEP_ORDER.map((s, i) => {
+            const currentIndex = STEP_ORDER.indexOf(step);
+            // A step already passed can be returned to; one not yet reached cannot, since
+            // the answer it needs has not been given.
+            const isDone = i < currentIndex;
+            return (
+              <li key={s} className="flex items-center gap-2">
+                {i > 0 && (
+                  <span aria-hidden="true" className="text-muted-foreground">
+                    /
+                  </span>
+                )}
+                {isDone ? (
+                  <button
+                    type="button"
+                    onClick={() => goToStep(s)}
+                    className="rounded-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    {STEP_LABELS[s]}
+                  </button>
+                ) : (
+                  <span
+                    aria-current={step === s ? "step" : undefined}
+                    className={
+                      step === s ? "font-medium text-foreground" : "text-muted-foreground"
+                    }
+                  >
+                    {STEP_LABELS[s]}
+                  </span>
+                )}
+              </li>
+            );
+          })}
+        </ol>
+      </nav>
 
       {error && (
         <p className="rounded-[var(--radius)] border border-[var(--color-danger)]/30 bg-[var(--color-danger)]/10 px-4 py-3 text-sm text-[var(--color-danger)]">
@@ -428,9 +495,34 @@ export default function ScopePage() {
             <ArrowLeft className="size-3.5" /> Back
           </button>
           <h3 className="text-sm font-medium text-muted-foreground">
-            Visa type for <strong>{selectedDestination?.flag} {selectedDestination?.name}</strong>
+            Visa type for <strong>{destinationFlag} {selectedDestination?.name}</strong>
           </h3>
-          {loadingOptions ? (
+          {/* A fully-discovered country can publish dozens of routes, which is more than
+              anyone wants to scroll. The box appears only once the list earns it. */}
+          {!loadingVisaTypes && visaTypes.length > 8 && (
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <input
+                type="text"
+                value={visaFilter}
+                onChange={(e) => setVisaFilter(e.target.value)}
+                placeholder={`Filter ${visaTypes.length} visa types...`}
+                aria-label="Filter visa types"
+                className="h-9 w-full rounded-[var(--radius)] border bg-background pl-9 pr-8 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              />
+              {visaFilter && (
+                <button
+                  type="button"
+                  onClick={() => setVisaFilter("")}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                  aria-label="Clear filter"
+                >
+                  <X className="size-3.5" />
+                </button>
+              )}
+            </div>
+          )}
+          {loadingVisaTypes ? (
             <div className="py-8 text-center">
               <Loader2 className="mx-auto size-6 animate-spin text-muted-foreground" />
               <p className="mt-2 text-xs text-muted-foreground">Loading available visa types…</p>
@@ -439,16 +531,27 @@ export default function ScopePage() {
             <p className="text-sm text-muted-foreground">
               No visa types available for this destination.
             </p>
+          ) : filteredVisaTypes.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              No visa type matches “{visaFilter}”.
+            </p>
           ) : (
-            visaTypes.map((v) => (
+            filteredVisaTypes.map((v) => (
               <button
                 key={v.code}
                 onClick={() => selectVisaType(v)}
                 className="flex w-full items-center gap-4 rounded-[var(--radius)] border bg-card p-4 text-left transition-colors hover:bg-accent"
               >
                 <div className="flex-1">
-                  <p className="font-medium">{v.name}</p>
-                  {v.description && v.description !== v.name && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="font-medium">{v.name}</p>
+                    {v.is_research && (
+                      <Badge tone="info" title="Requirements are read from official sources when you apply, rather than from a reviewed pack.">
+                        Live research
+                      </Badge>
+                    )}
+                  </div>
+                  {isExtraDetail(v.description, v.name) && (
                     <p className="text-xs text-muted-foreground mt-0.5">{v.description}</p>
                   )}
                 </div>
@@ -465,9 +568,9 @@ export default function ScopePage() {
             <ArrowLeft className="size-3.5" /> Back
           </button>
           <h3 className="text-sm font-medium text-muted-foreground">
-            Application type for <strong>{selectedDestination?.flag} {selectedDestination?.name} — {selectedVisaType?.name}</strong>
+            Application type for <strong>{destinationFlag} {selectedDestination?.name} — {selectedVisaType?.name}</strong>
           </h3>
-          {loadingOptions ? (
+          {loadingAppTypes ? (
             <div className="py-8 text-center">
               <Loader2 className="mx-auto size-6 animate-spin text-muted-foreground" />
               <p className="mt-2 text-xs text-muted-foreground">Loading available application types…</p>
@@ -484,8 +587,15 @@ export default function ScopePage() {
                 className="flex w-full items-center gap-4 rounded-[var(--radius)] border bg-card p-4 text-left transition-colors hover:bg-accent"
               >
                 <div className="flex-1">
-                  <p className="font-medium">{a.name}</p>
-                  {a.description && a.description !== a.name && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="font-medium">{a.name}</p>
+                    {a.is_research && (
+                      <Badge tone="info" title="Requirements are read from official sources when you apply, rather than from a reviewed pack.">
+                        Live research
+                      </Badge>
+                    )}
+                  </div>
+                  {isExtraDetail(a.description, a.name) && (
                     <p className="text-xs text-muted-foreground mt-0.5">{a.description}</p>
                   )}
                 </div>
@@ -516,7 +626,7 @@ export default function ScopePage() {
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">To</span>
-                <span className="font-medium">{selectedDestination?.flag} {selectedDestination?.name}</span>
+                <span className="font-medium">{destinationFlag} {selectedDestination?.name}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Visa type</span>

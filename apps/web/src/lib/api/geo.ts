@@ -21,12 +21,15 @@ export type VisaType = {
   code: string;
   name: string;
   description: string;
+  /** No reviewed content pack — requirements are read off official pages on demand. */
+  is_research?: boolean;
 };
 
 export type ApplicationType = {
   code: string;
   name: string;
   description: string;
+  is_research?: boolean;
 };
 
 export type Nationality = {
