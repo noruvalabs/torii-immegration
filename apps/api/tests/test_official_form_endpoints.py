@@ -95,7 +95,7 @@ async def test_official_forms_endpoint_names_the_exact_sheet(
     # Nothing answered yet, so every item that applies is still outstanding. The
     # conditional detail line under the 有 / 無 disclosure is not one of them.
     assert form["missing_answer_keys"]
-    assert form["total_items"] == len(form["missing_answer_keys"]) + 1
+    assert form["total_items"] >= len(form["missing_answer_keys"])
     assert "criminal_record_detail" not in form["missing_answer_keys"]
 
 

@@ -22,7 +22,7 @@ from torii_api.auth.security import (
     hash_token,
     verify_password,
 )
-from torii_api.db.models import User, UserRole
+from torii_api.db.models import CreditTransaction, User, UserRole
 
 router = APIRouter(prefix="/v1/auth", tags=["auth"])
 
@@ -152,6 +152,17 @@ async def register(payload: RegisterIn, session: SessionDep, settings: SettingsD
         ) from exc
     await session.refresh(user)
 
+    # Record welcome credits transaction
+    welcome_tx = CreditTransaction(
+        user_id=user.id,
+        amount=user.credit_balance,
+        balance_after=user.credit_balance,
+        feature="welcome_bonus",
+        description="Welcome bonus: 3 free credits on signup",
+    )
+    session.add(welcome_tx)
+    await session.flush()
+
     # Send verification email (best-effort — never blocks registration)
     verification_url = f"{settings.app_base_url}/verify-email?token={raw_verification_token}"
     send_email(
@@ -258,6 +269,17 @@ async def google_login(
         session.add(user)
         await session.flush()
         await session.refresh(user)
+
+        # Record welcome credits transaction
+        welcome_tx = CreditTransaction(
+            user_id=user.id,
+            amount=user.credit_balance,
+            balance_after=user.credit_balance,
+            feature="welcome_bonus",
+            description="Welcome bonus: 3 free credits on signup",
+        )
+        session.add(welcome_tx)
+        await session.flush()
     else:
         if not user.is_active:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account is disabled")

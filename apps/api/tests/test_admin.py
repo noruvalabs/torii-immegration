@@ -242,3 +242,108 @@ async def test_admin_user_count(client: AsyncClient, engine: AsyncEngine) -> Non
     counts = resp.json()
     assert counts["admin"] >= 1
     assert counts["applicant"] >= 2
+
+
+async def test_admin_scope_details_get_and_put(client: AsyncClient, engine: AsyncEngine) -> None:
+    await _seed_admin(engine)
+    async with engine.begin() as conn:
+        await conn.execute(
+            text("INSERT INTO jurisdictions (id, code, name, is_live) VALUES (99, 'TEST', 'Testland', 1)")
+        )
+        await conn.execute(
+            text("INSERT INTO visa_categories (id, jurisdiction_id, code, name, is_enabled) VALUES (991, 99, 'work', 'Work Visa', 1)")
+        )
+        await conn.execute(
+            text("INSERT INTO case_actions (id, jurisdiction_id, code, name, is_enabled) VALUES (992, 99, 'new', 'New Application', 1)")
+        )
+
+    login = await client.post(
+        "/v1/auth/login",
+        json={"email_or_username": "real-admin@example.com", "password": "admin-pass-123"},
+    )
+    token = login.json()["access_token"]
+
+    # 1. GET scope details
+    resp = await client.get(
+        "/v1/admin/ops/scope-details?jurisdiction_code=TEST&visa_category_code=work&action_code=new",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["jurisdiction"]["code"] == "TEST"
+    assert data["visa_category"]["code"] == "work"
+    assert data["case_action"]["code"] == "new"
+
+    # 2. PUT scope details
+    put_resp = await client.put(
+        "/v1/admin/ops/scope-details",
+        json={
+            "jurisdiction_code": "TEST",
+            "visa_category_code": "work",
+            "action_code": "new",
+            "category_name": "Updated Work Visa",
+            "intake_questions": [
+                {"key": "test_q", "prompt": "Test Prompt?", "type": "string", "required": True}
+            ],
+            "document_requirements": [
+                {"code": "doc_1", "name": "Passport Copy", "is_required": True}
+            ],
+            "form_templates": [
+                {
+                    "code": "form_01",
+                    "version": "1.0",
+                    "official_title": "Official Test Form",
+                    "field_mappings": [{"form_field": "f1", "answer_key": "test_q", "required": True}],
+                }
+            ],
+            "eligibility_rules": [
+                {"key": "age", "operator": "min", "value": 18, "message": "Must be 18+"}
+            ],
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert put_resp.status_code == 200
+    saved = put_resp.json()
+    assert saved["visa_category"]["name"] == "Updated Work Visa"
+    assert len(saved["intake_questions"]) == 1
+    assert saved["intake_questions"][0]["key"] == "test_q"
+    assert len(saved["document_requirements"]) == 1
+    assert len(saved["form_templates"]) == 1
+    assert len(saved["eligibility_rules"]) == 1
+
+
+async def test_admin_form_template_pdf_upload_and_download(client: AsyncClient, engine: AsyncEngine) -> None:
+    await _seed_admin(engine)
+    login = await client.post(
+        "/v1/auth/login",
+        json={"email_or_username": "real-admin@example.com", "password": "admin-pass-123"},
+    )
+    token = login.json()["access_token"]
+
+    import io
+    from reportlab.pdfgen import canvas
+
+    buf = io.BytesIO()
+    c = canvas.Canvas(buf)
+    c.drawString(100, 100, "Official Form Test")
+    c.save()
+    pdf_bytes = buf.getvalue()
+
+    files = {"file": ("test_form.pdf", pdf_bytes, "application/pdf")}
+    resp = await client.post(
+        "/v1/admin/ops/form-templates/TEST_FORM_01/upload-pdf",
+        files=files,
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 200
+    res = resp.json()
+    assert res["success"] is True
+    assert res["code"] == "TEST_FORM_01"
+    assert res["pages"] == 1
+
+    get_resp = await client.get("/v1/admin/ops/form-templates/TEST_FORM_01/pdf")
+    assert get_resp.status_code == 200
+    assert get_resp.headers["content-type"] == "application/pdf"
+    assert len(get_resp.content) > 0
+
+

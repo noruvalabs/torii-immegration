@@ -106,3 +106,42 @@ def test_official_japan_mofa_template_with_photo():
     pdf_bytes = generate_official_japan_visa_form_pdf("JP-2026-TOURIST", answers, "Japan · Tourist", photo_data=dummy_png)
     assert pdf_bytes.startswith(b"%PDF-")
     assert len(pdf_bytes) > 3000
+
+
+def _consular_sheet_text(answers: dict) -> str:
+    """The words a visa officer actually reads off the filled consular form."""
+    import io
+
+    import pypdf
+
+    from torii_api.services.pdf_generator import generate_official_japan_visa_form_pdf
+
+    pdf_bytes = generate_official_japan_visa_form_pdf("JP-2026-TOURIST", answers, "Japan")
+    reader = pypdf.PdfReader(io.BytesIO(pdf_bytes))
+    return "\n".join((page.extract_text() or "") for page in reader.pages)
+
+
+def test_consular_form_prints_the_country_not_the_iso_code():
+    """Packs store nationality as a code so the rules can match on it; the form asks for
+    the country, and "BD" is not an answer to "Nationality or citizenship"."""
+    text = _consular_sheet_text({"full_name": "Rahim Uddin", "nationality": "BD"})
+    assert "Bangladesh" in text
+
+    # A nationality already written out passes through as the applicant wrote it.
+    written = _consular_sheet_text({"full_name": "Rahim Uddin", "nationality": "Bangladesh"})
+    assert "Bangladesh" in written
+
+
+def test_consular_form_names_the_country_behind_an_other_nationality():
+    """The enum lists the nationalities the rules match on; "other" is not a country."""
+    text = _consular_sheet_text(
+        {"full_name": "Rahim Uddin", "nationality": "other", "nationality_other": "Bhutan"}
+    )
+    assert "Bhutan" in text
+
+
+def test_consular_form_prints_the_purpose_in_words():
+    """The enum token is this service's vocabulary, not the ministry's."""
+    text = _consular_sheet_text({"full_name": "Rahim Uddin", "purpose_of_visit": "visiting_family"})
+    assert "Visiting relatives" in text
+    assert "visiting_family" not in text

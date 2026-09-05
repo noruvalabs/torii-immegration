@@ -40,6 +40,7 @@ from torii_api.services.content_packs import (
     load_all_packs,
     workflow_rows_from_packs,
 )
+from torii_api.services.scope_discovery import SOURCE_PACK
 
 SEED_USERS = [
     {
@@ -356,6 +357,7 @@ async def _ensure_category(
     name: str,
     is_live: bool,
     research_enabled: bool = False,
+    description: str = "",
     category_ids: dict[tuple[str, str], int],
 ) -> int:
     existing = await session.scalar(
@@ -368,6 +370,11 @@ async def _ensure_category(
         existing.is_live = is_live
         existing.name = name
         existing.research_enabled = research_enabled
+        existing.source = SOURCE_PACK
+        if description:
+            existing.description = description
+        # ``is_enabled`` is untouched on purpose: it is the admin's switch, and a reseed
+        # putting a route an admin turned off back on is the failure it exists to avoid.
         category_ids[(j_code, code)] = existing.id
         return 0
     vc = VisaCategory(
@@ -376,6 +383,8 @@ async def _ensure_category(
         name=name,
         is_live=is_live,
         research_enabled=research_enabled,
+        description=description,
+        source=SOURCE_PACK,
     )
     session.add(vc)
     await session.flush()
@@ -392,6 +401,7 @@ async def _ensure_action(
     name: str,
     is_live: bool,
     research_enabled: bool = False,
+    description: str = "",
     action_ids: dict[tuple[str, str], int],
 ) -> int:
     existing = await session.scalar(
@@ -404,6 +414,10 @@ async def _ensure_action(
         existing.is_live = is_live
         existing.name = name
         existing.research_enabled = research_enabled
+        existing.source = SOURCE_PACK
+        if description:
+            existing.description = description
+        # See ``_ensure_category``: the admin switch is not the pack's to set.
         action_ids[(j_code, code)] = existing.id
         return 0
     ca = CaseAction(
@@ -412,6 +426,8 @@ async def _ensure_action(
         name=name,
         is_live=is_live,
         research_enabled=research_enabled,
+        description=description,
+        source=SOURCE_PACK,
     )
     session.add(ca)
     await session.flush()
@@ -419,15 +435,25 @@ async def _ensure_action(
     return 1
 
 
-async def seed() -> None:
+async def seed(session_factory: Any | None = None) -> None:
+    """Load the content packs into the system of record.
+
+    ``session_factory`` is for callers that already have a database — the tests, which
+    run against a throwaway one. Left out, this opens its own from settings as the CLI
+    entry point needs.
+    """
     settings = get_settings()
-    engine = create_engine(to_async_url(settings.database_url))
-    session_factory = create_session_factory(engine)
+    engine = create_engine(to_async_url(settings.database_url)) if session_factory is None else None
+    owns_engine = engine is not None
+    if session_factory is None:
+        assert engine is not None
+        session_factory = create_session_factory(engine)
     packs = load_all_packs()
     pack_jurisdictions = list_jurisdiction_metas()
 
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    if engine is not None:
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
 
     async with session_factory() as session:
         created_users = 0
@@ -474,6 +500,7 @@ async def seed() -> None:
                     name=str(cat["name"]),
                     is_live=bool(cat.get("is_live", True)),
                     research_enabled=True,
+                    description=str(cat.get("description") or ""),
                     category_ids=category_ids,
                 )
             for action in meta.actions:
@@ -485,6 +512,7 @@ async def seed() -> None:
                     name=str(action["name"]),
                     is_live=bool(action.get("is_live", True)),
                     research_enabled=True,
+                    description=str(action.get("description") or ""),
                     action_ids=action_ids,
                 )
 
@@ -553,7 +581,8 @@ async def seed() -> None:
 
         await session.commit()
 
-    await engine.dispose()
+    if owns_engine and engine is not None:
+        await engine.dispose()
     print(
         f"Seeded {created_users} users, {created_jurisdictions} jurisdictions, "
         f"{created_categories} visa categories, {created_actions} case actions, "

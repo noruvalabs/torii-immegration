@@ -33,7 +33,7 @@ const CreditsContext = createContext<CreditsContextValue | null>(null);
 
 export function CreditsProvider({ children }: { children: React.ReactNode }) {
   const { token, user } = useAuth();
-  const [balance, setBalance] = useState<number>(10);
+  const [balance, setBalance] = useState<number>(3);
   const [packs, setPacks] = useState<CreditPack[]>([]);
   const [transactions, setTransactions] = useState<CreditTransaction[]>([]);
   const [loading, setLoading] = useState(false);

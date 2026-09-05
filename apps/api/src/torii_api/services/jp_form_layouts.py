@@ -1338,7 +1338,7 @@ PERMANENT_RESIDENCE_P2_LAYOUT = FormLayout(
 
 
 # ── Designated Activities (特定活動), form U — 申請人等作成用 ２ / ３ / ４ ─────────────
-# Reference: https://www.moj.go.jp/isa/content/930004120.pdf pages 3-5 (extension; the
+# Reference: https://www.moj.go.jp/isa/content/930004118.pdf pages 3-5 (extension; the
 # change-of-status packet ships the same three sheets byte for byte) and
 # .../930004058.pdf pages 3-5 (Certificate of Eligibility).
 
@@ -1655,7 +1655,7 @@ DA_PART2_LAYOUT = FormLayout(
     code="moj_designated_activities_applicant_p2",
     series="別記第三十号の二様式 申請人等作成用 ２（Ｕ その他）",
     procedure=PROCEDURE_EXTENSION,
-    reference="930004120.pdf p3",
+    reference="930004118.pdf p3",
     page=2,
     rows=_DA_PART2_ROWS,
     lines=(),
@@ -1806,7 +1806,7 @@ DA_PART3_LAYOUT = FormLayout(
     code="moj_designated_activities_applicant_p3",
     series="別記第三十号の二様式 申請人等作成用 ３（Ｕ その他）",
     procedure=PROCEDURE_EXTENSION,
-    reference="930004120.pdf p4",
+    reference="930004118.pdf p4",
     page=3,
     rows=_DA_PART3_ROWS,
     lines=_da_part3_lines(
@@ -2045,7 +2045,7 @@ DA_PART4_LAYOUT = FormLayout(
     code="moj_designated_activities_applicant_p4",
     series="別記第三十号の二様式 申請人等作成用 ４（Ｕ その他）",
     procedure=PROCEDURE_EXTENSION,
-    reference="930004120.pdf p5",
+    reference="930004118.pdf p5",
     page=4,
     rows=(
         (801.8, (46.1, 549.0)),

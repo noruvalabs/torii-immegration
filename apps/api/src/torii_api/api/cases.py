@@ -27,6 +27,7 @@ from torii_api.db.models import (
     IntakeDefinition,
     Jurisdiction,
     OutboxEvent,
+    PackOverride,
     ScopeResearch,
     ScopeResearchStatus,
     User,
@@ -46,6 +47,7 @@ from torii_api.services.intake import (
     visible_questions,
 )
 from torii_api.services.jp_official_forms import merge_form_questions
+from torii_api.services.pack_overrides import SECTION_INTAKE, apply_overrides
 from torii_api.services.research import (
     find_research,
     research_documents,
@@ -137,6 +139,8 @@ class VisaCategoryOut(BaseModel):
     name: str
     is_live: bool
     research_enabled: bool = False
+    # One line for the applicant, under the route name on the visa-type step.
+    description: str = ""
 
 
 class CaseActionOut(BaseModel):
@@ -148,6 +152,7 @@ class CaseActionOut(BaseModel):
     name: str
     is_live: bool
     research_enabled: bool = False
+    description: str = ""
 
 
 class ScopeIn(BaseModel):
@@ -243,7 +248,7 @@ async def list_visa_categories(
     jurisdiction_code: str = Query(..., min_length=2, max_length=8),
     live_only: bool = False,
 ) -> list[VisaCategory]:
-    """List visa categories for a jurisdiction. ``live_only=true`` returns only live ones."""
+    """List visa categories for a jurisdiction. ``live_only=true`` = what an applicant is offered."""
     jurisdiction = await session.scalar(
         select(Jurisdiction).where(Jurisdiction.code == jurisdiction_code.upper())
     )
@@ -258,7 +263,12 @@ async def list_visa_categories(
         .order_by(VisaCategory.code)
     )
     if live_only:
-        stmt = stmt.where(VisaCategory.is_live.is_(True) | VisaCategory.research_enabled.is_(True))
+        # The admin switch first, then how the content is produced — see the module docstring
+        # in ``api/jurisdictions.py`` for why those are separate questions.
+        stmt = stmt.where(
+            VisaCategory.is_enabled.is_(True),
+            VisaCategory.is_live.is_(True) | VisaCategory.research_enabled.is_(True),
+        )
     result = await session.execute(stmt)
     return list(result.scalars().all())
 
@@ -272,7 +282,7 @@ async def list_case_actions(
     jurisdiction_code: str = Query(..., min_length=2, max_length=8),
     live_only: bool = False,
 ) -> list[CaseAction]:
-    """List case actions for a jurisdiction. ``live_only=true`` returns only live ones."""
+    """List case actions for a jurisdiction. ``live_only=true`` = what an applicant is offered."""
     jurisdiction = await session.scalar(
         select(Jurisdiction).where(Jurisdiction.code == jurisdiction_code.upper())
     )
@@ -287,7 +297,10 @@ async def list_case_actions(
         .order_by(CaseAction.code)
     )
     if live_only:
-        stmt = stmt.where(CaseAction.is_live.is_(True) | CaseAction.research_enabled.is_(True))
+        stmt = stmt.where(
+            CaseAction.is_enabled.is_(True),
+            CaseAction.is_live.is_(True) | CaseAction.research_enabled.is_(True),
+        )
     result = await session.execute(stmt)
     return list(result.scalars().all())
 
@@ -303,7 +316,8 @@ async def scope_case(
 ) -> Case:
     """Create a new case scoped to a jurisdiction + visa category + action (US-01).
 
-    A scope is selectable when it has a live content pack **or** is research-enabled
+    A scope is selectable when the admin has it switched on (``is_enabled`` on the country,
+    the route and the procedure) **and** it has a live content pack or is research-enabled
     (requirements produced on demand by the live-research pipeline). Cross-border cases
     record ``origin_country`` / ``residence_country``. Returns the case in ``draft`` status.
     """
@@ -343,9 +357,15 @@ async def scope_case(
             detail=f"action '{payload.action_code}' is not available in {jurisdiction.code}",
         )
 
+    # The admin switch is checked here and not only in the listing: an applicant who kept a
+    # tab open, or posted the scope directly, must not get a case on a route ops has since
+    # switched off.
+    is_enabled_scope = (
+        jurisdiction.is_enabled and visa_category.is_enabled and case_action.is_enabled
+    )
     is_live_scope = jurisdiction.is_live and visa_category.is_live and case_action.is_live
     is_research_scope = visa_category.research_enabled and case_action.research_enabled
-    if not is_live_scope and not is_research_scope:
+    if not is_enabled_scope or not (is_live_scope or is_research_scope):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="this case scope is not available",
@@ -556,7 +576,12 @@ async def _intake_questions_for_case(session: AsyncSession, case: Case) -> list[
         )
     )
     if definition is not None and definition.questions:
-        return await _with_official_form_questions(session, case, list(definition.questions))
+        questions = apply_overrides(
+            list(definition.questions),
+            await _pack_overrides_for_case(session, case, action_ids),
+            section=SECTION_INTAKE,
+        )
+        return await _with_official_form_questions(session, case, questions)
 
     research = await _research_for_case(session, case)
     if research is not None and _effective_research_status(research) == "completed":
@@ -568,6 +593,22 @@ async def _intake_questions_for_case(session: AsyncSession, case: Case) -> list[
         status_code=status.HTTP_404_NOT_FOUND,
         detail="no intake definition for this case scope",
     )
+
+
+async def _pack_overrides_for_case(
+    session: AsyncSession, case: Case, action_ids: list[int]
+) -> list[dict[str, Any]]:
+    """Admin edits stored against this case's scope, which a reseed does not erase."""
+    if case.visa_category_id is None:
+        return []
+    rows = await session.scalars(
+        select(PackOverride).where(
+            PackOverride.jurisdiction_id == case.jurisdiction_id,
+            PackOverride.visa_category_id == case.visa_category_id,
+            PackOverride.case_action_id.in_(action_ids),
+        )
+    )
+    return [{"path": row.path, "value": row.value} for row in rows]
 
 
 async def _with_official_form_questions(
@@ -592,7 +633,9 @@ def _intake_state(
     jurisdiction_code: str = "JP",
     visa_category: str = "",
 ) -> IntakeStateOut:
-    parsed = parse_questions(questions, jurisdiction_code=jurisdiction_code, visa_category=visa_category)
+    parsed = parse_questions(
+        questions, jurisdiction_code=jurisdiction_code, visa_category=visa_category
+    )
     answers = dict(case.intake_answers or {})
     return IntakeStateOut(
         case_id=case.id,
@@ -884,7 +927,9 @@ async def get_intake(
     current_answers = dict(case.intake_answers or {})
     needs_flush = False
     for k, v in profile_prefill.items():
-        if (k not in current_answers or current_answers[k] is None or current_answers[k] == "") and v:
+        if (
+            k not in current_answers or current_answers[k] is None or current_answers[k] == ""
+        ) and v:
             current_answers[k] = v
             needs_flush = True
     if needs_flush:
@@ -898,8 +943,9 @@ async def get_intake(
 INTAKE_KEY_ALIASES: dict[str, list[str]] = {
     "corporate_number": ["employer_corporate_number", "company_number", "organization_number"],
     "employer_corporate_number": ["corporate_number", "company_number", "organization_number"],
-    "employer_name": ["company_name", "sponsoring_organization", "host_company_name"],
-    "company_name": ["employer_name", "sponsoring_organization"],
+    "employer_name": ["company_name", "sponsoring_organization", "host_company_name", "sponsor_name"],
+    "company_name": ["employer_name", "sponsoring_organization", "sponsor_name"],
+    "sponsor_name": ["employer_name", "company_name", "sponsoring_organization"],
     "monthly_salary": ["salary_monthly", "income_monthly", "salary"],
     "salary_monthly": ["monthly_salary", "income_monthly", "salary"],
     "salary": ["monthly_salary", "salary_monthly", "annual_salary_jpy", "income_monthly"],
@@ -914,6 +960,55 @@ INTAKE_KEY_ALIASES: dict[str, list[str]] = {
     "passport_no": ["passport_number", "passport"],
     "birth_date": ["date_of_birth", "dob"],
     "date_of_birth": ["birth_date", "dob"],
+    "current_japan_address": [
+        "registered_address_japan",
+        "address_in_japan",
+        "japan_address",
+        "residential_address_japan",
+    ],
+    "registered_address_japan": [
+        "current_japan_address",
+        "address_in_japan",
+        "japan_address",
+        "residential_address_japan",
+    ],
+    "address_in_japan": ["current_japan_address", "registered_address_japan", "japan_address"],
+    "telephone_japan": ["phone_number", "contact_phone", "phone_japan", "telephone_number"],
+    "phone_number": ["telephone_japan", "mobile_phone", "contact_phone", "phone_japan"],
+    "mobile_phone": ["mobile_phone_japan", "phone_number", "cell_phone"],
+    "mobile_phone_japan": ["mobile_phone", "phone_number"],
+    "current_status_of_residence": [
+        "current_visa_status",
+        "current_residence_status",
+        "status_of_residence",
+    ],
+    "current_visa_status": ["current_status_of_residence", "current_residence_status"],
+    "current_period_of_stay": ["current_period_of_stay_years", "period_of_stay"],
+    "current_period_of_stay_years": ["current_period_of_stay", "period_of_stay"],
+    "current_status_expiry_date": [
+        "current_stay_expiry_date",
+        "residence_card_expiry",
+        "expiry_date_stay",
+    ],
+    "current_stay_expiry_date": ["current_status_expiry_date", "residence_card_expiry"],
+    "residence_card_expiry": ["current_status_expiry_date", "current_stay_expiry_date"],
+    "residence_card_number": ["residence_card_no", "alien_registration_number"],
+    "place_of_birth": ["birth_place", "city_of_birth"],
+    "home_town_city": ["home_city", "hometown", "city_in_home_country"],
+    "desired_period_of_stay": ["desired_period", "desired_extension_days", "desired_stay_duration"],
+    "reason_for_extension": [
+        "extension_explanation_details",
+        "reason_for_change",
+        "reason_for_application",
+    ],
+    "criminal_record": ["criminal_record_any", "criminal_disclosures", "has_criminal_record"],
+    "has_family_in_japan": ["family_in_japan", "relatives_in_japan"],
+    "employer_address": ["place_of_employment_address", "company_address"],
+    "employer_phone": ["place_of_employment_tel", "company_phone", "employer_telephone"],
+    "education_level": ["final_education", "highest_education"],
+    "school_name": ["institution_name", "last_school_attended"],
+    "major_field": ["field_of_study", "major"],
+    "graduation_date": ["graduation_year_month", "date_of_graduation"],
 }
 
 
@@ -945,9 +1040,45 @@ async def answer_intake(
                 break
 
     if question is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"unknown question '{payload.key}'",
+        # Check statutory form questions from _form_questions.yml
+        try:
+            from torii_api.services.jp_official_forms import _load_question_specs
+            specs = _load_question_specs()
+            spec = specs.get(target_key)
+            if spec is None:
+                for alias in INTAKE_KEY_ALIASES.get(target_key, []):
+                    if alias in specs:
+                        spec = specs[alias]
+                        break
+            if spec is not None:
+                from torii_api.services.intake import IntakeQuestion
+                question = IntakeQuestion(
+                    key=target_key,
+                    prompt=spec.prompt,
+                    type=spec.type,
+                    section=spec.section or "Official Form Details",
+                    options=list(spec.options) if spec.options else None,
+                    required=False,
+                )
+                questions.append(question)
+                by_key[target_key] = question
+        except Exception:
+            pass
+
+    if question is None:
+        # Form field or statutory answer submitted directly from Forms step
+        val = payload.value
+        current = dict(case.intake_answers or {})
+        current[target_key] = val
+        case.intake_answers = current
+        case.intake_step = target_key
+        case.review_flags_acknowledged = False
+        await session.flush()
+        return _intake_state(
+            case,
+            [q.model_dump() for q in questions],
+            jurisdiction_code=j_code or "JP",
+            visa_category=v_code or "",
         )
 
     val = payload.value
@@ -965,7 +1096,10 @@ async def answer_intake(
     if error is not None:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=error)
 
-    merged = {**current, target_key: val}
+    merged = {**current, target_key: val, payload.key: val}
+    for alias in INTAKE_KEY_ALIASES.get(payload.key, []):
+        if alias not in merged:
+            merged[alias] = val
     case.intake_answers = prune_answers(questions, merged)
     case.intake_step = target_key
     case.review_flags_acknowledged = False
@@ -981,14 +1115,18 @@ async def answer_intake(
             required_fields = ["full_name", "nationality", "passport_number", "current_country"]
             user.profile_complete = all(bool(getattr(user, f, None)) for f in required_fields)
 
-    state = _intake_state(case, [q.model_dump() for q in questions], jurisdiction_code=j_code, visa_category=v_code)
+    state = _intake_state(
+        case, [q.model_dump() for q in questions], jurisdiction_code=j_code, visa_category=v_code
+    )
     if state.progress.complete:
         new_status = next_status_for_phase("eligibility", case.status)
         if new_status is not None:
             case.status = new_status
     await session.flush()
     await session.refresh(case)
-    return _intake_state(case, [q.model_dump() for q in questions], jurisdiction_code=j_code, visa_category=v_code)
+    return _intake_state(
+        case, [q.model_dump() for q in questions], jurisdiction_code=j_code, visa_category=v_code
+    )
 
 
 @router.get("/{case_id}/guidance", response_model=GuidanceOut)

@@ -179,3 +179,88 @@ async def test_scope_case_any_global_origin(client: AsyncClient, engine: AsyncEn
         data = resp.json()
         assert data["origin_country"] == origin
         assert data["residence_country"] == residence
+
+
+async def test_save_statutory_form_answers_for_student_and_work_cases(
+    client: AsyncClient, engine: AsyncEngine
+) -> None:
+    import json
+    from torii_api.services.intake import JP_WORK_RENEWAL_QUESTIONS
+
+    async with engine.begin() as conn:
+        await conn.execute(
+            text("INSERT INTO jurisdictions (code, name, is_live) VALUES ('JP_STAT', 'Japan Stat', 1)")
+        )
+        jid = (
+            await conn.execute(text("SELECT id FROM jurisdictions WHERE code = 'JP_STAT'"))
+        ).scalar_one()
+        await conn.execute(
+            text(
+                f"INSERT INTO visa_categories (jurisdiction_id, code, name, is_live) VALUES ({jid}, 'student', 'Student Visa', 1)"
+            )
+        )
+        vc_id = (
+            await conn.execute(
+                text(f"SELECT id FROM visa_categories WHERE jurisdiction_id = {jid} AND code = 'student'")
+            )
+        ).scalar_one()
+        await conn.execute(
+            text(
+                f"INSERT INTO case_actions (jurisdiction_id, code, name, is_live) VALUES ({jid}, 'renewal', 'Renewal', 1)"
+            )
+        )
+        ca_id = (
+            await conn.execute(
+                text(f"SELECT id FROM case_actions WHERE jurisdiction_id = {jid} AND code = 'renewal'")
+            )
+        ).scalar_one()
+        await conn.execute(
+            text(
+                "INSERT INTO intake_definitions (jurisdiction_id, visa_category_id, case_action_id, questions, is_live)"
+                f" VALUES ({jid}, {vc_id}, {ca_id}, :questions, 1)"
+            ),
+            {"questions": json.dumps(JP_WORK_RENEWAL_QUESTIONS)},
+        )
+
+    register = await client.post(
+        "/v1/auth/register",
+        json={"email": "statutory_user@example.com", "password": "secure-pass"},
+    )
+    token = register.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    scoped = await client.post(
+        "/v1/cases/scope",
+        json={
+            "jurisdiction_code": "JP_STAT",
+            "visa_category_code": "student",
+            "action_code": "renewal",
+        },
+        headers=headers,
+    )
+    assert scoped.status_code == 201
+    case_id = scoped.json()["id"]
+
+    statutory_answers = {
+        "current_japan_address": "1-2-3 Shinjuku, Shinjuku-ku, Tokyo 16",
+        "telephone_japan": "03-1234-5678",
+        "current_period_of_stay": "5 Years",
+        "residence_card_number": "AB12345678CD",
+        "current_status_of_residence": "Student",
+        "desired_period_of_stay": "5 Years",
+    }
+
+    for key, val in statutory_answers.items():
+        resp = await client.put(
+            f"/v1/cases/{case_id}/intake/answer",
+            json={"key": key, "value": val},
+            headers=headers,
+        )
+        assert resp.status_code == 200, f"Failed for key {key}: {resp.text}"
+
+    case_resp = await client.get(f"/v1/cases/{case_id}", headers=headers)
+    assert case_resp.status_code == 200
+    saved_answers = case_resp.json()["intake_answers"]
+    for key, val in statutory_answers.items():
+        assert saved_answers.get(key) == val, f"Missing {key} in saved answers"
+

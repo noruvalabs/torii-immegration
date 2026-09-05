@@ -12,24 +12,31 @@ notes: Official UK Visas and Immigration (UKVI / Home Office) immigration workfl
 categories:
   - code: work
     name: Skilled Worker Visa
+    description: Skilled Worker route — employment with a licensed UK sponsor.
     is_live: true
   - code: student
     name: Student Visa
+    description: Study a course with a licensed UK student sponsor.
     is_live: true
   - code: tourist
     name: Standard Visitor Visa
+    description: Standard Visitor route — tourism, business visits, and family visits of up to six months.
     is_live: false
     research_enabled: true
 actions:
   - code: new
     name: New Visa
+    description: First-time application made from outside the UK.
     is_live: true
   - code: renewal
     name: Renewal / Extension
+    description: Extend the permission you already hold.
     is_live: true
   - code: new_application
     name: New application
+    description: First-time application made from outside the UK.
     is_live: true
   - code: change_of_status
     name: Change of status
+    description: Switch to a different route from inside the UK.
     is_live: true

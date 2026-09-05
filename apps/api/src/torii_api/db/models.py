@@ -69,7 +69,7 @@ class User(TimestampMixin, Base):
     current_country: Mapped[str | None] = mapped_column(String(100), nullable=True)
     avatar_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
     profile_complete: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
-    credit_balance: Mapped[int] = mapped_column(Integer, default=10, server_default="10")
+    credit_balance: Mapped[int] = mapped_column(Integer, default=3, server_default="3")
 
     cases: Mapped[list[Case]] = relationship(back_populates="owner")
     credit_transactions: Mapped[list[CreditTransaction]] = relationship(
@@ -87,6 +87,10 @@ class Jurisdiction(TimestampMixin, Base):
     code: Mapped[str] = mapped_column(String(8), unique=True, index=True)
     name: Mapped[str] = mapped_column(String(128))
     is_live: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    # The admin's own on/off switch, deliberately not ``is_live``. ``seed()`` rewrites
+    # ``is_live`` from ``docs/jurisdictions`` on every run, so a country switched off
+    # through it would be switched back on by the next deploy. Nothing seeds this column.
+    is_enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1")
     efile_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
 
     cases: Mapped[list[Case]] = relationship(back_populates="jurisdiction")
@@ -112,9 +116,23 @@ class VisaCategory(TimestampMixin, Base):
     code: Mapped[str] = mapped_column(String(32), index=True)
     name: Mapped[str] = mapped_column(String(128))
     is_live: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    # The admin's on/off switch for this route, held apart from the two flags that say
+    # *how* its content is produced — see :class:`Jurisdiction.is_enabled` for why.
+    is_enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1")
     # True when a scope with no seeded content pack can still be offered, with
     # requirements produced on demand by the live-research pipeline (NF-2 gated).
     research_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    # One line for the applicant, shown under the route name on the visa-type step.
+    description: Mapped[str] = mapped_column(String(512), default="", server_default="")
+    # Where this route came from: "pack" (docs/jurisdictions), "discovered" (read off an
+    # official page by scope discovery), or "manual" (typed in by an admin).
+    source: Mapped[str] = mapped_column(String(16), default="manual", server_default="manual")
+    # The official page a discovered route was read off, so every route can answer where it
+    # came from (NF-2). Empty ``{}`` for pack and manual rows — and a server default, not
+    # only a Python one, so a raw-SQL writer cannot leave it NULL and make readers nullable.
+    citation: Mapped[dict[str, Any]] = mapped_column(
+        SAJSON, default=dict, server_default="{}", nullable=False
+    )
 
     jurisdiction: Mapped[Jurisdiction] = relationship(back_populates="visa_categories")
     cases: Mapped[list[Case]] = relationship(back_populates="visa_category")
@@ -140,7 +158,14 @@ class CaseAction(TimestampMixin, Base):
     code: Mapped[str] = mapped_column(String(32), index=True)
     name: Mapped[str] = mapped_column(String(128))
     is_live: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    # See :class:`VisaCategory.is_enabled`.
+    is_enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1")
     research_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    description: Mapped[str] = mapped_column(String(512), default="", server_default="")
+    source: Mapped[str] = mapped_column(String(16), default="manual", server_default="manual")
+    citation: Mapped[dict[str, Any]] = mapped_column(
+        SAJSON, default=dict, server_default="{}", nullable=False
+    )
 
     jurisdiction: Mapped[Jurisdiction] = relationship(back_populates="case_actions")
     cases: Mapped[list[Case]] = relationship(back_populates="case_action")
@@ -204,6 +229,31 @@ class DocumentRequirementSet(TimestampMixin, Base):
     jurisdiction: Mapped[Jurisdiction] = relationship(back_populates="document_requirement_sets")
     visa_category: Mapped[VisaCategory] = relationship(back_populates="document_requirement_sets")
     case_action: Mapped[CaseAction] = relationship(back_populates="document_requirement_sets")
+
+
+class PackOverride(TimestampMixin, Base):
+    """One admin edit to seeded pack content, kept beside the seeded row rather than in it.
+
+    ``seed()`` rewrites the seeded rows from ``docs/jurisdictions`` on every run, so an
+    edit stored in those rows is destroyed on the next boot. These survive it and are
+    re-applied on read — see ``torii_api.services.pack_overrides``.
+    """
+
+    __tablename__ = "pack_overrides"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    jurisdiction_id: Mapped[int] = mapped_column(ForeignKey("jurisdictions.id"), index=True)
+    visa_category_id: Mapped[int] = mapped_column(ForeignKey("visa_categories.id"), index=True)
+    case_action_id: Mapped[int] = mapped_column(ForeignKey("case_actions.id"), index=True)
+    # The pack path this edits, in the grammar pack_proposals uses:
+    # ``intake.questions[key=full_name].prompt``.
+    path: Mapped[str] = mapped_column(String(256), index=True)
+    # JSON, because the value at a path is a string, a bool, a list or a nested object
+    # depending on which field it is.
+    value: Mapped[Any] = mapped_column(SAJSON, default=None)
+    # Why the edit was made, and by whom. An override outlives the person who made it.
+    reason: Mapped[str] = mapped_column(Text, default="")
+    created_by: Mapped[str] = mapped_column(String(256), default="")
 
 
 class FormTemplate(TimestampMixin, Base):
@@ -581,13 +631,16 @@ class CreditTransaction(TimestampMixin, Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
-    amount: Mapped[int] = mapped_column(Integer)  # +50, +200 on top-up; -2 on OCR; -30 on case unlock
+    amount: Mapped[int] = mapped_column(
+        Integer
+    )  # +50, +200 on top-up; -2 on OCR; -30 on case unlock
     balance_after: Mapped[int] = mapped_column(Integer)
-    feature: Mapped[str] = mapped_column(String(64))  # "welcome_bonus", "top_up", "ocr_extraction", "ai_query", "case_unlock"
+    feature: Mapped[str] = mapped_column(
+        String(64)
+    )  # "welcome_bonus", "top_up", "ocr_extraction", "ai_query", "case_unlock"
     case_id: Mapped[int | None] = mapped_column(ForeignKey("cases.id"), nullable=True, index=True)
     description: Mapped[str] = mapped_column(String(256))
     reference_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
 
     user: Mapped[User] = relationship(back_populates="credit_transactions")
     case: Mapped[Case | None] = relationship()
-

@@ -331,6 +331,11 @@ def load_jurisdiction_meta(code: str, packs_dir: Path | None = None) -> Jurisdic
     root = packs_dir or resolve_packs_dir()
     path = root / code.lower() / "_jurisdiction.yml"
     if not path.is_file():
+        if code.upper() == "GB":
+            path = root / "uk" / "_jurisdiction.yml"
+        elif code.upper() == "UK":
+            path = root / "gb" / "_jurisdiction.yml"
+    if not path.is_file():
         return None
     return JurisdictionMeta.model_validate(_load_yaml(path))
 

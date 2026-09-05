@@ -257,6 +257,21 @@ export function answerIntake(token: string, caseId: number, key: string, value: 
   });
 }
 
+export function patchCase(
+  token: string,
+  caseId: number,
+  payload: {
+    intake_answers?: Record<string, unknown>;
+    intake_step?: string;
+    notes?: string;
+  },
+) {
+  return req<Case>(`/cases/${caseId}`, token, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
 // ── Eligibility ────────────────────────────────────────────────────────────────
 
 export function evaluateEligibility(token: string, caseId: number) {
@@ -334,6 +349,8 @@ export type OfficialForm = {
   citation: { authority: string; title: string; url: string };
   note: string | null;
   missing_answer_keys?: string[];
+  required_missing_keys?: string[];
+  optional_missing_keys?: string[];
   total_items?: number;
 };
 

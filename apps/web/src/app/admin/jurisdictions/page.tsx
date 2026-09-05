@@ -1,29 +1,48 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import {
+  ArrowRight,
   ChevronDown,
   ChevronRight,
+  ExternalLink,
+  FileText,
   Globe,
+  Loader2,
   Plus,
+  Radar,
+  Search,
   Trash2,
-  CheckCircle2,
-  XCircle,
+  X,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { toast } from "@/components/ui/sonner";
 import { useAuth } from "@/lib/auth-context";
-import { matchCountry } from "@/lib/countries";
-
-type Jurisdiction = { id: number; code: string; name: string; is_live: boolean };
-type Category = { id: number; jurisdiction_id: number; code: string; name: string; is_live: boolean };
-
-const API = "/backend/v1/jurisdictions";
+import { CountrySelector } from "@/components/ui/country-selector";
+import { getCountryByName, isSameCountry, matchCountry } from "@/lib/countries";
+import { formatErrorMessage } from "@/lib/api/errors";
+import {
+  type AdminJurisdiction,
+  type Discovery,
+  type Scope,
+  type ScopeKind,
+  createJurisdiction,
+  createScope,
+  deleteJurisdiction,
+  deleteScope,
+  discoverScopes,
+  listJurisdictions,
+  listScopes,
+  updateJurisdiction,
+  updateScope,
+} from "@/lib/api/jurisdictions";
 
 const POPULAR_PRESETS = [
   { code: "JP", name: "Japan" },
-  { code: "GB", name: "United Kingdom" },
+  { code: "UK", name: "United Kingdom" },
   { code: "US", name: "United States" },
   { code: "CA", name: "Canada" },
   { code: "AU", name: "Australia" },
@@ -31,36 +50,33 @@ const POPULAR_PRESETS = [
   { code: "SG", name: "Singapore" },
 ];
 
+/** What each `source` value means, said in the panel rather than left to be inferred. */
+const SOURCE_LABEL: Record<string, string> = {
+  pack: "From content pack",
+  discovered: "Found on official pages",
+  manual: "Added by hand",
+};
+
 export default function JurisdictionsPage() {
   const { token } = useAuth();
-  const [items, setItems] = useState<Jurisdiction[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [items, setItems] = useState<AdminJurisdiction[]>([]);
   const [loading, setLoading] = useState(true);
   const [code, setCode] = useState("");
   const [name, setName] = useState("");
-  const [isLive, setIsLive] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-
-  const hdrs = useCallback((): Record<string, string> => {
-    const h: Record<string, string> = { "content-type": "application/json" };
-    if (token) h.Authorization = `Bearer ${token}`;
-    return h;
-  }, [token]);
+  // The country a just-finished discovery ran for, so its card can open on its results.
+  const [justDiscovered, setJustDiscovered] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
-    setError(null);
     try {
-      const res = await fetch(API, { cache: "no-store", headers: hdrs() });
-      if (!res.ok) throw new Error(`API returned ${res.status}`);
-      setItems(await res.json());
-    } catch {
-      setError("Could not reach the API. Is torii-api running on :8000?");
+      setItems(await listJurisdictions(token));
+    } catch (e) {
+      toast.error(formatErrorMessage(e));
     } finally {
       setLoading(false);
     }
-  }, [hdrs]);
+  }, [token]);
 
   useEffect(() => {
     void load();
@@ -71,127 +87,121 @@ export default function JurisdictionsPage() {
     const targetName = (presetName || name).trim();
     if (!targetCode || !targetName) return;
 
+    // Check if this country (or its alias) is already configured
+    const existing = items.find(
+      (i) => isSameCountry(i.code, targetCode) || isSameCountry(i.name, targetName),
+    );
+    if (existing) {
+      toast.error(
+        `${targetName} (${targetCode}) is already configured as ${existing.name} (${existing.code}).`,
+      );
+      return;
+    }
+
     setSubmitting(true);
-    setError(null);
-    setSuccessMsg(null);
     try {
-      const res = await fetch(API, {
-        method: "POST",
-        headers: hdrs(),
-        body: JSON.stringify({ code: targetCode, name: targetName, is_live: isLive }),
+      const created = await createJurisdiction(token, {
+        code: targetCode,
+        name: targetName,
+        is_live: true,
       });
-      if (res.status === 409) {
-        setError(`Country / Jurisdiction '${targetCode}' already exists.`);
-        return;
-      }
-      if (!res.ok) throw new Error(`API returned ${res.status}`);
       setCode("");
       setName("");
-      setIsLive(true);
-      setSuccessMsg(`Added ${targetName} (${targetCode}) with default visa routes.`);
+      toast.success(
+        `Added ${targetName} (${targetCode}). Every route starts switched off — open it to see` +
+          " what the country publishes and choose what to offer.",
+      );
       await load();
-    } catch {
-      setError("Create failed — check that the API server is running.");
+      // Adding a country is the moment to ask what it offers, so the admin does not have to
+      // know that themselves. The card opens on the answer.
+      setJustDiscovered(created.id);
+    } catch (e) {
+      toast.error(formatErrorMessage(e));
     } finally {
       setSubmitting(false);
     }
   }
 
-  async function toggleJurisdictionLive(j: Jurisdiction) {
-    setError(null);
-    setSuccessMsg(null);
+  async function toggleCountry(j: AdminJurisdiction) {
     try {
-      const res = await fetch(`${API}/${j.id}`, {
-        method: "PATCH",
-        headers: hdrs(),
-        body: JSON.stringify({ is_live: !j.is_live }),
-      });
-      if (!res.ok) throw new Error(`API returned ${res.status}`);
-      setSuccessMsg(`${j.name} is now ${!j.is_live ? "LIVE (applicants can apply)" : "DISABLED (hidden from applicants)"}.`);
+      await updateJurisdiction(token, j.id, { is_enabled: !j.is_enabled });
+      toast.success(
+        `${j.name} is now ${
+          !j.is_enabled ? "open for applications" : "closed — hidden from applicants"
+        }.`,
+      );
       await load();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Update failed");
+      toast.error(formatErrorMessage(e));
     }
   }
 
-  async function deleteJurisdiction(j: Jurisdiction) {
-    if (!confirm(`Are you sure you want to remove ${j.name} (${j.code})?`)) return;
-    setError(null);
-    setSuccessMsg(null);
+  async function removeCountry(j: AdminJurisdiction) {
+    if (!confirm(`Remove ${j.name} (${j.code}) and all of its routes?`)) return;
     try {
-      const res = await fetch(`${API}/${j.id}`, {
-        method: "DELETE",
-        headers: hdrs(),
-      });
-      if (!res.ok && res.status !== 204) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.detail || `Cannot delete jurisdiction with active cases.`);
-      }
-      setSuccessMsg(`Removed ${j.name} (${j.code}).`);
+      await deleteJurisdiction(token, j.id);
+      toast.success(`Removed ${j.name} (${j.code}).`);
       await load();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Delete failed");
+      toast.error(formatErrorMessage(e));
     }
   }
 
-  const liveCount = items.filter((j) => j.is_live).length;
+  const openCount = items.filter((j) => j.is_enabled && j.is_live).length;
+
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const filteredItems = useMemo(() => {
+    if (!searchQuery.trim()) return items;
+    const q = searchQuery.trim().toLowerCase();
+    return items.filter(
+      (j) => j.name.toLowerCase().includes(q) || j.code.toLowerCase().includes(q),
+    );
+  }, [items, searchQuery]);
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
-      {/* ── HEADER ───────────────────────────────────────────────────────────── */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      {/* ── Header ─────────────────────────────────────────────────────────── */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex items-start gap-3.5">
-          <div className="flex size-11 items-center justify-center rounded-[var(--radius)] bg-primary/10 text-primary shrink-0">
+          <div className="flex size-11 shrink-0 items-center justify-center rounded-[var(--radius)] bg-primary/10 text-primary">
             <Globe className="size-6" />
           </div>
           <div>
-            <h1 className="text-xl font-bold tracking-tight">Application Countries &amp; Jurisdictions</h1>
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              Select which countries are active for applicant visa filings. Applicants can only apply to <strong>Live</strong> countries.
+            <h1 className="text-xl font-bold tracking-tight">Countries &amp; application routes</h1>
+            <p className="mt-0.5 max-w-2xl text-xs text-muted-foreground">
+              Choose which countries accept applications, and which of each country&apos;s visa
+              routes and procedures applicants can pick. Everything here starts switched off.
             </p>
           </div>
         </div>
 
-        {/* Quick Stats Pill */}
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1.5 rounded-lg border bg-card px-3 py-1.5 text-xs">
-            <span className="flex size-2 rounded-full bg-emerald-500" />
-            <span className="font-semibold text-foreground">{liveCount} Live</span>
-            <span className="text-muted-foreground">/ {items.length} total</span>
-          </div>
+        <div className="flex items-center gap-1.5 self-start rounded-lg border bg-card px-3 py-1.5 text-xs">
+          <span className="flex size-2 rounded-full bg-emerald-500" />
+          <span className="font-semibold text-foreground">{openCount} open</span>
+          <span className="text-muted-foreground">/ {items.length} configured</span>
         </div>
       </div>
 
-      {/* ── ALERT MESSAGES ──────────────────────────────────────────────────── */}
-      {error && (
-        <div className="flex items-center gap-2 rounded-[var(--radius)] border border-[var(--color-danger)]/30 bg-[var(--color-danger)]/10 px-4 py-3 text-xs text-[var(--color-danger)]">
-          <XCircle className="size-4 shrink-0" />
-          <span>{error}</span>
-        </div>
-      )}
-      {successMsg && (
-        <div className="flex items-center gap-2 rounded-[var(--radius)] border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-xs text-emerald-700 dark:text-emerald-300">
-          <CheckCircle2 className="size-4 shrink-0" />
-          <span>{successMsg}</span>
-        </div>
-      )}
-
-      {/* ── ADD JURISDICTION & PRESETS CARD ─────────────────────────────────── */}
+      {/* ── Add a country ──────────────────────────────────────────────────── */}
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-sm font-bold text-foreground">Add New Application Country</CardTitle>
+          <CardTitle className="text-sm font-bold text-foreground">Add a country</CardTitle>
           <p className="text-xs text-muted-foreground">
-            Add a destination country and auto-provision standard visa categories (Work, Student, Tourist) and actions.
+            Search any country or choose from quick presets. Adding a country reads its official
+            immigration pages to discover published visa routes and procedures.
           </p>
         </CardHeader>
         <CardContent className="space-y-4 pt-0">
-          {/* Quick presets */}
           <div>
-            <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Quick Add Popular Countries:</span>
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              Quick add
+            </span>
             <div className="mt-1.5 flex flex-wrap gap-2">
               {POPULAR_PRESETS.map((preset) => {
-                const existing = items.find((i) => i.code.toUpperCase() === preset.code.toUpperCase());
-                const flag = matchCountry(preset.code).flag;
+                const existing = items.find(
+                  (i) => isSameCountry(i.code, preset.code) || isSameCountry(i.name, preset.name),
+                );
                 return (
                   <button
                     key={preset.code}
@@ -200,14 +210,14 @@ export default function JurisdictionsPage() {
                     onClick={() => void create(preset.code, preset.name)}
                     className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium transition-all ${
                       existing
-                        ? "opacity-50 cursor-not-allowed bg-muted text-muted-foreground border-transparent"
-                        : "bg-background text-foreground hover:bg-accent hover:border-primary/40"
+                        ? "cursor-not-allowed border-transparent bg-muted text-muted-foreground opacity-50"
+                        : "bg-background text-foreground hover:border-primary/40 hover:bg-accent"
                     }`}
                   >
-                    <span>{flag}</span>
+                    <span>{matchCountry(preset.code).flag}</span>
                     <span>{preset.name}</span>
                     {existing ? (
-                      <span className="text-[10px] text-muted-foreground">(Added)</span>
+                      <span className="text-[10px] text-muted-foreground">(added)</span>
                     ) : (
                       <Plus className="size-3 text-primary" />
                     )}
@@ -217,440 +227,577 @@ export default function JurisdictionsPage() {
             </div>
           </div>
 
-          {/* Custom Form */}
           <form
             onSubmit={(e) => {
               e.preventDefault();
               void create();
             }}
-            className="flex flex-wrap items-end gap-3 pt-2 border-t"
+            className="space-y-3 border-t pt-3"
           >
-            <label className="flex flex-col gap-1 text-xs">
-              <span className="text-muted-foreground font-medium">ISO Country Code</span>
-              <input
-                required
+            <div className="flex flex-col gap-1 text-xs">
+              <span className="font-medium text-muted-foreground">Search country</span>
+              <CountrySelector
                 value={code}
-                onChange={(e) => {
-                  const val = e.target.value.toUpperCase();
-                  setCode(val);
-                  if (val.length === 2 && !name) {
-                    const matched = matchCountry(val);
-                    if (matched && matched.name) setName(matched.name);
-                  }
+                valueType="code"
+                placeholder="Search all 240+ countries (e.g. Canada, Germany, France, CA)..."
+                onChange={(_val, country) => {
+                  const canonicalCode = country.code === "GB" ? "UK" : country.code;
+                  setCode(canonicalCode);
+                  setName(country.name);
                 }}
-                placeholder="e.g. CA"
-                maxLength={8}
-                className="h-9 w-28 rounded-[var(--radius)] border bg-background px-3 font-mono uppercase text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring"
               />
-            </label>
-            <label className="flex flex-1 flex-col gap-1 text-xs">
-              <span className="text-muted-foreground font-medium">Country Name</span>
-              <input
-                required
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="e.g. Canada"
-                className="h-9 min-w-44 rounded-[var(--radius)] border bg-background px-3 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              />
-            </label>
-            <label className="flex h-9 items-center gap-2 text-xs font-medium cursor-pointer">
-              <input
-                type="checkbox"
-                checked={isLive}
-                onChange={(e) => setIsLive(e.target.checked)}
-                className="size-4 rounded accent-primary"
-              />
-              Live for Applications
-            </label>
-            <Button type="submit" size="sm" disabled={submitting || !code || !name} className="gap-1.5">
-              <Plus className="size-4" />
-              {submitting ? "Adding…" : "Add Country"}
-            </Button>
+            </div>
+
+            <div className="flex flex-wrap items-end gap-3">
+              <label className="flex flex-col gap-1 text-xs">
+                <span className="font-medium text-muted-foreground">ISO country code</span>
+                <input
+                  required
+                  value={code}
+                  onChange={(e) => {
+                    const val = e.target.value.toUpperCase();
+                    setCode(val);
+                    if (val.length >= 2) {
+                      const matched = matchCountry(val);
+                      if (matched?.name) setName(matched.name);
+                    }
+                  }}
+                  placeholder="e.g. CA"
+                  maxLength={8}
+                  className="h-9 w-28 rounded-[var(--radius)] border bg-background px-3 font-mono text-xs uppercase outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                />
+              </label>
+              <label className="flex flex-1 flex-col gap-1 text-xs">
+                <span className="font-medium text-muted-foreground">Country name</span>
+                <input
+                  required
+                  value={name}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setName(val);
+                    if (!code || code.length < 2) {
+                      const matched = getCountryByName(val);
+                      if (matched) setCode(matched.code === "GB" ? "UK" : matched.code);
+                    }
+                  }}
+                  placeholder="e.g. Canada"
+                  className="h-9 min-w-44 rounded-[var(--radius)] border bg-background px-3 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                />
+              </label>
+              <Button type="submit" size="sm" disabled={submitting || !code || !name} className="h-9 gap-1.5">
+                {submitting ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
+                {submitting ? "Adding…" : "Add country"}
+              </Button>
+            </div>
           </form>
         </CardContent>
       </Card>
 
-      {/* ── CONFIGURED COUNTRIES LIST ───────────────────────────────────────── */}
+      {/* ── Configured countries ───────────────────────────────────────────── */}
       <div className="space-y-3">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">
-            Configured Countries ({items.length})
+            Configured countries ({items.length})
           </h2>
-          <p className="text-xs text-muted-foreground">
-            Click toggle switch to instantly enable/disable applications for that country.
-          </p>
+
+          {items.length > 0 && (
+            <div className="relative w-full sm:w-64">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search configured countries..."
+                className="h-8 w-full rounded-md border bg-background pl-8 pr-7 text-xs outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  aria-label="Clear search"
+                >
+                  <X className="size-3" />
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
         {loading ? (
-          <p className="text-xs text-muted-foreground py-4">Loading countries…</p>
+          <p className="py-4 text-xs text-muted-foreground">Loading countries…</p>
         ) : items.length === 0 ? (
           <Card>
             <CardContent className="py-8 text-center text-xs text-muted-foreground">
-              No jurisdictions configured. Use the quick presets above to add Japan, UK, or US.
+              No countries configured yet. Use quick add above.
+            </CardContent>
+          </Card>
+        ) : filteredItems.length === 0 ? (
+          <Card>
+            <CardContent className="py-8 text-center text-xs text-muted-foreground">
+              No countries match &ldquo;{searchQuery}&rdquo;.
             </CardContent>
           </Card>
         ) : (
-          <div className="space-y-3">
-            {items.map((j) => (
-              <JurisdictionCard
-                key={j.id}
-                jurisdiction={j}
-                hdrs={hdrs()}
-                onToggleLive={() => void toggleJurisdictionLive(j)}
-                onDelete={() => void deleteJurisdiction(j)}
-                onError={setError}
-                onReload={load}
-              />
-            ))}
-          </div>
+          filteredItems.map((j) => (
+            <JurisdictionCard
+              key={j.id}
+              jurisdiction={j}
+              token={token}
+              autoDiscover={justDiscovered === j.id}
+              onAutoDiscoverDone={() => setJustDiscovered(null)}
+              onToggle={() => void toggleCountry(j)}
+              onDelete={() => void removeCountry(j)}
+            />
+          ))
         )}
       </div>
     </div>
   );
 }
 
-/* ── Individual Country Card with Quick Toggle & Expandable Settings ─────────── */
+/* ── One country: its switch, and the routes underneath it ──────────────────── */
 
 function JurisdictionCard({
   jurisdiction: j,
-  hdrs,
-  onToggleLive,
+  token,
+  autoDiscover,
+  onAutoDiscoverDone,
+  onToggle,
   onDelete,
-  onError,
-  onReload,
 }: {
-  jurisdiction: Jurisdiction;
-  hdrs: Record<string, string>;
-  onToggleLive: () => void;
+  jurisdiction: AdminJurisdiction;
+  token: string | null;
+  autoDiscover: boolean;
+  onAutoDiscoverDone: () => void;
+  onToggle: () => void;
   onDelete: () => void;
-  onError: (msg: string | null) => void;
-  onReload: () => Promise<void>;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [actions, setActions] = useState<Category[]>([]);
-  const [catCode, setCatCode] = useState("");
-  const [catName, setCatName] = useState("");
-  const [actCode, setActCode] = useState("");
-  const [actName, setActName] = useState("");
+  const [categories, setCategories] = useState<Scope[]>([]);
+  const [actions, setActions] = useState<Scope[]>([]);
+  const [discovering, setDiscovering] = useState(false);
+  const [discovery, setDiscovery] = useState<Discovery | null>(null);
 
-  const countryMeta = matchCountry(j.code);
-  const flag = countryMeta.flag || "🌐";
+  const flag = matchCountry(j.code).flag || "🌐";
 
-  const loadSub = useCallback(async () => {
+  const loadScopes = useCallback(async () => {
     try {
-      const [catRes, actRes] = await Promise.all([
-        fetch(`${API}/${j.id}/visa-categories`, { cache: "no-store", headers: hdrs }),
-        fetch(`${API}/${j.id}/case-actions`, { cache: "no-store", headers: hdrs }),
+      const [cats, acts] = await Promise.all([
+        listScopes(token, j.id, "visa-categories"),
+        listScopes(token, j.id, "case-actions"),
       ]);
-      if (catRes.ok) setCategories(await catRes.json());
-      if (actRes.ok) setActions(await actRes.json());
-    } catch {
-      /* silent */
+      setCategories(cats);
+      setActions(acts);
+    } catch (e) {
+      toast.error(formatErrorMessage(e));
     }
-  }, [j.id, hdrs]);
+  }, [token, j.id]);
 
   useEffect(() => {
-    if (expanded) void loadSub();
-  }, [expanded, loadSub]);
+    if (expanded) void loadScopes();
+  }, [expanded, loadScopes]);
 
-  async function addCategory(e: React.FormEvent) {
-    e.preventDefault();
-    onError(null);
+  const runDiscovery = useCallback(async () => {
+    setDiscovering(true);
+    setDiscovery(null);
     try {
-      const res = await fetch(`${API}/${j.id}/visa-categories`, {
-        method: "POST",
-        headers: hdrs,
-        body: JSON.stringify({ code: catCode.toLowerCase(), name: catName, is_live: true }),
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.detail || `API returned ${res.status}`);
-      }
-      setCatCode("");
-      setCatName("");
-      await loadSub();
+      const result = await discoverScopes(token, j.id);
+      setDiscovery(result);
+      toast.success(result.message || `Found routes for ${j.name}`);
+      await loadScopes();
     } catch (e) {
-      onError(e instanceof Error ? e.message : "Add category failed");
+      toast.error(formatErrorMessage(e));
+    } finally {
+      setDiscovering(false);
     }
-  }
+  }, [token, j.id, loadScopes, j.name]);
 
-  async function addAction(e: React.FormEvent) {
-    e.preventDefault();
-    onError(null);
-    try {
-      const res = await fetch(`${API}/${j.id}/case-actions`, {
-        method: "POST",
-        headers: hdrs,
-        body: JSON.stringify({ code: actCode.toLowerCase(), name: actName, is_live: true }),
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.detail || `API returned ${res.status}`);
-      }
-      setActCode("");
-      setActName("");
-      await loadSub();
-    } catch (e) {
-      onError(e instanceof Error ? e.message : "Add action failed");
-    }
-  }
+  useEffect(() => {
+    if (!autoDiscover) return;
+    setExpanded(true);
+    onAutoDiscoverDone();
+    void runDiscovery();
+  }, [autoDiscover, onAutoDiscoverDone, runDiscovery]);
 
-  async function deleteCategory(id: number) {
-    onError(null);
-    try {
-      const res = await fetch(`${API}/${j.id}/visa-categories/${id}`, {
-        method: "DELETE",
-        headers: hdrs,
-      });
-      if (!res.ok && res.status !== 204) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.detail || `API returned ${res.status}`);
-      }
-      await loadSub();
-    } catch (e) {
-      onError(e instanceof Error ? e.message : "Delete category failed");
-    }
-  }
-
-  async function deleteAction(id: number) {
-    onError(null);
-    try {
-      const res = await fetch(`${API}/${j.id}/case-actions/${id}`, {
-        method: "DELETE",
-        headers: hdrs,
-      });
-      if (!res.ok && res.status !== 204) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.detail || `API returned ${res.status}`);
-      }
-      await loadSub();
-    } catch (e) {
-      onError(e instanceof Error ? e.message : "Delete action failed");
-    }
-  }
-
-  async function toggleCatLive(id: number, live: boolean) {
-    onError(null);
-    await fetch(`${API}/${j.id}/visa-categories/${id}`, {
-      method: "PATCH",
-      headers: hdrs,
-      body: JSON.stringify({ is_live: live }),
-    });
-    await loadSub();
-  }
-
-  async function toggleActLive(id: number, live: boolean) {
-    onError(null);
-    await fetch(`${API}/${j.id}/case-actions/${id}`, {
-      method: "PATCH",
-      headers: hdrs,
-      body: JSON.stringify({ is_live: live }),
-    });
-    await loadSub();
-  }
+  const liveRoutes = categories.filter((c) => c.is_enabled).length;
 
   return (
-    <Card className={`transition-all ${j.is_live ? "border-emerald-500/30" : "border-border opacity-85"}`}>
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 gap-3">
-        {/* Country Info & Flag */}
-        <div className="flex items-center gap-3 min-w-0">
-          <span className="text-2xl shrink-0">{flag}</span>
+    <Card className={j.is_enabled ? "border-emerald-500/30" : "border-border opacity-90"}>
+      <div className="flex flex-col justify-between gap-3 p-4 sm:flex-row sm:items-center">
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="shrink-0 text-2xl">{flag}</span>
           <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <span className="font-bold text-sm text-foreground truncate">{j.name}</span>
-              <span className="font-mono text-xs font-semibold px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="truncate text-sm font-bold text-foreground">{j.name}</span>
+              <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs font-semibold text-muted-foreground">
                 {j.code}
               </span>
+              {!j.is_live && (
+                <Badge tone="muted" className="text-[10px]" title="No seeded content pack backs this country yet">
+                  no content pack
+                </Badge>
+              )}
             </div>
-            <p className="text-[11px] text-muted-foreground mt-0.5">
-              {j.is_live ? "Open for applicant filings" : "Disabled / Hidden from applicants"}
+            <p className="mt-0.5 text-[11px] text-muted-foreground">
+              {j.is_enabled
+                ? `Open for applications · ${expanded ? `${liveRoutes} of ${categories.length} routes on` : "open a country to manage its routes"}`
+                : "Closed — hidden from applicants"}
             </p>
           </div>
         </div>
 
-        {/* Action Controls: Live Switch, Manage, Delete */}
-        <div className="flex items-center gap-2.5 shrink-0 self-end sm:self-auto">
-          {/* Quick Toggle Live Switch */}
+        <div className="flex shrink-0 flex-wrap items-center gap-2 self-end sm:self-auto">
           <button
             type="button"
-            onClick={onToggleLive}
-            title={j.is_live ? "Click to disable applications" : "Click to enable applications"}
-            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold transition-all border ${
-              j.is_live
-                ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/20"
-                : "bg-muted border-border text-muted-foreground hover:bg-muted/80"
+            onClick={onToggle}
+            aria-pressed={j.is_enabled}
+            title={j.is_enabled ? "Close this country to applications" : "Open this country for applications"}
+            className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold transition-all ${
+              j.is_enabled
+                ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 hover:bg-emerald-500/20 dark:text-emerald-300"
+                : "border-border bg-muted text-muted-foreground hover:bg-muted/80"
             }`}
           >
-            <span className={`size-2 rounded-full ${j.is_live ? "bg-emerald-500 animate-pulse" : "bg-muted-foreground"}`} />
-            <span>{j.is_live ? "Live for Applications" : "Disabled"}</span>
+            <span
+              className={`size-2 rounded-full ${j.is_enabled ? "bg-emerald-500" : "bg-muted-foreground"}`}
+            />
+            <span>{j.is_enabled ? "Open" : "Closed"}</span>
           </button>
 
-          {/* Expand Button for Visa Categories & Actions */}
           <Button
             type="button"
             variant="outline"
             size="sm"
             onClick={() => setExpanded(!expanded)}
             className="h-8 gap-1 text-xs"
+            aria-expanded={expanded}
           >
-            <span>Routes &amp; Rules</span>
+            <span>Routes</span>
             {expanded ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}
           </Button>
 
-          {/* Delete Button */}
           <button
             type="button"
             onClick={onDelete}
-            title="Remove country"
-            className="inline-flex size-8 items-center justify-center rounded-[var(--radius)] text-muted-foreground hover:bg-[var(--color-danger)]/10 hover:text-[var(--color-danger)] transition-colors"
+            title={`Remove ${j.name}`}
+            className="inline-flex size-8 items-center justify-center rounded-[var(--radius)] text-muted-foreground transition-colors hover:bg-[var(--color-danger)]/10 hover:text-[var(--color-danger)]"
           >
             <Trash2 className="size-4" />
           </button>
         </div>
       </div>
 
-      {/* Expanded Accordion: Visa Categories & Case Actions */}
       {expanded && (
-        <div className="border-t bg-muted/20 px-5 py-4 space-y-5">
-          {/* Visa Categories */}
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                Visa Categories for {j.name}
-              </h4>
-              <span className="text-[11px] text-muted-foreground">{categories.length} category routes</span>
-            </div>
-
-            {categories.length > 0 ? (
-              <div className="space-y-1.5 mb-3">
-                {categories.map((c) => (
-                  <div
-                    key={c.id}
-                    className="flex items-center justify-between rounded-md border bg-card px-3 py-2 text-xs"
-                  >
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono font-semibold text-[11px] text-muted-foreground">{c.code}</span>
-                      <span className="font-medium text-foreground">{c.name}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Badge tone={c.is_live ? "success" : "muted"} className="text-[10px]">
-                        {c.is_live ? "live" : "draft"}
-                      </Badge>
-                      <button
-                        type="button"
-                        onClick={() => void toggleCatLive(c.id, !c.is_live)}
-                        className="text-[11px] text-muted-foreground hover:underline font-medium"
-                      >
-                        {c.is_live ? "unpublish" : "publish"}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => void deleteCategory(c.id)}
-                        className="text-muted-foreground hover:text-[var(--color-danger)] transition-colors"
-                      >
-                        <Trash2 className="size-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="mb-3 text-xs text-muted-foreground">No specific visa categories added yet.</p>
-            )}
-
-            <form onSubmit={(e) => void addCategory(e)} className="flex items-end gap-2">
-              <input
-                required
-                value={catCode}
-                onChange={(e) => setCatCode(e.target.value)}
-                placeholder="code (e.g. work)"
-                maxLength={32}
-                className="h-8 w-28 rounded-[var(--radius)] border bg-background px-2.5 text-xs font-mono outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              />
-              <input
-                required
-                value={catName}
-                onChange={(e) => setCatName(e.target.value)}
-                placeholder="Route Name (e.g. Highly Skilled Professional)"
-                className="h-8 flex-1 rounded-[var(--radius)] border bg-background px-2.5 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              />
-              <Button type="submit" size="sm" className="h-8 gap-1 text-xs">
-                <Plus className="size-3" /> Add Category
-              </Button>
-            </form>
+        <div className="space-y-5 border-t bg-muted/20 px-4 py-4 sm:px-5">
+          {/* ── Discovery ─────────────────────────────────────────────────── */}
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <p className="max-w-xl text-[11px] text-muted-foreground">
+              Search {j.name}&apos;s official immigration pages for the routes and procedures it
+              publishes. Anything new arrives switched off, with a link to the page it came from.
+            </p>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => void runDiscovery()}
+              disabled={discovering}
+              className="h-8 shrink-0 gap-1.5 text-xs"
+            >
+              {discovering ? <Loader2 className="size-3.5 animate-spin" /> : <Radar className="size-3.5" />}
+              {discovering ? "Searching official pages…" : "Find available routes"}
+            </Button>
           </div>
 
-          {/* Case Actions */}
-          <div className="pt-3 border-t">
-            <div className="flex items-center justify-between mb-2">
-              <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                Application Actions for {j.name}
-              </h4>
-              <span className="text-[11px] text-muted-foreground">{actions.length} action types</span>
+          {discovery && (
+            <div className="rounded-md border bg-card px-3 py-2.5 text-[11px]">
+              <p className="font-medium text-foreground">{discovery.message}</p>
+              {discovery.source_pages.length > 0 && (
+                <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
+                  <span className="text-muted-foreground">Read:</span>
+                  {discovery.source_pages.slice(0, 4).map((page) => (
+                    <a
+                      key={page.url}
+                      href={page.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex max-w-full items-center gap-1 truncate text-primary hover:underline"
+                    >
+                      <span className="truncate">{hostOf(page.url)}</span>
+                      <ExternalLink className="size-3 shrink-0" />
+                    </a>
+                  ))}
+                </div>
+              )}
             </div>
+          )}
 
-            {actions.length > 0 ? (
-              <div className="space-y-1.5 mb-3">
-                {actions.map((a) => (
-                  <div
-                    key={a.id}
-                    className="flex items-center justify-between rounded-md border bg-card px-3 py-2 text-xs"
-                  >
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono font-semibold text-[11px] text-muted-foreground">{a.code}</span>
-                      <span className="font-medium text-foreground">{a.name}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Badge tone={a.is_live ? "success" : "muted"} className="text-[10px]">
-                        {a.is_live ? "live" : "draft"}
-                      </Badge>
-                      <button
-                        type="button"
-                        onClick={() => void toggleActLive(a.id, !a.is_live)}
-                        className="text-[11px] text-muted-foreground hover:underline font-medium"
-                      >
-                        {a.is_live ? "unpublish" : "publish"}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => void deleteAction(a.id)}
-                        className="text-muted-foreground hover:text-[var(--color-danger)] transition-colors"
-                      >
-                        <Trash2 className="size-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="mb-3 text-xs text-muted-foreground">No specific case actions added yet.</p>
-            )}
+          <ScopeSection
+            heading={`Visa routes for ${j.name}`}
+            emptyLabel="No visa routes yet — search the official pages above, or add one by hand."
+            kind="visa-categories"
+            scopes={categories}
+            token={token}
+            jurisdictionId={j.id}
+            jurisdictionCode={j.code}
+            availableActions={actions}
+            codePlaceholder="code (e.g. work)"
+            namePlaceholder="Route name (e.g. Skilled Worker)"
+            onChanged={loadScopes}
+          />
 
-            <form onSubmit={(e) => void addAction(e)} className="flex items-end gap-2">
-              <input
-                required
-                value={actCode}
-                onChange={(e) => setActCode(e.target.value)}
-                placeholder="code (e.g. new)"
-                maxLength={32}
-                className="h-8 w-28 rounded-[var(--radius)] border bg-background px-2.5 text-xs font-mono outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              />
-              <input
-                required
-                value={actName}
-                onChange={(e) => setActName(e.target.value)}
-                placeholder="Action Name (e.g. New Application / Extension)"
-                className="h-8 flex-1 rounded-[var(--radius)] border bg-background px-2.5 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              />
-              <Button type="submit" size="sm" className="h-8 gap-1 text-xs">
-                <Plus className="size-3" /> Add Action
-              </Button>
-            </form>
-          </div>
+          <ScopeSection
+            heading={`Application types for ${j.name}`}
+            emptyLabel="No application types yet — search the official pages above, or add one by hand."
+            kind="case-actions"
+            scopes={actions}
+            token={token}
+            jurisdictionId={j.id}
+            codePlaceholder="code (e.g. renewal)"
+            namePlaceholder="Application type (e.g. Renewal / Extension)"
+            onChanged={loadScopes}
+          />
         </div>
       )}
     </Card>
   );
 }
 
+/* ── One list of routes or procedures, with its switches ────────────────────── */
+
+function ScopeSection({
+  heading,
+  emptyLabel,
+  kind,
+  scopes,
+  token,
+  jurisdictionId,
+  jurisdictionCode,
+  availableActions,
+  codePlaceholder,
+  namePlaceholder,
+  onChanged,
+}: {
+  heading: string;
+  emptyLabel: string;
+  kind: ScopeKind;
+  scopes: Scope[];
+  token: string | null;
+  jurisdictionId: number;
+  jurisdictionCode?: string;
+  availableActions?: Scope[];
+  codePlaceholder: string;
+  namePlaceholder: string;
+  onChanged: () => Promise<void>;
+}) {
+  const [newCode, setNewCode] = useState("");
+  const [newName, setNewName] = useState("");
+  const [busy, setBusy] = useState<number | "new" | null>(null);
+
+  async function add(e: FormEvent) {
+    e.preventDefault();
+    setBusy("new");
+    try {
+      await createScope(token, jurisdictionId, kind, {
+        code: newCode.trim().toLowerCase(),
+        name: newName.trim(),
+        // Added by hand and switched on straight away: an admin typing a route in has
+        // already made the decision that discovery leaves to them.
+        is_enabled: true,
+        research_enabled: true,
+      });
+      toast.success(`Added ${newName.trim()} (${newCode.trim().toLowerCase()}).`);
+      setNewCode("");
+      setNewName("");
+      await onChanged();
+    } catch (err) {
+      toast.error(formatErrorMessage(err));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function toggle(scope: Scope) {
+    setBusy(scope.id);
+    try {
+      await updateScope(token, jurisdictionId, kind, scope.id, { is_enabled: !scope.is_enabled });
+      toast.success(`${scope.name} is now ${!scope.is_enabled ? "enabled" : "disabled"}.`);
+      await onChanged();
+    } catch (err) {
+      toast.error(formatErrorMessage(err));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function remove(scope: Scope) {
+    setBusy(scope.id);
+    try {
+      await deleteScope(token, jurisdictionId, kind, scope.id);
+      toast.success(`Removed ${scope.name}.`);
+      await onChanged();
+    } catch (err) {
+      toast.error(formatErrorMessage(err));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  const onCount = scopes.filter((s) => s.is_enabled).length;
+
+  return (
+    <div className="border-t pt-4 first:border-t-0 first:pt-0">
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+          {heading}
+        </h4>
+        <span className="text-[11px] text-muted-foreground">
+          {onCount} of {scopes.length} offered to applicants
+        </span>
+      </div>
+
+      {scopes.length === 0 ? (
+        <p className="mb-3 text-xs text-muted-foreground">{emptyLabel}</p>
+      ) : (
+        <ul className="mb-3 space-y-2">
+          {scopes.map((scope) => (
+            <li
+              key={scope.id}
+              className="flex flex-col gap-2 rounded-xl border bg-card p-3 text-xs shadow-2xs hover:border-primary/30 transition-all sm:flex-row sm:items-center sm:justify-between"
+            >
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-mono text-[11px] font-semibold text-muted-foreground bg-muted/60 px-1.5 py-0.5 rounded">
+                    {scope.code}
+                  </span>
+                  <span className="font-bold text-foreground text-sm">{scope.name}</span>
+                  <Badge
+                    tone={scope.source === "discovered" ? "info" : "muted"}
+                    className="text-[10px]"
+                  >
+                    {SOURCE_LABEL[scope.source] ?? scope.source}
+                  </Badge>
+                </div>
+                {scope.description && (
+                  <p className="mt-1 text-[11px] text-muted-foreground">{scope.description}</p>
+                )}
+                {scope.citation?.url && (
+                  <a
+                    href={scope.citation.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-0.5 inline-flex items-center gap-1 text-[11px] text-primary hover:underline"
+                  >
+                    <span className="truncate">
+                      {scope.citation.title || hostOf(scope.citation.url)}
+                    </span>
+                    <ExternalLink className="size-3 shrink-0" />
+                  </a>
+                )}
+
+                {/* Nested Application Types under Visa Category */}
+                {kind === "visa-categories" && availableActions && availableActions.length > 0 && (
+                  <div className="mt-2 flex flex-wrap items-center gap-1.5 pt-1.5 border-t border-border/60">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                      Application types:
+                    </span>
+                    {availableActions.map((act) => (
+                      <Link
+                        key={act.id}
+                        href={`/admin/jurisdictions/${jurisdictionCode}/routes/${scope.code}?action=${act.code}`}
+                        className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-0.5 text-[10px] font-medium text-foreground hover:bg-muted/80 hover:text-primary transition-colors"
+                      >
+                        <span>{act.name}</span>
+                        <span className="font-mono text-[9px] text-muted-foreground">({act.code})</span>
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="flex shrink-0 items-center gap-2 self-end sm:self-auto">
+                {kind === "visa-categories" && jurisdictionCode && (
+                  <Link
+                    href={`/admin/jurisdictions/${jurisdictionCode}/routes/${scope.code}`}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-primary/30 bg-primary/10 px-3 py-1.5 text-xs font-bold text-primary transition-all hover:bg-primary/20 shadow-2xs"
+                  >
+                    <FileText className="size-3.5" />
+                    <span>Intake &amp; PDF Editor</span>
+                    <ChevronRight className="size-3" />
+                  </Link>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => void toggle(scope)}
+                  disabled={busy === scope.id}
+                  aria-pressed={scope.is_enabled}
+                  title={
+                    scope.is_enabled
+                      ? "Stop offering this to applicants"
+                      : "Offer this to applicants"
+                  }
+                  className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-all disabled:opacity-50 ${
+                    scope.is_enabled
+                      ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 hover:bg-emerald-500/20 dark:text-emerald-300"
+                      : "border-border bg-muted text-muted-foreground hover:bg-muted/80"
+                  }`}
+                >
+                  {busy === scope.id ? (
+                    <Loader2 className="size-3 animate-spin" />
+                  ) : (
+                    <span
+                      className={`size-1.5 rounded-full ${
+                        scope.is_enabled ? "bg-emerald-500" : "bg-muted-foreground"
+                      }`}
+                    />
+                  )}
+                  {scope.is_enabled ? "On" : "Off"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void remove(scope)}
+                  disabled={busy === scope.id}
+                  title={`Delete ${scope.name}`}
+                  className="text-muted-foreground transition-colors hover:text-[var(--color-danger)] disabled:opacity-50 p-1"
+                >
+                  <Trash2 className="size-3.5" />
+                </button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <form onSubmit={(e) => void add(e)} className="flex flex-wrap items-end gap-2">
+        <input
+          required
+          value={newCode}
+          onChange={(e) => setNewCode(e.target.value)}
+          placeholder={codePlaceholder}
+          maxLength={32}
+          className="h-8 w-28 rounded-[var(--radius)] border bg-background px-2.5 font-mono text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        />
+        <input
+          required
+          value={newName}
+          onChange={(e) => setNewName(e.target.value)}
+          placeholder={namePlaceholder}
+          className="h-8 min-w-40 flex-1 rounded-[var(--radius)] border bg-background px-2.5 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        />
+        <Button type="submit" size="sm" disabled={busy === "new"} className="h-8 gap-1 text-xs">
+          <Plus className="size-3" /> Add
+        </Button>
+      </form>
+    </div>
+  );
+}
+
+function hostOf(url: string | undefined): string {
+  if (!url) return "";
+  try {
+    return new URL(url).host.replace(/^www\./, "");
+  } catch {
+    return url;
+  }
+}

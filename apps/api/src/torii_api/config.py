@@ -86,6 +86,10 @@ class Settings(BaseSettings):
     scrape_jurisdictions: str = "JP"
     # Service-to-service token for authenticated AI→API calls.
     service_token: str = ""
+    # An admin waits on scope discovery with the page open, and it searches, fetches several
+    # government pages, and runs one extraction pass — so it is generous where the
+    # in-request AI calls are not, and still bounded.
+    scope_discovery_timeout_seconds: float = 120.0
 
     # --- Content packs (docs/jurisdictions/*.yml) -------------------------------
     # Empty = auto-detect monorepo docs/jurisdictions. Override for deploys that

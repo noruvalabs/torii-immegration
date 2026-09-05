@@ -21,9 +21,14 @@ class GroqChatClient:
         settings: Settings,
         model: str | None = None,
         fallback: ChatClient | None = None,
+        max_tokens: int | None = None,
     ) -> None:
         self._settings = settings
         self._model = model or settings.groq_model
+        # Groq counts the reserved output budget toward the tokens-per-minute allowance, so
+        # a caller whose reply is short says so here rather than reserving the account's
+        # whole minute and being refused with a 413.
+        self._max_tokens = max_tokens or settings.groq_max_tokens
         self._fallback = fallback
         self._client = AsyncOpenAI(
             api_key=settings.groq_api_key or "missing",
@@ -45,7 +50,7 @@ class GroqChatClient:
                     {"role": "user", "content": user},
                 ],
                 temperature=0.2,
-                max_tokens=self._settings.groq_max_tokens,
+                max_tokens=self._max_tokens,
             )
             content = response.choices[0].message.content
             return content or ""

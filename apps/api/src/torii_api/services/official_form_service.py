@@ -143,6 +143,64 @@ async def render_primary_form(
     return await render_form(form, answers, **kwargs)
 
 
+STATUTORY_REQUIRED_KEYS = {
+    # Core Identity & Nationality
+    "full_name",
+    "applicant_name",
+    "nationality",
+    "country_of_citizenship",
+    "date_of_birth",
+    "birth_date",
+    "dob",
+    "sex",
+    "gender",
+    "marital_status",
+    "place_of_birth",
+    "passport_number",
+    "passport_expiry_date",
+    "passport_expiry",
+    # Status in Japan (Extension / Renewal / Change of Status)
+    "current_status_of_residence",
+    "current_visa_status",
+    "current_residence_status",
+    "current_period_of_stay",
+    "current_period_of_stay_years",
+    "current_status_expiry_date",
+    "current_stay_expiry_date",
+    "residence_card_expiry",
+    "residence_card_number",
+    "current_japan_address",
+    "registered_address_japan",
+    "address_in_japan",
+    "telephone_japan",
+    "phone_number",
+    "contact_phone",
+    # Application terms
+    "desired_period_of_stay",
+    "desired_period",
+    "reason_for_extension",
+    "reason_for_change",
+    "purpose_of_visit",
+    "main_purpose",
+    # Primary sponsor / school / employer
+    "employer_name",
+    "company_name",
+    "sponsor_name",
+    "employer_address",
+    "employer_phone",
+    "occupation",
+    "job_title",
+    "monthly_salary",
+    "salary",
+    "annual_salary",
+    "school_name",
+    "institution_name",
+    "education_level",
+    "major_field",
+    "field_of_study",
+}
+
+
 def describe_scope_forms(
     visa_category: str, action: str, answers: dict[str, Any]
 ) -> list[dict[str, Any]]:
@@ -167,7 +225,18 @@ def describe_scope_forms(
             "note": form.note,
         }
         if form.layout is not None:
-            entry["missing_answer_keys"] = missing_answer_keys(form.layout, answers)
-            entry["total_items"] = len(form.layout.keys)
+            all_layouts = (form.layout, *form.extra_layouts)
+            missing = []
+            total = 0
+            for lyt in all_layouts:
+                missing.extend(missing_answer_keys(lyt, answers))
+                total += len(lyt.keys)
+            unique_missing = list(dict.fromkeys(missing))
+            req_missing = [k for k in unique_missing if k in STATUTORY_REQUIRED_KEYS]
+            opt_missing = [k for k in unique_missing if k not in STATUTORY_REQUIRED_KEYS]
+            entry["missing_answer_keys"] = unique_missing
+            entry["required_missing_keys"] = req_missing
+            entry["optional_missing_keys"] = opt_missing
+            entry["total_items"] = total
         described.append(entry)
     return described

@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { register, googleLogin } from "@/lib/api/auth";
 import { useAuth } from "@/lib/auth-context";
-import { useI18n, LanguageSwitcher } from "@/lib/i18n";
+import { useI18n } from "@/lib/i18n";
 import { GoogleLogo } from "../login/page";
 
 export default function RegisterPage() {
@@ -65,12 +65,11 @@ export default function RegisterPage() {
 
   return (
     <div className="w-full max-w-md space-y-4">
-      <div className="flex items-center justify-between px-1">
+      <div className="flex items-center px-1">
         <Link href="/" className="flex items-center gap-2 font-bold text-sm">
           <span>⛩️</span>
           <span>Torii</span>
         </Link>
-        <LanguageSwitcher />
       </div>
 
       <Card className="border shadow-md">
@@ -89,18 +88,18 @@ export default function RegisterPage() {
             variant="outline"
             onClick={handleGoogleLogin}
             disabled={googleSubmitting || submitting}
-            className="w-full justify-center gap-2 h-10 border bg-background hover:bg-muted font-medium text-xs shadow-xs"
+            className="w-full justify-center gap-2 h-10 border bg-background hover:bg-muted font-medium text-xs shadow-xs rounded-md"
           >
             <GoogleLogo />
             <span>{t("auth_google_continue", "Continue with Google")}</span>
           </Button>
 
-          <div className="relative flex items-center justify-center">
-            <div className="border-t w-full border-border" />
-            <span className="bg-card px-2 text-[11px] text-muted-foreground uppercase font-medium">
-              {t("auth_or_divider", "Or with email")}
+          <div className="relative flex items-center justify-center my-1.5">
+            <div className="border-t flex-1 border-border" />
+            <span className="bg-card px-2.5 text-[11px] text-muted-foreground uppercase font-medium tracking-wider whitespace-nowrap shrink-0">
+              {t("auth_or_divider", "Or continue with email")}
             </span>
-            <div className="border-t w-full border-border" />
+            <div className="border-t flex-1 border-border" />
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-3">
@@ -114,7 +113,7 @@ export default function RegisterPage() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="you@example.com"
-                  className="h-9 w-full rounded-lg border bg-background pl-9 pr-3 text-xs outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  className="h-9 w-full rounded-md border bg-background pl-9 pr-3 text-xs outline-none focus-visible:ring-1 focus-visible:ring-ring"
                 />
               </div>
             </label>
@@ -132,7 +131,7 @@ export default function RegisterPage() {
                   placeholder="johndoe"
                   minLength={3}
                   maxLength={64}
-                  className="h-9 w-full rounded-lg border bg-background pl-9 pr-3 text-xs outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  className="h-9 w-full rounded-md border bg-background pl-9 pr-3 text-xs outline-none focus-visible:ring-1 focus-visible:ring-ring"
                 />
               </div>
             </label>
@@ -148,7 +147,7 @@ export default function RegisterPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="h-9 w-full rounded-lg border bg-background pl-9 pr-3 text-xs outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  className="h-9 w-full rounded-md border bg-background pl-9 pr-3 text-xs outline-none focus-visible:ring-1 focus-visible:ring-ring"
                 />
               </div>
             </label>
@@ -166,18 +165,18 @@ export default function RegisterPage() {
                   value={confirm}
                   onChange={(e) => setConfirm(e.target.value)}
                   placeholder="••••••••"
-                  className="h-9 w-full rounded-lg border bg-background pl-9 pr-3 text-xs outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  className="h-9 w-full rounded-md border bg-background pl-9 pr-3 text-xs outline-none focus-visible:ring-1 focus-visible:ring-ring"
                 />
               </div>
             </label>
 
             {error && (
-              <p className="rounded-lg border border-[var(--color-danger)]/30 bg-[var(--color-danger)]/10 px-3 py-2 text-xs text-[var(--color-danger)]">
+              <p className="rounded-md border border-[var(--color-danger)]/30 bg-[var(--color-danger)]/10 px-3 py-2 text-xs text-[var(--color-danger)]">
                 {error}
               </p>
             )}
 
-            <Button type="submit" disabled={submitting || googleSubmitting} className="w-full text-xs font-semibold h-9 shadow-xs">
+            <Button type="submit" disabled={submitting || googleSubmitting} className="w-full text-xs font-semibold h-9 shadow-xs rounded-md">
               {submitting ? t("loading", "Creating account…") : t("auth_create_one", "Create account")}
               <ArrowRight className="ml-1.5 size-3.5" />
             </Button>

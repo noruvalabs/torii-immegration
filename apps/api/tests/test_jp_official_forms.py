@@ -1148,3 +1148,43 @@ def test_a_multi_select_box_follows_the_amount_beside_it() -> None:
     result = fill_flat_form(form, template, answers)
     assert result.filled["22(1) Support is partly self-funded"] == "ticked"
     assert "22(1) Support from a scholarship" not in result.filled
+
+
+def test_every_layout_names_a_pdf_it_is_actually_bound_to() -> None:
+    """A `reference` is the provenance note somebody re-verifying the layout will open.
+
+    Three designated-activities sheets named 930004120 -- which is not that packet at all,
+    it is the Temporary Visitor acquisition-of-status form. The layouts were right and the
+    fill gate never noticed, because it validates shape rather than filename; the note was
+    simply pointing at the wrong sheet.
+    """
+    from torii_api.services.jp_official_forms import forms_for_scope
+
+    # Each layout may serve several procedures; its reference must name one of them.
+    bound: dict[str, tuple[str, set[str]]] = {}
+    for category in (
+        "work",
+        "hsp",
+        "student",
+        "dependent",
+        "spouse",
+        "designated_activities",
+        "permanent_resident",
+        "tourist",
+    ):
+        for action in ("new_application", "renewal", "change_of_status"):
+            for form in forms_for_scope(category, action):
+                if form.pdf_url is None:
+                    continue
+                content_id = form.pdf_url.rsplit("/", 1)[-1].removesuffix(".pdf")
+                sheets = ((form.layout,) if form.layout else ()) + form.extra_layouts
+                for sheet in sheets:
+                    bound.setdefault(sheet.code, (sheet.reference, set()))[1].add(content_id)
+
+    assert bound, "no layouts resolved"
+    for code, (reference, content_ids) in sorted(bound.items()):
+        named = reference.split(".pdf")[0]
+        assert named in content_ids, (
+            f"{code} says {named}.pdf but is only ever bound to "
+            f"{sorted(content_ids)} — the note points at a different sheet"
+        )

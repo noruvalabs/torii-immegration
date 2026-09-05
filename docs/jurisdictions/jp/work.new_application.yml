@@ -4,278 +4,525 @@ scope:
   action: new_application
   is_live: true
   name: Japan Work Visa — New Application / COE Path (技術・人文知識・国際業務 認定申請)
-
 stages:
-  - sequence: 1
-    code: sponsor_petition
-    actor: sponsor
-    handoff_artifact: coe
-  - sequence: 2
-    code: applicant_filing
-    actor: applicant
-
+- sequence: 1
+  code: sponsor_petition
+  actor: sponsor
+  handoff_artifact: coe
+- sequence: 2
+  code: applicant_filing
+  actor: applicant
 intake:
   questions:
-    # --- Section 1: Personal & Identity ---
-    - key: full_name
-      section: Personal & Identity
-      prompt: What is your full name as it appears on your passport?
-      type: string
-      min_length: 2
-      max_length: 200
-      required: true
-      citation:
-        authority: Immigration Services Agency of Japan (MOJ)
-        title: Application for Certificate of Eligibility (Work / Engineer)
-        url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
-
-    - key: nationality
-      section: Personal & Identity
-      prompt: What is your nationality (passport country)?
-      type: enum
-      options:
-        - BD
-        - US
-        - GB
-        - CA
-        - AU
-        - DE
-        - FR
-        - SG
-        - KR
-        - IN
-        - CN
-        - PH
-        - VN
-        - ID
-        - TH
-        - MY
-        - other
-      required: true
-      citation:
-        authority: Immigration Services Agency of Japan (MOJ)
-        title: Statutory Identification Requirements
-        url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
-
-    - key: date_of_birth
-      section: Personal & Identity
-      prompt: What is your date of birth (YYYY-MM-DD)?
-      type: date
-      required: true
-      citation:
-        authority: Immigration Services Agency of Japan (MOJ)
-        title: Identity Verification Criteria
-        url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
-
-    - key: passport_number
-      section: Personal & Identity
-      prompt: What is your passport number?
-      type: string
-      min_length: 5
-      max_length: 32
-      required: true
-      citation:
-        authority: Immigration Services Agency of Japan (MOJ)
-        title: Passport Details
-        url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
-
-    - key: current_residence_country
-      section: Personal & Identity
-      prompt: What is your country of current residence?
-      type: string
-      min_length: 2
-      max_length: 100
-      required: true
-      citation:
-        authority: Immigration Services Agency of Japan (MOJ)
-        title: Current Residence Country Disclosure
-        url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
-
-    # --- Section 2: Sponsoring Employer in Japan ---
-    - key: employer_name
-      section: Sponsoring Employer
-      prompt: What is the registered name of your sponsoring employer in Japan?
-      type: string
-      min_length: 2
-      max_length: 200
-      required: true
-      citation:
-        authority: Immigration Services Agency of Japan (MOJ)
-        title: Sponsoring Organization Details
-        url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
-
-    - key: corporate_number
-      section: Sponsoring Employer
-      prompt: What is the 13-digit Corporate Number (法人番号) of the employer?
-      type: string
-      min_length: 13
-      max_length: 13
-      required: true
-      citation:
-        authority: National Tax Agency of Japan (NTA)
-        title: Corporate Number Verification
-        url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
-
-    - key: employer_category
-      section: Sponsoring Employer
-      prompt: What is the statutory category of the sponsoring employer (Category 1 to 4)?
-      type: enum
-      options:
-        - category_1_listed_company
-        - category_2_large_withholding
-        - category_3_standard_sme
-        - category_4_new_startup
-      required: true
-      citation:
-        authority: Immigration Services Agency of Japan (MOJ)
-        title: Employer Category Classifications
-        url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
-
-    - key: monthly_salary
-      section: Sponsoring Employer
-      prompt: What is your agreed gross monthly remuneration (in JPY)?
-      type: integer
-      min_value: 150000
-      max_value: 5000000
-      required: true
-      citation:
-        authority: Immigration Services Agency of Japan (MOJ)
-        title: Remuneration Equal to or Greater than Japanese Nationals
-        url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
-
-    - key: job_description
-      section: Sponsoring Employer
-      prompt: What are your primary job duties in Japan?
-      type: string
-      min_length: 5
-      max_length: 500
-      required: true
-      citation:
-        authority: Immigration Services Agency of Japan (MOJ)
-        title: Activity Scope (Engineer / Specialist in Humanities)
-        url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
-
-    # --- Section 3: Education & Experience ---
-    - key: highest_degree_earned
-      section: Education & Qualifications
-      prompt: What is your highest level of completed education?
-      type: enum
-      options:
-        - bachelor_degree
-        - master_degree
-        - doctorate_phd
-        - vocational_college_japan
-        - high_school_or_none
-      required: true
-      citation:
-        authority: Immigration Services Agency of Japan (MOJ)
-        title: Academic Degree Prerequisite (Bachelor's or Higher)
-        url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
-
-    - key: field_of_study_major
-      section: Education & Qualifications
-      prompt: What was your academic major / degree subject?
-      type: string
-      min_length: 2
-      max_length: 150
-      required: true
-      citation:
-        authority: Immigration Services Agency of Japan (MOJ)
-        title: Major-Job Relevance Criteria
-        url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
-
-    # --- Section 4: Compliance & History ---
-    - key: criminal_record
-      section: Security & History
-      prompt: Have you ever been convicted of a crime in any country?
-      type: boolean
-      required: true
-      citation:
-        authority: Immigration Services Agency of Japan (MOJ)
-        title: Denial of Landing Criteria (Act Article 5)
-        url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
-
-eligibility:
-  rules:
-    - key: highest_degree_earned
-      operator: in
-      value:
-        - bachelor_degree
-        - master_degree
-        - doctorate_phd
-        - vocational_college_japan
-      failure_status: at_risk
-      message: Academic degree (Bachelor or vocational college diploma in Japan) is required for Engineer / Specialist in Humanities status.
-      citation:
-        authority: Immigration Services Agency of Japan (MOJ)
-        title: Ministerial Ordinance on Criteria for Work Visa Status
-        url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
-
-    - key: monthly_salary
-      operator: min
-      value: 200000
-      failure_status: at_risk
-      message: Monthly remuneration must be equal to or greater than that of a Japanese national (typically ¥200,000/month minimum).
-      citation:
-        authority: Immigration Services Agency of Japan (MOJ)
-        title: Minimum Remuneration Standards
-        url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
-
-documents:
-  requirements:
-    - code: coe_application_form
-      name: Official Application for Certificate of Eligibility (在留資格認定証明書交付申請書)
-      is_required: true
-      citation:
-        authority: Immigration Services Agency of Japan (MOJ)
-        title: Procedure 16-1 Format
-        url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
-
-    - code: employment_contract
-      name: Employment Contract or Letter of Appointment (雇用契約書 / 労働条件通知書)
-      is_required: true
-      citation:
-        authority: Immigration Services Agency of Japan (MOJ)
-        title: Proof of Employment and Salary
-        url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
-
-    - code: university_degree_certificate
-      name: University Graduation Certificate or Official Degree Transcript (卒業証明書)
-      is_required: true
-      citation:
-        authority: Immigration Services Agency of Japan (MOJ)
-        title: Academic Credentials Verification
-        url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
-
-    - code: company_statutory_table
-      name: Sponsoring Company Statutory Category Proof (法定調書合計表 / 会社四季報)
-      is_required: true
-      citation:
-        authority: Immigration Services Agency of Japan (MOJ)
-        title: Employer Category Documentation
-        url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
-
-forms:
-  - code: moj_coe_work
-    version: "2026-04"
-    official_title: Application for Certificate of Eligibility (在留資格認定証明書交付申請書)
+  - key: full_name
+    section: Personal & Identity
+    prompt: What is your full name as it appears on your passport?
+    type: string
+    min_length: 2
+    max_length: 200
+    required: true
     citation:
       authority: Immigration Services Agency of Japan (MOJ)
-      title: Official Procedure 16-1
+      title: Application for Certificate of Eligibility (Work / Engineer)
       url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
-    field_mappings:
-      - form_field: applicant_name
-        answer_key: full_name
-        required: true
-      - form_field: nationality
-        answer_key: nationality
-        required: true
-      - form_field: passport_no
-        answer_key: passport_number
-        required: true
-      - form_field: employer
-        answer_key: employer_name
-        required: true
-      - form_field: salary
-        answer_key: monthly_salary
-        required: true
+  - key: nationality
+    section: Personal & Identity
+    prompt: What is your nationality (passport country)?
+    type: enum
+    options:
+    - BD
+    - US
+    - GB
+    - CA
+    - AU
+    - DE
+    - FR
+    - SG
+    - KR
+    - IN
+    - CN
+    - PH
+    - VN
+    - ID
+    - TH
+    - MY
+    - other
+    required: true
+    citation:
+      authority: Immigration Services Agency of Japan (MOJ)
+      title: Statutory Identification Requirements
+      url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
+  - key: date_of_birth
+    section: Personal & Identity
+    prompt: What is your date of birth (YYYY-MM-DD)?
+    type: date
+    required: true
+    citation:
+      authority: Immigration Services Agency of Japan (MOJ)
+      title: Identity Verification Criteria
+      url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
+  - key: passport_number
+    section: Personal & Identity
+    prompt: What is your passport number?
+    type: string
+    min_length: 5
+    max_length: 32
+    required: true
+    citation:
+      authority: Immigration Services Agency of Japan (MOJ)
+      title: Passport Details
+      url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
+  - key: current_residence_country
+    section: Personal & Identity
+    prompt: What is your country of current residence?
+    type: string
+    min_length: 2
+    max_length: 100
+    required: true
+    citation:
+      authority: Immigration Services Agency of Japan (MOJ)
+      title: Current Residence Country Disclosure
+      url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
+  - key: employer_name
+    section: Sponsoring Employer
+    prompt: What is the registered name of your sponsoring employer in Japan?
+    type: string
+    min_length: 2
+    max_length: 200
+    required: true
+    citation:
+      authority: Immigration Services Agency of Japan (MOJ)
+      title: Sponsoring Organization Details
+      url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
+  - key: corporate_number
+    section: Sponsoring Employer
+    prompt: What is the 13-digit Corporate Number (法人番号) of the employer?
+    type: string
+    min_length: 13
+    max_length: 13
+    required: true
+    citation:
+      authority: National Tax Agency of Japan (NTA)
+      title: Corporate Number Verification
+      url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
+  - key: employer_category
+    section: Sponsoring Employer
+    prompt: What is the statutory category of the sponsoring employer (Category 1 to 4)?
+    type: enum
+    options:
+    - category_1_listed_company
+    - category_2_large_withholding
+    - category_3_standard_sme
+    - category_4_new_startup
+    required: true
+    citation:
+      authority: Immigration Services Agency of Japan (MOJ)
+      title: Employer Category Classifications
+      url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
+  - key: monthly_salary
+    section: Sponsoring Employer
+    prompt: What is your agreed gross monthly remuneration (in JPY)?
+    type: integer
+    min_value: 150000
+    max_value: 5000000
+    required: true
+    citation:
+      authority: Immigration Services Agency of Japan (MOJ)
+      title: Remuneration Equal to or Greater than Japanese Nationals
+      url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
+  - key: job_description
+    section: Sponsoring Employer
+    prompt: What are your primary job duties in Japan?
+    type: string
+    min_length: 5
+    max_length: 500
+    required: true
+    citation:
+      authority: Immigration Services Agency of Japan (MOJ)
+      title: Activity Scope (Engineer / Specialist in Humanities)
+      url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
+  - key: highest_degree_earned
+    section: Education & Qualifications
+    prompt: What is your highest level of completed education?
+    type: enum
+    options:
+    - bachelor_degree
+    - master_degree
+    - doctorate_phd
+    - vocational_college_japan
+    - high_school_or_none
+    required: true
+    citation:
+      authority: Immigration Services Agency of Japan (MOJ)
+      title: Academic Degree Prerequisite (Bachelor's or Higher)
+      url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
+  - key: field_of_study_major
+    section: Education & Qualifications
+    prompt: What was your academic major / degree subject?
+    type: string
+    min_length: 2
+    max_length: 150
+    required: true
+    citation:
+      authority: Immigration Services Agency of Japan (MOJ)
+      title: Major-Job Relevance Criteria
+      url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
+  - key: criminal_record
+    section: Security & History
+    prompt: Have you ever been convicted of a crime in any country?
+    type: boolean
+    required: true
+    citation:
+      authority: Immigration Services Agency of Japan (MOJ)
+      title: Denial of Landing Criteria (Act Article 5)
+      url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
+eligibility:
+  rules:
+  - key: highest_degree_earned
+    operator: in
+    value:
+    - bachelor_degree
+    - master_degree
+    - doctorate_phd
+    - vocational_college_japan
+    failure_status: at_risk
+    message: Academic degree (Bachelor or vocational college diploma in Japan) is required for Engineer
+      / Specialist in Humanities status.
+    citation:
+      authority: Immigration Services Agency of Japan (MOJ)
+      title: Ministerial Ordinance on Criteria for Work Visa Status
+      url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
+  - key: monthly_salary
+    operator: min
+    value: 200000
+    failure_status: at_risk
+    message: Monthly remuneration must be equal to or greater than that of a Japanese national (typically
+      ¥200,000/month minimum).
+    citation:
+      authority: Immigration Services Agency of Japan (MOJ)
+      title: Minimum Remuneration Standards
+      url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
+documents:
+  requirements:
+  - code: coe_application_form
+    name: Official Application for Certificate of Eligibility (在留資格認定証明書交付申請書)
+    is_required: true
+    citation:
+      authority: Immigration Services Agency of Japan (MOJ)
+      title: Procedure 16-1 Format
+      url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
+  - code: employment_contract
+    name: Employment Contract or Letter of Appointment (雇用契約書 / 労働条件通知書)
+    is_required: true
+    citation:
+      authority: Immigration Services Agency of Japan (MOJ)
+      title: Proof of Employment and Salary
+      url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
+  - code: university_degree_certificate
+    name: University Graduation Certificate or Official Degree Transcript (卒業証明書)
+    is_required: true
+    citation:
+      authority: Immigration Services Agency of Japan (MOJ)
+      title: Academic Credentials Verification
+      url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
+  - code: company_statutory_table
+    name: Sponsoring Company Statutory Category Proof (法定調書合計表 / 会社四季報)
+    is_required: true
+    citation:
+      authority: Immigration Services Agency of Japan (MOJ)
+      title: Employer Category Documentation
+      url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
+  items:
+  - code: photograph
+    name:
+      en: Photograph (40mm × 30mm)
+      ja: 写真（縦4cm×横3cm）1葉
+    how_to_obtain:
+      en: Have one taken to the ministry's specification within the last three months and affix it to
+        the photo panel on the application form.
+    why_required:
+      en: The certificate cannot be issued without a photograph meeting the published specification; an
+        unsuitable one is sent back to be retaken.
+    is_required: true
+    citation:
+      authority: Immigration Services Agency of Japan (出入国在留管理庁)
+      title: Engineer / Specialist in Humanities / International Services — 在留資格認定証明書交付申請 提出書類
+      url: https://www.moj.go.jp/isa/applications/status/gijinkoku.html
+      source_version: 2026-04
+  - code: return_envelope
+    name:
+      en: Self-addressed return envelope
+      ja: 返信用封筒（宛先明記・簡易書留分の切手貼付）1通
+    how_to_obtain:
+      en: Write your address on a standard envelope and affix postage for 簡易書留 (registered mail).
+    why_required:
+      en: The bureau posts the issued certificate back to you in it.
+    is_required: true
+    citation:
+      authority: Immigration Services Agency of Japan (出入国在留管理庁)
+      title: Engineer / Specialist in Humanities / International Services — 在留資格認定証明書交付申請 提出書類
+      url: https://www.moj.go.jp/isa/applications/status/gijinkoku.html
+      source_version: 2026-04
+  - code: employer_category_evidence
+    name:
+      en: Evidence of which category your employer falls into
+      ja: カテゴリーのいずれかに該当することを証明する文書
+    how_to_obtain:
+      en: Ask your employer for it. What counts differs per category, and the items below name the one
+        for yours.
+    why_required:
+      en: The category decides which other documents you have to gather at all. Without evidence the bureau
+        treats the employer as category 4, which is the largest bundle.
+    is_required: true
+    citation:
+      authority: Immigration Services Agency of Japan (出入国在留管理庁)
+      title: Engineer / Specialist in Humanities / International Services — 在留資格認定証明書交付申請 提出書類
+      url: https://www.moj.go.jp/isa/applications/status/gijinkoku.html
+      source_version: 2026-04
+  - code: listed_company_evidence
+    name:
+      en: Proof the employer is listed, or was licensed by its competent ministry
+      ja: 四季報の写し又は上場を証明する文書／主務官庁の設立許可を証明する文書（写し）
+    how_to_obtain:
+      en: A copy of the 会社四季報 entry, the stock-exchange listing, or the establishment licence from the
+        competent ministry.
+    why_required:
+      en: This is what establishes a category 1 employer.
+    is_required: true
+    citation:
+      authority: Immigration Services Agency of Japan (出入国在留管理庁)
+      title: Engineer / Specialist in Humanities / International Services — 在留資格認定証明書交付申請 提出書類
+      url: https://www.moj.go.jp/isa/applications/status/gijinkoku.html
+      source_version: 2026-04
+    show_when:
+      key: employer_category
+      equals: category_1
+  - code: withholding_summary
+    name:
+      en: Employer's statutory withholding-tax summary for last year
+      ja: 前年分の職員の給与所得の源泉徴収票等の法定調書合計表（写し）
+    how_to_obtain:
+      en: Your employer files this with the tax office each year; ask them for the stamped copy.
+    why_required:
+      en: It is what places the employer in category 2 or 3, and the withheld amount is what separates
+        the two.
+    is_required: true
+    citation:
+      authority: Immigration Services Agency of Japan (出入国在留管理庁)
+      title: Engineer / Specialist in Humanities / International Services — 在留資格認定証明書交付申請 提出書類
+      url: https://www.moj.go.jp/isa/applications/status/gijinkoku.html
+      source_version: 2026-04
+    show_when:
+      key: employer_category
+      one_of:
+      - category_2
+      - category_3
+  - code: employment_conditions_notice
+    name:
+      en: Written statement of your employment conditions
+      ja: 労働条件通知書（雇用契約書）1通
+    how_to_obtain:
+      en: Your employer must give you this under Article 15 of the Labour Standards Act. If you are joining
+        as a company officer instead, bring the articles of incorporation or the shareholders' meeting
+        minutes setting your remuneration.
+    why_required:
+      en: It shows the bureau what you will actually do, for how long, and for how much — which is what
+        your status is judged against.
+    is_required: true
+    citation:
+      authority: Immigration Services Agency of Japan (出入国在留管理庁)
+      title: Engineer / Specialist in Humanities / International Services — 在留資格認定証明書交付申請 提出書類
+      url: https://www.moj.go.jp/isa/applications/status/gijinkoku.html
+      source_version: 2026-04
+    show_when: &id001
+      key: employer_category
+      one_of:
+      - category_3
+      - category_4
+  - code: curriculum_vitae
+    name:
+      en: Curriculum vitae covering the relevant experience
+      ja: 履歴書（従事した機関・内容・期間を明示したもの）1通
+    how_to_obtain:
+      en: Write it yourself, naming each employer, what the work involved, and the exact dates.
+    why_required:
+      en: Your eligibility rests on your education or your experience; this is where the experience is
+        set out.
+    is_required: true
+    citation:
+      authority: Immigration Services Agency of Japan (出入国在留管理庁)
+      title: Engineer / Specialist in Humanities / International Services — 在留資格認定証明書交付申請 提出書類
+      url: https://www.moj.go.jp/isa/applications/status/gijinkoku.html
+      source_version: 2026-04
+    show_when: *id001
+  - code: graduation_certificate
+    name:
+      en: Graduation certificate, or proof of the experience that stands in for it
+      ja: 卒業証明書、又は在職証明書等の実務経験を証明する文書 1通
+    how_to_obtain:
+      en: Request the certificate from your university. If you are qualifying on experience rather than
+        a degree, ask each past employer for a 在職証明書 stating the dates. IT engineers may instead submit
+        a qualification listed in the Minister's notice.
+    why_required:
+      en: The 技人国 status requires either a relevant degree or a set number of years of relevant experience.
+    is_required: true
+    citation:
+      authority: Immigration Services Agency of Japan (出入国在留管理庁)
+      title: Engineer / Specialist in Humanities / International Services — 在留資格認定証明書交付申請 提出書類
+      url: https://www.moj.go.jp/isa/applications/status/gijinkoku.html
+      source_version: 2026-04
+    show_when: *id001
+  - code: specialist_title_certificate
+    name:
+      en: Certificate of the 専門士 or 高度専門士 title
+      ja: 専門士又は高度専門士の称号を付与されたことを証明する文書 1通
+    how_to_obtain:
+      en: Ask the vocational school that awarded it.
+    why_required:
+      en: Required instead of a degree certificate where the applicant graduated from a Japanese vocational
+        school (専門学校).
+    is_required: false
+    citation:
+      authority: Immigration Services Agency of Japan (出入国在留管理庁)
+      title: Engineer / Specialist in Humanities / International Services — 在留資格認定証明書交付申請 提出書類
+      url: https://www.moj.go.jp/isa/applications/status/gijinkoku.html
+      source_version: 2026-04
+    show_when: *id001
+  - code: company_registry_extract
+    name:
+      en: Employer's certificate of registered matters
+      ja: 登記事項証明書 1通
+    how_to_obtain:
+      en: Your employer obtains it from the Legal Affairs Bureau; it can be requested online. It must
+        be dated within the last three months.
+    why_required:
+      en: It proves the employing company exists and what it is registered to do.
+    is_required: true
+    citation:
+      authority: Immigration Services Agency of Japan (出入国在留管理庁)
+      title: Engineer / Specialist in Humanities / International Services — 在留資格認定証明書交付申請 提出書類
+      url: https://www.moj.go.jp/isa/applications/status/gijinkoku.html
+      source_version: 2026-04
+    show_when: *id001
+  - code: company_profile
+    name:
+      en: Employer's company profile
+      ja: 事業内容を明らかにする資料（会社案内等）1通
+    how_to_obtain:
+      en: Ask your employer for the brochure or equivalent setting out its history, officers, structure
+        and business, including main clients and trading record.
+    why_required:
+      en: It lets the bureau judge whether the employer's business genuinely needs the work you were hired
+        for.
+    is_required: true
+    citation:
+      authority: Immigration Services Agency of Japan (出入国在留管理庁)
+      title: Engineer / Specialist in Humanities / International Services — 在留資格認定証明書交付申請 提出書類
+      url: https://www.moj.go.jp/isa/applications/status/gijinkoku.html
+      source_version: 2026-04
+    show_when: *id001
+  - code: financial_statements
+    name:
+      en: Employer's most recent annual financial statements
+      ja: 直近年度の決算文書の写し（新規事業の場合は事業計画書）1通
+    how_to_obtain:
+      en: Ask your employer. A newly established business submits a business plan instead.
+    why_required:
+      en: It shows the employer can actually pay the salary it has contracted to pay.
+    is_required: true
+    citation:
+      authority: Immigration Services Agency of Japan (出入国在留管理庁)
+      title: Engineer / Specialist in Humanities / International Services — 在留資格認定証明書交付申請 提出書類
+      url: https://www.moj.go.jp/isa/applications/status/gijinkoku.html
+      source_version: 2026-04
+    show_when: *id001
+  - code: representative_declaration
+    name:
+      en: Declaration concerning the employer's representative
+      ja: 所属機関の代表者に関する申告書 1通
+    how_to_obtain:
+      en: Your employer completes the ministry's reference form (参考様式).
+    why_required:
+      en: Required on applications filed from 15 April 2026 where the employer is in category 3 or 4.
+    is_required: true
+    citation:
+      authority: Immigration Services Agency of Japan (出入国在留管理庁)
+      title: Engineer / Specialist in Humanities / International Services — 在留資格認定証明書交付申請 提出書類
+      url: https://www.moj.go.jp/isa/applications/status/gijinkoku.html
+      source_version: 2026-04
+    show_when: *id001
+  - code: language_ability_evidence
+    name:
+      en: Evidence of CEFR B2 language ability
+      ja: 業務上使用する言語について、ＣＥＦＲ・Ｂ２相当の言語能力を有することを証する資料 1通
+    how_to_obtain:
+      en: JLPT N2 or above, BJT 400 or above, twenty years' residence in Japan, or graduation from a Japanese
+        university or vocational course all count as meeting it for Japanese.
+    why_required:
+      en: Required where the work is mainly customer-facing or language-based — translation, interpreting,
+        hotel front desk and the like.
+    is_required: false
+    citation:
+      authority: Immigration Services Agency of Japan (出入国在留管理庁)
+      title: Engineer / Specialist in Humanities / International Services — 在留資格認定証明書交付申請 提出書類
+      url: https://www.moj.go.jp/isa/applications/status/gijinkoku.html
+      source_version: 2026-04
+    show_when: *id001
+  - code: no_withholding_summary_reason
+    name:
+      en: Evidence of why the withholding summary cannot be provided
+      ja: 源泉徴収票等の法定調書合計表を提出できない理由を明らかにする資料 1通
+    how_to_obtain:
+      en: Either the exemption certificate for an employer exempt from withholding, or a copy of the notification
+        opening a salary-paying office (給与支払事務所等の開設届出書).
+    why_required:
+      en: Category 4 is precisely the case where that summary does not exist, so the bureau asks why instead.
+    is_required: true
+    citation:
+      authority: Immigration Services Agency of Japan (出入国在留管理庁)
+      title: Engineer / Specialist in Humanities / International Services — 在留資格認定証明書交付申請 提出書類
+      url: https://www.moj.go.jp/isa/applications/status/gijinkoku.html
+      source_version: 2026-04
+    show_when: &id002
+      key: employer_category
+      equals: category_4
+  - code: income_tax_payment_record
+    name:
+      en: Last three months of income-tax payment records
+      ja: 直近3か月分の給与所得・退職所得等の所得税徴収高計算書（領収日付印のある写し）1通
+    how_to_obtain:
+      en: Your employer's copies, stamped with the receipt date. If the employer is on the special payment
+        schedule, evidence of that approval instead.
+    why_required:
+      en: It is the substitute evidence that the employer is a real, paying operation.
+    is_required: true
+    citation:
+      authority: Immigration Services Agency of Japan (出入国在留管理庁)
+      title: Engineer / Specialist in Humanities / International Services — 在留資格認定証明書交付申請 提出書類
+      url: https://www.moj.go.jp/isa/applications/status/gijinkoku.html
+      source_version: 2026-04
+    show_when: *id002
+forms:
+- code: moj_coe_work
+  version: 2026-04
+  official_title: Application for Certificate of Eligibility (在留資格認定証明書交付申請書)
+  citation:
+    authority: Immigration Services Agency of Japan (MOJ)
+    title: Official Procedure 16-1
+    url: https://www.moj.go.jp/isa/applications/procedures/16-1.html
+  field_mappings:
+  - form_field: applicant_name
+    answer_key: full_name
+    required: true
+  - form_field: nationality
+    answer_key: nationality
+    required: true
+  - form_field: passport_no
+    answer_key: passport_number
+    required: true
+  - form_field: employer
+    answer_key: employer_name
+    required: true
+  - form_field: salary
+    answer_key: monthly_salary
+    required: true

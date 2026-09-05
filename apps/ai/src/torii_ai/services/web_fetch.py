@@ -10,11 +10,19 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import re
+from html import unescape
 
 import httpx
 import structlog
 
 log = structlog.get_logger()
+
+# How much raw markup to read before extracting text. Bounded for memory, but generously:
+# a government page's <head> alone can run well past 8KB of meta tags, inline CSS and
+# schema.org JSON, and slicing the markup before the tags come out is how a real page ends
+# up yielding sixty characters of text. Callers cap the *extracted* text
+# (``scrape_pages(page_chars=...)``); this cap only stops a pathological download.
+RAW_HTML_LIMIT = 400_000
 
 
 def is_govuk(url: str) -> bool:
@@ -26,11 +34,34 @@ def is_govuk(url: str) -> bool:
     return host == "www.gov.uk" or host.endswith(".gov.uk")
 
 
+# Regions that are never the page's own content. Stripped before the tags come out, because
+# a government page leads with a skip link, a language switcher and a site-wide menu, and a
+# reader given only the first couple of thousand characters would otherwise see just those.
+_CHROME = ("script", "style", "noscript", "nav", "header", "footer", "aside", "form")
+
+
 def strip_html(raw: str) -> str:
-    """Strip script/style blocks and tags, collapse whitespace."""
-    text = re.sub(r"<script[^>]*>.*?</script>", "", raw, flags=re.DOTALL)
-    text = re.sub(r"<style[^>]*>.*?</style>", "", text, flags=re.DOTALL)
+    """Extract a page's readable text: its content region, minus site chrome, entities decoded.
+
+    Three narrowings, each because a real government page needed it. Everything before
+    ``<body>`` is metadata, inline styling and structured-data JSON, and on some sites is
+    larger than the body itself. A declared ``<main>`` region is the content, so it wins over
+    the whole body. And the chrome elements around it are dropped by name. An HTML fragment
+    with none of these markers (the gov.uk content API returns such fragments) is used whole.
+    """
+    section = re.search(r"<main\b[^>]*>(.*?)</main>", raw, flags=re.DOTALL | re.IGNORECASE)
+    if section is None:
+        section = re.search(r"<body\b[^>]*>(.*)", raw, flags=re.DOTALL | re.IGNORECASE)
+    text = section.group(1) if section else raw
+
+    for element in _CHROME:
+        text = re.sub(
+            rf"<{element}\b[^>]*>.*?</{element}>", " ", text, flags=re.DOTALL | re.IGNORECASE
+        )
     text = re.sub(r"<[^>]+>", " ", text)
+    # Decoded, because a requirement the model reads as "&pound;1,334" is a requirement it
+    # can misread.
+    text = unescape(text)
     return re.sub(r"\s+", " ", text).strip()
 
 
@@ -84,7 +115,7 @@ async def fetch_page_text(client: httpx.AsyncClient, url: str) -> str:
         if ctype and not ctype.startswith("text/") and "html" not in ctype:
             log.info("web_fetch.page_skipped", url=url, content_type=ctype)
             return ""
-        return strip_html(resp.text[:8000])
+        return strip_html(resp.text[:RAW_HTML_LIMIT])
     except (httpx.HTTPError, ValueError) as exc:
         log.warning("web_fetch.page_failed", url=url, error=str(exc))
         return ""

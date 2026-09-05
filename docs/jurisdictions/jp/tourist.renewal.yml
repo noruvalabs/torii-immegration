@@ -2,7 +2,11 @@ scope:
   jurisdiction: JP
   visa_category: tourist
   action: renewal
-  is_live: true
+  # Parked: no authored form and no checklist yet. The ministry grants a 短期滞在
+  # extension only for genuinely unavoidable humanitarian reasons (人道上の真に
+  # やむをえない事情), so it is rare as well as unbuilt. Form 930004090 is published;
+  # page 1 already fits the shared layout and page 3 (form H) needs authoring.
+  is_live: false
   name: Japan Short-Stay Tourist Extension (短期滞在・在留期間更新許可申請)
 
 stages:

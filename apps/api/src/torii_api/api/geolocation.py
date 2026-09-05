@@ -90,7 +90,9 @@ async def list_destinations(
     if session:
         live_jurisdictions = (
             await session.scalars(
-                select(Jurisdiction).where(Jurisdiction.is_live.is_(True)).order_by(Jurisdiction.name)
+                select(Jurisdiction)
+                .where(Jurisdiction.is_live.is_(True), Jurisdiction.is_enabled.is_(True))
+                .order_by(Jurisdiction.name)
             )
         ).all()
         if live_jurisdictions:
@@ -119,6 +121,7 @@ async def list_visa_types(
             categories = await session.scalars(
                 select(VisaCategory)
                 .where(VisaCategory.jurisdiction_id == jurisdiction.id)
+                .where(VisaCategory.is_enabled.is_(True))
                 .where(VisaCategory.is_live.is_(True) | VisaCategory.research_enabled.is_(True))
                 .order_by(VisaCategory.code)
             )
@@ -130,7 +133,10 @@ async def list_visa_types(
                     if c.code in seen_codes:
                         continue
                     seen_codes.add(c.code)
-                    desc = (
+                    # A stored description is what this country's own page says about the
+                    # route, so it wins over the generic line below. The fallback ladder
+                    # covers the conventional codes that predate the column.
+                    desc = c.description or (
                         "Employment or business activities"
                         if c.code in ("work", "h1b")
                         else "Study at an educational institution"
@@ -174,6 +180,7 @@ async def list_application_types(
                     select(VisaCategory)
                     .where(VisaCategory.jurisdiction_id == jurisdiction.id)
                     .where(VisaCategory.code == v_code)
+                    .where(VisaCategory.is_enabled.is_(True))
                 )
 
             # Query actions associated with this visa category
@@ -184,6 +191,7 @@ async def list_application_types(
                     .join(IntakeDefinition, IntakeDefinition.case_action_id == CaseAction.id)
                     .where(IntakeDefinition.jurisdiction_id == jurisdiction.id)
                     .where(IntakeDefinition.visa_category_id == visa_cat.id)
+                    .where(CaseAction.is_enabled.is_(True))
                     .distinct()
                 )
                 action_list = list(intake_actions.all())
@@ -193,6 +201,7 @@ async def list_application_types(
                 actions = await session.scalars(
                     select(CaseAction)
                     .where(CaseAction.jurisdiction_id == jurisdiction.id)
+                    .where(CaseAction.is_enabled.is_(True))
                     .where(CaseAction.is_live.is_(True) | CaseAction.research_enabled.is_(True))
                     .order_by(CaseAction.code)
                 )
@@ -218,26 +227,30 @@ async def list_application_types(
                     seen_codes.add(a.code)
 
                     name = a.name
-                    desc = a.name
+                    desc = a.description or a.name
                     if v_code in ("permanent_resident", "pr", "ilr"):
                         name = "Permanent Residence Application"
                         desc = "Apply for permanent resident status (永住許可申請)"
                     elif v_code in ("tourist", "visitor", "b1b2"):
                         name = "Tourist / Entry Visa"
                         desc = "First-time short-term entry visa application"
+                    # The pack's own wording wins over these generic lines, which stay as
+                    # the fallback for actions that predate the description column.
                     elif a.code in ("new", "new_application"):
                         name = "New Visa"
-                        desc = (
+                        desc = a.description or (
                             "First-time application / Certificate of Eligibility (COE)"
                             if jurisdiction.code == "JP"
                             else "First-time visa application"
                         )
                     elif a.code == "renewal":
                         name = "Renewal / Extension"
-                        desc = "Extend or renew existing visa before expiration"
+                        desc = a.description or "Extend or renew existing visa before expiration"
                     elif a.code == "change_of_status":
                         name = "Change of status"
-                        desc = "Switch to a different visa status inside the country"
+                        desc = (
+                            a.description or "Switch to a different visa status inside the country"
+                        )
 
                     result.append(ApplicationTypeOut(code=a.code, name=name, description=desc))
                 return result
@@ -258,7 +271,9 @@ async def get_all_geo_data(
     if session:
         live_jurisdictions = (
             await session.scalars(
-                select(Jurisdiction).where(Jurisdiction.is_live.is_(True)).order_by(Jurisdiction.name)
+                select(Jurisdiction)
+                .where(Jurisdiction.is_live.is_(True), Jurisdiction.is_enabled.is_(True))
+                .order_by(Jurisdiction.name)
             )
         ).all()
         for j in live_jurisdictions:
