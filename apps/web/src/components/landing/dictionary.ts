@@ -47,6 +47,34 @@ export const dictionary = {
         "Ministry of Foreign Affairs (外務省)",
       ],
     },
+    valueProps: {
+      eyebrow: "Where the money actually goes",
+      title: "Three things a lawyer charges thousands for.",
+      items: [
+        {
+          title: "Knowing what Japan asks for",
+          body: "Not a generic list. The documents your exact route needs — work, student, short-stay, dependent, spouse — each one linked to the immigration page that requires it.",
+        },
+        {
+          title: "Filling the forms correctly",
+          body: "The statutory sheet for your procedure, filled from your answers. Blank wherever you have not answered, because nothing should be guessed on a document you sign.",
+        },
+        {
+          title: "Catching what gets you rejected",
+          body: "A name that differs between two forms, a certificate that expired last month, a photograph at the wrong size. The small things that send you back to the counter.",
+        },
+      ],
+    },
+    stats: {
+      title: "What that adds up to",
+      items: [
+        { value: "5", label: "Japan visa routes covered" },
+        { value: "3", label: "Procedures — new, renewal, change of status" },
+        { value: "¥0", label: "To check whether you qualify" },
+        { value: "0", label: "Fields invented on a form you sign" },
+      ],
+      note: "Torii prepares paperwork. It does not verify your documents and it does not decide your application — the immigration bureau does that.",
+    },
     hero: {
       eyebrow: "Japan visas · Free eligibility check",
       titleBefore: "Applying for a visa shouldn't be this ",
@@ -374,6 +402,34 @@ export const dictionary = {
       ],
       sourcesLabel: "要件はすべて、当局の公式ページから",
       sources: ["出入国在留管理庁", "法務省", "外務省"],
+    },
+    valueProps: {
+      eyebrow: "費用の正体",
+      title: "弁護士に数十万円を払う理由は、たいてい3つです。",
+      items: [
+        {
+          title: "日本が何を求めているかを知ること",
+          body: "一般的な一覧ではありません。就労・留学・短期滞在・家族滞在・配偶者等——あなたの手続きに必要な書類だけを、それを定める入管のページへのリンク付きで示します。",
+        },
+        {
+          title: "書式を正しく埋めること",
+          body: "手続きに対応する法定様式を、あなたの回答から作成します。未回答の欄は空欄のまま。署名する書類に推測を書き込むべきではないからです。",
+        },
+        {
+          title: "不許可の原因を先に見つけること",
+          body: "書式間で一致しない氏名、先月で切れた証明書、規格違いの写真。窓口から引き返すことになる、その小さな原因を洗い出します。",
+        },
+      ],
+    },
+    stats: {
+      title: "結果として",
+      items: [
+        { value: "5", label: "対応する日本のビザ" },
+        { value: "3", label: "手続き — 新規・更新・変更" },
+        { value: "¥0", label: "適格性の確認にかかる費用" },
+        { value: "0", label: "署名する書類に推測で書く項目" },
+      ],
+      note: "Toriiは書類の準備を行います。書類の真正性を確認するものでも、許否を判断するものでもありません。判断するのは入管です。",
     },
     hero: {
       eyebrow: "日本のビザ · 適格性チェックは無料",
