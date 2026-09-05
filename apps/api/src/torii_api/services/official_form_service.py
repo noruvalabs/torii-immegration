@@ -23,6 +23,7 @@ from torii_api.services.official_form_filler import (
     FillResult,
     fill_flat_form,
     missing_answer_keys,
+    resolve_answer,
 )
 from torii_api.services.official_form_store import ensure_template
 
@@ -182,6 +183,17 @@ STATUTORY_REQUIRED_KEYS = {
     "reason_for_change",
     "purpose_of_visit",
     "main_purpose",
+    "intended_length_of_stay",
+    "intended_length_of_stay_days",
+    "stay_days",
+    "stay_duration_days",
+    "length_of_stay_days",
+    "planned_arrival_date",
+    "port_of_entry",
+    "accommodation_name",
+    "accommodation_address",
+    "current_address",
+    "criminal_record",
     # Primary sponsor / school / employer
     "employer_name",
     "company_name",
@@ -238,5 +250,18 @@ def describe_scope_forms(
             entry["required_missing_keys"] = req_missing
             entry["optional_missing_keys"] = opt_missing
             entry["total_items"] = total
+        elif form.acroform_items:
+            missing = [
+                key
+                for _, key in form.acroform_items
+                if resolve_answer(key, answers) in (None, "")
+            ]
+            unique_missing = list(dict.fromkeys(missing))
+            req_missing = [k for k in unique_missing if k in STATUTORY_REQUIRED_KEYS]
+            opt_missing = [k for k in unique_missing if k not in STATUTORY_REQUIRED_KEYS]
+            entry["missing_answer_keys"] = unique_missing
+            entry["required_missing_keys"] = req_missing
+            entry["optional_missing_keys"] = opt_missing
+            entry["total_items"] = len(form.acroform_items)
         described.append(entry)
     return described

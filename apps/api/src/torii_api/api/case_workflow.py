@@ -365,11 +365,21 @@ async def _review(session: AsyncSession, case: Case) -> ReviewResult:
         DocumentOut.model_validate(item).model_dump(mode="json")
         for item in await _documents(session, case.id)
     ]
+    existing_forms = await _forms(session, case.id)
+    answers = dict(case.intake_answers or {})
+    if existing_forms and templates:
+        template_by_code = {t.code: t for t in templates}
+        for ef in existing_forms:
+            t = template_by_code.get(ef.form_code)
+            if t and t.field_mappings:
+                filled = fill_form(t.field_mappings, answers)
+                ef.filled_fields = filled.filled_fields
+                ef.missing_required_fields = filled.missing_required_fields
+        await session.flush()
     forms = [
-        GeneratedFormOut.model_validate(item).model_dump(mode="json")
-        for item in await _forms(session, case.id)
+        GeneratedFormOut.model_validate(item).model_dump(mode="json") for item in existing_forms
     ]
-    return review_packet(dict(case.intake_answers or {}), documents, forms, live_versions)
+    return review_packet(answers, documents, forms, live_versions)
 
 
 @router.patch("/{case_id}/locale", response_model=LocaleOut)
@@ -448,11 +458,19 @@ async def get_case_deadlines(
     from torii_api.services.deadlines import compute_deadlines
 
     case = await _owned_case(session, case_id, user)
-    _, _, a_code, _ = await _scope_label(session, case)
+    j_code, _, a_code, _ = await _scope_label(session, case)
     expiry = (case.intake_answers or {}).get("residence_card_expiry")
     if not expiry:
-        return {"residence_expiry": None, "procedure": a_code or ""}
-    return compute_deadlines(str(expiry), (a_code or "").replace("_", "").lower()).to_dict()
+        return {
+            "residence_expiry": None,
+            "procedure": a_code or "",
+            "jurisdiction": (j_code or "").upper(),
+        }
+    return compute_deadlines(
+        str(expiry),
+        (a_code or "").replace("_", "").lower(),
+        jurisdiction=j_code,
+    ).to_dict()
 
 
 @router.post("/{case_id}/checklist/refresh", response_model=list[ChecklistItemOut])
