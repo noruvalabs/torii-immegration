@@ -84,7 +84,10 @@ async def create_session(
         httponly=True,
         samesite="lax",
         secure=settings.cookie_secure,
-        path="/ai",
+        # The browser reaches this service both directly at /ai and through the
+        # Next.js /assistant/ai proxy. A root-scoped cookie preserves the same
+        # conversation on both route shapes.
+        path="/",
     )
     return SessionOut(
         conversation_id=convo.id,
@@ -161,7 +164,7 @@ async def post_message(
         httponly=True,
         samesite="lax",
         secure=settings.cookie_secure,
-        path="/ai",
+        path="/",
     )
     # request reserved for future auth header inspection
     _ = request

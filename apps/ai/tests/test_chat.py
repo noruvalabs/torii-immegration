@@ -89,6 +89,7 @@ async def test_session_sets_cookie(client: AsyncClient) -> None:
     assert body["conversation_id"]
     assert body["messages"] == []
     assert "ai_sid" in resp.cookies
+    assert "; Path=/;" in resp.headers["set-cookie"]
 
 
 @pytest.mark.asyncio
