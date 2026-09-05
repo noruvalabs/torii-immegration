@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import base64
 from dataclasses import dataclass
-from datetime import date
+from datetime import UTC, date, datetime
 from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
@@ -1486,8 +1486,47 @@ async def build_case_plan(
     return {"plan": plan}
 
 
+@router.post("/{case_id}/filed")
+async def record_case_filed(
+    case_id: int, session: SessionDep, user: CurrentUserDep
+) -> dict[str, Any]:
+    """Record that the applicant has filed the application themselves.
+
+    This is not the same act as ``/submit``, and conflating the two was a bug the
+    applicant met head-on: the packet step's "mark as filed" button called the e-file
+    endpoint, which refuses every jurisdiction that does not accept electronic submission
+    from a third party — Japan among them, because its bureau takes applications in
+    person. Handing an applicant "E-file is unavailable for this jurisdiction" when all
+    they said was that they had been to the counter is a refusal of the wrong question.
+
+    Filing it themselves is the normal path. Recording it freezes the packet they filed
+    from, so what was submitted can be reproduced later, and starts the renewal clock.
+    No submission reference is written: the receipt number comes from the office, and
+    inventing one would put a number on the case that no authority ever issued.
+    """
+    case = await _owned_case(session, case_id, user)
+    if case.packet_snapshot is None:
+        raise HTTPException(
+            status_code=400,
+            detail="assemble your filing kit before recording the application as filed",
+        )
+    filed_at = datetime.now(UTC).isoformat()
+    case.status = "submitted"
+    case.packet_snapshot = {**case.packet_snapshot, "filed_at": filed_at}
+    await session.flush()
+    return {
+        "status": case.status,
+        "filed_at": filed_at,
+        "submission_reference": case.submission_reference,
+    }
+
+
 @router.post("/{case_id}/submit")
 async def submit_case(case_id: int, session: SessionDep, user: CurrentUserDep) -> dict[str, str]:
+    """File electronically on the applicant's behalf, where the jurisdiction accepts it.
+
+    Most do not. An applicant who filed at a counter wants ``/filed`` instead.
+    """
     case = await _owned_case(session, case_id, user)
     jurisdiction = await session.get(Jurisdiction, case.jurisdiction_id)
     if jurisdiction is None or not jurisdiction.efile_enabled:

@@ -354,3 +354,86 @@ async def test_plan_is_scoped_to_the_owner(client: AsyncClient, engine: AsyncEng
     )
     assert response.status_code == 404
 
+
+# -- Recording that the applicant filed it -------------------------------------------
+
+
+async def _scoped_case(client: AsyncClient, email: str) -> tuple[dict[str, str], int]:
+    register = await client.post(
+        "/v1/auth/register", json={"email": email, "password": "secure-pass"}
+    )
+    headers = {"Authorization": f"Bearer {register.json()['access_token']}"}
+    scoped = await client.post(
+        "/v1/cases/scope",
+        json={
+            "jurisdiction_code": "JP",
+            "visa_category_code": "work",
+            "action_code": "renewal",
+            "locale": "en",
+        },
+        headers=headers,
+    )
+    return headers, scoped.json()["id"]
+
+
+async def test_filing_it_yourself_is_not_refused_for_lacking_e_file(
+    client: AsyncClient, engine: AsyncEngine
+) -> None:
+    """Japan's bureau takes applications in person, so e-file is off — and irrelevant here.
+
+    The packet step's button was calling the e-file endpoint, which answered someone who
+    had been to the counter with "E-file is unavailable for this jurisdiction".
+    """
+    await _seed_scope(engine)
+    headers, case_id = await _scoped_case(client, "filed@example.com")
+
+    # E-filing really is unavailable, and still says so.
+    refused = await client.post(f"/v1/cases/{case_id}/submit", headers=headers)
+    assert refused.status_code == 400
+    assert "E-file is unavailable" in refused.json()["detail"]
+
+    # Recording your own filing is a different act, and it works.
+    await client.post(f"/v1/cases/{case_id}/review", headers=headers)
+    await client.post(f"/v1/cases/{case_id}/review/acknowledge", headers=headers)
+    packet = await client.post(f"/v1/cases/{case_id}/packet", headers=headers)
+    assert packet.status_code == 200
+    filed = await client.post(f"/v1/cases/{case_id}/filed", headers=headers)
+    assert filed.status_code == 200
+    assert filed.json()["status"] == "submitted"
+    assert filed.json()["filed_at"]
+    # No receipt number is invented: that number comes from the office, not from Torii.
+    assert filed.json()["submission_reference"] is None
+
+    case = await client.get(f"/v1/cases/{case_id}", headers=headers)
+    assert case.json()["status"] == "submitted"
+    # And the journey moves on with it: the wait for a decision becomes the live stage.
+    journey = await client.get(f"/v1/cases/{case_id}/journey", headers=headers)
+    assert journey.json()["submitted"] is True
+    stages = {stage["key"]: stage for stage in journey.json()["stages"]}
+    assert stages["await_decision"]["status"] == "current"
+
+
+async def test_a_case_with_no_packet_cannot_be_recorded_as_filed(
+    client: AsyncClient, engine: AsyncEngine
+) -> None:
+    await _seed_scope(engine)
+    headers, case_id = await _scoped_case(client, "no-packet@example.com")
+    response = await client.post(f"/v1/cases/{case_id}/filed", headers=headers)
+    assert response.status_code == 400
+    assert "assemble your filing kit" in response.json()["detail"]
+
+
+async def test_recording_a_filing_is_scoped_to_the_owner(
+    client: AsyncClient, engine: AsyncEngine
+) -> None:
+    await _seed_scope(engine)
+    _headers, case_id = await _scoped_case(client, "filed-owner@example.com")
+    intruder = await client.post(
+        "/v1/auth/register",
+        json={"email": "filed-intruder@example.com", "password": "secure-pass"},
+    )
+    response = await client.post(
+        f"/v1/cases/{case_id}/filed",
+        headers={"Authorization": f"Bearer {intruder.json()['access_token']}"},
+    )
+    assert response.status_code == 404
