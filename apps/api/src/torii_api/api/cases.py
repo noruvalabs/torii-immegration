@@ -58,6 +58,7 @@ from torii_api.services.research import (
     research_questions,
     research_rules,
 )
+from torii_api.services.scope_availability import scope_is_available
 
 router = APIRouter(prefix="/v1/cases", tags=["cases"])
 
@@ -248,7 +249,12 @@ async def list_visa_categories(
     jurisdiction_code: str = Query(..., min_length=2, max_length=8),
     live_only: bool = False,
 ) -> list[VisaCategory]:
-    """List visa categories for a jurisdiction. ``live_only=true`` = what an applicant is offered."""
+    """List visa categories for a jurisdiction, optionally only the switched-on, backed ones.
+
+    ``live_only`` is a per-row filter, not the applicant's offer: a route only reaches
+    the visa-type step when a procedure with matching flags exists too — see
+    ``torii_api.services.scope_availability``.
+    """
     jurisdiction = await session.scalar(
         select(Jurisdiction).where(Jurisdiction.code == jurisdiction_code.upper())
     )
@@ -282,7 +288,12 @@ async def list_case_actions(
     jurisdiction_code: str = Query(..., min_length=2, max_length=8),
     live_only: bool = False,
 ) -> list[CaseAction]:
-    """List case actions for a jurisdiction. ``live_only=true`` = what an applicant is offered."""
+    """List case actions for a jurisdiction, optionally only the switched-on, backed ones.
+
+    ``live_only`` is a per-row filter, not the applicant's offer: a route only reaches
+    the visa-type step when a procedure with matching flags exists too — see
+    ``torii_api.services.scope_availability``.
+    """
     jurisdiction = await session.scalar(
         select(Jurisdiction).where(Jurisdiction.code == jurisdiction_code.upper())
     )
@@ -357,15 +368,11 @@ async def scope_case(
             detail=f"action '{payload.action_code}' is not available in {jurisdiction.code}",
         )
 
-    # The admin switch is checked here and not only in the listing: an applicant who kept a
-    # tab open, or posted the scope directly, must not get a case on a route ops has since
-    # switched off.
-    is_enabled_scope = (
-        jurisdiction.is_enabled and visa_category.is_enabled and case_action.is_enabled
-    )
-    is_live_scope = jurisdiction.is_live and visa_category.is_live and case_action.is_live
-    is_research_scope = visa_category.research_enabled and case_action.research_enabled
-    if not is_enabled_scope or not (is_live_scope or is_research_scope):
+    # Checked here and not only in the listing: an applicant who kept a tab open, or posted
+    # the scope directly, must not get a case on a route ops has since switched off. The
+    # test itself lives in one place so the listing endpoints cannot offer a scope this
+    # then refuses — see torii_api.services.scope_availability.
+    if not scope_is_available(jurisdiction, visa_category, case_action):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="this case scope is not available",
@@ -750,18 +757,21 @@ async def _def_flags(session: AsyncSession, case: Case) -> tuple[bool, bool, boo
     return has_intake, has_eligibility, has_docs, has_forms
 
 
-def _case_deadlines(case: Case, action_code: str | None) -> dict[str, object] | None:
+def _case_deadlines(
+    case: Case, action_code: str | None, jurisdiction_code: str | None
+) -> dict[str, object] | None:
     """Derive the deadline profile from the residence-card expiry intake answer.
 
     Returns ``None`` when no expiry is known yet (the applicant has not reached that intake
     branch). ``action_code`` (e.g. ``extend`` / ``change`` / ``new_application``) decides
-    whether the 特例期間 grace period applies.
+    whether a grace period applies, and ``jurisdiction_code`` decides whose statute says so
+    — Japan's 特例期間 is Japan's, and a case in another country gets its own rules or none.
     """
     expiry = (case.intake_answers or {}).get("residence_card_expiry")
     procedure = (action_code or "").replace("_", "").lower()
     if expiry is None:
         return None
-    return compute_deadlines(str(expiry), procedure).to_dict()
+    return compute_deadlines(str(expiry), procedure, jurisdiction=jurisdiction_code).to_dict()
 
 
 async def _case_guidance(session: AsyncSession, case: Case) -> GuidanceOut:
@@ -866,7 +876,7 @@ async def _case_guidance(session: AsyncSession, case: Case) -> GuidanceOut:
         has_form_def=has_forms,
         research_status=research_status,
         scope_label=label,
-        deadlines=_case_deadlines(case, a_code),
+        deadlines=_case_deadlines(case, a_code, j_code),
     )
     steps = research_progress_steps(research.payload if research is not None else None)
     _ = (j_code, v_code, a_code)
@@ -908,7 +918,104 @@ async def list_cases(
         select(Case).where(Case.user_id == user.id).order_by(Case.created_at.desc())
     )
     cases = list(result.scalars().all())
-    return [await _enrich_case(session, case) for case in cases]
+    if not cases:
+        return []
+
+    jurisdiction_ids = {c.jurisdiction_id for c in cases if c.jurisdiction_id}
+    visa_category_ids = {c.visa_category_id for c in cases if c.visa_category_id}
+    case_action_ids = {c.case_action_id for c in cases if c.case_action_id}
+
+    jurisdictions = (
+        {
+            j.id: j
+            for j in (
+                await session.scalars(
+                    select(Jurisdiction).where(Jurisdiction.id.in_(jurisdiction_ids))
+                )
+            ).all()
+        }
+        if jurisdiction_ids
+        else {}
+    )
+    visa_categories = (
+        {
+            v.id: v
+            for v in (
+                await session.scalars(
+                    select(VisaCategory).where(VisaCategory.id.in_(visa_category_ids))
+                )
+            ).all()
+        }
+        if visa_category_ids
+        else {}
+    )
+    case_actions = (
+        {
+            a.id: a
+            for a in (
+                await session.scalars(
+                    select(CaseAction).where(CaseAction.id.in_(case_action_ids))
+                )
+            ).all()
+        }
+        if case_action_ids
+        else {}
+    )
+
+    out: list[CaseOut] = []
+    for case in cases:
+        j = jurisdictions.get(case.jurisdiction_id)
+        v = visa_categories.get(case.visa_category_id) if case.visa_category_id else None
+        a = case_actions.get(case.case_action_id) if case.case_action_id else None
+        j_code = j.code if j else None
+        v_code = v.code if v else None
+        a_code = a.code if a else None
+        parts = [
+            p
+            for p in (
+                j.name if j else None,
+                v.name if v else None,
+                a.name if a else None,
+            )
+            if p
+        ]
+        label = " · ".join(parts) if parts else None
+
+        next_phase = "intake"
+        next_title = "Answer the intake questions"
+        if case.status == "submitted":
+            next_phase = "done"
+            next_title = "Application submitted"
+        elif case.status == "packet_ready":
+            next_phase = "packet"
+            next_title = "Review and download your packet"
+        elif case.status == "forms_generated":
+            next_phase = "review"
+            next_title = "Review your case"
+        elif case.status == "checklist_ready":
+            next_phase = "forms"
+            next_title = "Generate your application forms"
+        elif case.status == "intake_complete":
+            next_phase = "eligibility"
+            next_title = "Check eligibility"
+        elif case.intake_answers and len(case.intake_answers) > 0:
+            next_phase = "intake"
+            next_title = "Continue intake"
+
+        base = CaseOut.model_validate(case)
+        out.append(
+            base.model_copy(
+                update={
+                    "jurisdiction_code": j_code,
+                    "visa_category_code": v_code,
+                    "case_action_code": a_code,
+                    "scope_label": label,
+                    "next_phase": next_phase,
+                    "next_title": next_title,
+                }
+            )
+        )
+    return out
 
 
 @router.get("/{case_id}/intake", response_model=IntakeStateOut)
@@ -954,8 +1061,14 @@ INTAKE_KEY_ALIASES: dict[str, list[str]] = {
     "attendance_percentage": ["attendance_rate", "school_attendance_rate"],
     "purpose_of_visit": ["main_purpose", "purpose", "visit_purpose"],
     "main_purpose": ["purpose_of_visit", "purpose", "visit_purpose"],
-    "intended_length_of_stay_days": ["stay_duration_days", "length_of_stay_days", "stay_days"],
-    "stay_duration_days": ["intended_length_of_stay_days", "length_of_stay_days", "stay_days"],
+    "intended_length_of_stay_days": ["stay_duration_days", "length_of_stay_days", "stay_days", "duration_of_stay"],
+    "stay_duration_days": ["intended_length_of_stay_days", "length_of_stay_days", "stay_days", "duration_of_stay"],
+    "length_of_stay_days": ["intended_length_of_stay_days", "stay_duration_days", "stay_days", "duration_of_stay"],
+    "stay_days": ["intended_length_of_stay_days", "stay_duration_days", "length_of_stay_days", "duration_of_stay"],
+    "support_type": ["financial_support_type", "visitor_has_sufficient_funds", "has_sufficient_funds"],
+    "financial_support_type": ["support_type", "visitor_has_sufficient_funds", "has_sufficient_funds"],
+    "visitor_has_sufficient_funds": ["has_sufficient_funds", "support_type", "financial_support_type"],
+    "has_sufficient_funds": ["visitor_has_sufficient_funds", "support_type", "financial_support_type"],
     "passport_number": ["passport_no", "passport"],
     "passport_no": ["passport_number", "passport"],
     "birth_date": ["date_of_birth", "dob"],

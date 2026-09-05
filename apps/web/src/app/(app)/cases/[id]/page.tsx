@@ -16,7 +16,7 @@ import {
   getCase, getCaseGuidance, getIntake, answerIntake, evaluateEligibility, getEligibility,
   refreshChecklist, getChecklist, patchChecklistItem,
   generateForms, getForms, reviewCase, acknowledgeReview,
-  buildPacket, getPacket, submitCase,
+  buildPacket, getPacket, recordCaseFiled,
   type Case, type CaseGuidance, type IntakeState, type EligibilityResult,
   type ChecklistItem, type GeneratedForm, type ReviewResult,
 } from "@/lib/api/cases";
@@ -297,15 +297,16 @@ export default function CaseDetailPage() {
     }
   }
 
+  /** The applicant telling us they have filed it — not a request for Torii to file it. */
   async function handleSubmit() {
     if (!token) return;
     setSubmitting(true);
     setError(null);
     try {
-      await submitCase(token, caseId);
+      await recordCaseFiled(token, caseId);
       await loadCase();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Submission failed");
+      setError(e instanceof Error ? e.message : "Could not record the application as filed");
     } finally {
       setSubmitting(false);
     }

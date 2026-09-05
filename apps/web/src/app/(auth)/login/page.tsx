@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { login, googleLogin } from "@/lib/api/auth";
 import { useAuth } from "@/lib/auth-context";
 import { useI18n } from "@/lib/i18n";
+import { ToriiLogo } from "@/components/brand/ToriiLogo";
 
 export function GoogleLogo() {
   return (
@@ -80,9 +81,9 @@ export default function LoginPage() {
   return (
     <div className="w-full max-w-md space-y-4">
       <div className="flex items-center px-1">
-        <Link href="/" className="flex items-center gap-2 font-bold text-sm">
-          <span>⛩️</span>
-          <span>Torii</span>
+        <Link href="/" className="flex items-center gap-3 font-bold">
+          <ToriiLogo size={36} />
+          <span className="text-xl tracking-tight">Torii</span>
         </Link>
       </div>
 

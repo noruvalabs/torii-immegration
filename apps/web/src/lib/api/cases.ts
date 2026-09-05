@@ -8,17 +8,44 @@ function authHeaders(token: string | null): Record<string, string> {
   return h;
 }
 
+const inFlightRequests = new Map<string, Promise<unknown>>();
+
 async function req<T>(path: string, token: string | null, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${API}${path}`, {
-    ...init,
-    headers: { ...authHeaders(token), ...init?.headers },
-  });
-  if (!res.ok) {
-    const body = (await res.json().catch(() => null)) as { detail?: unknown } | null;
-    throw new Error(formatApiDetail(body?.detail) || `Request failed (${res.status})`);
+  const method = (init?.method || "GET").toUpperCase();
+  const isGet = method === "GET";
+  const dedupeKey = isGet ? `${token || ""}:${path}` : null;
+
+  if (dedupeKey) {
+    const existing = inFlightRequests.get(dedupeKey);
+    if (existing) {
+      return existing as Promise<T>;
+    }
   }
-  if (res.status === 204) return undefined as T;
-  return res.json() as Promise<T>;
+
+  const execute = async () => {
+    try {
+      const res = await fetch(`${API}${path}`, {
+        ...init,
+        headers: { ...authHeaders(token), ...init?.headers },
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as { detail?: unknown } | null;
+        throw new Error(formatApiDetail(body?.detail) || `Request failed (${res.status})`);
+      }
+      if (res.status === 204) return undefined as T;
+      return (await res.json()) as T;
+    } finally {
+      if (dedupeKey) {
+        inFlightRequests.delete(dedupeKey);
+      }
+    }
+  };
+
+  const promise = execute();
+  if (dedupeKey) {
+    inFlightRequests.set(dedupeKey, promise);
+  }
+  return promise;
 }
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -441,8 +468,155 @@ export function getPacket(token: string, caseId: number) {
   return req<Record<string, unknown>>(`/cases/${caseId}/packet`, token);
 }
 
+// ── Document export ────────────────────────────────────────────────────────────
+
+export type ExportFormat = "pdf" | "docx";
+
+export type ExportDocumentInput = {
+  title: string;
+  content: string;
+  filename_stem?: string;
+};
+
+export type ExportedFile = {
+  filename: string;
+  media_type: string;
+  data_base64: string;
+  size_bytes: number;
+};
+
+/**
+ * Render the drafts the applicant has on screen as real files.
+ *
+ * The text is sent back to the server because it is theirs: template, AI draft, or
+ * either of those after they edited it in the textarea. `separate` returns a zip with
+ * one file per document instead of a single file holding all of them.
+ */
+export function exportCaseDocuments(
+  token: string,
+  caseId: number,
+  data: { documents: ExportDocumentInput[]; format: ExportFormat; separate?: boolean },
+) {
+  return req<ExportedFile>(`/cases/${caseId}/export/documents?format=base64`, token, {
+    method: "POST",
+    headers: { Accept: "application/json" },
+    body: JSON.stringify(data),
+  });
+}
+
+// ── Journey ────────────────────────────────────────────────────────────────────
+
+export type JourneyStage = {
+  key: string;
+  order: number;
+  title: string;
+  detail: string;
+  owner: "torii" | "you" | "authority" | "third_party";
+  status: "done" | "current" | "todo";
+  phase: string | null;
+  done_count: number | null;
+  total_count: number | null;
+  authority: string | null;
+  official_citation_url: string | null;
+  portal_url: string | null;
+  notes: string[];
+};
+
+export type JourneyExternalTask = {
+  code: string;
+  category: string;
+  categories: string[];
+  title: string;
+  arranged_with: string;
+  lead_time: string;
+  guidance: string;
+  how_to_obtain: string;
+  why_required: string;
+  is_required: boolean;
+  status: string;
+  checklist_item_id: number | null;
+  official_citation_url: string | null;
+  options: { label: string; url: string | null }[];
+};
+
+export type CaseJourney = {
+  reference: string;
+  scope_label: string;
+  phase: string;
+  filing_mode: string;
+  apply_url: string | null;
+  submitted: boolean;
+  stages: JourneyStage[];
+  external_tasks: JourneyExternalTask[];
+  checklist_progress: { done: number; total: number };
+  external_progress: { done: number; total: number };
+  office: string | null;
+  filed_by: string | null;
+  fee_note: string | null;
+  notes: string[];
+};
+
+export function getCaseJourney(token: string, caseId: number) {
+  return req<CaseJourney>(`/cases/${caseId}/journey`, token);
+}
+
+// ── Action plan ────────────────────────────────────────────────────────────────
+
+export type PlanAction = {
+  title: string;
+  detail: string;
+  lead_time?: string | null;
+};
+
+export type CasePlan = {
+  headline: string;
+  ready_to_file: boolean;
+  time_to_ready: string | null;
+  start_now: PlanAction[];
+  then: PlanAction[];
+  risks: PlanAction[];
+  questions: string[];
+  disclaimer: string;
+  model_used: string;
+  generated_at: string;
+};
+
+/** The plan already built for this case, or `null` if it has not been built yet. */
+export function getCasePlan(token: string, caseId: number) {
+  return req<{ plan: CasePlan | null }>(`/cases/${caseId}/plan`, token);
+}
+
+/**
+ * Build the plan once and keep it on the case.
+ *
+ * The API prepares the case — the outstanding items and their lead times, the cited
+ * filing route, the answers that say something — before the model sees it, and stores
+ * the result. The browser never talks to the AI service directly: when that service is
+ * slow or down the applicant used to get a proxy 500 instead of a plan.
+ */
+export function buildCasePlan(token: string, caseId: number) {
+  return req<{ plan: CasePlan }>(`/cases/${caseId}/plan`, token, { method: "POST" });
+}
+
 // ── Submission ─────────────────────────────────────────────────────────────────
 
+/**
+ * Record that the applicant filed the application themselves.
+ *
+ * Not the same call as `submitCase`, which asks Torii to file electronically — that is
+ * refused by every jurisdiction whose authority does not accept third-party electronic
+ * submission, Japan included. Someone reporting a trip to the counter was being told
+ * "E-file is unavailable for this jurisdiction", which answers a question they did not ask.
+ */
+export function recordCaseFiled(token: string, caseId: number) {
+  return req<{ status: string; filed_at: string; submission_reference: string | null }>(
+    `/cases/${caseId}/filed`,
+    token,
+    { method: "POST" },
+  );
+}
+
+/** Electronic filing by Torii, where the jurisdiction accepts it. Most do not. */
 export function submitCase(token: string, caseId: number) {
   return req<{ submission_reference: string }>(`/cases/${caseId}/submit`, token, { method: "POST" });
 }

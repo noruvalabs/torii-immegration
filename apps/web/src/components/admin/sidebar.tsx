@@ -17,6 +17,7 @@ import {
   Settings,
   User as UserIcon,
 } from "lucide-react";
+import { ToriiLogo } from "@/components/brand/ToriiLogo";
 
 export function Sidebar() {
   const pathname = usePathname();
@@ -292,12 +293,10 @@ export function Sidebar() {
         )}
       >
         <div className="flex h-16 items-center justify-between border-b px-4">
-          <div className="flex items-center gap-2">
-            <span className="text-2xl" aria-hidden>
-              ⛩️
-            </span>
+          <div className="flex items-center gap-3">
+            <ToriiLogo size={34} />
             <div className="flex flex-col">
-              <span className="text-base font-bold tracking-tight bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">
+              <span className="text-lg font-bold tracking-tight bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">
                 Torii
               </span>
               <span className="text-[10px] text-muted-foreground -mt-0.5">
@@ -338,18 +337,16 @@ export function Sidebar() {
               type="button"
               onClick={toggleCollapsed}
               title={lang === "ja" ? "サイドバーを展開" : "Expand sidebar"}
-              className="flex size-9 items-center justify-center rounded-xl text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+              className="flex size-11 items-center justify-center rounded-xl text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
             >
-              <PanelLeftOpen className="size-5" />
+              <ToriiLogo size={26} />
             </button>
           ) : (
             <>
-              <div className="flex items-center gap-2.5 min-w-0">
-                <span className="text-2xl shrink-0" aria-hidden>
-                  ⛩️
-                </span>
+              <div className="flex items-center gap-3 min-w-0">
+                <ToriiLogo size={34} />
                 <div className="flex flex-col min-w-0">
-                  <span className="text-base font-bold tracking-tight bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent truncate">
+                  <span className="text-lg font-bold tracking-tight bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent truncate">
                     Torii
                   </span>
                   <span className="text-[10px] text-muted-foreground -mt-0.5 truncate">

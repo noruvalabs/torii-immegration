@@ -41,12 +41,17 @@ export const FAQ_ORDER: FaqId[] = [
   "finalOutput",
 ];
 
-export type JurisdictionId = "jp" | "us" | "uk";
+/** The Japan routes the scope picker actually offers today. Torii covers one country
+ *  properly rather than three partially, so the landing page names the routes instead of
+ *  flying flags for countries a visitor cannot yet file to. */
+export type JpRouteId = "work" | "student" | "tourist" | "dependent" | "spouse";
 
-export const JURISDICTION_ORDER: { id: JurisdictionId; flag: string; live: boolean }[] = [
-  { id: "jp", flag: "🇯🇵", live: true },
-  { id: "us", flag: "🇺🇸", live: true },
-  { id: "uk", flag: "🇬🇧", live: true },
+export const JP_ROUTE_ORDER: { id: JpRouteId; kanji: string }[] = [
+  { id: "work", kanji: "技術・人文知識・国際業務" },
+  { id: "student", kanji: "留学" },
+  { id: "tourist", kanji: "短期滞在" },
+  { id: "dependent", kanji: "家族滞在" },
+  { id: "spouse", kanji: "日本人の配偶者等" },
 ];
 
 export type PricingTierId = "scope" | "guided" | "review";

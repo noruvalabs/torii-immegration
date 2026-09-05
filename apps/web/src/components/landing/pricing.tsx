@@ -1,9 +1,9 @@
 "use client";
 
-import Link from "next/link";
 import { Check } from "lucide-react";
 import { PRICING_TIER_ORDER } from "./data";
 import { Reveal } from "./reveal";
+import { StartCaseButton } from "./start-case-button";
 import { useLang } from "./i18n";
 import { dictionary } from "./dictionary";
 import { cn } from "@/lib/utils";
@@ -58,17 +58,12 @@ export function Pricing() {
                   ))}
                 </ul>
 
-                <Link
-                  href="/scope"
-                  className={cn(
-                    "mt-7 inline-flex items-center justify-center rounded-full px-5 py-3 text-sm font-medium transition-all",
-                    highlighted
-                      ? "bg-primary text-primary-foreground shadow-md hover:-translate-y-0.5"
-                      : "border hover:bg-accent",
-                  )}
-                >
-                  {tier.cta}
-                </Link>
+                <StartCaseButton
+                  variant={highlighted ? "solid" : "outline"}
+                  signedOutLabel={tier.cta}
+                  showArrow={false}
+                  className="mt-7 w-full px-5 py-3"
+                />
               </Reveal>
             );
           })}

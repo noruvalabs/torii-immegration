@@ -66,6 +66,14 @@ async def test_list_visa_types_dynamic_destination(
                 f" VALUES ({jid}, 'work', 'Work Visa', 1)"
             )
         )
+        # A route on its own is not an offer: a case needs a procedure too, and one
+        # sourced the same way the route is. See services/scope_availability.
+        await conn.execute(
+            text(
+                "INSERT INTO case_actions (jurisdiction_id, code, name, is_live)"
+                f" VALUES ({jid}, 'new', 'New Visa', 1)"
+            )
+        )
 
     resp = await client.get("/v1/geo/visa-types", params={"destination": "JP"})
     assert resp.status_code == 200

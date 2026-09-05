@@ -313,7 +313,7 @@ async def delete_jurisdiction(
     jurisdiction_id: int,
     session: SessionDep,
     _admin: AdminDep,
-) -> None:
+) -> Response:
     """Delete a jurisdiction (admin only). Fails if it has associated cases."""
     jurisdiction = await session.get(Jurisdiction, jurisdiction_id)
     if jurisdiction is None:
@@ -342,6 +342,7 @@ async def delete_jurisdiction(
     await session.execute(delete(VisaCategory).where(VisaCategory.jurisdiction_id == jurisdiction_id))
     await session.delete(jurisdiction)
     await session.flush()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 # ── Admin: discover what a country offers ─────────────────────────────────────
@@ -442,7 +443,11 @@ async def list_visa_categories(
     session: SessionDep,
     live_only: bool = False,
 ) -> list[VisaCategory]:
-    """List visa categories for a jurisdiction; ``live_only`` = what an applicant is offered."""
+    """List visa categories for a jurisdiction, admin view.
+
+    ``live_only`` filters this row alone. What an applicant is offered additionally
+    requires a procedure whose flags match — see ``torii_api.services.scope_availability``.
+    """
     jurisdiction = await session.get(Jurisdiction, jurisdiction_id)
     if jurisdiction is None:
         raise HTTPException(

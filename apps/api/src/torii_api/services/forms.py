@@ -33,13 +33,18 @@ FORM_ANSWER_KEY_ALIASES: dict[str, list[str]] = {
     "passport_expiry_date": ["passport_expiry", "expiry_date"],
     "purpose_of_visit": ["main_purpose", "purpose_of_stay", "trip_purpose", "purpose"],
     "main_purpose": ["purpose_of_visit", "purpose_of_stay", "trip_purpose", "purpose"],
-    "intended_length_of_stay_days": ["stay_duration_days", "duration_of_stay", "duration"],
-    "stay_duration_days": ["intended_length_of_stay_days", "duration_of_stay", "duration"],
+    "intended_length_of_stay_days": ["stay_duration_days", "duration_of_stay", "duration", "length_of_stay_days", "stay_days", "visit.length_of_stay_days"],
+    "stay_duration_days": ["intended_length_of_stay_days", "duration_of_stay", "duration", "length_of_stay_days", "stay_days", "visit.length_of_stay_days"],
+    "length_of_stay_days": ["intended_length_of_stay_days", "stay_duration_days", "duration_of_stay", "duration", "stay_days", "visit.length_of_stay_days"],
+    "stay_days": ["intended_length_of_stay_days", "stay_duration_days", "duration_of_stay", "duration", "length_of_stay_days", "visit.length_of_stay_days"],
     "arrival_date": ["planned_arrival_date", "intended_arrival_date"],
     "planned_arrival_date": ["arrival_date", "intended_arrival_date"],
     # Only the same question asked another way. A savings figure or a choice of payer is
     # evidence a human weighs, not a declaration that funds are sufficient.
-    "visitor_has_sufficient_funds": ["has_sufficient_funds"],
+    "visitor_has_sufficient_funds": ["has_sufficient_funds", "support_type", "financial_support_type", "financial.support_type"],
+    "has_sufficient_funds": ["visitor_has_sufficient_funds", "support_type", "financial_support_type", "financial.support_type"],
+    "support_type": ["visitor_has_sufficient_funds", "has_sufficient_funds", "financial_support_type", "financial.support_type"],
+    "financial_support_type": ["support_type", "financial.support_type", "visitor_has_sufficient_funds", "has_sufficient_funds"],
     "relationship_to_visitor": ["relationship", "sponsor_relationship", "relationship_to_applicant"],
     "relationship": ["relationship_to_visitor", "sponsor_relationship", "relationship_to_applicant"],
     "current_residence_country": ["residence_country", "current_location_country", "country_of_residence"],
@@ -53,6 +58,13 @@ FORM_ANSWER_KEY_ALIASES: dict[str, list[str]] = {
     "employer_name": ["employer", "company_name", "sponsoring_organization", "host_company_name"],
     "corporate_number": ["employer_corporate_number", "company_number", "organization_number"],
     "employer_corporate_number": ["corporate_number", "company_number", "organization_number"],
+    "attendance_rate": ["school.attendance_rate", "school_attendance_rate"],
+    "school.attendance_rate": ["attendance_rate", "school_attendance_rate"],
+    "school_attendance_rate": ["attendance_rate", "school.attendance_rate"],
+    "school.enrollment_status": ["school_completed", "enrollment_status", "school_enrollment_status"],
+    "school_completed": ["school.enrollment_status", "enrollment_status", "school_enrollment_status"],
+    "enrollment_status": ["school.enrollment_status", "school_completed", "school_enrollment_status"],
+    "school_enrollment_status": ["school.enrollment_status", "school_completed", "enrollment_status"],
 }
 
 
@@ -70,11 +82,25 @@ def _resolve_form_field_value(answer_key: str, answers: dict[str, Any]) -> Any:
     if value is not None and value != "":
         return value
 
+    # 1b. Clean key without section/category prefix (e.g. "visit.length_of_stay_days" -> "length_of_stay_days")
+    clean_key = answer_key.split(".")[-1]
+    if clean_key != answer_key:
+        value = answers.get(clean_key)
+        if value is not None and value != "":
+            return value
+
     # 2. An alias the packs use for the same fact.
     for alias in FORM_ANSWER_KEY_ALIASES.get(answer_key, []):
         candidate = answers.get(alias)
         if candidate is not None and candidate != "":
             return candidate
+
+    # 2b. Aliases of clean key
+    if clean_key != answer_key:
+        for alias in FORM_ANSWER_KEY_ALIASES.get(clean_key, []):
+            candidate = answers.get(alias)
+            if candidate is not None and candidate != "":
+                return candidate
 
     return None
 

@@ -6,6 +6,7 @@ export { ReviewStep } from "./ReviewStep";
 export { PacketStep } from "./PacketStep";
 export { ResearchStep } from "./ResearchStep";
 export { DeadlinesCard } from "./DeadlinesCard";
+export { JourneyMap } from "./JourneyMap";
 export type {
   Step,
   Case,

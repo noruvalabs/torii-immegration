@@ -1,6 +1,7 @@
 export const dictionary = {
   en: {
     nav: {
+      outcomes: "What you get",
       howItWorks: "How it works",
       features: "Features",
       pricing: "Pricing",
@@ -10,13 +11,49 @@ export const dictionary = {
       dashboard: "Dashboard",
       startCase: "Start your case",
     },
+    cta: {
+      startFree: "Check my eligibility — free",
+      stickyCta: "Check my eligibility — free",
+      reassure: ["Free eligibility check", "No card required", "Save and come back anytime"],
+      returningBefore: "Already started a case? ",
+      returningLink: "Sign in",
+    },
+    outcomes: {
+      eyebrow: "What you walk away with",
+      title: "Not advice. Documents.",
+      body: "Four things end up in your hands, and every one of them traces back to the official page that required it.",
+      items: [
+        {
+          title: "Your official form, filled",
+          body: "The statutory sheet your procedure actually requires, filled from your answers and left blank wherever you have not answered. Nothing is guessed on a document you sign.",
+        },
+        {
+          title: "A checklist that cites its source",
+          body: "Every document your case needs, why it is required, and a link to the government page that says so — so you can check anything Torii tells you.",
+        },
+        {
+          title: "Drafts you can finish and sign",
+          body: "Cover letter, statement of purpose, schedule of stay. Download them as a PDF to file, or as a Word file to edit in your own words first.",
+        },
+        {
+          title: "A plan with real lead times",
+          body: "What to start today, how long a bank letter or a police certificate actually takes, and the things that get applications handed back at the counter.",
+        },
+      ],
+      sourcesLabel: "Requirements come from the authorities themselves",
+      sources: [
+        "Immigration Services Agency of Japan (出入国在留管理庁)",
+        "Ministry of Justice (法務省)",
+        "Ministry of Foreign Affairs (外務省)",
+      ],
+    },
     hero: {
-      eyebrow: "Guided visa & immigration filing",
-      titleBefore: "File your visa application ",
-      titleAccent: "correctly",
-      titleAfter: " — for a fraction of a lawyer's fee.",
-      body: "Torii walks you from “which forms do I even need?” to a submission-ready packet: a branching intake, a personalized document checklist, and auto-filled government forms — every step sourced to the official page it came from.",
-      ctaPrimary: "Start your case",
+      eyebrow: "Japan visas · Free eligibility check",
+      titleBefore: "Applying for a visa shouldn't be this ",
+      titleAccent: "complicated",
+      titleAfter: " — or cost thousands.",
+      body: "Meet Torii. It tells you exactly which documents Japan asks for, fills your official forms from your answers, and catches the mistakes that get applications handed back at the counter. See whether you qualify before you pay anything.",
+      ctaPrimary: "Check my eligibility — free",
       ctaSecondary: "See how it works",
       disclaimerBefore: "Torii is ",
       disclaimerStrong: "not a legal advisor",
@@ -79,14 +116,18 @@ export const dictionary = {
         meta: "2.4 MB · 9 pages · submission-ready",
       },
     },
-    jurisdictions: {
-      eyebrow: "Built jurisdiction by jurisdiction, not all at once",
-      inProgress: "In progress",
-      items: {
-        jp: { name: "Japan", detail: "Work visa · tourist visa (J3) · renewal & new application" },
-        us: { name: "United States", detail: "H-1B specialty worker · tourist / visitor visa (B1/B2)" },
-        uk: { name: "United Kingdom", detail: "Standard visitor visa · work & study" },
+    coverage: {
+      eyebrow: "Japan, today",
+      title: "Every Japan visa route we cover",
+      body: "Torii is built one country at a time, so the one it covers is genuinely finished rather than three half-done. New applications, renewals and changes of status.",
+      routes: {
+        work: { name: "Work visa", detail: "Engineer / Specialist in Humanities / International Services" },
+        student: { name: "Student visa", detail: "University, college or language school" },
+        tourist: { name: "Tourist / Temporary Visitor", detail: "Short-term travel, business, visiting relatives" },
+        dependent: { name: "Dependent visa", detail: "Spouse and children of work or student residents" },
+        spouse: { name: "Spouse or child of a Japanese national or PR", detail: "日本人の配偶者等 / 永住者の配偶者等" },
       },
+      more: "More countries on the way",
     },
     howItWorks: {
       eyebrow: "How it works",
@@ -264,7 +305,7 @@ export const dictionary = {
         supportedJurisdictions: {
           question: "Which countries and visa types are supported?",
           answer:
-            "Torii is built jurisdiction by jurisdiction rather than all at once, so each one is genuinely complete before it goes live. Today that means Bangladesh to Japan, United States, and the United Kingdom, with more jurisdictions and categories rolling out after.",
+            "Japan, today — work (技術・人文知識・国際業務), student (留学), short-stay tourist and family visit (短期滞在), dependent (家族滞在), and spouse or child of a Japanese national or permanent resident, for new applications, renewals and changes of status. Torii is built one country at a time so each is genuinely complete before it goes live; more are on the way.",
         },
         complexCase: {
           question: "What happens if my case is more complicated than a checklist?",
@@ -292,6 +333,7 @@ export const dictionary = {
   },
   ja: {
     nav: {
+      outcomes: "得られるもの",
       howItWorks: "利用の流れ",
       features: "特長",
       pricing: "料金",
@@ -301,13 +343,45 @@ export const dictionary = {
       dashboard: "ダッシュボード",
       startCase: "申請を始める",
     },
+    cta: {
+      startFree: "無料で適格性をチェック",
+      stickyCta: "無料で適格性をチェック",
+      reassure: ["適格性チェックは無料", "クレジットカード不要", "いつでも中断・再開"],
+      returningBefore: "すでに申請を始めていますか？ ",
+      returningLink: "ログイン",
+    },
+    outcomes: {
+      eyebrow: "手元に残るもの",
+      title: "アドバイスではなく、書類を。",
+      body: "4つの成果物が手元に残ります。そのすべてが、根拠となる公式ページまでたどれます。",
+      items: [
+        {
+          title: "記入済みの公式書式",
+          body: "手続きに実際に必要な法定様式に、あなたの回答をそのまま反映します。未回答の欄は空欄のまま——署名する書類に推測を書き込むことはありません。",
+        },
+        {
+          title: "出典付きのチェックリスト",
+          body: "必要な書類、その理由、そして根拠となる政府ページへのリンク。Toriiの説明はすべてご自身で確認できます。",
+        },
+        {
+          title: "仕上げて署名できる下書き",
+          body: "カバーレター、理由書、滞在予定表。提出用のPDFで、あるいはご自身の言葉に直せるWord形式で書き出せます。",
+        },
+        {
+          title: "所要期間まで含めた計画",
+          body: "今日から動くべきこと、残高証明書や無犯罪証明書に実際かかる期間、そして窓口で申請が差し戻される原因。",
+        },
+      ],
+      sourcesLabel: "要件はすべて、当局の公式ページから",
+      sources: ["出入国在留管理庁", "法務省", "外務省"],
+    },
     hero: {
-      eyebrow: "ビザ・在留資格申請を伴走サポート",
-      titleBefore: "ビザ申請を",
-      titleAccent: "正しく",
-      titleAfter: "。弁護士費用のごく一部で。",
-      body: "Toriiは「どの書類が必要かわからない」という状態から、提出できる状態の申請一式まで案内します。分岐式のヒアリング、あなた専用の必要書類チェックリスト、政府書式への自動入力——すべてのステップに、根拠となる公式ページの出典が付きます。",
-      ctaPrimary: "申請を始める",
+      eyebrow: "日本のビザ · 適格性チェックは無料",
+      titleBefore: "ビザ申請は、こんなに",
+      titleAccent: "ややこしい",
+      titleAfter: "必要はありません。費用も同じです。",
+      body: "Toriiが、日本が求める書類を正確に示し、あなたの回答から公式書式を作成し、窓口で申請が差し戻される原因になるミスを事前に見つけます。お支払いの前に、まず適格性をご確認ください。",
+      ctaPrimary: "無料で適格性をチェック",
       ctaSecondary: "利用の流れを見る",
       disclaimerBefore: "Toriiは",
       disclaimerStrong: "法律専門家ではありません",
@@ -370,14 +444,18 @@ export const dictionary = {
         meta: "2.4 MB · 9ページ · 提出準備完了",
       },
     },
-    jurisdictions: {
-      eyebrow: "国・地域ごとに、着実に対応を広げています",
-      inProgress: "準備中",
-      items: {
-        jp: { name: "日本", detail: "就労ビザ・観光ビザ（J3）· 更新・新規申請" },
-        us: { name: "アメリカ合衆国", detail: "H-1B専門職ビザ · 観光/短期商用ビザ (B1/B2)" },
-        uk: { name: "イギリス（英国）", detail: "標準ビザ · 就労・留学ビザ" },
+    coverage: {
+      eyebrow: "現在の対応：日本",
+      title: "対応している日本のビザ",
+      body: "Toriiは一度に何か国も広げず、まず一つの国を完成させます。新規申請・更新・在留資格変更に対応しています。",
+      routes: {
+        work: { name: "就労ビザ", detail: "技術・人文知識・国際業務" },
+        student: { name: "留学ビザ", detail: "大学・専門学校・日本語学校" },
+        tourist: { name: "短期滞在", detail: "観光・商用・知人訪問" },
+        dependent: { name: "家族滞在", detail: "就労・留学ビザ保持者の配偶者と子" },
+        spouse: { name: "日本人の配偶者等", detail: "日本人・永住者の配偶者等" },
       },
+      more: "他の国も準備中です",
     },
     howItWorks: {
       eyebrow: "利用の流れ",
@@ -555,7 +633,7 @@ export const dictionary = {
         supportedJurisdictions: {
           question: "対応している国・ビザの種類は？",
           answer:
-            "Toriiは一度にすべてではなく、国・地域ごとに着実に対応を広げています。現在はバングラデシュ発の日本、アメリカ、イギリスへの申請に対応しており、今後さらに国とビザの種類が追加される予定です。",
+            "現在は日本です。就労（技術・人文知識・国際業務）、留学、短期滞在（観光・知人訪問）、家族滞在、日本人・永住者の配偶者等に対応し、新規申請・更新・在留資格変更のいずれも扱えます。Toriiは一度に何か国も広げず、一つずつ完成させてから公開しています。他の国も準備中です。",
         },
         complexCase: {
           question: "チェックリストだけでは対応しきれない場合はどうなりますか？",

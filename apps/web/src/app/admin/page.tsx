@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { ToriiLogo } from "@/components/brand/ToriiLogo";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth-context";
 import { useI18n } from "@/lib/i18n";
@@ -165,7 +166,7 @@ export default function DashboardPage() {
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 relative z-10">
           <div>
             <div className="flex items-center gap-2 mb-1">
-              <span className="text-xl">⛩️</span>
+              <ToriiLogo size={24} />
               <Badge tone="default" className="text-[10px] font-bold tracking-wider uppercase">
                 {lang === "ja" ? "法務省・出入国在留管理庁 基準準拠" : "ISA & Consular Regulatory Compliant"}
               </Badge>

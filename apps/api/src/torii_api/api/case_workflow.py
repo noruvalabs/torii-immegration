@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import base64
 from dataclasses import dataclass
-from datetime import date
+from datetime import UTC, date, datetime
 from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
@@ -32,9 +32,16 @@ from torii_api.db.models import (
 )
 from torii_api.db.session import get_session
 from torii_api.services.agentic import find_admissibility, scope_key, stage_is_usable
+from torii_api.services.case_plan import build_payload, request_plan
 from torii_api.services.checklist import ChecklistStatus, update_status, visible_requirement_items
 from torii_api.services.citations import resolve_official_citation
 from torii_api.services.content_packs import load_jurisdiction_meta, load_pack_by_scope
+from torii_api.services.document_export import (
+    MEDIA_TYPES,
+    render_bundle,
+    render_document,
+    safe_stem,
+)
 from torii_api.services.eligibility import (
     EligibilityResult,
     evaluate_eligibility_with_ai,
@@ -42,6 +49,7 @@ from torii_api.services.eligibility import (
 from torii_api.services.forms import fill_form
 from torii_api.services.guidance import next_status_for_phase
 from torii_api.services.i18n import localized
+from torii_api.services.journey import build_journey
 from torii_api.services.jp_official_forms import forms_for_scope
 from torii_api.services.official_form_service import (
     describe_scope_forms,
@@ -365,11 +373,21 @@ async def _review(session: AsyncSession, case: Case) -> ReviewResult:
         DocumentOut.model_validate(item).model_dump(mode="json")
         for item in await _documents(session, case.id)
     ]
+    existing_forms = await _forms(session, case.id)
+    answers = dict(case.intake_answers or {})
+    if existing_forms and templates:
+        template_by_code = {t.code: t for t in templates}
+        for ef in existing_forms:
+            t = template_by_code.get(ef.form_code)
+            if t and t.field_mappings:
+                filled = fill_form(t.field_mappings, answers)
+                ef.filled_fields = filled.filled_fields
+                ef.missing_required_fields = filled.missing_required_fields
+        await session.flush()
     forms = [
-        GeneratedFormOut.model_validate(item).model_dump(mode="json")
-        for item in await _forms(session, case.id)
+        GeneratedFormOut.model_validate(item).model_dump(mode="json") for item in existing_forms
     ]
-    return review_packet(dict(case.intake_answers or {}), documents, forms, live_versions)
+    return review_packet(answers, documents, forms, live_versions)
 
 
 @router.patch("/{case_id}/locale", response_model=LocaleOut)
@@ -448,11 +466,19 @@ async def get_case_deadlines(
     from torii_api.services.deadlines import compute_deadlines
 
     case = await _owned_case(session, case_id, user)
-    _, _, a_code, _ = await _scope_label(session, case)
+    j_code, _, a_code, _ = await _scope_label(session, case)
     expiry = (case.intake_answers or {}).get("residence_card_expiry")
     if not expiry:
-        return {"residence_expiry": None, "procedure": a_code or ""}
-    return compute_deadlines(str(expiry), (a_code or "").replace("_", "").lower()).to_dict()
+        return {
+            "residence_expiry": None,
+            "procedure": a_code or "",
+            "jurisdiction": (j_code or "").upper(),
+        }
+    return compute_deadlines(
+        str(expiry),
+        (a_code or "").replace("_", "").lower(),
+        jurisdiction=j_code,
+    ).to_dict()
 
 
 @router.post("/{case_id}/checklist/refresh", response_model=list[ChecklistItemOut])
@@ -1275,8 +1301,232 @@ async def download_dossier_packet_pdf(
     )
 
 
+class ExportDocumentIn(BaseModel):
+    """One drafted document, exactly as the applicant has it on screen."""
+
+    title: str = Field(min_length=1, max_length=200)
+    content: str = Field(min_length=1, max_length=200_000)
+    filename_stem: str | None = Field(default=None, max_length=140)
+
+
+class ExportDocumentsIn(BaseModel):
+    documents: list[ExportDocumentIn] = Field(min_length=1, max_length=12)
+    format: Literal["pdf", "docx"] = "pdf"
+    # ``separate`` returns a zip holding one file per document; otherwise the documents
+    # are laid out in a single file, one per page.
+    separate: bool = False
+
+
+@router.post("/{case_id}/export/documents")
+async def export_case_documents(
+    case_id: int,
+    payload: ExportDocumentsIn,
+    session: SessionDep,
+    user: CurrentUserDep,
+    request: Request,
+    format: str | None = Query(default=None),
+) -> Response:
+    """Render the drafted documents the applicant is looking at as a PDF or a Word file.
+
+    The text is round-tripped from the client because it is the applicant's: it may be the
+    template, an AI draft, or either of those after they edited it in the browser. The
+    server adds typography and the "check and sign before filing" footer, and nothing else
+    — no reference, scope or preparation date is printed above the applicant's own wording,
+    since these documents are read by a consular officer, not by Torii.
+
+    The case reference is still used for the *filename*, which is how the applicant tells
+    one download from another.
+    """
+    case = await _owned_case(session, case_id, user)
+    reference = case.reference or f"CASE-{case.id}"
+
+    fmt = payload.format
+    single = len(payload.documents) == 1
+    first = payload.documents[0]
+    stem_source = (
+        (first.filename_stem or f"{reference}-{first.title}") if single else f"{reference}-filing-kit"
+    )
+    default_stem = safe_stem(stem_source, "torii-document")
+
+    if payload.separate and not single:
+        content = render_bundle(
+            [
+                (
+                    item.title,
+                    item.filename_stem or f"{reference}-{item.title}",
+                    item.content,
+                )
+                for item in payload.documents
+            ],
+            fmt=fmt,
+        )
+        filename = f"{default_stem}.zip"
+        media_type = MEDIA_TYPES["zip"]
+    else:
+        content = render_document(
+            [(item.title, item.content) for item in payload.documents], fmt=fmt
+        )
+        filename = f"{default_stem}.{fmt}"
+        media_type = MEDIA_TYPES[fmt]
+
+    wants_json = format in ("base64", "json") or "application/json" in request.headers.get(
+        "accept", ""
+    )
+    if wants_json:
+        return JSONResponse(
+            content={
+                "filename": filename,
+                "media_type": media_type,
+                "data_base64": base64.b64encode(content).decode("ascii"),
+                "size_bytes": len(content),
+            }
+        )
+    return Response(
+        content=content,
+        media_type=media_type,
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Content-Length": str(len(content)),
+        },
+    )
+
+
+async def _journey_for(session: AsyncSession, case: Case) -> tuple[dict[str, Any], str | None]:
+    """The journey payload for one case, and its jurisdiction code."""
+    from torii_api.api.cases import _case_guidance
+
+    j_code, _v_code, _a_code, scope_label = await _scope_label(session, case)
+    guidance = await _case_guidance(session, case)
+    checklist = [
+        ChecklistItemOut.model_validate(item).model_dump(mode="json")
+        for item in await _checklist(session, case.id)
+    ]
+    forms = [
+        GeneratedFormOut.model_validate(item).model_dump(mode="json")
+        for item in await _forms(session, case.id)
+    ]
+    journey = build_journey(
+        reference=case.reference or f"CASE-{case.id}",
+        scope_label=scope_label or case.locale.upper(),
+        phase=guidance.phase,
+        case_status=case.status,
+        checklist=checklist,
+        forms=forms,
+        submission_kit=await _submission_kit(session, case),
+        filing_mode=_filing_mode(j_code),
+        apply_url=_apply_url(j_code),
+        has_research=await _research_for_case(session, case) is not None,
+    )
+    return journey, j_code
+
+
+@router.get("/{case_id}/journey")
+async def get_case_journey(
+    case_id: int, session: SessionDep, user: CurrentUserDep
+) -> dict[str, Any]:
+    """The whole application end to end, including what has to be arranged elsewhere.
+
+    The workflow steps show the applicant what to do next; this shows them the shape of
+    the entire process — preparation, filing, decision, renewal — and which requirements
+    come from a bank, an airline or another government rather than from Torii, because
+    those lead times are what actually decide when the application can be filed.
+    """
+    case = await _owned_case(session, case_id, user)
+    journey, _j_code = await _journey_for(session, case)
+    return journey
+
+
+@router.get("/{case_id}/plan")
+async def get_case_plan(
+    case_id: int, session: SessionDep, user: CurrentUserDep
+) -> dict[str, Any]:
+    """The plan already built for this case, if there is one.
+
+    Returned from the case rather than rebuilt, so opening the step again costs nothing
+    and shows the applicant the same words they read last time.
+    """
+    case = await _owned_case(session, case_id, user)
+    snapshot = case.packet_snapshot or {}
+    plan = snapshot.get("ai_plan") if isinstance(snapshot, dict) else None
+    return {"plan": plan if isinstance(plan, dict) else None}
+
+
+@router.post("/{case_id}/plan")
+async def build_case_plan(
+    case_id: int, session: SessionDep, user: CurrentUserDep
+) -> dict[str, Any]:
+    """Build the applicant's action plan once, and keep it on the case.
+
+    The case is reduced to the handful of facts a plan is made of before the model sees
+    it — the outstanding items and their lead times, the cited filing route, the answers
+    that say something — which is what makes this quick. The result is stored on the
+    packet snapshot, so it is built once rather than on every visit; assembling the packet
+    again clears it, because a packet that changed deserves a plan that did too.
+    """
+    case = await _owned_case(session, case_id, user)
+    journey, j_code = await _journey_for(session, case)
+    checklist = [
+        ChecklistItemOut.model_validate(item).model_dump(mode="json")
+        for item in await _checklist(session, case.id)
+    ]
+    payload = build_payload(
+        journey=journey,
+        checklist=checklist,
+        answers=dict(case.intake_answers or {}),
+        jurisdiction_code=j_code,
+        nationality=case.origin_country,
+        residence_country=case.residence_country,
+    )
+    plan = await request_plan(payload)
+
+    snapshot = dict(case.packet_snapshot or {})
+    snapshot["ai_plan"] = plan
+    case.packet_snapshot = snapshot
+    await session.flush()
+    return {"plan": plan}
+
+
+@router.post("/{case_id}/filed")
+async def record_case_filed(
+    case_id: int, session: SessionDep, user: CurrentUserDep
+) -> dict[str, Any]:
+    """Record that the applicant has filed the application themselves.
+
+    This is not the same act as ``/submit``, and conflating the two was a bug the
+    applicant met head-on: the packet step's "mark as filed" button called the e-file
+    endpoint, which refuses every jurisdiction that does not accept electronic submission
+    from a third party — Japan among them, because its bureau takes applications in
+    person. Handing an applicant "E-file is unavailable for this jurisdiction" when all
+    they said was that they had been to the counter is a refusal of the wrong question.
+
+    Filing it themselves is the normal path. Recording it freezes the packet they filed
+    from, so what was submitted can be reproduced later, and starts the renewal clock.
+    No submission reference is written: the receipt number comes from the office, and
+    inventing one would put a number on the case that no authority ever issued.
+    """
+    case = await _owned_case(session, case_id, user)
+    if case.packet_snapshot is None:
+        raise HTTPException(
+            status_code=400,
+            detail="assemble your filing kit before recording the application as filed",
+        )
+    filed_at = datetime.now(UTC).isoformat()
+    case.status = "submitted"
+    case.packet_snapshot = {**case.packet_snapshot, "filed_at": filed_at}
+    await session.flush()
+    return {
+        "status": case.status,
+        "filed_at": filed_at,
+        "submission_reference": case.submission_reference,
+    }
+
+
 @router.post("/{case_id}/submit")
 async def submit_case(case_id: int, session: SessionDep, user: CurrentUserDep) -> dict[str, str]:
+    """File electronically on the applicant's behalf, where the jurisdiction accepts it.
+
+    Most do not. An applicant who filed at a counter wants ``/filed`` instead.
+    """
     case = await _owned_case(session, case_id, user)
     jurisdiction = await session.get(Jurisdiction, case.jurisdiction_id)
     if jurisdiction is None or not jurisdiction.efile_enabled:

@@ -763,6 +763,14 @@ export function IntakeStep({ state, profile, onAnswer, onProceedToEligibility, t
                   value={String(current ?? "")}
                   onChange={(e) => handleChange(q.key, e.target.value)}
                   onBlur={() => void handleSubmit(q.key)}
+                  onPaste={(e) => {
+                    const text = e.clipboardData.getData("text").trim();
+                    if (text) {
+                      handleChange(q.key, text);
+                      const parsed = q.type === "integer" ? (parseInt(text, 10) || text) : text;
+                      void handleDirectAnswer(q.key, parsed);
+                    }
+                  }}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
                       e.preventDefault();

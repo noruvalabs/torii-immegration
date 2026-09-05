@@ -5,9 +5,11 @@ import { useEffect, useState } from "react";
 import { LandingAuthLink } from "@/components/landing-auth-link";
 import { ThemeToggle } from "@/components/admin/theme-toggle";
 import { LanguageToggle } from "./language-toggle";
+import { StartCaseButton } from "./start-case-button";
 import { useLang } from "./i18n";
 import { dictionary } from "./dictionary";
 import { cn } from "@/lib/utils";
+import { ToriiLogo } from "@/components/brand/ToriiLogo";
 
 export function SiteHeader() {
   const { lang } = useLang();
@@ -22,6 +24,7 @@ export function SiteHeader() {
   }, []);
 
   const navLinks = [
+    { href: "#outcomes", label: t.nav.outcomes },
     { href: "#how-it-works", label: t.nav.howItWorks },
     { href: "#features", label: t.nav.features },
     { href: "#pricing", label: t.nav.pricing },
@@ -39,11 +42,9 @@ export function SiteHeader() {
             : "border-transparent bg-transparent shadow-none backdrop-blur-none",
         )}
       >
-        <Link href="/" className="flex items-center gap-2">
-          <span className="text-xl" aria-hidden>
-            ⛩️
-          </span>
-          <span className="text-lg font-semibold tracking-tight">Torii</span>
+        <Link href="/" className="flex items-center gap-3">
+          <ToriiLogo size={34} />
+          <span className="text-xl font-bold tracking-tight">Torii</span>
         </Link>
 
         <nav className="ml-8 hidden items-center gap-0.5 lg:flex">
@@ -62,12 +63,7 @@ export function SiteHeader() {
           <LanguageToggle className="hidden sm:inline-flex" />
           <ThemeToggle className="size-9 border-transparent hover:bg-accent" />
           <LandingAuthLink />
-          <Link
-            href="/scope"
-            className="hidden items-center rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-sm transition-transform hover:-translate-y-0.5 sm:inline-flex"
-          >
-            {t.nav.startCase}
-          </Link>
+          <StartCaseButton showArrow={false} className="hidden px-4 py-2 shadow-sm sm:inline-flex" />
         </div>
       </div>
     </header>

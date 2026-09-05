@@ -5,13 +5,18 @@ import { ArrowRight } from "lucide-react";
 import { useLang } from "./i18n";
 import { dictionary } from "./dictionary";
 import { Reveal } from "./reveal";
+import { ToriiLogo } from "@/components/brand/ToriiLogo";
 
 export function SiteFooter() {
   const { lang } = useLang();
   const t = dictionary[lang];
 
   return (
-    <footer className="relative overflow-hidden rounded-t-[2.5rem] border-t border-border/60 bg-muted/40 sm:rounded-t-[3.5rem]">
+    <footer
+      // pb-24 on a phone clears the sticky call to action, which would otherwise sit on
+      // top of the last row of footer links.
+      className="relative overflow-hidden rounded-t-[2.5rem] border-t border-border/60 bg-muted/40 pb-24 sm:rounded-t-[3.5rem] sm:pb-0"
+    >
       <div
         aria-hidden
         className="animate-blob-drift-slow pointer-events-none absolute -top-24 left-1/2 size-[28rem] -translate-x-1/2 rounded-full bg-primary/10 blur-[100px]"
@@ -19,11 +24,9 @@ export function SiteFooter() {
 
       <div className="relative mx-auto max-w-6xl px-6 pb-10 pt-16 sm:pt-20">
         <Reveal>
-          <div className="flex items-center gap-2">
-            <span className="text-lg" aria-hidden>
-              ⛩️
-            </span>
-            <span className="font-semibold tracking-tight">Torii</span>
+          <div className="flex items-center gap-3">
+            <ToriiLogo size={36} />
+            <span className="text-xl font-bold tracking-tight">Torii</span>
           </div>
 
           <h2 className="mt-6 max-w-2xl text-4xl font-semibold leading-[1.05] tracking-tight sm:text-6xl">

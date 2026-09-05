@@ -172,6 +172,44 @@ body {
   animation: badge-pulse 2s ease-in-out infinite;
 }
 
+/* A slow vertical drift, for the one element on the page that should feel alive rather
+   than decorated — the product demo the hero is arguing for. */
+@keyframes float-y {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+.animate-float-y {
+  animation: float-y 7s ease-in-out infinite;
+}
+
+/* A light sweeping across the primary call to action. Slow and low-contrast on purpose:
+   it should catch the eye on a page the reader is scanning, not blink at them. */
+@keyframes sheen {
+  0% {
+    transform: translateX(-120%) skewX(-20deg);
+  }
+  60%,
+  100% {
+    transform: translateX(220%) skewX(-20deg);
+  }
+}
+
+.animate-sheen::after {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 40%;
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.28), transparent);
+  animation: sheen 4.5s ease-in-out infinite;
+  pointer-events: none;
+}
+
 /* Scroll-reveal: toggled by the Reveal component once an element enters the viewport. */
 .reveal {
   opacity: 0;
@@ -191,8 +229,14 @@ body {
   .animate-blob-drift,
   .animate-blob-drift-slow,
   .animate-gradient-pan,
-  .animate-badge-pulse {
+  .animate-badge-pulse,
+  .animate-float-y,
+  .animate-sheen::after {
     animation: none;
+  }
+
+  .animate-sheen::after {
+    display: none;
   }
   [style*="hero-progress"] {
     animation: none !important;

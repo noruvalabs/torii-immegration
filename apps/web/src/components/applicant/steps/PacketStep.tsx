@@ -8,14 +8,9 @@ import {
   Loader2,
   FileText,
   Copy,
-  ExternalLink,
   ShieldCheck,
-  CheckSquare,
   Sparkles,
   Layers,
-  ArrowRight,
-  Coins,
-  Zap,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -23,7 +18,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import { useAuth } from "@/lib/auth-context";
 import { useCredits } from "@/lib/credits-context";
 import { draftDocument } from "@/lib/api/ai";
+import { exportCaseDocuments, type ExportFormat } from "@/lib/api/cases";
 import { toast } from "@/components/ui/sonner";
+import { JourneyMap } from "./JourneyMap";
 import type { Case } from "./types";
 
 type PacketStepProps = {
@@ -323,12 +320,22 @@ End of Complete Filing Kit · Torii Immigration Platform
 
 type DocType = "cover" | "schedule" | "reason" | "financial" | "form" | "full";
 
+/** Tab order, and the order documents are written into a "download everything" zip. */
+const DOC_ORDER: DocType[] = ["cover", "schedule", "reason", "financial", "form", "full"];
+
+const FORMAT_LABELS: Record<ExportFormat, string> = {
+  pdf: "PDF",
+  docx: "Word (.docx)",
+};
+
 export function PacketStep({ packet, caseData, loading, onBuild, onSubmit }: PacketStepProps) {
   const { token } = useAuth();
   const { balance, unlockCase } = useCredits();
   const [activeDoc, setActiveDoc] = useState<DocType>("cover");
   const [copiedDoc, setCopiedDoc] = useState(false);
   const [downloadingPdf, setDownloadingPdf] = useState<string | null>(null);
+  const [exportFormat, setExportFormat] = useState<ExportFormat>("pdf");
+  const [exporting, setExporting] = useState<string | null>(null);
   const [isUnlocking, setIsUnlocking] = useState(false);
   const [unlocked, setUnlocked] = useState(Boolean(caseData.is_entitled));
   const [aiDrafts, setAiDrafts] = useState<Partial<Record<DocType, string>>>({});
@@ -336,12 +343,6 @@ export function PacketStep({ packet, caseData, loading, onBuild, onSubmit }: Pac
   const [customInstructions, setCustomInstructions] = useState("");
   const [showPromptInput, setShowPromptInput] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
-  const [trackedSteps, setTrackedSteps] = useState({
-    filledOnline: false,
-    paidFee: false,
-    bookedAppointment: false,
-    submittedDossier: caseData.status === "submitted",
-  });
 
   async function handleGenerateAIDraft(targetDoc?: DocType) {
     const doc = targetDoc || activeDoc;
@@ -540,41 +541,46 @@ export function PacketStep({ packet, caseData, loading, onBuild, onSubmit }: Pac
     (caseData.packet_snapshot as Record<string, unknown> | null) ||
     (caseData.status === "packet_ready" ? { reference: caseData.reference } : null);
 
-  function getActiveDocText(): { title: string; filename: string; text: string; isAi: boolean } {
-    let base = { title: "", filename: "", text: "" };
-    switch (activeDoc) {
+  function getDocText(doc: DocType): {
+    title: string;
+    stem: string;
+    text: string;
+    isAi: boolean;
+  } {
+    let base = { title: "", stem: "", text: "" };
+    switch (doc) {
       case "schedule":
         base = {
           title: docLabels.schedule.replace(/^[^\w]+/, ""),
-          filename: `${caseData.reference}-schedule-of-stay.txt`,
+          stem: `${caseData.reference}-schedule-of-stay`,
           text: generateScheduleOfStay(caseData, effectivePacket),
         };
         break;
       case "reason":
         base = {
           title: docLabels.reason.replace(/^[^\w]+/, ""),
-          filename: `${caseData.reference}-reason-for-visit.txt`,
+          stem: `${caseData.reference}-reason-for-visit`,
           text: generateReasonForVisit(caseData, effectivePacket),
         };
         break;
       case "financial":
         base = {
           title: docLabels.financial.replace(/^[^\w]+/, ""),
-          filename: `${caseData.reference}-financial-guarantee.txt`,
+          stem: `${caseData.reference}-financial-guarantee`,
           text: generateFinancialGuarantee(caseData, effectivePacket),
         };
         break;
       case "form":
         base = {
           title: docLabels.form.replace(/^[^\w]+/, ""),
-          filename: `${caseData.reference}-official-form-data.txt`,
+          stem: `${caseData.reference}-official-form-data`,
           text: generateCompleteOfficialForm(caseData, effectivePacket),
         };
         break;
       case "full":
         base = {
           title: docLabels.full.replace(/^[^\w]+/, ""),
-          filename: `${caseData.reference}-complete-filing-kit.txt`,
+          stem: `${caseData.reference}-complete-filing-kit`,
           text: generateCompleteFilingKitText(effectivePacket || {}, caseData),
         };
         break;
@@ -582,16 +588,20 @@ export function PacketStep({ packet, caseData, loading, onBuild, onSubmit }: Pac
       default:
         base = {
           title: docLabels.cover.replace(/^[^\w]+/, ""),
-          filename: `${caseData.reference}-embassy-cover-letter.txt`,
+          stem: `${caseData.reference}-embassy-cover-letter`,
           text: generateCoverLetter(caseData, effectivePacket),
         };
         break;
     }
 
-    if (aiDrafts[activeDoc]) {
-      return { ...base, text: aiDrafts[activeDoc]!, isAi: true };
+    if (aiDrafts[doc]) {
+      return { ...base, text: aiDrafts[doc]!, isAi: true };
     }
     return { ...base, isAi: false };
+  }
+
+  function getActiveDocText() {
+    return getDocText(activeDoc);
   }
 
   function handleCopyActiveDoc() {
@@ -601,28 +611,8 @@ export function PacketStep({ packet, caseData, loading, onBuild, onSubmit }: Pac
     setTimeout(() => setCopiedDoc(false), 2000);
   }
 
-  function handleDownloadActiveDoc() {
-    const { filename, text } = getActiveDocText();
-    const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    setTimeout(() => {
-      link.remove();
-      URL.revokeObjectURL(url);
-    }, 5000);
-  }
-
-  function downloadFullFilingKit() {
-    if (!effectivePacket) return;
-    const filename = `${caseData.reference}-complete-filing-kit.txt`;
-    const blob = new Blob([generateCompleteFilingKitText(effectivePacket, caseData)], {
-      type: "text/plain;charset=utf-8",
-    });
-    const url = URL.createObjectURL(blob);
+  function saveFile(bytes: BlobPart, filename: string, mediaType: string) {
+    const url = URL.createObjectURL(new Blob([bytes], { type: mediaType }));
     const link = document.createElement("a");
     link.href = url;
     link.download = filename;
@@ -632,6 +622,51 @@ export function PacketStep({ packet, caseData, loading, onBuild, onSubmit }: Pac
       link.remove();
       URL.revokeObjectURL(url);
     }, 10000);
+  }
+
+  /**
+   * Render the drafts as real files.
+   *
+   * The text is sent to the server rather than saved from the browser because the same
+   * text has to come back as a paginated PDF or an editable Word file, not only as the
+   * plain `.txt` this step used to be limited to. What is sent is exactly what is on
+   * screen — template, AI draft, or either after the applicant edited it.
+   */
+  async function exportDocuments(fmt: ExportFormat, scope: "active" | "all") {
+    const activeToken =
+      token || (typeof window !== "undefined" ? localStorage.getItem("torii_token") : null);
+    if (!activeToken) {
+      toast.error("Please sign in again to download your documents.");
+      return;
+    }
+
+    const selected: DocType[] = scope === "all" ? DOC_ORDER : [activeDoc];
+    const documents = selected.map((doc) => {
+      const { title, stem, text } = getDocText(doc);
+      return { title, content: text, filename_stem: stem };
+    });
+
+    setExporting(`${scope}:${fmt}`);
+    try {
+      const file = await exportCaseDocuments(activeToken, caseData.id, {
+        documents,
+        format: fmt,
+        separate: scope === "all",
+      });
+      const binary = atob(file.data_base64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      saveFile(bytes, file.filename, file.media_type);
+      toast.success(
+        scope === "all"
+          ? `All ${documents.length} documents downloaded as ${fmt.toUpperCase()} in a zip.`
+          : `${FORMAT_LABELS[fmt]} downloaded.`,
+      );
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Download failed. Please try again.");
+    } finally {
+      setExporting(null);
+    }
   }
 
 
@@ -795,8 +830,53 @@ export function PacketStep({ packet, caseData, loading, onBuild, onSubmit }: Pac
                       </>
                     )}
                   </Button>
-                  <Button variant="outline" onClick={handleDownloadActiveDoc} className="px-2.5 py-1 text-xs">
-                    <Download className="mr-1.5 size-3.5" /> Download (.txt)
+                  {/* Format picker — the same draft as a PDF to file, or a Word file to
+                      finish editing. */}
+                  <div className="inline-flex overflow-hidden rounded-md border">
+                    {(["pdf", "docx"] as ExportFormat[]).map((fmt) => (
+                      <button
+                        key={fmt}
+                        type="button"
+                        onClick={() => setExportFormat(fmt)}
+                        className={`px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                          exportFormat === fmt
+                            ? "bg-primary text-primary-foreground"
+                            : "bg-transparent text-muted-foreground hover:bg-accent"
+                        }`}
+                        title={`Download as ${FORMAT_LABELS[fmt]}`}
+                      >
+                        {fmt === "docx" ? "Word" : fmt.toUpperCase()}
+                      </button>
+                    ))}
+                  </div>
+
+                  <Button
+                    variant="outline"
+                    onClick={() => void exportDocuments(exportFormat, "active")}
+                    disabled={exporting !== null}
+                    className="px-2.5 py-1 text-xs"
+                  >
+                    {exporting === `active:${exportFormat}` ? (
+                      <Loader2 className="mr-1.5 size-3.5 animate-spin" />
+                    ) : (
+                      <Download className="mr-1.5 size-3.5" />
+                    )}
+                    Download
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    onClick={() => void exportDocuments(exportFormat, "all")}
+                    disabled={exporting !== null}
+                    className="px-2.5 py-1 text-xs"
+                    title={`Every document in this suite as ${FORMAT_LABELS[exportFormat]}, in one zip`}
+                  >
+                    {exporting === `all:${exportFormat}` ? (
+                      <Loader2 className="mr-1.5 size-3.5 animate-spin" />
+                    ) : (
+                      <Layers className="mr-1.5 size-3.5" />
+                    )}
+                    All {DOC_ORDER.length} (.zip)
                   </Button>
                 </div>
               </div>
@@ -874,7 +954,7 @@ export function PacketStep({ packet, caseData, loading, onBuild, onSubmit }: Pac
                   )}
                 </div>
                 <span className="text-[10px] text-muted-foreground font-mono">
-                  {getActiveDocText().filename}
+                  {getActiveDocText().stem}.{exportFormat}
                 </span>
               </div>
 
@@ -898,120 +978,20 @@ export function PacketStep({ packet, caseData, loading, onBuild, onSubmit }: Pac
             </CardContent>
           </Card>
 
-          {/* Feature 2: Official Step-by-Step Submission Roadmap */}
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <h4 className="text-sm font-bold tracking-tight flex items-center gap-2">
-                <ArrowRight className="size-4 text-primary" /> Official Submission Roadmap &amp; Filing Channels
-              </h4>
-              <span className="text-[11px] text-muted-foreground">Every instruction backed by official government source</span>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              {effectivePacket && Array.isArray(effectivePacket.submission_steps) && effectivePacket.submission_steps.length > 0 ? (
-                (effectivePacket.submission_steps as {
-                  step?: number;
-                  title?: string;
-                  description?: string;
-                  portal_url?: string | null;
-                  authority?: string | null;
-                  official_citation_url?: string | null;
-                  category?: string | null;
-                }[]).map((st, i) => (
-                  <div key={i} className="rounded-xl border border-border bg-card p-4 space-y-2 flex flex-col justify-between shadow-xs">
-                    <div className="space-y-1.5">
-                      <div className="flex items-center justify-between gap-2">
-                        <Badge tone="default">Step {st.step ?? i + 1}</Badge>
-                        {st.authority && (
-                          <span className="text-[10px] text-muted-foreground truncate max-w-[190px]" title={st.authority}>
-                            🏛️ {st.authority}
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-xs font-bold text-foreground pt-1">{st.title}</p>
-                      <p className="text-[11px] text-muted-foreground leading-relaxed">{st.description}</p>
-                    </div>
+          {/* The plan for this application, from here to the decision.
 
-                    <div className="pt-2 border-t flex flex-wrap items-center justify-between gap-2 text-[11px]">
-                      {st.portal_url ? (
-                        <a
-                          href={st.portal_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 text-primary hover:underline font-semibold"
-                        >
-                          <ExternalLink className="size-3" />
-                          Open Official Portal
-                        </a>
-                      ) : (
-                        <span className="text-muted-foreground text-[10px]">In-Person / Consular Channel</span>
-                      )}
+              This replaces the old four-card "submission roadmap", and then the sixteen-row
+              timeline that replaced it — both described the procedure rather than advising
+              on this case. Torii now reads the whole case and says what to start today,
+              what follows, and what gets applications like this one handed back. The full
+              step list and the third-party items stay one click away underneath. */}
+          <JourneyMap token={token} caseData={caseData} />
 
-                      {st.official_citation_url && (
-                        <a
-                          href={st.official_citation_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground text-[10px]"
-                          title="Verify official government regulation"
-                        >
-                          Verify Source ↗
-                        </a>
-                      )}
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <>
-                  <div className="rounded-xl border bg-card p-4 space-y-1">
-                    <div className="flex items-center justify-between">
-                      <Badge tone="default">Step 1</Badge>
-                      <span className="text-[10px] text-primary font-semibold">Online Portal</span>
-                    </div>
-                    <p className="text-xs font-semibold text-foreground pt-1">Fill Official Government Form</p>
-                    <p className="text-[11px] text-muted-foreground">
-                      Use Torii&apos;s copyable field guide from the Forms tab to fill out the embassy web portal.
-                    </p>
-                  </div>
-                  <div className="rounded-xl border bg-card p-4 space-y-1">
-                    <div className="flex items-center justify-between">
-                      <Badge tone="default">Step 2</Badge>
-                      <span className="text-[10px] text-primary font-semibold">Filing Fee</span>
-                    </div>
-                    <p className="text-xs font-semibold text-foreground pt-1">Pay Official Visa Fee</p>
-                    <p className="text-[11px] text-muted-foreground">
-                      Pay required fee through the government payment gateway and save receipt.
-                    </p>
-                  </div>
-                  <div className="rounded-xl border bg-card p-4 space-y-1">
-                    <div className="flex items-center justify-between">
-                      <Badge tone="default">Step 3</Badge>
-                      <span className="text-[10px] text-primary font-semibold">Appointment</span>
-                    </div>
-                    <p className="text-xs font-semibold text-foreground pt-1">Book Biometrics &amp; Interview</p>
-                    <p className="text-[11px] text-muted-foreground">
-                      Schedule appointment date at the nearest Visa Application Center or Embassy.
-                    </p>
-                  </div>
-                  <div className="rounded-xl border bg-card p-4 space-y-1">
-                    <div className="flex items-center justify-between">
-                      <Badge tone="default">Step 4</Badge>
-                      <span className="text-[10px] text-primary font-semibold">Dossier</span>
-                    </div>
-                    <p className="text-xs font-semibold text-foreground pt-1">Stack Physical Dossier</p>
-                    <p className="text-[11px] text-muted-foreground">
-                      Arrange physical documents in exact order specified in your Torii filing kit.
-                    </p>
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
-
-          {/* Feature 3: Physical Dossier Assembly Stack Order */}
+          {/* The paper stack, in the order it is handed over. */}
           <Card>
             <CardContent className="p-4 space-y-3">
               <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                Physical Dossier Stacking Order (For Embassy Interview / VAC Dropoff)
+                Stack your papers in this order
               </h4>
               {effectivePacket && Array.isArray(effectivePacket.dossier_order) && effectivePacket.dossier_order.length > 0 ? (
                 <ol className="space-y-1.5 text-xs text-foreground">
@@ -1047,64 +1027,35 @@ export function PacketStep({ packet, caseData, loading, onBuild, onSubmit }: Pac
             </CardContent>
           </Card>
 
-          {/* Feature 4: Interactive Progress & Submission Button */}
-          <Card className="border-primary/30">
-            <CardContent className="p-5 space-y-4">
-              <div className="flex items-center gap-2">
-                <CheckSquare className="size-5 text-primary" />
-                <h4 className="text-sm font-bold tracking-tight">Filing Tracker &amp; Finalize Case</h4>
-              </div>
+          {/* Finalising the case.
 
-              <div className="space-y-2 text-xs">
-                <label className="flex items-center gap-2.5 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={trackedSteps.filledOnline}
-                    onChange={(e) => setTrackedSteps({ ...trackedSteps, filledOnline: e.target.checked })}
-                    className="rounded text-primary focus:ring-primary size-4"
-                  />
-                  <span>I have entered my application data into the official government portal.</span>
-                </label>
-
-                <label className="flex items-center gap-2.5 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={trackedSteps.paidFee}
-                    onChange={(e) => setTrackedSteps({ ...trackedSteps, paidFee: e.target.checked })}
-                    className="rounded text-primary focus:ring-primary size-4"
-                  />
-                  <span>I have paid the embassy/consulate filing fee and saved the receipt.</span>
-                </label>
-
-                <label className="flex items-center gap-2.5 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={trackedSteps.bookedAppointment}
-                    onChange={(e) => setTrackedSteps({ ...trackedSteps, bookedAppointment: e.target.checked })}
-                    className="rounded text-primary focus:ring-primary size-4"
-                  />
-                  <span>I have scheduled my visa interview / biometrics appointment.</span>
-                </label>
-              </div>
-
-              {caseData.status !== "submitted" ? (
-                <div className="pt-2">
-                  <Button onClick={onSubmit} disabled={loading} className="w-full sm:w-auto">
-                    {loading ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Send className="mr-2 size-4" />}
-                    Mark Application Submitted in Torii
-                  </Button>
-                </div>
-              ) : (
-                <div className="rounded border border-[var(--color-success)]/30 bg-[var(--color-success)]/10 p-3 text-xs flex items-center gap-2 text-[var(--color-success)]">
-                  <Check className="size-4 shrink-0" />
-                  <span>
-                    Case Submitted Successfully! Reference:{" "}
-                    <span className="font-mono font-bold">{caseData.submission_reference || caseData.reference}</span>
-                  </span>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+              This used to be a "Filing Tracker" asking the applicant to tick that they had
+              filled the portal, paid the fee and booked the appointment. They file by hand
+              at an office — those boxes recorded nothing Torii uses and nothing the
+              applicant needed reminding of. One action remains: tell Torii it is filed, so
+              the packet is frozen and the renewal deadline can be tracked. */}
+          {caseData.status !== "submitted" ? (
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-[11px] text-muted-foreground">
+                Filed it already? Recording it here freezes this packet and starts the deadline
+                tracking.
+              </p>
+              <Button onClick={onSubmit} disabled={loading} className="shrink-0">
+                {loading ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Send className="mr-2 size-4" />}
+                Mark as filed
+              </Button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 rounded-lg border border-[var(--color-success)]/30 bg-[var(--color-success)]/10 p-3 text-xs text-[var(--color-success)]">
+              <Check className="size-4 shrink-0" />
+              <span>
+                Recorded as filed ·{" "}
+                <span className="font-mono font-bold">
+                  {caseData.submission_reference || caseData.reference}
+                </span>
+              </span>
+            </div>
+          )}
         </div>
       )}
     </div>
