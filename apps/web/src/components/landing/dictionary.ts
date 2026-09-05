@@ -1,7 +1,6 @@
 export const dictionary = {
   en: {
     nav: {
-      coverage: "Japan visas",
       outcomes: "What you get",
       howItWorks: "How it works",
       features: "Features",
@@ -334,7 +333,6 @@ export const dictionary = {
   },
   ja: {
     nav: {
-      coverage: "対応ビザ",
       outcomes: "得られるもの",
       howItWorks: "利用の流れ",
       features: "特長",

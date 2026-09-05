@@ -24,7 +24,6 @@ export function SiteHeader() {
   }, []);
 
   const navLinks = [
-    { href: "#coverage", label: t.nav.coverage },
     { href: "#outcomes", label: t.nav.outcomes },
     { href: "#how-it-works", label: t.nav.howItWorks },
     { href: "#features", label: t.nav.features },
