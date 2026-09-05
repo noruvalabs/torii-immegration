@@ -48,6 +48,7 @@ from torii_api.services.eligibility import (
 from torii_api.services.forms import fill_form
 from torii_api.services.guidance import next_status_for_phase
 from torii_api.services.i18n import localized
+from torii_api.services.journey import build_journey
 from torii_api.services.jp_official_forms import forms_for_scope
 from torii_api.services.official_form_service import (
     describe_scope_forms,
@@ -1387,6 +1388,51 @@ async def export_case_documents(
             "Content-Length": str(len(content)),
         },
     )
+
+
+async def _journey_for(session: AsyncSession, case: Case) -> tuple[dict[str, Any], str | None]:
+    """The journey payload for one case, and its jurisdiction code."""
+    from torii_api.api.cases import _case_guidance
+
+    j_code, _v_code, _a_code, scope_label = await _scope_label(session, case)
+    guidance = await _case_guidance(session, case)
+    checklist = [
+        ChecklistItemOut.model_validate(item).model_dump(mode="json")
+        for item in await _checklist(session, case.id)
+    ]
+    forms = [
+        GeneratedFormOut.model_validate(item).model_dump(mode="json")
+        for item in await _forms(session, case.id)
+    ]
+    journey = build_journey(
+        reference=case.reference or f"CASE-{case.id}",
+        scope_label=scope_label or case.locale.upper(),
+        phase=guidance.phase,
+        case_status=case.status,
+        checklist=checklist,
+        forms=forms,
+        submission_kit=await _submission_kit(session, case),
+        filing_mode=_filing_mode(j_code),
+        apply_url=_apply_url(j_code),
+        has_research=await _research_for_case(session, case) is not None,
+    )
+    return journey, j_code
+
+
+@router.get("/{case_id}/journey")
+async def get_case_journey(
+    case_id: int, session: SessionDep, user: CurrentUserDep
+) -> dict[str, Any]:
+    """The whole application end to end, including what has to be arranged elsewhere.
+
+    The workflow steps show the applicant what to do next; this shows them the shape of
+    the entire process — preparation, filing, decision, renewal — and which requirements
+    come from a bank, an airline or another government rather than from Torii, because
+    those lead times are what actually decide when the application can be filed.
+    """
+    case = await _owned_case(session, case_id, user)
+    journey, _j_code = await _journey_for(session, case)
+    return journey
 
 
 @router.post("/{case_id}/submit")
