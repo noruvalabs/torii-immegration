@@ -1,6 +1,7 @@
 export const dictionary = {
   en: {
     nav: {
+      outcomes: "What you get",
       howItWorks: "How it works",
       features: "Features",
       pricing: "Pricing",
@@ -9,6 +10,43 @@ export const dictionary = {
       signIn: "Sign in",
       dashboard: "Dashboard",
       startCase: "Start your case",
+    },
+    cta: {
+      startFree: "Start free",
+      stickyCta: "Start your case — free",
+      reassure: ["Free to start", "No card required", "Save and resume anytime"],
+      returningBefore: "Already started a case? ",
+      returningLink: "Sign in",
+    },
+    outcomes: {
+      eyebrow: "What you walk away with",
+      title: "Not advice. Documents.",
+      body: "Four things end up in your hands, and every one of them traces back to the official page that required it.",
+      items: [
+        {
+          title: "Your official form, filled",
+          body: "The statutory sheet your procedure actually requires, filled from your answers and left blank wherever you have not answered. Nothing is guessed on a document you sign.",
+        },
+        {
+          title: "A checklist that cites its source",
+          body: "Every document your case needs, why it is required, and a link to the government page that says so — so you can check anything Torii tells you.",
+        },
+        {
+          title: "Drafts you can finish and sign",
+          body: "Cover letter, statement of purpose, schedule of stay. Download them as a PDF to file, or as a Word file to edit in your own words first.",
+        },
+        {
+          title: "A plan with real lead times",
+          body: "What to start today, how long a bank letter or a police certificate actually takes, and the things that get applications handed back at the counter.",
+        },
+      ],
+      sourcesLabel: "Requirements come from the authorities themselves",
+      sources: [
+        "Immigration Services Agency of Japan",
+        "Ministry of Foreign Affairs of Japan",
+        "UK Visas & Immigration",
+        "U.S. Department of State",
+      ],
     },
     hero: {
       eyebrow: "Guided visa & immigration filing",
@@ -292,6 +330,7 @@ export const dictionary = {
   },
   ja: {
     nav: {
+      outcomes: "得られるもの",
       howItWorks: "利用の流れ",
       features: "特長",
       pricing: "料金",
@@ -300,6 +339,38 @@ export const dictionary = {
       signIn: "ログイン",
       dashboard: "ダッシュボード",
       startCase: "申請を始める",
+    },
+    cta: {
+      startFree: "無料で始める",
+      stickyCta: "無料で申請を始める",
+      reassure: ["無料で開始", "クレジットカード不要", "いつでも中断・再開"],
+      returningBefore: "すでに申請を始めていますか？ ",
+      returningLink: "ログイン",
+    },
+    outcomes: {
+      eyebrow: "手元に残るもの",
+      title: "アドバイスではなく、書類を。",
+      body: "4つの成果物が手元に残ります。そのすべてが、根拠となる公式ページまでたどれます。",
+      items: [
+        {
+          title: "記入済みの公式書式",
+          body: "手続きに実際に必要な法定様式に、あなたの回答をそのまま反映します。未回答の欄は空欄のまま——署名する書類に推測を書き込むことはありません。",
+        },
+        {
+          title: "出典付きのチェックリスト",
+          body: "必要な書類、その理由、そして根拠となる政府ページへのリンク。Toriiの説明はすべてご自身で確認できます。",
+        },
+        {
+          title: "仕上げて署名できる下書き",
+          body: "カバーレター、理由書、滞在予定表。提出用のPDFで、あるいはご自身の言葉に直せるWord形式で書き出せます。",
+        },
+        {
+          title: "所要期間まで含めた計画",
+          body: "今日から動くべきこと、残高証明書や無犯罪証明書に実際かかる期間、そして窓口で申請が差し戻される原因。",
+        },
+      ],
+      sourcesLabel: "要件はすべて、当局の公式ページから",
+      sources: ["出入国在留管理庁", "外務省", "UK Visas & Immigration", "米国国務省"],
     },
     hero: {
       eyebrow: "ビザ・在留資格申請を伴走サポート",

@@ -12,7 +12,11 @@ export function SiteFooter() {
   const t = dictionary[lang];
 
   return (
-    <footer className="relative overflow-hidden rounded-t-[2.5rem] border-t border-border/60 bg-muted/40 sm:rounded-t-[3.5rem]">
+    <footer
+      // pb-24 on a phone clears the sticky call to action, which would otherwise sit on
+      // top of the last row of footer links.
+      className="relative overflow-hidden rounded-t-[2.5rem] border-t border-border/60 bg-muted/40 pb-24 sm:rounded-t-[3.5rem] sm:pb-0"
+    >
       <div
         aria-hidden
         className="animate-blob-drift-slow pointer-events-none absolute -top-24 left-1/2 size-[28rem] -translate-x-1/2 rounded-full bg-primary/10 blur-[100px]"

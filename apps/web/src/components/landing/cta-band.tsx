@@ -1,8 +1,7 @@
 "use client";
 
-import Link from "next/link";
-import { ArrowRight } from "lucide-react";
 import { Reveal } from "./reveal";
+import { StartCaseButton } from "./start-case-button";
 import { useLang } from "./i18n";
 import { dictionary } from "./dictionary";
 
@@ -29,12 +28,7 @@ export function CtaBand() {
             </h2>
             <p className="mt-3 max-w-md text-base text-[var(--color-ink-foreground)]/75">{t.ctaBand.body}</p>
           </div>
-          <Link
-            href="/scope"
-            className="group inline-flex shrink-0 items-center gap-2 rounded-full bg-primary px-6 py-3.5 text-sm font-medium text-primary-foreground shadow-lg transition-transform hover:-translate-y-0.5"
-          >
-            {t.ctaBand.cta} <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
-          </Link>
+          <StartCaseButton signedOutLabel={t.ctaBand.cta} className="shrink-0 shadow-lg" />
         </div>
       </Reveal>
     </section>
