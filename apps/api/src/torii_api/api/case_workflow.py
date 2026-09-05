@@ -35,6 +35,12 @@ from torii_api.services.agentic import find_admissibility, scope_key, stage_is_u
 from torii_api.services.checklist import ChecklistStatus, update_status, visible_requirement_items
 from torii_api.services.citations import resolve_official_citation
 from torii_api.services.content_packs import load_jurisdiction_meta, load_pack_by_scope
+from torii_api.services.document_export import (
+    MEDIA_TYPES,
+    render_bundle,
+    render_document,
+    safe_stem,
+)
 from torii_api.services.eligibility import (
     EligibilityResult,
     evaluate_eligibility_with_ai,
@@ -1289,6 +1295,96 @@ async def download_dossier_packet_pdf(
         headers={
             "Content-Disposition": f'attachment; filename="{filename}"',
             "Content-Length": str(len(pdf_bytes)),
+        },
+    )
+
+
+class ExportDocumentIn(BaseModel):
+    """One drafted document, exactly as the applicant has it on screen."""
+
+    title: str = Field(min_length=1, max_length=200)
+    content: str = Field(min_length=1, max_length=200_000)
+    filename_stem: str | None = Field(default=None, max_length=140)
+
+
+class ExportDocumentsIn(BaseModel):
+    documents: list[ExportDocumentIn] = Field(min_length=1, max_length=12)
+    format: Literal["pdf", "docx"] = "pdf"
+    # ``separate`` returns a zip holding one file per document; otherwise the documents
+    # are laid out in a single file, one per page.
+    separate: bool = False
+
+
+@router.post("/{case_id}/export/documents")
+async def export_case_documents(
+    case_id: int,
+    payload: ExportDocumentsIn,
+    session: SessionDep,
+    user: CurrentUserDep,
+    request: Request,
+    format: str | None = Query(default=None),
+) -> Response:
+    """Render the drafted documents the applicant is looking at as a PDF or a Word file.
+
+    The text is round-tripped from the client because it is the applicant's: it may be the
+    template, an AI draft, or either of those after they edited it in the browser. The
+    server adds typography and the "check and sign before filing" footer, and nothing else
+    — no reference, scope or preparation date is printed above the applicant's own wording,
+    since these documents are read by a consular officer, not by Torii.
+
+    The case reference is still used for the *filename*, which is how the applicant tells
+    one download from another.
+    """
+    case = await _owned_case(session, case_id, user)
+    reference = case.reference or f"CASE-{case.id}"
+
+    fmt = payload.format
+    single = len(payload.documents) == 1
+    first = payload.documents[0]
+    stem_source = (
+        (first.filename_stem or f"{reference}-{first.title}") if single else f"{reference}-filing-kit"
+    )
+    default_stem = safe_stem(stem_source, "torii-document")
+
+    if payload.separate and not single:
+        content = render_bundle(
+            [
+                (
+                    item.title,
+                    item.filename_stem or f"{reference}-{item.title}",
+                    item.content,
+                )
+                for item in payload.documents
+            ],
+            fmt=fmt,
+        )
+        filename = f"{default_stem}.zip"
+        media_type = MEDIA_TYPES["zip"]
+    else:
+        content = render_document(
+            [(item.title, item.content) for item in payload.documents], fmt=fmt
+        )
+        filename = f"{default_stem}.{fmt}"
+        media_type = MEDIA_TYPES[fmt]
+
+    wants_json = format in ("base64", "json") or "application/json" in request.headers.get(
+        "accept", ""
+    )
+    if wants_json:
+        return JSONResponse(
+            content={
+                "filename": filename,
+                "media_type": media_type,
+                "data_base64": base64.b64encode(content).decode("ascii"),
+                "size_bytes": len(content),
+            }
+        )
+    return Response(
+        content=content,
+        media_type=media_type,
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Content-Length": str(len(content)),
         },
     )
 
