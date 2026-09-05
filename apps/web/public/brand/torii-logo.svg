@@ -1,0 +1,135 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500" fill="none" width="100%" height="100%">
+  <defs>
+    <!-- Top Kasagi roof beam gradient -->
+    <linearGradient id="kasagi-grad" x1="5%" y1="0%" x2="95%" y2="100%">
+      <stop offset="0%" stopColor="#FFA048" />
+      <stop offset="25%" stopColor="#FF6B35" />
+      <stop offset="65%" stopColor="#FF3319" />
+      <stop offset="100%" stopColor="#D82510" />
+    </linearGradient>
+
+    <!-- Kasagi upper bevel highlight -->
+    <linearGradient id="kasagi-highlight" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stopColor="#FFB366" />
+      <stop offset="50%" stopColor="#FF7A30" />
+      <stop offset="100%" stopColor="#FFB366" />
+    </linearGradient>
+
+    <!-- Primary flowing ribbon gradient (Vermilion -> Magenta -> Deep Violet) -->
+    <linearGradient id="ribbon-grad" x1="50%" y1="0%" x2="50%" y2="100%">
+      <stop offset="0%" stopColor="#FFA048" />
+      <stop offset="25%" stopColor="#FF5722" />
+      <stop offset="55%" stopColor="#E11D48" />
+      <stop offset="80%" stopColor="#6366F1" />
+      <stop offset="100%" stopColor="#312E81" />
+    </linearGradient>
+
+    <!-- Center vertical T-stem gradient -->
+    <linearGradient id="center-stem-grad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stopColor="#FFB366" />
+      <stop offset="40%" stopColor="#FF4A2A" />
+      <stop offset="75%" stopColor="#9333EA" />
+      <stop offset="100%" stopColor="#4338CA" />
+    </linearGradient>
+
+    <!-- Sub-lintel horizontal crossbar gradient -->
+    <linearGradient id="lintel-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stopColor="#E11D48" />
+      <stop offset="50%" stopColor="#FF4A2A" />
+      <stop offset="100%" stopColor="#E11D48" />
+    </linearGradient>
+
+    <!-- Base curled fold shadow -->
+    <linearGradient id="fold-shadow" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stopColor="#3730A3" />
+      <stop offset="100%" stopColor="#1E1B4B" />
+    </linearGradient>
+
+    <!-- Subtle drop shadow for depth -->
+    <filter id="soft-shadow" x="-10%" y="-10%" width="120%" height="120%" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#000000" flood-opacity="0.3" />
+    </filter>
+  </defs>
+
+  <!-- ==================== TORII EMBLEM ==================== -->
+  <g transform="translate(100, 30)" filter="url(#soft-shadow)">
+    <!-- Sub-lintel / Nuki horizontal crossbar -->
+    <rect x="25" y="65" width="250" height="24" rx="12" fill="url(#lintel-grad)" />
+
+    <!-- Outer rear vertical pillars -->
+    <rect x="42" y="65" width="26" height="150" rx="13" fill="url(#fold-shadow)" opacity="0.65" />
+    <rect x="232" y="65" width="26" height="150" rx="13" fill="url(#fold-shadow)" opacity="0.65" />
+
+    <!-- Left flowing archway ribbon -->
+    <path
+      d="M70 75C70 62 85 52 110 52H130V135C130 155 118 165 102 175C84 187 64 200 64 225C64 245 82 255 100 245C118 235 125 215 125 195V105"
+      stroke="url(#ribbon-grad)"
+      stroke-width="26"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
+
+    <!-- Right flowing archway ribbon -->
+    <path
+      d="M230 75C230 62 215 52 190 52H170V135C170 155 182 165 198 175C216 187 236 200 236 225C236 245 218 255 200 245C182 235 175 215 175 195V105"
+      stroke="url(#ribbon-grad)"
+      stroke-width="26"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
+
+    <!-- Center continuous "T" monogram stem -->
+    <path
+      d="M150 35V145C150 170 140 185 120 205"
+      stroke="url(#center-stem-grad)"
+      stroke-width="28"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
+
+    <!-- Top curved Kasagi roof beam with flared ends -->
+    <!-- Main roof body -->
+    <path
+      d="M5 24C45 18 100 24 150 26C200 24 255 18 295 24C300 30 295 40 280 44C240 48 195 47 150 48C105 47 60 48 20 44C5 40 0 30 5 24Z"
+      fill="url(#kasagi-grad)"
+    />
+    <!-- Roof upper bevel highlight line -->
+    <path
+      d="M8 26C50 20 100 26 150 28C200 26 250 20 292 26"
+      stroke="url(#kasagi-highlight)"
+      stroke-width="3"
+      stroke-linecap="round"
+      opacity="0.8"
+    />
+  </g>
+
+  <!-- ==================== TYPOGRAPHY ==================== -->
+  <!-- "TORII" - bold, clean, modern geometric typography -->
+  <text
+    x="250"
+    y="380"
+    text-anchor="middle"
+    font-family="system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif"
+    font-size="62"
+    font-weight="900"
+    letter-spacing="9"
+    fill="#FFFFFF"
+  >
+    TORII
+  </text>
+
+  <!-- "IMMIGRATION" - elegant tracking, perfectly centered, NO "TECH" -->
+  <text
+    x="250"
+    y="435"
+    text-anchor="middle"
+    font-family="system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif"
+    font-size="20"
+    font-weight="600"
+    letter-spacing="10"
+    fill="#A5B4FC"
+    opacity="0.9"
+  >
+    IMMIGRATION
+  </text>
+</svg>

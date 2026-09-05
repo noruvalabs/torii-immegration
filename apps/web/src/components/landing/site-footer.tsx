@@ -5,6 +5,7 @@ import { ArrowRight } from "lucide-react";
 import { useLang } from "./i18n";
 import { dictionary } from "./dictionary";
 import { Reveal } from "./reveal";
+import { ToriiLogo } from "@/components/brand/ToriiLogo";
 
 export function SiteFooter() {
   const { lang } = useLang();
@@ -19,11 +20,9 @@ export function SiteFooter() {
 
       <div className="relative mx-auto max-w-6xl px-6 pb-10 pt-16 sm:pt-20">
         <Reveal>
-          <div className="flex items-center gap-2">
-            <span className="text-lg" aria-hidden>
-              ⛩️
-            </span>
-            <span className="font-semibold tracking-tight">Torii</span>
+          <div className="flex items-center gap-2.5">
+            <ToriiLogo size={24} />
+            <span className="font-bold tracking-tight">Torii</span>
           </div>
 
           <h2 className="mt-6 max-w-2xl text-4xl font-semibold leading-[1.05] tracking-tight sm:text-6xl">

@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 
 import { useCredits } from "@/lib/credits-context";
+import { ToriiLogo } from "@/components/brand/ToriiLogo";
 
 export function ApplicantSidebar() {
   const pathname = usePathname();
@@ -279,11 +280,9 @@ export function ApplicantSidebar() {
     <>
       {/* Mobile Top Header */}
       <header className="flex h-14 shrink-0 items-center justify-between border-b bg-card px-4 md:hidden">
-        <div className="flex items-center gap-2">
-          <span className="text-xl" aria-hidden>
-            ⛩️
-          </span>
-          <span className="text-lg font-semibold tracking-tight">Torii</span>
+        <div className="flex items-center gap-2.5">
+          <ToriiLogo size={26} />
+          <span className="text-lg font-bold tracking-tight">Torii</span>
         </div>
         <button
           type="button"
@@ -312,11 +311,9 @@ export function ApplicantSidebar() {
         )}
       >
         <div className="flex h-14 items-center justify-between border-b px-4">
-          <div className="flex items-center gap-2">
-            <span className="text-xl" aria-hidden>
-              ⛩️
-            </span>
-            <span className="text-lg font-semibold tracking-tight">Torii</span>
+          <div className="flex items-center gap-2.5">
+            <ToriiLogo size={24} />
+            <span className="text-lg font-bold tracking-tight">Torii</span>
           </div>
           <button
             type="button"
@@ -346,14 +343,12 @@ export function ApplicantSidebar() {
               title={lang === "ja" ? "サイドバーを展開" : "Expand sidebar"}
               className="flex size-9 items-center justify-center rounded-xl text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
             >
-              <PanelLeftOpen className="size-5" />
+              <ToriiLogo size={24} />
             </button>
           ) : (
             <>
-              <div className="flex items-center gap-2">
-                <span className="text-xl" aria-hidden>
-                  ⛩️
-                </span>
+              <div className="flex items-center gap-2.5">
+                <ToriiLogo size={26} />
                 <span className="text-lg font-bold tracking-tight">Torii</span>
               </div>
               <button

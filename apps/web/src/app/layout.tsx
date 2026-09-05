@@ -20,6 +20,11 @@ export const metadata: Metadata = {
   },
   description:
     "A guided form-preparation platform for immigration. Not legal advice — every instruction is sourced.",
+  icons: {
+    icon: "/brand/logo-icon.png",
+    shortcut: "/brand/logo-icon.png",
+    apple: "/brand/logo-icon.png",
+  },
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

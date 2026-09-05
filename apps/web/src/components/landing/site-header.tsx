@@ -8,6 +8,7 @@ import { LanguageToggle } from "./language-toggle";
 import { useLang } from "./i18n";
 import { dictionary } from "./dictionary";
 import { cn } from "@/lib/utils";
+import { ToriiLogo } from "@/components/brand/ToriiLogo";
 
 export function SiteHeader() {
   const { lang } = useLang();
@@ -39,11 +40,9 @@ export function SiteHeader() {
             : "border-transparent bg-transparent shadow-none backdrop-blur-none",
         )}
       >
-        <Link href="/" className="flex items-center gap-2">
-          <span className="text-xl" aria-hidden>
-            ⛩️
-          </span>
-          <span className="text-lg font-semibold tracking-tight">Torii</span>
+        <Link href="/" className="flex items-center gap-2.5">
+          <ToriiLogo size={26} />
+          <span className="text-lg font-bold tracking-tight">Torii</span>
         </Link>
 
         <nav className="ml-8 hidden items-center gap-0.5 lg:flex">
