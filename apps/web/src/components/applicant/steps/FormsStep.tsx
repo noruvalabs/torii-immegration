@@ -137,6 +137,29 @@ function getFieldControlSpec(key: string): FieldControlSpec {
     };
   }
 
+  // Attendance Rate (出席率)
+  if (k.includes("attendance_rate")) {
+    return {
+      type: "number",
+      placeholder: "e.g. 95 (%)",
+      min: 0,
+      max: 100,
+    };
+  }
+
+  // School Enrollment / Completion Status
+  if (k.includes("enrollment_status") || k.includes("school_completed")) {
+    return {
+      type: "select",
+      options: [
+        { label: "Enrolled (在籍中・在学中)", value: "enrolled" },
+        { label: "Completed / Graduated (卒業・修了)", value: "graduated" },
+        { label: "Expected to Graduate (卒業見込み)", value: "expected_to_graduate" },
+        { label: "Withdrawn (退学)", value: "withdrawn" },
+      ],
+    };
+  }
+
   // Desired or Current Period of stay
   if (k.includes("period_of_stay") || k.includes("desired_period")) {
     return {
@@ -243,6 +266,14 @@ const STATUTORY_REQUIRED_FIELD_KEYS = new Set([
   "education_level",
   "major_field",
   "field_of_study",
+  // Student & School specific statutory fields
+  "attendance_rate",
+  "school.attendance_rate",
+  "school_attendance_rate",
+  "school_completed",
+  "enrollment_status",
+  "school.enrollment_status",
+  "school_enrollment_status",
 ]);
 
 export function isFieldRequired(key: string): boolean {
@@ -417,6 +448,8 @@ const FIELD_ALIAS_GROUPS: string[][] = [
   ["employer_name", "company_name", "sponsor_name", "sponsoring_organization", "host_company_name", "employer"],
   ["corporate_number", "employer_corporate_number", "company_number", "organization_number"],
   ["salary", "monthly_salary", "annual_salary_jpy", "salary_monthly", "income_monthly"],
+  ["attendance_rate", "school.attendance_rate", "school_attendance_rate"],
+  ["school_completed", "enrollment_status", "school.enrollment_status", "school_enrollment_status"],
 ];
 
 function getCanonicalAliasGroup(key: string): string[] | null {
@@ -679,19 +712,21 @@ export function FormsStep({
       }
 
       return officialForms.map((oform) => {
-        const rawMissing = oform.missing_answer_keys && oform.missing_answer_keys.length > 0
-          ? oform.missing_answer_keys
-          : Array.from(allMissingFields);
+        const combinedMissing = new Set<string>([
+          ...(oform.missing_answer_keys || []),
+          ...Array.from(allMissingFields),
+        ]);
+        const rawMissing = Array.from(combinedMissing);
 
         // Deduplicate and filter out fields whose alias group is already answered
         const missing = deduplicateMissingFields(rawMissing, allFilledFields);
 
-        const requiredMissing = oform.required_missing_keys && oform.required_missing_keys.length > 0
-          ? oform.required_missing_keys.filter((k) => missing.includes(k))
-          : missing.filter((k) => isFieldRequired(k));
-        const optionalMissing = oform.optional_missing_keys && oform.optional_missing_keys.length > 0
-          ? oform.optional_missing_keys.filter((k) => missing.includes(k))
-          : missing.filter((k) => !isFieldRequired(k));
+        const requiredKeys = new Set<string>([
+          ...(oform.required_missing_keys || []),
+          ...Array.from(allMissingFields).filter((k) => isFieldRequired(k)),
+        ]);
+        const requiredMissing = missing.filter((k) => requiredKeys.has(k) || isFieldRequired(k));
+        const optionalMissing = missing.filter((k) => !requiredMissing.includes(k));
         const total = oform.total_items || Object.keys(allFilledFields).length || 45;
 
         return {

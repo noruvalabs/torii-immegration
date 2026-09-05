@@ -918,7 +918,104 @@ async def list_cases(
         select(Case).where(Case.user_id == user.id).order_by(Case.created_at.desc())
     )
     cases = list(result.scalars().all())
-    return [await _enrich_case(session, case) for case in cases]
+    if not cases:
+        return []
+
+    jurisdiction_ids = {c.jurisdiction_id for c in cases if c.jurisdiction_id}
+    visa_category_ids = {c.visa_category_id for c in cases if c.visa_category_id}
+    case_action_ids = {c.case_action_id for c in cases if c.case_action_id}
+
+    jurisdictions = (
+        {
+            j.id: j
+            for j in (
+                await session.scalars(
+                    select(Jurisdiction).where(Jurisdiction.id.in_(jurisdiction_ids))
+                )
+            ).all()
+        }
+        if jurisdiction_ids
+        else {}
+    )
+    visa_categories = (
+        {
+            v.id: v
+            for v in (
+                await session.scalars(
+                    select(VisaCategory).where(VisaCategory.id.in_(visa_category_ids))
+                )
+            ).all()
+        }
+        if visa_category_ids
+        else {}
+    )
+    case_actions = (
+        {
+            a.id: a
+            for a in (
+                await session.scalars(
+                    select(CaseAction).where(CaseAction.id.in_(case_action_ids))
+                )
+            ).all()
+        }
+        if case_action_ids
+        else {}
+    )
+
+    out: list[CaseOut] = []
+    for case in cases:
+        j = jurisdictions.get(case.jurisdiction_id)
+        v = visa_categories.get(case.visa_category_id) if case.visa_category_id else None
+        a = case_actions.get(case.case_action_id) if case.case_action_id else None
+        j_code = j.code if j else None
+        v_code = v.code if v else None
+        a_code = a.code if a else None
+        parts = [
+            p
+            for p in (
+                j.name if j else None,
+                v.name if v else None,
+                a.name if a else None,
+            )
+            if p
+        ]
+        label = " · ".join(parts) if parts else None
+
+        next_phase = "intake"
+        next_title = "Answer the intake questions"
+        if case.status == "submitted":
+            next_phase = "done"
+            next_title = "Application submitted"
+        elif case.status == "packet_ready":
+            next_phase = "packet"
+            next_title = "Review and download your packet"
+        elif case.status == "forms_generated":
+            next_phase = "review"
+            next_title = "Review your case"
+        elif case.status == "checklist_ready":
+            next_phase = "forms"
+            next_title = "Generate your application forms"
+        elif case.status == "intake_complete":
+            next_phase = "eligibility"
+            next_title = "Check eligibility"
+        elif case.intake_answers and len(case.intake_answers) > 0:
+            next_phase = "intake"
+            next_title = "Continue intake"
+
+        base = CaseOut.model_validate(case)
+        out.append(
+            base.model_copy(
+                update={
+                    "jurisdiction_code": j_code,
+                    "visa_category_code": v_code,
+                    "case_action_code": a_code,
+                    "scope_label": label,
+                    "next_phase": next_phase,
+                    "next_title": next_title,
+                }
+            )
+        )
+    return out
 
 
 @router.get("/{case_id}/intake", response_model=IntakeStateOut)

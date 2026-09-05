@@ -91,11 +91,7 @@ export function getDocumentTypes(token?: string | null) {
 }
 
 export async function getWallet(token?: string | null) {
-  try {
-    return await request<WalletDocument[]>("/", { method: "GET" }, token);
-  } catch {
-    return await request<WalletDocument[]>("", { method: "GET" }, token);
-  }
+  return request<WalletDocument[]>("", { method: "GET" }, token);
 }
 
 export function getWalletSummary(token?: string | null) {

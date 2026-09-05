@@ -58,6 +58,13 @@ FORM_ANSWER_KEY_ALIASES: dict[str, list[str]] = {
     "employer_name": ["employer", "company_name", "sponsoring_organization", "host_company_name"],
     "corporate_number": ["employer_corporate_number", "company_number", "organization_number"],
     "employer_corporate_number": ["corporate_number", "company_number", "organization_number"],
+    "attendance_rate": ["school.attendance_rate", "school_attendance_rate"],
+    "school.attendance_rate": ["attendance_rate", "school_attendance_rate"],
+    "school_attendance_rate": ["attendance_rate", "school.attendance_rate"],
+    "school.enrollment_status": ["school_completed", "enrollment_status", "school_enrollment_status"],
+    "school_completed": ["school.enrollment_status", "enrollment_status", "school_enrollment_status"],
+    "enrollment_status": ["school.enrollment_status", "school_completed", "school_enrollment_status"],
+    "school_enrollment_status": ["school.enrollment_status", "school_completed", "enrollment_status"],
 }
 
 

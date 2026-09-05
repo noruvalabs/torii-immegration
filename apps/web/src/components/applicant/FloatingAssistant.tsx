@@ -18,7 +18,7 @@ import {
   evaluateEligibility,
   getEligibility,
   getCase,
-  refreshChecklist,
+  getChecklist,
   type Case,
   type EligibilityResult,
   type ChecklistItem,
@@ -253,8 +253,10 @@ export function FloatingAssistant() {
   const caseId = caseMatch ? Number(caseMatch[1]) : null;
 
   // Fetch complete real-time case context (Case, Eligibility findings, Checklist, Profile)
+  // Only fetch when the assistant drawer is open to prevent redundant query bursts on page load
   useEffect(() => {
-    if (!token || !caseId) {
+    if (!token || !caseId || !isOpen) {
+      if (!isOpen) return;
       setActiveCase(null);
       setActiveEligibility(null);
       setActiveChecklist([]);
@@ -265,8 +267,8 @@ export function FloatingAssistant() {
       try {
         const [c, elig, chk, prof] = await Promise.all([
           getCase(token, caseId),
-          getEligibility(token, caseId).catch(() => evaluateEligibility(token, caseId).catch(() => null)),
-          refreshChecklist(token, caseId).catch(() => []),
+          getEligibility(token, caseId).catch(() => null),
+          getChecklist(token, caseId).catch(() => []),
           getProfile(token).catch(() => null),
         ]);
         setActiveCase(c);
