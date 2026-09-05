@@ -250,6 +250,20 @@ async def test_discovery_writes_candidates_switched_off_and_is_re_runnable(
         headers=admin,
     )
 
+    # A route on its own is not yet something to apply on: a case needs a procedure too,
+    # and ``scope_case`` refuses a scope whose procedure is switched off. Switching the
+    # discovered procedure on is the other half of the same curation.
+    pr_action = next(
+        a
+        for a in (await client.get(f"/v1/jurisdictions/{jid}/case-actions", headers=admin)).json()
+        if a["code"] == "permanent_residence"
+    )
+    await client.patch(
+        f"/v1/jurisdictions/{jid}/case-actions/{pr_action['id']}",
+        json={"is_enabled": True},
+        headers=admin,
+    )
+
     # Re-running discovery finds nothing new and leaves the admin's work alone.
     _stub_ai(monkeypatch, _discovery_payload())
     second = await client.post(f"/v1/jurisdictions/{jid}/discover", headers=admin)
@@ -489,3 +503,192 @@ async def test_applying_fills_a_gap_but_never_overwrites(engine: AsyncEngine) ->
         # Only the gaps were filled.
         assert row.description == "Employment activities."
         assert row.citation["url"] == ISA
+
+
+# ── The listing and the create agree ───────────────────────────────────────────
+
+
+async def _scope_fixture(client: AsyncClient, engine: AsyncEngine) -> tuple[dict[str, str], int]:
+    admin = {"Authorization": f"Bearer {await _admin_token(client, engine)}"}
+    jid = (
+        await client.post(
+            "/v1/jurisdictions",
+            json={"code": "jp", "name": "Japan", "is_live": True},
+            headers=admin,
+        )
+    ).json()["id"]
+    return admin, jid
+
+
+async def _set_scope_row(
+    client: AsyncClient,
+    admin: dict[str, str],
+    jid: int,
+    kind: str,
+    code: str,
+    name: str | None = None,
+    **flags: bool,
+) -> None:
+    """Set a route's or procedure's flags, whether or not the starter set already has it."""
+    rows = (await client.get(f"/v1/jurisdictions/{jid}/{kind}", headers=admin)).json()
+    existing = next((r for r in rows if r["code"] == code), None)
+    body: dict[str, Any] = dict(flags)
+    if name is not None:
+        body["name"] = name
+    if existing is None:
+        resp = await client.post(
+            f"/v1/jurisdictions/{jid}/{kind}",
+            json={"code": code, "name": name or code.replace("_", " ").title(), **flags},
+            headers=admin,
+        )
+        assert resp.status_code == 201, resp.text
+        return
+    resp = await client.patch(
+        f"/v1/jurisdictions/{jid}/{kind}/{existing['id']}", json=body, headers=admin
+    )
+    assert resp.status_code == 200, resp.text
+
+
+async def _set_action(
+    client: AsyncClient, admin: dict[str, str], jid: int, code: str, **flags: bool
+) -> None:
+    await _set_scope_row(client, admin, jid, "case-actions", code, **flags)
+
+
+async def _set_route(
+    client: AsyncClient,
+    admin: dict[str, str],
+    jid: int,
+    code: str,
+    name: str | None = None,
+    **flags: bool,
+) -> None:
+    await _set_scope_row(client, admin, jid, "visa-categories", code, name, **flags)
+
+
+async def test_a_listed_route_is_one_an_applicant_can_actually_open_a_case_on(
+    client: AsyncClient, engine: AsyncEngine
+) -> None:
+    """The listing endpoints and ``scope_case`` used to disagree about the same scope.
+
+    A route with a content pack paired with a procedure served by research passed each of
+    the two per-row filters the geo endpoints applied, so it was offered — and then
+    ``scope_case`` refused it, because it asks whether the *scope* is sourced one way or
+    the other. The applicant met that as a bare "this case scope is not available" on the
+    last click of a five-step flow.
+    """
+    admin, jid = await _scope_fixture(client, engine)
+
+    # A packed route, and a procedure that is only research-enabled: neither is wrong on
+    # its own, and together they are not a scope anyone can be served.
+    await _set_route(
+        client, admin, jid, "work", is_live=True, is_enabled=True, research_enabled=False
+    )
+    await _set_action(
+        client, admin, jid, "renewal", is_enabled=True, is_live=False, research_enabled=True
+    )
+
+    applicant = {"Authorization": f"Bearer {await _applicant_token(client)}"}
+    visa_types = (await client.get("/v1/geo/visa-types?destination=JP", headers=applicant)).json()
+    assert visa_types == [], "a route with no procedure it pairs with is not an offer"
+
+    # Give it a procedure sourced the same way, and it becomes a real offer.
+    await _set_action(client, admin, jid, "new", is_enabled=True, is_live=True)
+    visa_types = (await client.get("/v1/geo/visa-types?destination=JP", headers=applicant)).json()
+    assert [v["code"] for v in visa_types] == ["work"]
+
+    actions = (
+        await client.get(
+            "/v1/geo/application-types?destination=JP&visa_type=work", headers=applicant
+        )
+    ).json()
+    assert [a["code"] for a in actions] == ["new"], "the mismatched renewal is not offered"
+
+    # Everything still listed survives the last click.
+    for a in actions:
+        created = await client.post(
+            "/v1/cases/scope",
+            json={
+                "jurisdiction_code": "JP",
+                "visa_category_code": "work",
+                "action_code": a["code"],
+            },
+            headers=applicant,
+        )
+        assert created.status_code == 201, created.text
+
+
+async def test_a_known_destination_never_falls_back_to_the_generic_route_list(
+    client: AsyncClient, engine: AsyncEngine
+) -> None:
+    """An empty country offers nothing, rather than three routes it has no rows for."""
+    await _scope_fixture(client, engine)
+    applicant = {"Authorization": f"Bearer {await _applicant_token(client)}"}
+
+    visa_types = (await client.get("/v1/geo/visa-types?destination=JP", headers=applicant)).json()
+    assert visa_types == []
+
+    app_types = (
+        await client.get(
+            "/v1/geo/application-types?destination=JP&visa_type=work", headers=applicant
+        )
+    ).json()
+    assert app_types == []
+
+
+async def test_the_route_list_leads_with_the_routes_people_ask_for(
+    client: AsyncClient, engine: AsyncEngine
+) -> None:
+    """Ordering by the internal handle buried work and tourist under the rarer routes."""
+    admin, jid = await _scope_fixture(client, engine)
+    await _set_action(client, admin, jid, "new", is_enabled=True, is_live=True)
+    for code, name in [
+        ("dependent", "Dependent Visa"),
+        ("work", "Work Visa"),
+        ("hsp", "Highly Skilled Professional"),
+        ("student", "Student Visa"),
+    ]:
+        await _set_route(client, admin, jid, code, name, is_live=True, is_enabled=True)
+
+    applicant = {"Authorization": f"Bearer {await _applicant_token(client)}"}
+    visa_types = (await client.get("/v1/geo/visa-types?destination=JP", headers=applicant)).json()
+    assert [v["code"] for v in visa_types] == ["work", "student", "dependent", "hsp"]
+
+
+async def test_a_research_only_route_says_so(client: AsyncClient, engine: AsyncEngine) -> None:
+    """The applicant can tell a reviewed route from one researched on demand."""
+    admin, jid = await _scope_fixture(client, engine)
+    await _set_action(client, admin, jid, "new", is_enabled=True, is_live=True)
+    await _set_action(
+        client, admin, jid, "renewal", is_enabled=True, is_live=False, research_enabled=True
+    )
+    await _set_route(client, admin, jid, "work", "Work Visa", is_live=True, is_enabled=True)
+    await _set_route(
+        client, admin, jid, "hsp", "HSP", is_live=False, is_enabled=True, research_enabled=True
+    )
+
+    applicant = {"Authorization": f"Bearer {await _applicant_token(client)}"}
+    visa_types = (await client.get("/v1/geo/visa-types?destination=JP", headers=applicant)).json()
+    flags = {v["code"]: v["is_research"] for v in visa_types}
+    assert flags == {"work": False, "hsp": True}
+
+
+async def test_a_route_carries_no_description_it_did_not_come_with(
+    client: AsyncClient, engine: AsyncEngine
+) -> None:
+    """The generic per-code lines only repeated what the name already said."""
+    admin, jid = await _scope_fixture(client, engine)
+    await _set_action(client, admin, jid, "new", is_enabled=True, is_live=True)
+    await _set_route(
+        client,
+        admin,
+        jid,
+        "student",
+        "Student Visa - 留学 (Study at a university, college, or language school)",
+        is_live=True,
+        is_enabled=True,
+    )
+
+    applicant = {"Authorization": f"Bearer {await _applicant_token(client)}"}
+    visa_types = (await client.get("/v1/geo/visa-types?destination=JP", headers=applicant)).json()
+    assert visa_types[0]["description"] == ""

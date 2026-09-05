@@ -587,13 +587,14 @@ async def upsert_pack_override(
     status_code=status.HTTP_204_NO_CONTENT,
     response_class=Response,
 )
-async def delete_pack_override(override_id: int, session: SessionDep, _admin: AdminOpsDep) -> None:
+async def delete_pack_override(override_id: int, session: SessionDep, _admin: AdminOpsDep) -> Response:
     """Revert one edit. The pack's own value is what the scope shows again."""
     row = await session.get(PackOverride, override_id)
     if row is None:
         raise HTTPException(status_code=404, detail="no such override")
     await session.delete(row)
     await session.flush()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 # ── Scope Details & Intake/PDF Editor ──────────────────────────────────────────
