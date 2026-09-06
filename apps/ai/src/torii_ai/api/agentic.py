@@ -7,10 +7,10 @@ Called by ``apps/api``'s worker; never directly by the applicant's browser.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Annotated, Any
 
 import structlog
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from torii_ai.config import Settings, get_settings
@@ -28,6 +28,7 @@ from torii_ai.tools.tavily import FakeSearchClient, TavilyClient
 log = structlog.get_logger()
 
 router = APIRouter(prefix="/ai/agentic", tags=["agentic"])
+SettingsDep = Annotated[Settings, Depends(get_settings)]
 
 
 class StageResearchIn(BaseModel):
@@ -180,9 +181,8 @@ def _build_planner(settings: Settings) -> AICasePlanner:
 
 
 @router.post("/research-stage", response_model=StageResearchOut)
-async def research_stage(payload: StageResearchIn) -> StageResearchOut:
+async def research_stage(payload: StageResearchIn, settings: SettingsDep) -> StageResearchOut:
     """Run one pipeline stage's live research and return its cited, stage-shaped payload."""
-    settings = get_settings()
     researcher = _build_researcher(settings)
     request = StageResearchRequest(
         stage=payload.stage,
@@ -217,9 +217,9 @@ async def research_stage(payload: StageResearchIn) -> StageResearchOut:
 @router.post("/evaluate-eligibility", response_model=AIEvaluateEligibilityOut)
 async def evaluate_eligibility_endpoint(
     payload: AIEvaluateEligibilityIn,
+    settings: SettingsDep,
 ) -> AIEvaluateEligibilityOut:
     """Run AI-assisted eligibility screening on applicant answers."""
-    settings = get_settings()
     evaluator = _build_evaluator(settings)
     request = AIEvaluationRequest(
         destination_code=payload.destination_code,
@@ -257,9 +257,10 @@ async def evaluate_eligibility_endpoint(
 
 
 @router.post("/draft-document", response_model=DraftDocumentOut)
-async def draft_document_endpoint(payload: DraftDocumentIn) -> DraftDocumentOut:
+async def draft_document_endpoint(
+    payload: DraftDocumentIn, settings: SettingsDep
+) -> DraftDocumentOut:
     """Dynamically generate official customized legal documents tailored to applicant case."""
-    settings = get_settings()
     drafter = _build_drafter(settings)
     req = AIDraftRequest(
         doc_type=payload.doc_type,
@@ -281,15 +282,13 @@ async def draft_document_endpoint(payload: DraftDocumentIn) -> DraftDocumentOut:
         result = await drafter.draft_document(req)
     except Exception as exc:
         log.error("agentic.draft_document.failed", error=str(exc))
-        raise HTTPException(
-            status_code=500, detail=f"AI document drafting failed: {exc}"
-        ) from exc
+        raise HTTPException(status_code=500, detail=f"AI document drafting failed: {exc}") from exc
 
     return DraftDocumentOut(**result)
 
 
 @router.post("/case-plan", response_model=CasePlanOut)
-async def case_plan_endpoint(payload: CasePlanIn) -> CasePlanOut:
+async def case_plan_endpoint(payload: CasePlanIn, settings: SettingsDep) -> CasePlanOut:
     """Reduce a whole case to a short action plan: what to start today, then, and the risks.
 
     The applicant's step view can draw every stage of the process, but sixteen numbered
@@ -298,7 +297,6 @@ async def case_plan_endpoint(payload: CasePlanIn) -> CasePlanOut:
     from a bank or an airline and how long each takes, the cited filing route — and
     returns the short version an adviser would actually say out loud.
     """
-    settings = get_settings()
     planner = _build_planner(settings)
     request = CasePlanRequest(
         scope_label=payload.scope_label,

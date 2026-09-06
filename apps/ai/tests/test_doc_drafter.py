@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 from httpx import ASGITransport, AsyncClient
 
+from torii_ai.api import agentic
 from torii_ai.config import Settings
 from torii_ai.llm.groq import FakeChatClient
 from torii_ai.main import create_app
@@ -40,7 +41,17 @@ async def test_doc_drafter_service_fallback() -> None:
 
 
 @pytest.mark.asyncio
-async def test_draft_document_endpoint() -> None:
+async def test_draft_document_endpoint(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Regression: an endpoint used to bypass the settings supplied to create_app and read the
+    # process-level .env instead. Make that global path observably wrong so this test remains
+    # deterministic even on a machine with no real API keys configured.
+    live_settings = Settings(groq_api_key="configured-but-must-not-be-used")
+    monkeypatch.setattr(agentic, "get_settings", lambda: live_settings)
+    monkeypatch.setattr(
+        agentic,
+        "GroqChatClient",
+        lambda *_args, **_kwargs: FakeChatClient("WRONG GLOBAL SETTINGS " * 12),
+    )
     settings = Settings(groq_api_key="", nvidia_api_key="")
     app = create_app(settings)
     transport = ASGITransport(app=app)

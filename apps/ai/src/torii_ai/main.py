@@ -23,6 +23,7 @@ APP_TITLE = "Torii AI"
 
 def create_app(settings: Settings | None = None) -> FastAPI:
     """Build the FastAPI AI app: logging, health, chat, optional docs."""
+    supplied_settings = settings
     settings = settings or get_settings()
     configure_logging(settings.log_level)
     log = structlog.get_logger()
@@ -56,6 +57,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(ocr_router)
     app.include_router(ops_router)
     app.include_router(agentic_router)
+    if supplied_settings is not None:
+        # Application-factory callers (especially tests) must get the exact settings they
+        # supplied, even when the process-level ``get_settings`` cache loaded a root .env.
+        app.dependency_overrides[get_settings] = lambda: settings
     return app
 
 
