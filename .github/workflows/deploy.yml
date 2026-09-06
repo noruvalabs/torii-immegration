@@ -161,21 +161,49 @@ jobs:
       SSH_HOST: ${{ secrets.DEPLOY_SSH_HOST }}
       SSH_PORT: ${{ secrets.DEPLOY_SSH_PORT || '22' }}
       SSH_USER: ${{ secrets.DEPLOY_SSH_USER }}
+      SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
       # Set TORII_APP_ROOT as an environment variable to run staging and production side by
       # side on one host (e.g. /opt/torii-staging).
       APP_ROOT: ${{ vars.TORII_APP_ROOT || '/opt/torii' }}
       IMAGE_OWNER: ${{ needs.resolve.outputs.owner }}
       TAG: ${{ needs.resolve.outputs.tag }}
       ENVIRONMENT: ${{ needs.resolve.outputs.environment }}
+      TORII_ENV_FILE_B64: ${{ secrets.DEPLOY_ENV_FILE_B64 }}
     steps:
       - uses: actions/checkout@v4
 
       - name: Prepare the SSH client
         env:
-          SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
           KNOWN_HOSTS: ${{ secrets.DEPLOY_SSH_KNOWN_HOSTS }}
         run: |
           set -euo pipefail
+
+          # Fallback: if SSH settings are not set as separate secrets, extract them from TORII_ENV_FILE_B64
+          if [ -n "${TORII_ENV_FILE_B64:-}" ]; then
+            DECODED_ENV=$(printf '%s' "$TORII_ENV_FILE_B64" | base64 -d 2>/dev/null || true)
+            if [ -z "${SSH_HOST:-}" ]; then
+              H=$(printf '%s\n' "$DECODED_ENV" | grep -E '^DEPLOY_SSH_HOST=' | tail -n1 | cut -d= -f2- | tr -d '\r"' || true)
+              if [ -n "$H" ]; then SSH_HOST="$H"; echo "SSH_HOST=$H" >> "$GITHUB_ENV"; fi
+            fi
+            if [ -z "${SSH_USER:-}" ]; then
+              U=$(printf '%s\n' "$DECODED_ENV" | grep -E '^DEPLOY_SSH_USER=' | tail -n1 | cut -d= -f2- | tr -d '\r"' || true)
+              if [ -n "$U" ]; then SSH_USER="$U"; echo "SSH_USER=$U" >> "$GITHUB_ENV"; fi
+            fi
+            if [ -z "${SSH_KEY:-}" ]; then
+              K=$(printf '%s\n' "$DECODED_ENV" | awk '/^DEPLOY_SSH_KEY=/{flag=1; sub(/^DEPLOY_SSH_KEY=["'\''"]?/, ""); if (sub(/["'\''"]?$/, "")) {print; flag=0} else {print}; next} flag{if (sub(/["'\''"]?$/, "")) {print; flag=0} else {print}}' || true)
+              if [ -n "$K" ]; then SSH_KEY="$K"; fi
+            fi
+            if [ "${SSH_PORT:-22}" = "22" ]; then
+              P=$(printf '%s\n' "$DECODED_ENV" | grep -E '^DEPLOY_SSH_PORT=' | tail -n1 | cut -d= -f2- | tr -d '\r"' || true)
+              if [ -n "$P" ]; then SSH_PORT="$P"; echo "SSH_PORT=$P" >> "$GITHUB_ENV"; fi
+            fi
+          fi
+
+          if [ -z "${SSH_HOST:-}" ] || [ -z "${SSH_USER:-}" ] || [ -z "${SSH_KEY:-}" ]; then
+            echo "::error::Missing SSH deployment credentials! Set DEPLOY_SSH_HOST, DEPLOY_SSH_USER, and DEPLOY_SSH_KEY either in GitHub Secrets or inside .env."
+            exit 1
+          fi
+
           mkdir -p ~/.ssh && chmod 700 ~/.ssh
           printf '%s\n' "$SSH_KEY" >~/.ssh/torii_deploy
           chmod 600 ~/.ssh/torii_deploy

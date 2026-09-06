@@ -49,7 +49,7 @@ write_env_file() {
   chmod 600 "$ENV_FILE"
   # IMAGE_OWNER/TAG are exported above, which wins over anything stale in the file — but the
   # file is also what a human sees when they run `docker compose ps` by hand later.
-  sed -i -e '/^IMAGE_OWNER=/d' -e '/^TAG=/d' "$ENV_FILE"
+  sed -i -e '/^IMAGE_OWNER=/d' -e '/^TAG=/d' -e '/^DEPLOY_SSH_/d' "$ENV_FILE"
   printf 'IMAGE_OWNER=%s\nTAG=%s\n' "$IMAGE_OWNER" "$TAG" >>"$ENV_FILE"
 }
 
