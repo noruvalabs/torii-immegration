@@ -18,8 +18,9 @@ docs/_shared.md
 **/*.py[cod]
 **/.pytest_cache
 **/.ruff_cache
-# Government form templates are fetched from the issuing ministry at runtime, never baked in.
-apps/api/var
+# Government form templates (keep official_forms)
+apps/api/var/*
+!apps/api/var/official_forms
 **/*.log
 **/*.db
 **/*.db-*

@@ -45,10 +45,9 @@ __pycache__/
 **/*.db-journal
 **/*.sqlite*
 
-# Official government form templates fetched from the issuing ministry at runtime
-# (`torii-fetch-forms`). Provenance is recorded in the sidecar JSON beside each PDF;
-# the source of truth is the ministry, not the repo.
-apps/api/var/
+# Official government form templates
+apps/api/var/*
+!apps/api/var/official_forms/
 
 # Environment / secrets
 .env
