@@ -42,6 +42,7 @@ docs/         product specs (docs/specs) + architecture decisions (docs/decision
 ```bash
 cp .env.example .env   # one file for apps/api, apps/ai, and apps/web — fill in secrets
 pnpm install    # once — installs the web deps and registers apps/api and apps/ai with turbo
+(cd apps/api && uv run alembic upgrade head && uv run torii-seed)
 pnpm dev        # runs the API (8000), AI service (8001), and web app (3000) together, prefixed logs
 # → http://localhost:3000            applicant landing
 # → http://localhost:3000/admin      back office (talks live to the API)
@@ -53,6 +54,15 @@ pnpm dev        # runs the API (8000), AI service (8001), and web app (3000) tog
 runs `next dev`; `apps/api` runs FastAPI on port 8000; `apps/ai` runs the AI/research engine on port 8001.
 
 Run just one service with `pnpm --filter web dev`, `pnpm --filter api dev`, or `pnpm --filter ai dev`.
+The seed command is idempotent and creates local demo users plus all bundled jurisdiction content.
+
+### Optional local credentials
+
+No API keys are required for the local demo: SQLite, seeded content, fake AI/search clients,
+mock payments, and logged email links keep the main flow usable. For live AI answers, research,
+and document OCR, set `TORII_AI_GROQ_API_KEY` and `TORII_AI_TAVILY_API_KEY` in the root `.env`.
+SMTP settings are only needed to deliver real verification/reset emails. The current Google button
+is a local social-login mock, not a verified Google OAuth integration.
 
 ### Everything, together (Postgres + Redis + nginx)
 

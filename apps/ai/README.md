@@ -28,7 +28,8 @@ one file covers apps/api, apps/ai, and apps/web.
 | Variable | Default | Purpose |
 |---|---|---|
 | `TORII_AI_GROQ_API_KEY` | (empty) | Groq API key |
-| `TORII_AI_GROQ_MODEL` | `llama-3.3-70b-versatile` | Chat model id |
+| `TORII_AI_GROQ_MODEL` | `qwen/qwen3.6-27b` | Vision/OCR-capable model id |
+| `TORII_AI_GROQ_EXTRACT_MODEL` | `openai/gpt-oss-120b` | Chat and structured-extraction model id |
 | `TORII_AI_GROQ_BASE_URL` | Groq OpenAI URL | Compatible base URL |
 | `TORII_AI_TAVILY_API_KEY` | (empty) | Tavily search key |
 | `TORII_AI_API_BASE_URL` | `http://localhost:8000` | System-of-record API |
