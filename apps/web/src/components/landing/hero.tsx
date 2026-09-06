@@ -35,9 +35,10 @@ export function Hero() {
 
       <div className="relative mx-auto grid max-w-6xl gap-12 px-6 pb-20 pt-28 lg:grid-cols-[1.1fr_0.9fr] lg:items-center lg:pb-28 lg:pt-36">
         <Reveal>
-          <p className="inline-flex items-center gap-1.5 rounded-full border border-primary/25 bg-primary/8 px-3 py-1 text-xs font-medium text-primary transition-colors hover:border-primary/50">
-            {t.hero.eyebrow}
-          </p>
+          <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/8 px-3.5 py-1 text-xs font-medium text-primary backdrop-blur-sm transition-colors hover:border-primary/40">
+            <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse" />
+            <span>{t.hero.eyebrow}</span>
+          </div>
 
           <h1 className="mt-6 max-w-xl text-5xl font-semibold leading-[1.05] tracking-tight sm:text-6xl">
             {t.hero.titleBefore}
@@ -50,10 +51,10 @@ export function Hero() {
           <div className="mt-9 flex flex-wrap items-center gap-3">
             <StartCaseButton />
             <a
-              href="#how-it-works"
-              className="inline-flex items-center gap-2 rounded-full border px-6 py-3.5 text-sm font-medium transition-colors hover:bg-accent"
+              href="#dashboard-showcase"
+              className="inline-flex h-11 items-center gap-2 rounded-md border border-border/80 bg-background/80 px-5 text-sm font-medium tracking-tight text-foreground transition-all duration-200 hover:bg-accent hover:border-foreground/20 active:scale-[0.98]"
             >
-              {t.hero.ctaSecondary}
+              <span>{lang === "ja" ? "実例と自動生成を見る ↓" : "View Live Cases Engine ↓"}</span>
             </a>
           </div>
 

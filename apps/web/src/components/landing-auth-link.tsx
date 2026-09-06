@@ -5,7 +5,13 @@ import { useAuth } from "@/lib/auth-context";
 import { useLang } from "@/components/landing/i18n";
 import { dictionary } from "@/components/landing/dictionary";
 
-export function LandingAuthLink() {
+import { cn } from "@/lib/utils";
+
+type Props = {
+  className?: string;
+};
+
+export function LandingAuthLink({ className }: Props) {
   const { user, loading } = useAuth();
   const { lang } = useLang();
   const t = dictionary[lang];
@@ -17,9 +23,9 @@ export function LandingAuthLink() {
     return (
       <Link
         href={dashboardHref}
-        className="text-sm font-medium text-muted-foreground hover:text-foreground"
+        className={cn("text-sm font-medium text-muted-foreground transition-colors hover:text-foreground", className)}
       >
-        {t.nav.dashboard} →
+        {t.nav.dashboard}
       </Link>
     );
   }
@@ -27,9 +33,9 @@ export function LandingAuthLink() {
   return (
     <Link
       href="/login"
-      className="text-sm font-medium text-muted-foreground hover:text-foreground"
+      className={cn("text-sm font-medium text-muted-foreground transition-colors hover:text-foreground", className)}
     >
-      {t.nav.signIn} →
+      {t.nav.signIn}
     </Link>
   );
 }

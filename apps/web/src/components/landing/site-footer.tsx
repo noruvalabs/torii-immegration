@@ -35,7 +35,7 @@ export function SiteFooter() {
 
           <Link
             href="/scope"
-            className="group mt-8 inline-flex items-center gap-2 rounded-full bg-primary px-6 py-3.5 text-sm font-medium text-primary-foreground shadow-md transition-all hover:-translate-y-0.5"
+            className="group mt-8 inline-flex items-center gap-2 rounded-md bg-primary px-6 py-3 text-sm font-medium text-primary-foreground shadow-xs transition-colors hover:bg-primary/90"
           >
             {t.footer.cta}
             <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
@@ -44,18 +44,18 @@ export function SiteFooter() {
 
         <div className="mt-14 flex flex-col gap-6 border-t border-border/60 pt-8 sm:flex-row sm:items-start sm:justify-between">
           <nav className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-muted-foreground">
+            <a href="#dashboard-showcase" className="hover:text-foreground">
+              {lang === "ja" ? "実際の画面" : "Live Demo"}
+            </a>
             <a href="#how-it-works" className="hover:text-foreground">
               {t.nav.howItWorks}
             </a>
-            <a href="#features" className="hover:text-foreground">
-              {t.nav.features}
+            <a href="#coverage" className="hover:text-foreground">
+              {lang === "ja" ? "対応ビザ" : "Supported Visas"}
             </a>
             <a href="#pricing" className="hover:text-foreground">
               {t.nav.pricing}
             </a>
-            <Link href="/blog" className="hover:text-foreground">
-              {t.nav.blog}
-            </Link>
             <a href="#faq" className="hover:text-foreground">
               {t.nav.faq}
             </a>

@@ -28,7 +28,7 @@ export function CtaBand() {
             </h2>
             <p className="mt-3 max-w-md text-base text-[var(--color-ink-foreground)]/75">{t.ctaBand.body}</p>
           </div>
-          <StartCaseButton signedOutLabel={t.ctaBand.cta} className="shrink-0 shadow-lg" />
+          <StartCaseButton signedOutLabel={t.ctaBand.cta} className="shrink-0" />
         </div>
       </Reveal>
     </section>

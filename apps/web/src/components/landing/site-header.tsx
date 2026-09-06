@@ -24,11 +24,10 @@ export function SiteHeader() {
   }, []);
 
   const navLinks = [
-    { href: "#outcomes", label: t.nav.outcomes },
+    { href: "#dashboard-showcase", label: lang === "ja" ? "実際の画面" : "Live Demo" },
     { href: "#how-it-works", label: t.nav.howItWorks },
-    { href: "#features", label: t.nav.features },
+    { href: "#coverage", label: lang === "ja" ? "対応ビザ" : "Supported Visas" },
     { href: "#pricing", label: t.nav.pricing },
-    { href: "#blog", label: t.nav.blog },
     { href: "#faq", label: t.nav.faq },
   ];
 
@@ -59,11 +58,16 @@ export function SiteHeader() {
           ))}
         </nav>
 
-        <div className="ml-auto flex items-center gap-2.5">
+        <div className="ml-auto flex items-center gap-3">
           <LanguageToggle className="hidden sm:inline-flex" />
           <ThemeToggle className="size-9 border-transparent hover:bg-accent" />
           <LandingAuthLink />
-          <StartCaseButton showArrow={false} className="hidden px-4 py-2 shadow-sm sm:inline-flex" />
+          <StartCaseButton
+            size="sm"
+            signedOutLabel={t.nav.headerCta}
+            showArrow={false}
+            className="hidden sm:inline-flex"
+          />
         </div>
       </div>
     </header>
