@@ -252,9 +252,7 @@ def describe_scope_forms(
             entry["total_items"] = total
         elif form.acroform_items:
             missing = [
-                key
-                for _, key in form.acroform_items
-                if resolve_answer(key, answers) in (None, "")
+                key for _, key in form.acroform_items if resolve_answer(key, answers) in (None, "")
             ]
             unique_missing = list(dict.fromkeys(missing))
             req_missing = [k for k in unique_missing if k in STATUTORY_REQUIRED_KEYS]

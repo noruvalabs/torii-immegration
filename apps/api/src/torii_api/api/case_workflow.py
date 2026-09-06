@@ -1344,7 +1344,9 @@ async def export_case_documents(
     single = len(payload.documents) == 1
     first = payload.documents[0]
     stem_source = (
-        (first.filename_stem or f"{reference}-{first.title}") if single else f"{reference}-filing-kit"
+        (first.filename_stem or f"{reference}-{first.title}")
+        if single
+        else f"{reference}-filing-kit"
     )
     default_stem = safe_stem(stem_source, "torii-document")
 
@@ -1437,9 +1439,7 @@ async def get_case_journey(
 
 
 @router.get("/{case_id}/plan")
-async def get_case_plan(
-    case_id: int, session: SessionDep, user: CurrentUserDep
-) -> dict[str, Any]:
+async def get_case_plan(case_id: int, session: SessionDep, user: CurrentUserDep) -> dict[str, Any]:
     """The plan already built for this case, if there is one.
 
     Returned from the case rather than rebuilt, so opening the step again costs nothing

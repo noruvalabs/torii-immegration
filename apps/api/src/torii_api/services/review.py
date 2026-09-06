@@ -159,7 +159,10 @@ def review_packet(
 
     # --- 1. Passport 6-Month Validity Rule ---
     from datetime import UTC, datetime
-    passport_exp_str = str(answers.get("passport_expiry_date") or answers.get("passport_expiry") or "")
+
+    passport_exp_str = str(
+        answers.get("passport_expiry_date") or answers.get("passport_expiry") or ""
+    )
     if passport_exp_str:
         try:
             # Handle YYYY-MM-DD

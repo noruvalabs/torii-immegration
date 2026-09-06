@@ -122,7 +122,7 @@ async def detect_country(
 @router.get("/destinations", response_model=list[DestinationOut])
 async def list_destinations(
     current_user: CurrentUserDep,
-    session: SessionDep = None,
+    session: SessionDep,
 ) -> list[DestinationOut]:
     """List all supported destination countries (excluding user's current country if applicable)."""
     current_country = (getattr(current_user, "current_country", None) or "").upper()
@@ -148,8 +148,8 @@ async def list_destinations(
 
 @router.get("/visa-types", response_model=list[VisaTypeOut])
 async def list_visa_types(
+    session: SessionDep,
     destination: str | None = None,
-    session: SessionDep = None,
 ) -> list[VisaTypeOut]:
     """List the routes an applicant can actually open a case on for this destination."""
     if destination and session:
@@ -204,7 +204,7 @@ async def list_visa_types(
             return result
 
     visa_types = get_visa_types()
-    return [VisaTypeOut(**vt) for vt in visa_types]
+    return [VisaTypeOut.model_validate(vt) for vt in visa_types]
 
 
 @router.get("/nationalities", response_model=list[DestinationOut])
@@ -216,9 +216,9 @@ async def list_nationalities() -> list[DestinationOut]:
 
 @router.get("/application-types", response_model=list[ApplicationTypeOut])
 async def list_application_types(
+    session: SessionDep,
     destination: str | None = None,
     visa_type: str | None = None,
-    session: SessionDep = None,
 ) -> list[ApplicationTypeOut]:
     """List the procedures available for a destination, or for one route within it.
 
@@ -347,13 +347,13 @@ async def list_application_types(
             return result
 
     app_types = get_application_types()
-    return [ApplicationTypeOut(**at) for at in app_types]
+    return [ApplicationTypeOut.model_validate(at) for at in app_types]
 
 
 @router.get("/all", response_model=GeoDataOut)
 async def get_all_geo_data(
     request: Request,
-    session: SessionDep = None,
+    session: SessionDep,
 ) -> GeoDataOut:
     """Get all geolocation data in one call (for frontend initialization)."""
     geo = await detect_country_from_ip(request)
@@ -389,8 +389,8 @@ async def get_all_geo_data(
         ),
         destinations=[DestinationOut(**d) for d in destinations],
         nationalities=[DestinationOut(**n) for n in nationalities],
-        visa_types=[VisaTypeOut(**vt) for vt in visa_types],
-        application_types=[ApplicationTypeOut(**at) for at in app_types],
+        visa_types=[VisaTypeOut.model_validate(vt) for vt in visa_types],
+        application_types=[ApplicationTypeOut.model_validate(at) for at in app_types],
     )
 
 

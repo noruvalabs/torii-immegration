@@ -114,6 +114,7 @@ async def test_case_action_create_requires_admin(client: AsyncClient, engine) ->
 
 async def _admin_token(client: AsyncClient, engine) -> str:
     from sqlalchemy import text
+
     from torii_api.auth.security import hash_password
 
     async with engine.begin() as conn:
@@ -196,5 +197,3 @@ async def test_delete_jurisdiction_cleans_up_routes_and_prevents_with_cases(
     # 3. Should no longer exist
     get_resp = await client.get("/v1/jurisdictions")
     assert not any(j["id"] == jid for j in get_resp.json())
-
-

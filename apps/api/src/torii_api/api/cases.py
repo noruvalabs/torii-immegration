@@ -7,7 +7,7 @@ US-03: Persist progress so an applicant can stop and resume.
 
 from __future__ import annotations
 
-from typing import Annotated, Any
+from typing import Annotated, Any, cast
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from pydantic import BaseModel, ConfigDict, Field
@@ -39,6 +39,7 @@ from torii_api.services.guidance import compute_guidance, next_status_for_phase
 from torii_api.services.intake import (
     IntakeProgress,
     IntakeQuestion,
+    QuestionType,
     is_visible,
     parse_questions,
     progress_for,
@@ -953,9 +954,7 @@ async def list_cases(
         {
             a.id: a
             for a in (
-                await session.scalars(
-                    select(CaseAction).where(CaseAction.id.in_(case_action_ids))
-                )
+                await session.scalars(select(CaseAction).where(CaseAction.id.in_(case_action_ids)))
             ).all()
         }
         if case_action_ids
@@ -1040,17 +1039,26 @@ async def get_intake(
             current_answers[k] = v
             needs_flush = True
     if needs_flush:
-        parsed_q = parse_questions(questions, jurisdiction_code=j_code, visa_category=v_code)
+        parsed_q = parse_questions(
+            questions, jurisdiction_code=j_code or "", visa_category=v_code or ""
+        )
         case.intake_answers = prune_answers(parsed_q, current_answers)
         await session.flush()
 
-    return _intake_state(case, questions, jurisdiction_code=j_code, visa_category=v_code)
+    return _intake_state(
+        case, questions, jurisdiction_code=j_code or "JP", visa_category=v_code or ""
+    )
 
 
 INTAKE_KEY_ALIASES: dict[str, list[str]] = {
     "corporate_number": ["employer_corporate_number", "company_number", "organization_number"],
     "employer_corporate_number": ["corporate_number", "company_number", "organization_number"],
-    "employer_name": ["company_name", "sponsoring_organization", "host_company_name", "sponsor_name"],
+    "employer_name": [
+        "company_name",
+        "sponsoring_organization",
+        "host_company_name",
+        "sponsor_name",
+    ],
     "company_name": ["employer_name", "sponsoring_organization", "sponsor_name"],
     "sponsor_name": ["employer_name", "company_name", "sponsoring_organization"],
     "monthly_salary": ["salary_monthly", "income_monthly", "salary"],
@@ -1061,14 +1069,50 @@ INTAKE_KEY_ALIASES: dict[str, list[str]] = {
     "attendance_percentage": ["attendance_rate", "school_attendance_rate"],
     "purpose_of_visit": ["main_purpose", "purpose", "visit_purpose"],
     "main_purpose": ["purpose_of_visit", "purpose", "visit_purpose"],
-    "intended_length_of_stay_days": ["stay_duration_days", "length_of_stay_days", "stay_days", "duration_of_stay"],
-    "stay_duration_days": ["intended_length_of_stay_days", "length_of_stay_days", "stay_days", "duration_of_stay"],
-    "length_of_stay_days": ["intended_length_of_stay_days", "stay_duration_days", "stay_days", "duration_of_stay"],
-    "stay_days": ["intended_length_of_stay_days", "stay_duration_days", "length_of_stay_days", "duration_of_stay"],
-    "support_type": ["financial_support_type", "visitor_has_sufficient_funds", "has_sufficient_funds"],
-    "financial_support_type": ["support_type", "visitor_has_sufficient_funds", "has_sufficient_funds"],
-    "visitor_has_sufficient_funds": ["has_sufficient_funds", "support_type", "financial_support_type"],
-    "has_sufficient_funds": ["visitor_has_sufficient_funds", "support_type", "financial_support_type"],
+    "intended_length_of_stay_days": [
+        "stay_duration_days",
+        "length_of_stay_days",
+        "stay_days",
+        "duration_of_stay",
+    ],
+    "stay_duration_days": [
+        "intended_length_of_stay_days",
+        "length_of_stay_days",
+        "stay_days",
+        "duration_of_stay",
+    ],
+    "length_of_stay_days": [
+        "intended_length_of_stay_days",
+        "stay_duration_days",
+        "stay_days",
+        "duration_of_stay",
+    ],
+    "stay_days": [
+        "intended_length_of_stay_days",
+        "stay_duration_days",
+        "length_of_stay_days",
+        "duration_of_stay",
+    ],
+    "support_type": [
+        "financial_support_type",
+        "visitor_has_sufficient_funds",
+        "has_sufficient_funds",
+    ],
+    "financial_support_type": [
+        "support_type",
+        "visitor_has_sufficient_funds",
+        "has_sufficient_funds",
+    ],
+    "visitor_has_sufficient_funds": [
+        "has_sufficient_funds",
+        "support_type",
+        "financial_support_type",
+    ],
+    "has_sufficient_funds": [
+        "visitor_has_sufficient_funds",
+        "support_type",
+        "financial_support_type",
+    ],
     "passport_number": ["passport_no", "passport"],
     "passport_no": ["passport_number", "passport"],
     "birth_date": ["date_of_birth", "dob"],
@@ -1137,8 +1181,8 @@ async def answer_intake(
     j_code, v_code, _, _ = await _scope_label(session, case)
     questions = parse_questions(
         await _intake_questions_for_case(session, case),
-        jurisdiction_code=j_code,
-        visa_category=v_code,
+        jurisdiction_code=j_code or "",
+        visa_category=v_code or "",
     )
     by_key = {q.key: q for q in questions}
 
@@ -1156,6 +1200,7 @@ async def answer_intake(
         # Check statutory form questions from _form_questions.yml
         try:
             from torii_api.services.jp_official_forms import _load_question_specs
+
             specs = _load_question_specs()
             spec = specs.get(target_key)
             if spec is None:
@@ -1165,10 +1210,11 @@ async def answer_intake(
                         break
             if spec is not None:
                 from torii_api.services.intake import IntakeQuestion
+
                 question = IntakeQuestion(
                     key=target_key,
                     prompt=spec.prompt,
-                    type=spec.type,
+                    type=cast(QuestionType, spec.type),
                     section=spec.section or "Official Form Details",
                     options=list(spec.options) if spec.options else None,
                     required=False,
@@ -1229,7 +1275,10 @@ async def answer_intake(
             user.profile_complete = all(bool(getattr(user, f, None)) for f in required_fields)
 
     state = _intake_state(
-        case, [q.model_dump() for q in questions], jurisdiction_code=j_code, visa_category=v_code
+        case,
+        [q.model_dump() for q in questions],
+        jurisdiction_code=j_code or "JP",
+        visa_category=v_code or "",
     )
     if state.progress.complete:
         new_status = next_status_for_phase("eligibility", case.status)
@@ -1238,7 +1287,10 @@ async def answer_intake(
     await session.flush()
     await session.refresh(case)
     return _intake_state(
-        case, [q.model_dump() for q in questions], jurisdiction_code=j_code, visa_category=v_code
+        case,
+        [q.model_dump() for q in questions],
+        jurisdiction_code=j_code or "JP",
+        visa_category=v_code or "",
     )
 
 

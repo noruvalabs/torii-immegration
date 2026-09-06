@@ -142,9 +142,8 @@ def main(argv: list[str] | None = None) -> None:
 
     args = parse_args(argv)
 
-    env_password = (
-        os.environ.get("TORII_SUPERUSER_PASSWORD")
-        or os.environ.get("TORII_ADMIN_PASSWORD")
+    env_password = os.environ.get("TORII_SUPERUSER_PASSWORD") or os.environ.get(
+        "TORII_ADMIN_PASSWORD"
     )
     if args.no_input or (env_password and not sys.stdin.isatty()):
         password = env_password

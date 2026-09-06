@@ -251,7 +251,12 @@ def resolve_official_citation(
         topic = "spouse"
     elif "dependent" in key or "supporter" in key or "kazoku" in key or cat == "dependent":
         topic = "dependent"
-    elif "designated" in key or "article_46" in key or "tokutei" in key or cat == "designated_activities":
+    elif (
+        "designated" in key
+        or "article_46" in key
+        or "tokutei" in key
+        or cat == "designated_activities"
+    ):
         topic = "designated_activities"
     elif "guarantor" in key or "hosho" in key:
         topic = "guarantor"
@@ -267,15 +272,41 @@ def resolve_official_citation(
         topic = "english"
     elif "tb" in key or "tuberculosis" in key:
         topic = "tb"
-    elif "student" in key or "cas" in key or "i20" in key or "school" in key or "university" in key or cat == "student":
+    elif (
+        "student" in key
+        or "cas" in key
+        or "i20" in key
+        or "school" in key
+        or "university" in key
+        or cat == "student"
+    ):
         topic = "student"
-    elif "tourist" in key or "visitor" in key or "itinerary" in key or cat in ("tourist", "b1b2", "visitor"):
+    elif (
+        "tourist" in key
+        or "visitor" in key
+        or "itinerary" in key
+        or cat in ("tourist", "b1b2", "visitor")
+    ):
         topic = "tourist"
-    elif "fund" in key or "bank" in key or "saving" in key or "financial" in key or "maintenance" in key:
+    elif (
+        "fund" in key
+        or "bank" in key
+        or "saving" in key
+        or "financial" in key
+        or "maintenance" in key
+    ):
         topic = "funds"
-    elif "criminal" in key or "violation" in key or "overstay" in key or "deportation" in key or "refusal" in key:
+    elif (
+        "criminal" in key
+        or "violation" in key
+        or "overstay" in key
+        or "deportation" in key
+        or "refusal" in key
+    ):
         topic = "criminal"
-    elif "work" in key or "job" in key or "h1b" in key or "employed" in key or cat in ("work", "h1b"):
+    elif (
+        "work" in key or "job" in key or "h1b" in key or "employed" in key or cat in ("work", "h1b")
+    ):
         topic = "work"
 
     selected = jur_map.get(topic) or jur_map.get("work") or jur_map.get("passport") or {}

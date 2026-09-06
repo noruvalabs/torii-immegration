@@ -241,7 +241,11 @@ async def trigger_scrape_stream(payload: ScrapeRequest):
                         + "\n"
                     )
                 elif event.get("type") == "complete":
-                    result = event["result"]
+                    from torii_ai.services.ops_scraper import ScrapeResult
+
+                    result = event.get("result")
+                    if not isinstance(result, ScrapeResult):
+                        continue
                     _last_scrape = {
                         "jurisdiction": payload.jurisdiction_code,
                         "at": result.scraped_at,

@@ -803,9 +803,7 @@ def _education_level_eight(
 # education level they follow from: "check one of the followings when the answer to
 # question 19 is from doctor to junior college", and "when the answer is college of
 # technology". Gating on the level is what the sheet asks for.
-_LEVEL_UNIVERSITY = Gate(
-    "education_level", ("doctor", "master", "bachelor", "junior_college")
-)
+_LEVEL_UNIVERSITY = Gate("education_level", ("doctor", "master", "bachelor", "junior_college"))
 _LEVEL_VOCATIONAL = Gate("education_level", ("college_of_technology",))
 
 
@@ -1230,16 +1228,20 @@ PERMANENT_RESIDENCE_P2_LAYOUT = FormLayout(
     rows=_PERMANENT_RESIDENCE_P2_ROWS,
     lines=(
         LineField("17(2)", "householder_employer_name", "Householder — employer", row=1, column=0),
+        LineField("17(2)", "householder_employer_branch", "Householder — branch", row=1, column=1),
         LineField(
-            "17(2)", "householder_employer_branch", "Householder — branch", row=1, column=1
-        ),
-        LineField(
-            "17(2)", "householder_employer_address", "Householder — employer address", row=2, column=0
+            "17(2)",
+            "householder_employer_address",
+            "Householder — employer address",
+            row=2,
+            column=0,
         ),
         LineField(
             "17(2)", "householder_employer_tel", "Householder — employer telephone", row=2, column=1
         ),
-        LineField("17(3)", "householder_annual_income_jpy", "Householder — annual income (yen)", row=3),
+        LineField(
+            "17(3)", "householder_annual_income_jpy", "Householder — annual income (yen)", row=3
+        ),
         LineField("19(1)", "resident_guarantor_name", "Guarantor in Japan — name", row=7, column=0),
         LineField(
             "19(2)", "guarantor_nationality", "Guarantor in Japan — nationality", row=7, column=1
@@ -1334,7 +1336,6 @@ PERMANENT_RESIDENCE_P2_LAYOUT = FormLayout(
         "18 Family in Japan and anyone you reside with (table, one row per person)",
     ),
 )
-
 
 
 # ── Designated Activities (特定活動), form U — 申請人等作成用 ２ / ３ / ４ ─────────────
@@ -1625,9 +1626,7 @@ _DA_EXT_WORKPLACE = Gate(
     "designated_activity",
     _DA_PROFESSIONS + _DA_MEDICAL + _DA_ATHLETE + _DA_EPA + _DA_SPECIAL_ZONE,
 )
-_DA_EXT_EDUCATION = Gate(
-    "designated_activity", _DA_MEDICAL + _DA_EPA + _DA_ENTREPRENEUR_ACTIVITY
-)
+_DA_EXT_EDUCATION = Gate("designated_activity", _DA_MEDICAL + _DA_EPA + _DA_ENTREPRENEUR_ACTIVITY)
 _DA_EXT_RECORD = Gate("designated_activity", _DA_ATHLETE)
 _DA_EXT_UNIVERSITY = Gate("designated_activity", _DA_INTERNSHIP_EXTENSION)
 _DA_EXT_ENTREPRENEUR = Gate("designated_activity", _DA_ENTREPRENEUR_ACTIVITY)
@@ -2077,9 +2076,7 @@ DA_PART4_LAYOUT = FormLayout(
         (164.0, (46.1, 549.0)),
         (38.2, (46.1, 549.0)),
     ),
-    lines=_da_part4_lines(
-        "24", "25", "27", _DA_EXT_ENTREPRENEUR, first_representative_row=10
-    ),
+    lines=_da_part4_lines("24", "25", "27", _DA_EXT_ENTREPRENEUR, first_representative_row=10),
     unsupported_items=("26 Work experience (table)",),
 )
 
@@ -2107,9 +2104,7 @@ DA_PART4_CHANGE_LAYOUT = FormLayout(
         (152.5, (48.2, 547.0)),
         (27.9, (48.2, 547.0)),
     ),
-    lines=_da_part4_lines(
-        "24", "25", "27", _DA_EXT_ENTREPRENEUR, first_representative_row=7
-    ),
+    lines=_da_part4_lines("24", "25", "27", _DA_EXT_ENTREPRENEUR, first_representative_row=7),
     unsupported_items=("26 Work experience (table)",),
 )
 
@@ -2138,9 +2133,7 @@ DA_PART4_COE_LAYOUT = FormLayout(
         (178.1, (19.4, 562.1)),
         (60.9, (19.4, 562.1)),
     ),
-    lines=_da_part4_lines(
-        "29", "30", "32", _DA_COE_ENTREPRENEUR, first_representative_row=7
-    ),
+    lines=_da_part4_lines("29", "30", "32", _DA_COE_ENTREPRENEUR, first_representative_row=7),
     unsupported_items=("31 Work experience (table)",),
 )
 
@@ -2619,6 +2612,7 @@ _SPOUSE_PART3_ROWS: NominalRows = (
     (129.2, (42.5, 539.5)),
     (51.4, (42.5, 539.5)),
 )
+
 
 def _supporter_relationship(item: str, marks: tuple[Mark, ...]) -> ChoiceField:
     """Item (8) of the supporter block - how the supporter is related to the applicant.
@@ -3156,7 +3150,6 @@ def _japanese_ability_flags(item: str, marks: dict[str, Mark]) -> tuple[Flag, ..
     return tuple(Flag(item, key, labels[key], mark) for key, mark in marks.items())
 
 
-
 # ── Applicant part 2, form P (Student) — Certificate of Eligibility variant ────────
 # Reference: https://www.moj.go.jp/isa/content/930004044.pdf page 3. Items 22 to 28.
 # The applicant is still abroad, so where the extension sheet asks how much money is
@@ -3348,9 +3341,7 @@ STUDENT_PART2_COE_LAYOUT = FormLayout(
             },
         ),
     ),
-    unsupported_items=(
-        "25 Personal history for the last 5 years (table, one row per entry)",
-    ),
+    unsupported_items=("25 Personal history for the last 5 years (table, one row per entry)",),
 )
 
 
@@ -3686,6 +3677,7 @@ _STUDENT_PART3_CHOICES: tuple[ChoiceField, ...] = (
     ),
 )
 
+
 def _supporter_relation_wide(item: str, marks: tuple[Mark, ...]) -> ChoiceField:
     """Item (3) of the student support block — sixteen printed □ boxes.
 
@@ -3841,7 +3833,6 @@ def _student_guardian_and_representative(
             depends_on="has_legal_representative",
         ),
     )
-
 
 
 # ── Applicant part 3, form P (Student) — Certificate of Eligibility variant ────────

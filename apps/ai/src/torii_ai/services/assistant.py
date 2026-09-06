@@ -199,9 +199,17 @@ def _generate_procedural_fallback(
     scope_display = scope_label or f"{dest} {cat.capitalize()} ({act})"
 
     # 1. Check if user is asking how to fix eligibility warnings / disqualifications
-    if any(k in msg for k in ("fix", "disqualif", "incomplet", "warning", "issue", "error", "fail", "why")):
+    if any(
+        k in msg
+        for k in ("fix", "disqualif", "incomplet", "warning", "issue", "error", "fail", "why")
+    ):
         if eligibility_findings and len(eligibility_findings) > 0:
-            bad_findings = [f for f in eligibility_findings if f.get("status") in ("disqualified", "fail", "at_risk", "incomplete", "out_of_scope")]
+            bad_findings = [
+                f
+                for f in eligibility_findings
+                if f.get("status")
+                in ("disqualified", "fail", "at_risk", "incomplete", "out_of_scope")
+            ]
             if bad_findings:
                 lines = [
                     f"### 🔍 Analysis & Action Plan for **{ref_display}**",
@@ -221,58 +229,89 @@ def _generate_procedural_fallback(
                     action_label = f"⚡ Fix '{title}'"
                     if "sanction" in key:
                         fix_value = "no"
-                        action_label = f"⚡ Answer 'No Sanctions'"
+                        action_label = "⚡ Answer 'No Sanctions'"
                     elif "arrear" in key or "criminal" in key:
                         fix_value = "no"
-                        action_label = f"⚡ Answer 'No Arrears'"
+                        action_label = "⚡ Answer 'No Arrears'"
                     elif "school" in key or "graduate" in key or "completed" in key:
                         fix_value = "yes"
-                        action_label = f"⚡ Set 'Completed Program' to 'Yes'"
+                        action_label = "⚡ Set 'Completed Program' to 'Yes'"
                     elif "job_offer" in key or "offer" in key:
                         fix_value = "yes"
-                        action_label = f"⚡ Set 'Job Offer' to 'Yes'"
+                        action_label = "⚡ Set 'Job Offer' to 'Yes'"
                     elif "job_description" in key or "duties" in key:
                         fix_value = "yes"
-                        action_label = f"⚡ Set 'Job Duties Provided' to 'Yes'"
+                        action_label = "⚡ Set 'Job Duties Provided' to 'Yes'"
                     elif "purpose" in key:
-                        fix_value = "Tourism" if "tourist" in cat else "Employment" if "work" in cat else "Study"
+                        fix_value = (
+                            "Tourism"
+                            if "tourist" in cat
+                            else "Employment"
+                            if "work" in cat
+                            else "Study"
+                        )
                         action_label = f"⚡ Set Purpose to '{fix_value}'"
                     elif "study_level" in key:
                         fix_value = "university"
-                        action_label = f"⚡ Set Study Level to 'University'"
+                        action_label = "⚡ Set Study Level to 'University'"
                     elif "attendance" in key or "attendance_rate" in key:
                         fix_value = "95"
-                        action_label = f"⚡ Set Attendance Rate to '95%'"
+                        action_label = "⚡ Set Attendance Rate to '95%'"
 
                     lines.append(f"**{i}. {title}** (`{status}`):")
                     lines.append(f"- **Issue**: {explanation}")
-                    lines.append(f"- **Statutory Guidance**: In accordance with official published guidelines, this criterion must be fully satisfied to pass eligibility screening.")
-                    lines.append(f"- **Quick Fix**: Click below to update your intake answer and re-evaluate:")
-                    lines.append(f'[ACTION:update_intake key="{key}" value="{fix_value}" label="{action_label}"]')
+                    lines.append(
+                        "- **Statutory Guidance**: In accordance with official published guidelines, this criterion must be fully satisfied to pass eligibility screening."
+                    )
+                    lines.append(
+                        "- **Quick Fix**: Click below to update your intake answer and re-evaluate:"
+                    )
+                    lines.append(
+                        f'[ACTION:update_intake key="{key}" value="{fix_value}" label="{action_label}"]'
+                    )
                     lines.append("")
 
-                lines.append("After applying the fixes, eligibility will be automatically re-evaluated to unlock the next steps.")
+                lines.append(
+                    "After applying the fixes, eligibility will be automatically re-evaluated to unlock the next steps."
+                )
                 return "\n".join(lines)
 
     # 1.5 Check if user specifically asks about missing fields or attendance rate
     if "attendance" in msg:
         return (
-            f"### 🏫 Missing Required Form Field: Attendance Rate (`school.attendance_rate`)\n\n"
-            f"**Why this is required by Japanese Immigration (MOJ ISA 16-1 / 16-3):**\n"
-            f"- For a Student Visa (留学) or renewal/extension in Japan, immigration authorities strictly require your academic attendance record.\n"
-            f"- **Statutory Standard**: An attendance rate of **80% or higher** (ideally 90%+) is required to be approved for visa extension.\n\n"
-            f"**How to fix this:**\n"
-            f"Click below to set your attendance rate percentage from your school certificate:\n\n"
-            f'[ACTION:update_intake key="attendance_rate" value="95" label="⚡ Set Attendance Rate to \'95%\'"]'
+            "### 🏫 Missing Required Form Field: Attendance Rate (`school.attendance_rate`)\n\n"
+            "**Why this is required by Japanese Immigration (MOJ ISA 16-1 / 16-3):**\n"
+            "- For a Student Visa (留学) or renewal/extension in Japan, immigration authorities strictly require your academic attendance record.\n"
+            "- **Statutory Standard**: An attendance rate of **80% or higher** (ideally 90%+) is required to be approved for visa extension.\n\n"
+            "**How to fix this:**\n"
+            "Click below to set your attendance rate percentage from your school certificate:\n\n"
+            '[ACTION:update_intake key="attendance_rate" value="95" label="⚡ Set Attendance Rate to \'95%\'"]'
         )
 
     # 2. Check if user is asking about current progress / status
-    if any(k in msg for k in ("progress", "current", "process", "where am i", "what next", "status", "next step")):
+    if any(
+        k in msg
+        for k in (
+            "progress",
+            "current",
+            "process",
+            "where am i",
+            "what next",
+            "status",
+            "next step",
+        )
+    ):
         step_name = current_step or case_status or "Intake"
         findings_count = len(eligibility_findings or [])
-        disqualified_count = len([f for f in (eligibility_findings or []) if f.get("status") in ("disqualified", "fail")])
-        incomplete_count = len([f for f in (eligibility_findings or []) if f.get("status") == "incomplete"])
-        gathered_count = len([d for d in (checklist or []) if d.get("status") in ("gathered", "uploaded")])
+        disqualified_count = len(
+            [f for f in (eligibility_findings or []) if f.get("status") in ("disqualified", "fail")]
+        )
+        incomplete_count = len(
+            [f for f in (eligibility_findings or []) if f.get("status") == "incomplete"]
+        )
+        gathered_count = len(
+            [d for d in (checklist or []) if d.get("status") in ("gathered", "uploaded")]
+        )
         total_docs = len(checklist or [])
 
         lines = [
@@ -288,15 +327,32 @@ def _generate_procedural_fallback(
             "",
         ]
         if disqualified_count > 0 or incomplete_count > 0:
-            lines.append("👉 **Immediate Next Step**: Resolve the eligibility warnings above so your application can advance to Document Gathering and Forms.")
+            lines.append(
+                "👉 **Immediate Next Step**: Resolve the eligibility warnings above so your application can advance to Document Gathering and Forms."
+            )
         elif total_docs > 0 and gathered_count < total_docs:
-            lines.append(f"👉 **Immediate Next Step**: Upload the remaining {total_docs - gathered_count} required document(s) in Step 3: Document Checklist.")
+            lines.append(
+                f"👉 **Immediate Next Step**: Upload the remaining {total_docs - gathered_count} required document(s) in Step 3: Document Checklist."
+            )
         else:
-            lines.append("👉 **Immediate Next Step**: Review your auto-filled forms and download your official PDF filing dossier.")
+            lines.append(
+                "👉 **Immediate Next Step**: Review your auto-filled forms and download your official PDF filing dossier."
+            )
         return "\n".join(lines)
 
     # 3. Check if user is asking about documents / checklist
-    if any(k in msg for k in ("document", "checklist", "gather", "upload", "proof", "what docs", "what do i need")):
+    if any(
+        k in msg
+        for k in (
+            "document",
+            "checklist",
+            "gather",
+            "upload",
+            "proof",
+            "what docs",
+            "what do i need",
+        )
+    ):
         if checklist and len(checklist) > 0:
             gathered = [d for d in checklist if d.get("status") in ("gathered", "uploaded")]
             needed = [d for d in checklist if d.get("status") not in ("gathered", "uploaded")]
@@ -400,7 +456,7 @@ def _build_user_prompt(
             "Instructions:",
             "1. Answer the applicant's question clearly and helpfully based strictly on official immigration guidelines for their specific visa type and active case context.",
             "2. If the user asks 'how to fix this' or has disqualified/incomplete eligibility findings, address each failing item specifically, explain the statutory legal reason, and provide an interactive action tag:",
-            "   [ACTION:update_intake key=\"<field_key>\" value=\"<correct_value>\" label=\"⚡ Fix <Field Label>\"]",
+            '   [ACTION:update_intake key="<field_key>" value="<correct_value>" label="⚡ Fix <Field Label>"]',
             "3. If the user asks about progress, summarize their active step, eligibility status, and document checklist readiness.",
             "",
             "Official Snippets:"
@@ -445,7 +501,11 @@ def _parse_model_reply(
             or not clean_text
             or len(clean_text.strip()) < 15
             or clean_text.strip() in ("Test reply.", "fallback", "I cannot help with that.")
-            or (any(k in message.lower() for k in ("fix", "disqualif", "warning")) and eligibility_findings and "[ACTION:update_intake" not in clean_text)
+            or (
+                any(k in message.lower() for k in ("fix", "disqualif", "warning"))
+                and eligibility_findings
+                and "[ACTION:update_intake" not in clean_text
+            )
         ):
             clean_text = _generate_procedural_fallback(
                 message,

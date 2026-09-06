@@ -152,7 +152,7 @@ def test_docx_is_a_package_word_will_open() -> None:
 
 def test_markup_in_the_draft_cannot_break_the_file() -> None:
     """An applicant can type anything into the textarea, including angle brackets."""
-    hostile = "Employer: Smith & Sons <Tokyo> \"branch\"\n"
+    hostile = 'Employer: Smith & Sons <Tokyo> "branch"\n'
     document = render_docx([("T", hostile)])
     archive = zipfile.ZipFile(io.BytesIO(document))
     xml = archive.read("word/document.xml").decode("utf-8")

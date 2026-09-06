@@ -147,9 +147,7 @@ def test_accepting_rewrites_the_pack(packs: Path) -> None:
     proposal = propose(
         scope=SCOPE,
         changes=[
-            Change(
-                path="intake.questions[key=full_name].prompt", to=wording, citation=CITATION
-            )
+            Change(path="intake.questions[key=full_name].prompt", to=wording, citation=CITATION)
         ],
         source="agentic_research",
     )
@@ -194,9 +192,7 @@ def test_accepting_touches_only_the_lines_that_were_reviewed(packs: Path) -> Non
     proposal = propose(
         scope=SCOPE,
         changes=[
-            Change(
-                path="intake.questions[key=full_name].prompt", to="Reviewed", citation=CITATION
-            )
+            Change(path="intake.questions[key=full_name].prompt", to="Reviewed", citation=CITATION)
         ],
         source="agentic_research",
     )
