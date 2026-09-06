@@ -62,6 +62,13 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     jwt_access_token_expire_minutes: int = 60 * 24 * 7  # 7 days
 
+    # --- Superuser / Admin bootstrap (auto-created if credentials present in env)
+    superuser_email: str = ""
+    superuser_password: str = ""
+    superuser_role: str = "admin"
+    admin_email: str = ""
+    admin_password: str = ""
+
     # --- Google Social Auth (OAuth 2.0 Client ID & Secret) --------------------
     google_client_id: str = ""
     google_client_secret: str = ""

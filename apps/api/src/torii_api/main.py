@@ -58,6 +58,23 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             await apply_migrations_in_thread(settings.database_url)
             log.info("api.migrations_applied")
 
+        # Bootstrap superuser / admin user from environment credentials if configured
+        superuser_email = (settings.superuser_email or settings.admin_email).strip().lower()
+        superuser_password = settings.superuser_password or settings.admin_password
+        if superuser_email and superuser_password:
+            from torii_api.management.createadmin import ensure_admin_user
+
+            created = await ensure_admin_user(
+                settings.database_url,
+                email=superuser_email,
+                password=superuser_password,
+                role=settings.superuser_role or "admin",
+            )
+            if created:
+                log.info("api.superuser_created", email=superuser_email)
+            else:
+                log.info("api.superuser_ready", email=superuser_email)
+
         if settings.seed_on_startup:
             from torii_api.management.seed import seed
 
