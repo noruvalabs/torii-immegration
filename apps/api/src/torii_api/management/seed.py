@@ -435,7 +435,10 @@ async def _ensure_action(
     return 1
 
 
-async def seed(session_factory: Any | None = None) -> None:
+async def seed(
+    session_factory: Any | None = None,
+    include_demo_users: bool | None = None,
+) -> None:
     """Load the content packs into the system of record.
 
     ``session_factory`` is for callers that already have a database — the tests, which
@@ -443,6 +446,8 @@ async def seed(session_factory: Any | None = None) -> None:
     entry point needs.
     """
     settings = get_settings()
+    if include_demo_users is None:
+        include_demo_users = settings.seed_demo_users
     engine = create_engine(to_async_url(settings.database_url)) if session_factory is None else None
     owns_engine = engine is not None
     if session_factory is None:
@@ -457,23 +462,24 @@ async def seed(session_factory: Any | None = None) -> None:
 
     async with session_factory() as session:
         created_users = 0
-        for data in SEED_USERS:
-            username = data["email"].split("@")[0]
-            existing = await session.scalar(
-                select(User).where((User.email == data["email"]) | (User.username == username))
-            )
-            if existing is not None:
-                continue
-            user = User(
-                email=data["email"],
-                username=username,
-                password_hash=hash_password(data["password"]),
-                role=data["role"],
-                is_active=True,
-                email_verified=data["email_verified"],
-            )
-            session.add(user)
-            created_users += 1
+        if include_demo_users:
+            for data in SEED_USERS:
+                username = data["email"].split("@")[0]
+                existing = await session.scalar(
+                    select(User).where((User.email == data["email"]) | (User.username == username))
+                )
+                if existing is not None:
+                    continue
+                user = User(
+                    email=data["email"],
+                    username=username,
+                    password_hash=hash_password(data["password"]),
+                    role=data["role"],
+                    is_active=True,
+                    email_verified=data["email_verified"],
+                )
+                session.add(user)
+                created_users += 1
 
         created_jurisdictions = 0
         created_categories = 0
@@ -592,7 +598,23 @@ async def seed(session_factory: Any | None = None) -> None:
 
 
 def main() -> None:
-    asyncio.run(seed())
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Seed database with jurisdiction content packs.")
+    parser.add_argument(
+        "--include-demo-users",
+        action="store_true",
+        default=None,
+        help="Seed sample development demo users (admin@example.com, etc.).",
+    )
+    parser.add_argument(
+        "--no-demo-users",
+        action="store_false",
+        dest="include_demo_users",
+        help="Skip demo users; only seed jurisdiction packs, workflows, and form templates.",
+    )
+    args = parser.parse_args()
+    asyncio.run(seed(include_demo_users=args.include_demo_users))
 
 
 if __name__ == "__main__":

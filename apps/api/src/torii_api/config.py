@@ -46,6 +46,10 @@ class Settings(BaseSettings):
     # jurisdictions, visa categories, and workflows on first boot.
     seed_on_startup: bool = False
 
+    # Whether to seed sample development demo users (admin@example.com etc.).
+    # Off by default: production and staging only get the real superuser from env.
+    seed_demo_users: bool = False
+
     # --- Background scheduler / task queue (arq over Redis) --------------------
     # The API enqueues jobs here; a separate `arq` worker consumes them and runs the
     # cron schedule. The API degrades gracefully when Redis is absent (enqueue no-ops

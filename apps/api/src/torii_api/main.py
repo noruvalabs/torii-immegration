@@ -78,8 +78,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if settings.seed_on_startup:
             from torii_api.management.seed import seed
 
-            await seed()
-            log.info("api.seeded")
+            await seed(include_demo_users=settings.seed_demo_users)
+            log.info("api.seeded", include_demo_users=settings.seed_demo_users)
 
         if not getattr(app.state, "engine", None):
             app.state.engine = create_engine(settings.database_url)
