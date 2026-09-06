@@ -84,6 +84,9 @@ services:
       timeout: 10s
       retries: 3
     networks:
+      # `edge` too, not just `data`: the cron jobs (scraper, stage research) call the ai
+      # service over HTTP, and it only sits on `edge`.
+      - edge
       - data
 
   # --- FastAPI AI service (grounded assistant, OCR, citations) ----------------
