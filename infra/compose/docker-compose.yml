@@ -57,6 +57,12 @@ services:
       redis:
         condition: service_healthy
     # Image bakes a HEALTHCHECK (httpx /health). No host `ports:` — nginx reaches it on `edge`.
+    healthcheck:
+      test: ["CMD", "python", "-c", "import httpx,sys; sys.exit(0 if httpx.get('http://localhost:8000/health').status_code==200 else 1)"]
+      interval: 15s
+      timeout: 15s
+      start_period: 60s
+      retries: 5
     networks:
       - edge
       - data
@@ -78,10 +84,10 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      # The api image's HTTP healthcheck can't apply here (no server); probe importability.
-      test: ["CMD", "python", "-c", "import torii_api.worker.scheduler"]
-      interval: 30s
-      timeout: 10s
+      test: ["CMD", "python", "-c", "import os; os.kill(1, 0)"]
+      interval: 15s
+      timeout: 5s
+      start_period: 20s
       retries: 3
     networks:
       # `edge` too, not just `data`: the cron jobs (scraper, stage research) call the ai
@@ -103,7 +109,12 @@ services:
     depends_on:
       api:
         condition: service_healthy
-    # Image bakes a HEALTHCHECK (httpx /health). No host `ports:`.
+    healthcheck:
+      test: ["CMD", "python", "-c", "import httpx,sys; sys.exit(0 if httpx.get('http://localhost:8001/health').status_code==200 else 1)"]
+      interval: 15s
+      timeout: 15s
+      start_period: 45s
+      retries: 5
     networks:
       - edge
 

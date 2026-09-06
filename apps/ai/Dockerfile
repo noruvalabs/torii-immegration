@@ -22,7 +22,7 @@ ENV PATH="/app/.venv/bin:$PATH"
 EXPOSE 8001
 
 # Liveness for compose/uptime probes.
-HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+HEALTHCHECK --interval=15s --timeout=15s --start-period=45s --retries=5 \
     CMD python -c "import httpx,sys; sys.exit(0 if httpx.get('http://localhost:8001/health').status_code==200 else 1)"
 
 CMD ["uvicorn", "torii_ai.main:app", "--host", "0.0.0.0", "--port", "8001"]
