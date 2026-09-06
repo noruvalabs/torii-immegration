@@ -2,12 +2,17 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [develop]
   pull_request:
-    branches: [main]
+    branches: [main, staging, develop]
+  # Called by deploy.yml so a deploy runs the same gates as a PR, once. (`main` and `staging`
+  # are deliberately absent from the push trigger above — Deploy owns them.)
+  workflow_call:
 
 concurrency:
-  group: ci-${{ github.ref }}
+  # `github.workflow` is the CALLER's name when reused, so a deploy's gates never cancel a
+  # standalone CI run on the same ref.
+  group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -85,3 +90,65 @@ jobs:
 
       - name: Typecheck
         run: pnpm --filter web typecheck
+
+  images:
+    # Builds the three deployable images without pushing, so a broken Dockerfile fails the PR
+    # rather than the deploy. The layer cache is shared with Deploy's push build, so this is
+    # not wasted work — it warms the cache the release build then reuses.
+    name: Image (${{ matrix.service }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # api and web both build from the repo root: the api image ships
+          # docs/jurisdictions, the web image needs the workspace pnpm lockfile.
+          - service: api
+            context: .
+            dockerfile: apps/api/Dockerfile
+          - service: ai
+            context: apps/ai
+            dockerfile: apps/ai/Dockerfile
+          - service: web
+            context: .
+            dockerfile: apps/web/Dockerfile
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build ${{ matrix.service }}
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          push: false
+          load: false
+          cache-from: type=gha,scope=torii-${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=torii-${{ matrix.service }}
+
+  compose-config:
+    name: Compose config
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Catches a malformed compose file or a bad interpolation before the host sees it.
+      - name: Validate the production compose file
+        run: |
+          cp infra/.env.example infra/compose/.env
+          docker compose --project-directory infra/compose -f infra/compose/docker-compose.yml config --quiet
+
+      # nginx resolves upstream hostnames while parsing, so the compose service names have to
+      # exist for `nginx -t`; they are stubbed to loopback purely to get past resolution.
+      - name: Validate the nginx edge config
+        run: |
+          docker run --rm \
+            --add-host web:127.0.0.1 --add-host api:127.0.0.1 --add-host ai:127.0.0.1 \
+            -v "$PWD/infra/nginx/conf.d/torii.conf:/etc/nginx/conf.d/default.conf:ro" \
+            nginx:1.27-alpine nginx -t
+
+      - name: Shellcheck the deploy scripts
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
+          shellcheck infra/scripts/*.sh

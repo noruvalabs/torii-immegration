@@ -1,7 +1,26 @@
-node_modules
-.next
-.turbo
+# Context is the repo root (see the header in apps/web/Dockerfile). Keep the three
+# package.json manifests the deps stage needs; everything heavy or secret is excluded.
+.git
+.github
+.reference
+docs
+infra
+**/node_modules
+**/.next
+**/.turbo
+**/.venv
+**/__pycache__
+**/*.py[cod]
+**/.pytest_cache
+**/.ruff_cache
+apps/api/src
+apps/api/tests
+apps/api/var
+apps/ai/src
+apps/ai/tests
+**/*.log
+**/*.db
+**/*.sqlite*
 .env
 .env.*
 !.env.example
-npm-debug.log*
