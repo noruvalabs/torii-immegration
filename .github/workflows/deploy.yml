@@ -220,7 +220,7 @@ jobs:
         run: |
           set -euo pipefail
           ssh -i ~/.ssh/torii_deploy -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" \
-            "mkdir -p '$APP_ROOT/compose' '$APP_ROOT/nginx/conf.d' '$APP_ROOT/scripts' '$APP_ROOT/state' && chmod 700 '$APP_ROOT'"
+            "sudo mkdir -p '$APP_ROOT' && sudo chown -R '$SSH_USER:$SSH_USER' '$APP_ROOT' && mkdir -p '$APP_ROOT/compose' '$APP_ROOT/nginx/conf.d' '$APP_ROOT/scripts' '$APP_ROOT/state' && chmod 700 '$APP_ROOT'"
           # The host mirrors the repo's infra/ layout, so the compose file's relative bind
           # mount for the nginx conf resolves the same way in both places.
           scp -i ~/.ssh/torii_deploy -P "$SSH_PORT" \
