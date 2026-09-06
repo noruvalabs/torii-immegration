@@ -29,7 +29,7 @@ on:
 concurrency:
   # Per environment: a staging rollout must never queue behind a production one. Deploys are
   # never cancelled mid-flight — a half-applied rollout is worse than a queued one.
-  group: deploy-${{ github.event.inputs.environment || (github.ref_name == 'main' && 'production' || 'staging') }}
+  group: deploy-${{ inputs.environment || (github.ref_name == 'main' && 'production' || 'staging') }}
   cancel-in-progress: false
 
 permissions:
