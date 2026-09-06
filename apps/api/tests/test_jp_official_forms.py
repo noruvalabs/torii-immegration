@@ -392,8 +392,10 @@ def test_derived_questions_say_which_box_they_fill() -> None:
     merged = merge_form_questions(pack_questions("jp/work.renewal"), "work", "renewal")
     hints = {q["key"]: q.get("hint") for q in merged}
     assert hints["sex"]
-    assert "在留期間更新許可申請書" in hints["current_period_of_stay"]
-    assert "prints empty" in hints["current_period_of_stay"]
+    hint = hints["current_period_of_stay"]
+    assert hint is not None
+    assert "在留期間更新許可申請書" in hint
+    assert "prints empty" in hint
     # A pack-authored question is untouched and carries no hint.
     assert hints["full_name"] is None
 
@@ -1121,13 +1123,13 @@ def test_a_value_gate_reaches_intake_as_a_one_of_condition() -> None:
 
 
 def test_one_of_hides_the_question_until_a_listed_answer_is_given() -> None:
-    from torii_api.services.intake import IntakeQuestion, is_visible
+    from torii_api.services.intake import IntakeQuestion, ShowWhen, is_visible
 
     question = IntakeQuestion(
         key="employer_name",
         prompt="Where do you work?",
         type="string",
-        show_when={"key": "designated_activity", "one_of": ["doctor", "nurse"]},
+        show_when=ShowWhen(key="designated_activity", one_of=["doctor", "nurse"]),
     )
     assert is_visible(question, {"designated_activity": "doctor"}) is True
     assert is_visible(question, {"designated_activity": "Nurse"}) is True

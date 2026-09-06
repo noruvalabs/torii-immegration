@@ -680,8 +680,9 @@ def _get_pdf_info(code: str, citation: dict[str, Any] | None = None) -> dict[str
             reader = pypdf.PdfReader(io.BytesIO(raw))
             if pages is None:
                 pages = len(reader.pages)
-            if not detected_fields and reader.get_fields():
-                detected_fields = list(reader.get_fields().keys())
+            fields = reader.get_fields()
+            if not detected_fields and fields:
+                detected_fields = list(fields.keys())
         except Exception:
             pass
 
@@ -1042,9 +1043,9 @@ async def update_scope_details(
 @router.post("/form-templates/{code}/upload-pdf")
 async def upload_form_template_pdf(
     code: str,
+    session: SessionDep,
+    _admin: AdminOpsDep,
     file: UploadFile = File(...),
-    session: SessionDep = None,
-    _admin: AdminOpsDep = None,
     jurisdiction_code: str | None = None,
     visa_category_code: str | None = None,
     action_code: str | None = None,
@@ -1060,7 +1061,8 @@ async def upload_form_template_pdf(
     try:
         reader = pypdf.PdfReader(io.BytesIO(content))
         pages = len(reader.pages)
-        detected_fields = list(reader.get_fields().keys()) if reader.get_fields() else []
+        fields = reader.get_fields()
+        detected_fields = list(fields.keys()) if fields else []
     except Exception as exc:
         raise HTTPException(
             status_code=400,

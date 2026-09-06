@@ -1589,7 +1589,7 @@ def generate_portal_application_pack_pdf(
         rows = [
             (
                 item.label + (" *" if item.required else ""),
-                item.value if item.answered else NOT_PROVIDED,
+                (item.value or NOT_PROVIDED) if item.answered else NOT_PROVIDED,
             )
             for item in section.fields
         ]

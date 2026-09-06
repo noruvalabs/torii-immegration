@@ -552,7 +552,7 @@ async def _set_scope_row(
 async def _set_action(
     client: AsyncClient, admin: dict[str, str], jid: int, code: str, **flags: bool
 ) -> None:
-    await _set_scope_row(client, admin, jid, "case-actions", code, **flags)
+    await _set_scope_row(client, admin, jid, "case-actions", code, name=None, **flags)
 
 
 async def _set_route(

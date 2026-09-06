@@ -80,7 +80,7 @@ def extract_text_from_pdf(pdf_bytes: bytes) -> str:
     doc = pymupdf.open(stream=pdf_bytes, filetype="pdf")
     pages: list[str] = []
     for page in doc:
-        pages.append(page.get_text())
+        pages.append(str(page.get_text()))
     doc.close()
     return "\n".join(pages).strip()
 

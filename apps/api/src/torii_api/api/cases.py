@@ -7,7 +7,7 @@ US-03: Persist progress so an applicant can stop and resume.
 
 from __future__ import annotations
 
-from typing import Annotated, Any
+from typing import Annotated, Any, cast
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from pydantic import BaseModel, ConfigDict, Field
@@ -39,6 +39,7 @@ from torii_api.services.guidance import compute_guidance, next_status_for_phase
 from torii_api.services.intake import (
     IntakeProgress,
     IntakeQuestion,
+    QuestionType,
     is_visible,
     parse_questions,
     progress_for,
@@ -1038,11 +1039,15 @@ async def get_intake(
             current_answers[k] = v
             needs_flush = True
     if needs_flush:
-        parsed_q = parse_questions(questions, jurisdiction_code=j_code, visa_category=v_code)
+        parsed_q = parse_questions(
+            questions, jurisdiction_code=j_code or "", visa_category=v_code or ""
+        )
         case.intake_answers = prune_answers(parsed_q, current_answers)
         await session.flush()
 
-    return _intake_state(case, questions, jurisdiction_code=j_code, visa_category=v_code)
+    return _intake_state(
+        case, questions, jurisdiction_code=j_code or "JP", visa_category=v_code or ""
+    )
 
 
 INTAKE_KEY_ALIASES: dict[str, list[str]] = {
@@ -1176,8 +1181,8 @@ async def answer_intake(
     j_code, v_code, _, _ = await _scope_label(session, case)
     questions = parse_questions(
         await _intake_questions_for_case(session, case),
-        jurisdiction_code=j_code,
-        visa_category=v_code,
+        jurisdiction_code=j_code or "",
+        visa_category=v_code or "",
     )
     by_key = {q.key: q for q in questions}
 
@@ -1209,7 +1214,7 @@ async def answer_intake(
                 question = IntakeQuestion(
                     key=target_key,
                     prompt=spec.prompt,
-                    type=spec.type,
+                    type=cast(QuestionType, spec.type),
                     section=spec.section or "Official Form Details",
                     options=list(spec.options) if spec.options else None,
                     required=False,
@@ -1270,7 +1275,10 @@ async def answer_intake(
             user.profile_complete = all(bool(getattr(user, f, None)) for f in required_fields)
 
     state = _intake_state(
-        case, [q.model_dump() for q in questions], jurisdiction_code=j_code, visa_category=v_code
+        case,
+        [q.model_dump() for q in questions],
+        jurisdiction_code=j_code or "JP",
+        visa_category=v_code or "",
     )
     if state.progress.complete:
         new_status = next_status_for_phase("eligibility", case.status)
@@ -1279,7 +1287,10 @@ async def answer_intake(
     await session.flush()
     await session.refresh(case)
     return _intake_state(
-        case, [q.model_dump() for q in questions], jurisdiction_code=j_code, visa_category=v_code
+        case,
+        [q.model_dump() for q in questions],
+        jurisdiction_code=j_code or "JP",
+        visa_category=v_code or "",
     )
 
 
