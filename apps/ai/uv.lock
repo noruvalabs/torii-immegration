@@ -626,7 +626,7 @@ requires-dist = [
     { name = "openai", specifier = ">=1.60" },
     { name = "pydantic-settings", specifier = ">=2.7" },
     { name = "pymupdf", specifier = ">=1.25" },
-    { name = "python-multipart", specifier = ">=0.0.18" },
+    { name = "python-multipart", specifier = ">=0.0.20" },
     { name = "scalar-fastapi", specifier = ">=1.8" },
     { name = "structlog", specifier = ">=24.4" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.34" },

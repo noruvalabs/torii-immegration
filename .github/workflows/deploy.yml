@@ -1,0 +1,289 @@
+name: Deploy
+
+# Build on GitHub's runners, push to GHCR, then have the target host PULL that exact tag.
+# The host never builds and never sees the source tree — only a compose file, the nginx conf,
+# the deploy script, and images it pulls by immutable sha tag.
+#
+#   push to staging ─► staging environment
+#   push to main    ─► production environment
+#
+# Both environments use the SAME secret names; GitHub resolves them per environment, so
+# nothing here needs STAGING_/PROD_ prefixes. Configure each under
+# Settings → Environments → {staging, production}.
+on:
+  push:
+    branches: [main, staging]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Where to deploy."
+        required: true
+        default: staging
+        type: choice
+        options: [staging, production]
+      tag:
+        description: "Re-deploy an image tag that already exists in GHCR (e.g. sha-1a2b3c4). Leave empty to build the current ref."
+        required: false
+        type: string
+
+concurrency:
+  # Per environment: a staging rollout must never queue behind a production one. Deploys are
+  # never cancelled mid-flight — a half-applied rollout is worse than a queued one.
+  group: deploy-${{ inputs.environment || (github.ref_name == 'main' && 'production' || 'staging') }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Decide what we are shipping: a fresh build of this ref, or an existing tag.
+  # ---------------------------------------------------------------------------
+  resolve:
+    name: Resolve release
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.pick.outputs.tag }}
+      owner: ${{ steps.pick.outputs.owner }}
+      build: ${{ steps.pick.outputs.build }}
+      environment: ${{ steps.pick.outputs.environment }}
+    steps:
+      - id: pick
+        env:
+          REQUESTED_TAG: ${{ inputs.tag }}
+          REQUESTED_ENV: ${{ inputs.environment }}
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          set -euo pipefail
+          # GHCR paths are case-sensitive and must be lowercase.
+          printf 'owner=%s\n' "$(printf '%s' "$OWNER" | tr '[:upper:]' '[:lower:]')" >>"$GITHUB_OUTPUT"
+
+          # A manual run says where it goes; a push is decided by its branch. Anything other
+          # than main is staging, so a stray branch can never reach production by accident.
+          if [ -n "${REQUESTED_ENV}" ]; then
+            ENVIRONMENT="${REQUESTED_ENV}"
+          elif [ "${GITHUB_REF_NAME}" = "main" ]; then
+            ENVIRONMENT="production"
+          else
+            ENVIRONMENT="staging"
+          fi
+          printf 'environment=%s\n' "$ENVIRONMENT" >>"$GITHUB_OUTPUT"
+
+          if [ -n "${REQUESTED_TAG}" ]; then
+            printf 'tag=%s\nbuild=false\n' "${REQUESTED_TAG}" >>"$GITHUB_OUTPUT"
+            echo "Re-deploying existing tag ${REQUESTED_TAG} to ${ENVIRONMENT} (no build, no gates)."
+          else
+            printf 'tag=sha-%s\nbuild=true\n' "${GITHUB_SHA:0:7}" >>"$GITHUB_OUTPUT"
+            echo "Building sha-${GITHUB_SHA:0:7} from ${GITHUB_REF_NAME} for ${ENVIRONMENT}."
+          fi
+
+  # ---------------------------------------------------------------------------
+  # Same gates as a pull request — nothing reaches production untested.
+  # ---------------------------------------------------------------------------
+  gates:
+    name: Gates
+    needs: [resolve]
+    if: needs.resolve.outputs.build == 'true'
+    uses: ./.github/workflows/ci.yml
+
+  # ---------------------------------------------------------------------------
+  # Build the three images on the runner and push them to GHCR.
+  # ---------------------------------------------------------------------------
+  build:
+    name: Build ${{ matrix.service }}
+    needs: [resolve, gates]
+    if: ${{ !cancelled() && needs.resolve.outputs.build == 'true' && needs.gates.result == 'success' }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          # api and web both build from the repo root: the api image ships
+          # docs/jurisdictions, the web image needs the workspace pnpm lockfile.
+          - service: api
+            context: .
+            dockerfile: apps/api/Dockerfile
+          - service: ai
+            context: apps/ai
+            dockerfile: apps/ai/Dockerfile
+          - service: web
+            context: .
+            dockerfile: apps/web/Dockerfile
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          push: true
+          provenance: false
+          # The sha tag is what the host deploys — immutable, and the only one used for
+          # rollback. `latest` is a convenience pointer for humans, never for the rollout.
+          tags: |
+            ${{ env.REGISTRY }}/${{ needs.resolve.outputs.owner }}/torii-${{ matrix.service }}:${{ needs.resolve.outputs.tag }}
+            ${{ env.REGISTRY }}/${{ needs.resolve.outputs.owner }}/torii-${{ matrix.service }}:latest
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ needs.resolve.outputs.tag }}
+          # Shared with CI's no-push build, so the release build mostly reuses warm layers.
+          cache-from: type=gha,scope=torii-${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=torii-${{ matrix.service }}
+
+  # ---------------------------------------------------------------------------
+  # Ship it: upload the deploy assets, then let the host pull and swap.
+  # ---------------------------------------------------------------------------
+  deploy:
+    name: Deploy to ${{ needs.resolve.outputs.environment }}
+    needs: [resolve, build]
+    # `build` is skipped on the re-deploy path; only a *failed* build should stop us.
+    if: ${{ !cancelled() && needs.build.result != 'failure' }}
+    runs-on: ubuntu-latest
+    # Selects which environment's secrets the steps below see, and applies that
+    # environment's protection rules (add a required reviewer on `production` to gate it).
+    environment: ${{ needs.resolve.outputs.environment }}
+    env:
+      SSH_HOST: ${{ secrets.DEPLOY_SSH_HOST }}
+      SSH_PORT: ${{ secrets.DEPLOY_SSH_PORT || '22' }}
+      SSH_USER: ${{ secrets.DEPLOY_SSH_USER }}
+      # Set TORII_APP_ROOT as an environment variable to run staging and production side by
+      # side on one host (e.g. /opt/torii-staging).
+      APP_ROOT: ${{ vars.TORII_APP_ROOT || '/opt/torii' }}
+      IMAGE_OWNER: ${{ needs.resolve.outputs.owner }}
+      TAG: ${{ needs.resolve.outputs.tag }}
+      ENVIRONMENT: ${{ needs.resolve.outputs.environment }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Prepare the SSH client
+        env:
+          SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.DEPLOY_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$SSH_KEY" >~/.ssh/torii_deploy
+          chmod 600 ~/.ssh/torii_deploy
+          # Pin the host key rather than trusting on first use.
+          if [ -n "$KNOWN_HOSTS" ]; then
+            printf '%s\n' "$KNOWN_HOSTS" >~/.ssh/known_hosts
+          else
+            echo "::warning::DEPLOY_SSH_KNOWN_HOSTS is unset — falling back to ssh-keyscan (trust on first use)."
+            ssh-keyscan -p "$SSH_PORT" "$SSH_HOST" >>~/.ssh/known_hosts 2>/dev/null
+          fi
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Upload the deploy assets
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/torii_deploy -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" \
+            "mkdir -p '$APP_ROOT/compose' '$APP_ROOT/nginx/conf.d' '$APP_ROOT/scripts' '$APP_ROOT/state' && chmod 700 '$APP_ROOT'"
+          # The host mirrors the repo's infra/ layout, so the compose file's relative bind
+          # mount for the nginx conf resolves the same way in both places.
+          scp -i ~/.ssh/torii_deploy -P "$SSH_PORT" \
+            infra/compose/docker-compose.yml "$SSH_USER@$SSH_HOST:$APP_ROOT/compose/"
+          scp -i ~/.ssh/torii_deploy -P "$SSH_PORT" \
+            infra/nginx/conf.d/torii.conf "$SSH_USER@$SSH_HOST:$APP_ROOT/nginx/conf.d/"
+          scp -i ~/.ssh/torii_deploy -P "$SSH_PORT" \
+            infra/scripts/deploy.sh "$SSH_USER@$SSH_HOST:$APP_ROOT/scripts/"
+          ssh -i ~/.ssh/torii_deploy -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" \
+            "chmod +x '$APP_ROOT/scripts/deploy.sh'"
+
+      - name: Pull and roll out
+        env:
+          # Base64 of the production compose .env. The runner never decodes it; it goes
+          # straight through the SSH session into the deploy script's environment.
+          TORII_ENV_FILE_B64: ${{ secrets.DEPLOY_ENV_FILE_B64 }}
+          # A long-lived read:packages PAT if one is configured, otherwise this job's own
+          # short-lived token (enough to pull packages owned by this repository).
+          GHCR_USERNAME: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GHCR_PULL_TOKEN || secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          # The script runs from the copy uploaded above rather than being piped into
+          # `bash -s`: a script read from stdin is lost the moment anything inside it
+          # consumes stdin, and the on-host copy is also what an operator reaches for when
+          # they need to re-run a rollout by hand.
+          #
+          # The two credentials ride the remote command's environment. That does put them in
+          # the remote shell's argv for the life of the deploy — acceptable because both are
+          # short-lived and the host is already trusted with the far more sensitive .env, but
+          # it is the reason this session is kept to a single call.
+          ssh -i ~/.ssh/torii_deploy -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" \
+            "TORII_APP_ROOT='$APP_ROOT' TORII_ENV_FILE_B64='$TORII_ENV_FILE_B64' GHCR_USERNAME='$GHCR_USERNAME' GHCR_TOKEN='$GHCR_TOKEN' '$APP_ROOT/scripts/deploy.sh' '$IMAGE_OWNER' '$TAG'"
+
+      - name: Summary
+        run: |
+          {
+            echo "### Deployed \`$TAG\` to **$ENVIRONMENT**"
+            echo
+            echo "| Image | Tag |"
+            echo "| --- | --- |"
+            for svc in api ai web; do
+              echo "| \`ghcr.io/$IMAGE_OWNER/torii-$svc\` | \`$TAG\` |"
+            done
+            echo
+            echo "Host root: \`$APP_ROOT\`"
+          } >>"$GITHUB_STEP_SUMMARY"
+
+  # ---------------------------------------------------------------------------
+  # Optional chat notification. Silently skipped when the webhook secret is unset.
+  # ---------------------------------------------------------------------------
+  notify:
+    name: Notify
+    needs: [resolve, deploy]
+    if: always() && needs.resolve.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Post the deploy result
+        env:
+          WEBHOOK_URL: ${{ secrets.DEPLOY_WEBHOOK_URL }}
+          STATUS: ${{ needs.deploy.result }}
+          TAG: ${{ needs.resolve.outputs.tag }}
+          ENVIRONMENT: ${{ needs.resolve.outputs.environment }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          if [ -z "$WEBHOOK_URL" ]; then
+            echo "DEPLOY_WEBHOOK_URL is unset; skipping the notification."
+            exit 0
+          fi
+          case "$STATUS" in
+            success) COLOR=5763719 ;;
+            failure) COLOR=15548997 ;;
+            *)       COLOR=16705372 ;;
+          esac
+          # Discord-shaped embed. A Slack incoming webhook ignores `embeds`, so point this at
+          # Discord or adapt the payload before switching targets.
+          payload=$(jq -n \
+            --arg title "Torii $ENVIRONMENT deploy: $STATUS" \
+            --arg url "$RUN_URL" \
+            --arg tag "$TAG" \
+            --arg env "$ENVIRONMENT" \
+            --arg repo "$GITHUB_REPOSITORY" \
+            --arg actor "$GITHUB_ACTOR" \
+            --arg sha "$GITHUB_SHA" \
+            --argjson color "$COLOR" \
+            '{username: "Torii Deploy", embeds: [{title: $title, url: $url, color: $color, fields: [
+                {name: "Environment", value: $env, inline: true},
+                {name: "Tag", value: $tag, inline: true},
+                {name: "Actor", value: $actor, inline: true},
+                {name: "Repository", value: $repo, inline: false},
+                {name: "Commit", value: $sha, inline: false}
+              ]}]}')
+          curl --fail --show-error --silent -H "Content-Type: application/json" -d "$payload" "$WEBHOOK_URL"
