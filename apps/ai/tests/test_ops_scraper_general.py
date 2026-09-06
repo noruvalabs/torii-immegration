@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import Any, cast
 
 import pytest
 
@@ -192,7 +193,7 @@ async def test_scrape_govuk_via_content_api() -> None:
                 )
             return _FakeResp(404, {})
 
-    client = _FakeClient()
+    client = cast(Any, _FakeClient())
     text = await scraper._scrape_govuk(client, "https://www.gov.uk/standard-visitor")
     assert "genuine visitor" in text
     assert captured == ["https://www.gov.uk/api/content/standard-visitor"]
@@ -230,7 +231,7 @@ async def test_scrape_govuk_follows_redirects() -> None:
                 }
             )
 
-    client = _FakeClient()
+    client = cast(Any, _FakeClient())
     text = await scraper._scrape_govuk(client, "https://www.gov.uk/standard-visitor-visa")
     assert "Apply online" in text
     assert captured == [
@@ -253,5 +254,5 @@ async def test_scrape_govuk_unknown_path_returns_empty() -> None:
         async def get(self, url: str):
             return _FakeResp()
 
-    text = await scraper._scrape_govuk(_FakeClient(), "https://www.gov.uk/not-found")
+    text = await scraper._scrape_govuk(cast(Any, _FakeClient()), "https://www.gov.uk/not-found")
     assert text == ""

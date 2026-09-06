@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
@@ -297,8 +298,9 @@ class OpsScraper:
             origin_country=origin_country,
             residence_country=residence_country,
         ):
-            if event.get("type") == "complete" and isinstance(event.get("result"), ScrapeResult):
-                result = event["result"]
+            res = event.get("result")
+            if event.get("type") == "complete" and isinstance(res, ScrapeResult):
+                result = res
         if result is None:
             return ScrapeResult(
                 jurisdiction_code=jurisdiction_code,
@@ -317,7 +319,7 @@ class OpsScraper:
         action: str = "renewal",
         origin_country: str | None = None,
         residence_country: str | None = None,
-    ):
+    ) -> AsyncIterator[dict[str, Any]]:
         """Yield progress events, then a final ``complete`` event with the ScrapeResult.
 
         Used for streaming research UIs: each event is a dict with ``type`` of
@@ -603,11 +605,7 @@ def _normalize_item_citation(
     version: str,
 ) -> None:
     item_key = str(
-        item.get("key")
-        or item.get("code")
-        or item.get("name")
-        or item.get("official_title")
-        or ""
+        item.get("key") or item.get("code") or item.get("name") or item.get("official_title") or ""
     )
     specific = resolve_official_citation(
         jurisdiction_code=jurisdiction_code,
@@ -888,7 +886,11 @@ def _fallback_structured_data(
             "citation": resolve_official_citation(
                 jurisdiction_code=jurisdiction_code,
                 visa_category=visa_category,
-                item_key_or_code="work" if "work" in visa_category.lower() else "student" if "student" in visa_category.lower() else "tourist",
+                item_key_or_code="work"
+                if "work" in visa_category.lower()
+                else "student"
+                if "student" in visa_category.lower()
+                else "tourist",
                 default_version=now_str,
             ),
         }

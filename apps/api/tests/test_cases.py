@@ -94,7 +94,9 @@ async def test_scope_case_uk_change_of_status(client: AsyncClient, engine: Async
     """Scoping with UK + work + change_of_status succeeds."""
     async with engine.begin() as conn:
         await conn.execute(
-            text("INSERT INTO jurisdictions (code, name, is_live) VALUES ('UK', 'United Kingdom', 1)")
+            text(
+                "INSERT INTO jurisdictions (code, name, is_live) VALUES ('UK', 'United Kingdom', 1)"
+            )
         )
         jid = (
             await conn.execute(text("SELECT id FROM jurisdictions WHERE code = 'UK'"))
@@ -185,11 +187,14 @@ async def test_save_statutory_form_answers_for_student_and_work_cases(
     client: AsyncClient, engine: AsyncEngine
 ) -> None:
     import json
+
     from torii_api.services.intake import JP_WORK_RENEWAL_QUESTIONS
 
     async with engine.begin() as conn:
         await conn.execute(
-            text("INSERT INTO jurisdictions (code, name, is_live) VALUES ('JP_STAT', 'Japan Stat', 1)")
+            text(
+                "INSERT INTO jurisdictions (code, name, is_live) VALUES ('JP_STAT', 'Japan Stat', 1)"
+            )
         )
         jid = (
             await conn.execute(text("SELECT id FROM jurisdictions WHERE code = 'JP_STAT'"))
@@ -201,7 +206,9 @@ async def test_save_statutory_form_answers_for_student_and_work_cases(
         )
         vc_id = (
             await conn.execute(
-                text(f"SELECT id FROM visa_categories WHERE jurisdiction_id = {jid} AND code = 'student'")
+                text(
+                    f"SELECT id FROM visa_categories WHERE jurisdiction_id = {jid} AND code = 'student'"
+                )
             )
         ).scalar_one()
         await conn.execute(
@@ -211,7 +218,9 @@ async def test_save_statutory_form_answers_for_student_and_work_cases(
         )
         ca_id = (
             await conn.execute(
-                text(f"SELECT id FROM case_actions WHERE jurisdiction_id = {jid} AND code = 'renewal'")
+                text(
+                    f"SELECT id FROM case_actions WHERE jurisdiction_id = {jid} AND code = 'renewal'"
+                )
             )
         ).scalar_one()
         await conn.execute(
@@ -263,4 +272,3 @@ async def test_save_statutory_form_answers_for_student_and_work_cases(
     saved_answers = case_resp.json()["intake_answers"]
     for key, val in statutory_answers.items():
         assert saved_answers.get(key) == val, f"Missing {key} in saved answers"
-

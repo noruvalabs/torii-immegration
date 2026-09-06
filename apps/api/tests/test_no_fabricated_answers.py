@@ -306,8 +306,7 @@ def test_the_resolver_cannot_be_handed_an_item_key() -> None:
     membership = [
         node
         for node in ast.walk(tree)
-        if isinstance(node, ast.Compare)
-        and any(isinstance(op, ast.In) for op in node.ops)
+        if isinstance(node, ast.Compare) and any(isinstance(op, ast.In) for op in node.ops)
     ]
     assert membership == []
 

@@ -1,10 +1,30 @@
-.venv/
-__pycache__/
-*.py[cod]
-.pytest_cache/
-.ruff_cache/
-*.db
-*.sqlite*
+# Context is the repo root (see the header in apps/api/Dockerfile). docs/jurisdictions is
+# deliberately kept — it ships in the image; the rest of docs/ does not.
+.git
+.github
+.reference
+infra
+apps/web
+apps/ai
+docs/decisions
+docs/plan
+docs/specs
+docs/_shared.md
+**/node_modules
+**/.next
+**/.turbo
+**/.venv
+**/__pycache__
+**/*.py[cod]
+**/.pytest_cache
+**/.ruff_cache
+# Government form templates (keep official_forms)
+apps/api/var/*
+!apps/api/var/official_forms
+**/*.log
+**/*.db
+**/*.db-*
+**/*.sqlite*
 .env
 .env.*
 !.env.example

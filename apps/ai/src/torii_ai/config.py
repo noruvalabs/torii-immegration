@@ -6,8 +6,11 @@ from pathlib import Path
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # One env file for the whole monorepo (see /.env.example at the repo root) — this file lives
-# at apps/ai/src/torii_ai/config.py, five levels below the root regardless of CWD.
-_REPO_ROOT_ENV_FILE = Path(__file__).resolve().parents[4] / ".env"
+# at apps/ai/src/torii_ai/config.py, five levels below the root regardless of CWD. In the
+# container only `apps/ai` is unpacked, at /app, so there is no fifth level and no env file to
+# read: settings come from the environment (compose `env_file:`) instead.
+_MODULE_PATH = Path(__file__).resolve()
+_REPO_ROOT_ENV_FILE = _MODULE_PATH.parents[4] / ".env" if len(_MODULE_PATH.parents) > 4 else None
 
 
 class Settings(BaseSettings):

@@ -11,8 +11,11 @@ from pathlib import Path
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # One env file for the whole monorepo (see /.env.example at the repo root) — this file lives
-# at apps/api/src/torii_api/config.py, five levels below the root regardless of CWD.
-_REPO_ROOT_ENV_FILE = Path(__file__).resolve().parents[4] / ".env"
+# at apps/api/src/torii_api/config.py, five levels below the root regardless of CWD. In the
+# container only `apps/api` is unpacked, at /app, so there is no fifth level and no env file
+# to read: settings come from the environment (compose `env_file:`) instead.
+_MODULE_PATH = Path(__file__).resolve()
+_REPO_ROOT_ENV_FILE = _MODULE_PATH.parents[4] / ".env" if len(_MODULE_PATH.parents) > 4 else None
 
 
 class Settings(BaseSettings):
@@ -43,6 +46,10 @@ class Settings(BaseSettings):
     # jurisdictions, visa categories, and workflows on first boot.
     seed_on_startup: bool = False
 
+    # Whether to seed sample development demo users (admin@example.com etc.).
+    # Off by default: production and staging only get the real superuser from env.
+    seed_demo_users: bool = False
+
     # --- Background scheduler / task queue (arq over Redis) --------------------
     # The API enqueues jobs here; a separate `arq` worker consumes them and runs the
     # cron schedule. The API degrades gracefully when Redis is absent (enqueue no-ops
@@ -58,6 +65,13 @@ class Settings(BaseSettings):
     jwt_secret_key: str = "dev-only-change-me-in-production"
     jwt_algorithm: str = "HS256"
     jwt_access_token_expire_minutes: int = 60 * 24 * 7  # 7 days
+
+    # --- Superuser / Admin bootstrap (auto-created if credentials present in env)
+    superuser_email: str = ""
+    superuser_password: str = ""
+    superuser_role: str = "admin"
+    admin_email: str = ""
+    admin_password: str = ""
 
     # --- Google Social Auth (OAuth 2.0 Client ID & Secret) --------------------
     google_client_id: str = ""

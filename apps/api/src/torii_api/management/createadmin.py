@@ -26,14 +26,18 @@ from torii_api.db.models import User, UserRole
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    import os
+
+    default_email = os.environ.get("TORII_SUPERUSER_EMAIL") or os.environ.get("TORII_ADMIN_EMAIL")
     parser = argparse.ArgumentParser(
         prog="torii-createadmin",
         description="Create an admin user for the Torii platform.",
     )
     parser.add_argument(
         "--email",
-        required=True,
-        help="Email address for the admin account.",
+        default=default_email,
+        required=not bool(default_email),
+        help="Email address for the admin account (defaults to TORII_SUPERUSER_EMAIL / TORII_ADMIN_EMAIL).",
     )
     parser.add_argument(
         "--role",
@@ -44,7 +48,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--no-input",
         action="store_true",
-        help="Read password from TORII_ADMIN_PASSWORD env var (for CI/scripts).",
+        help="Read password from TORII_SUPERUSER_PASSWORD or TORII_ADMIN_PASSWORD env var.",
     )
     return parser.parse_args(argv)
 
@@ -61,52 +65,96 @@ def prompt_password() -> str:
     return pw
 
 
-async def create_user(email: str, password: str, role: str) -> None:
-    settings = get_settings()
-    engine = create_engine(to_async_url(settings.database_url))
+async def ensure_admin_user(
+    database_url: str,
+    *,
+    email: str,
+    password: str,
+    role: str = UserRole.ADMIN,
+) -> bool:
+    """Ensure an admin user exists with the given credentials.
+
+    Returns:
+        True if a new user was created, False if user already existed.
+    """
+    engine = create_engine(to_async_url(database_url))
     session_factory = create_session_factory(engine)
 
-    async with session_factory() as session:
-        existing = await session.execute(select(User).where(User.email == email))
-        if existing.scalar_one_or_none() is not None:
-            print(f"Error: user '{email}' already exists.", file=sys.stderr)
-            await engine.dispose()
-            sys.exit(1)
+    try:
+        async with session_factory() as session:
+            normalized_email = email.strip().lower()
+            existing = await session.scalar(select(User).where(User.email == normalized_email))
+            if existing is not None:
+                changed = False
+                if existing.role != role:
+                    existing.role = role
+                    changed = True
+                if not existing.is_active:
+                    existing.is_active = True
+                    changed = True
+                if not existing.email_verified:
+                    existing.email_verified = True
+                    changed = True
+                if changed:
+                    await session.commit()
+                return False
 
-        user = User(
-            email=email,
-            password_hash=hash_password(password),
-            role=role,
-            is_active=True,
-        )
-        session.add(user)
-        try:
-            await session.commit()
-        except IntegrityError:
-            await session.rollback()
-            print(f"Error: user '{email}' already exists.", file=sys.stderr)
-            await engine.dispose()
-            sys.exit(1)
+            username = normalized_email.split("@")[0]
+            existing_name = await session.scalar(select(User).where(User.username == username))
+            if existing_name is not None:
+                username = None
 
+            user = User(
+                email=normalized_email,
+                username=username,
+                password_hash=hash_password(password),
+                role=role,
+                is_active=True,
+                email_verified=True,
+            )
+            session.add(user)
+            try:
+                await session.commit()
+                return True
+            except IntegrityError:
+                await session.rollback()
+                return False
+    finally:
         await engine.dispose()
-        print(f"✓ Created {role} user: {email} (id={user.id})")
+
+
+async def create_user(email: str, password: str, role: str) -> None:
+    settings = get_settings()
+    created = await ensure_admin_user(
+        settings.database_url,
+        email=email,
+        password=password,
+        role=role,
+    )
+    if not created:
+        print(f"Error: user '{email}' already exists.", file=sys.stderr)
+        sys.exit(1)
+    print(f"✓ Created {role} user: {email}")
 
 
 def main(argv: list[str] | None = None) -> None:
+    import os
+
     args = parse_args(argv)
 
-    if args.no_input:
-        import os
-
-        password = os.environ.get("TORII_ADMIN_PASSWORD")
+    env_password = os.environ.get("TORII_SUPERUSER_PASSWORD") or os.environ.get(
+        "TORII_ADMIN_PASSWORD"
+    )
+    if args.no_input or (env_password and not sys.stdin.isatty()):
+        password = env_password
         if not password:
             print(
-                "Error: --no-input requires TORII_ADMIN_PASSWORD env var.",
+                "Error: --no-input requires TORII_SUPERUSER_PASSWORD or TORII_ADMIN_PASSWORD env var.",
                 file=sys.stderr,
             )
             sys.exit(1)
     else:
-        password = prompt_password()
+        password = env_password if env_password else prompt_password()
 
     asyncio.run(create_user(args.email, password, args.role))
 

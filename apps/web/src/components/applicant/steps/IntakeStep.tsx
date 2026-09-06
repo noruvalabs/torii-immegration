@@ -164,6 +164,65 @@ function getProfileValueForQuestion(key: string, prompt: string, profile: User):
   return null;
 }
 
+function SectionSourceBanner({ questions }: { questions: IntakeState["questions"] }) {
+  const sources = useMemo(() => {
+    const map = new Map<string, { authority: string; title: string; url: string }>();
+    for (const q of questions) {
+      const cit = q.citation as { authority?: string; title?: string; url?: string } | null | undefined;
+      if (cit?.url) {
+        if (!map.has(cit.url)) {
+          map.set(cit.url, {
+            authority: cit.authority || "Official Government Authority",
+            title: cit.title || "Statutory Immigration Standard",
+            url: cit.url,
+          });
+        }
+      }
+    }
+    return Array.from(map.values());
+  }, [questions]);
+
+  if (sources.length === 0) return null;
+
+  return (
+    <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 text-xs shadow-2xs space-y-2">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div className="flex items-center gap-2">
+          <ShieldCheck className="size-4 text-primary shrink-0" />
+          <div>
+            <span className="font-semibold text-foreground text-xs">
+              Official Statutory Authority &amp; Verified Legal Basis
+            </span>
+            <span className="text-[11px] text-muted-foreground ml-1.5 hidden sm:inline">
+              (Questions in this section are verified against statutory government standards)
+            </span>
+          </div>
+        </div>
+        <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 border border-emerald-500/30 px-2 py-0.5 rounded-full">
+          ✓ Verified Legal Source
+        </span>
+      </div>
+
+      <div className="flex items-center gap-2 flex-wrap pt-1 border-t border-border/40">
+        <span className="text-[11px] font-medium text-muted-foreground">Official Government Sources:</span>
+        {sources.map((src, i) => (
+          <a
+            key={i}
+            href={src.url}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1.5 rounded-md border border-border/80 bg-background hover:bg-accent px-2.5 py-1 text-[11px] font-medium text-foreground hover:text-primary transition-colors shadow-2xs"
+            title={`${src.title} — ${src.authority}`}
+          >
+            <span>{src.authority}</span>
+            <ExternalLink className="size-3 text-muted-foreground" />
+          </a>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function IntakeStep({ state, profile, onAnswer, onProceedToEligibility, targetKey }: IntakeStepProps) {
   const [drafts, setDrafts] = useState<Record<string, unknown>>({});
   const [fieldErrors, setFieldErrors] = useState<Record<string, string | null>>({});
@@ -388,65 +447,6 @@ export function IntakeStep({ state, profile, onAnswer, onProceedToEligibility, t
   const remainingInCurrent = currentRequired.length > 0
     ? Math.max(0, currentRequired.length - currentAnsweredRequired)
     : Math.max(0, currentQuestions.length - currentAnsweredCount);
-
-  function SectionSourceBanner({ questions }: { questions: (typeof state.questions) }) {
-    const sources = useMemo(() => {
-      const map = new Map<string, { authority: string; title: string; url: string }>();
-      for (const q of questions) {
-        const cit = q.citation as { authority?: string; title?: string; url?: string } | null | undefined;
-        if (cit?.url) {
-          if (!map.has(cit.url)) {
-            map.set(cit.url, {
-              authority: cit.authority || "Official Government Authority",
-              title: cit.title || "Statutory Immigration Standard",
-              url: cit.url,
-            });
-          }
-        }
-      }
-      return Array.from(map.values());
-    }, [questions]);
-
-    if (sources.length === 0) return null;
-
-    return (
-      <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 text-xs shadow-2xs space-y-2">
-        <div className="flex items-center justify-between gap-2 flex-wrap">
-          <div className="flex items-center gap-2">
-            <ShieldCheck className="size-4 text-primary shrink-0" />
-            <div>
-              <span className="font-semibold text-foreground text-xs">
-                Official Statutory Authority &amp; Verified Legal Basis
-              </span>
-              <span className="text-[11px] text-muted-foreground ml-1.5 hidden sm:inline">
-                (Questions in this section are verified against statutory government standards)
-              </span>
-            </div>
-          </div>
-          <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 border border-emerald-500/30 px-2 py-0.5 rounded-full">
-            ✓ Verified Legal Source
-          </span>
-        </div>
-
-        <div className="flex items-center gap-2 flex-wrap pt-1 border-t border-border/40">
-          <span className="text-[11px] font-medium text-muted-foreground">Official Government Sources:</span>
-          {sources.map((src, i) => (
-            <a
-              key={i}
-              href={src.url}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-1.5 rounded-md border border-border/80 bg-background hover:bg-accent px-2.5 py-1 text-[11px] font-medium text-foreground hover:text-primary transition-colors shadow-2xs"
-              title={`${src.title} — ${src.authority}`}
-            >
-              <span>{src.authority}</span>
-              <ExternalLink className="size-3 text-muted-foreground" />
-            </a>
-          ))}
-        </div>
-      </div>
-    );
-  }
 
   function optionLabel(q: (typeof state.questions)[number], option: string): string {
     // The printed wording where the form has one; otherwise the value made readable.

@@ -234,10 +234,13 @@ def resolve_packs_dir(explicit: str | Path | None = None) -> Path:
 
     here = Path(__file__).resolve()
     candidates = [
-        here.parents[5] / "docs" / "jurisdictions",  # monorepo root from services/
         Path.cwd() / "docs" / "jurisdictions",
         Path.cwd().parent.parent / "docs" / "jurisdictions",  # from apps/api
     ]
+    # Monorepo root from services/ — absent in the container, where only apps/api is
+    # unpacked at /app and TORII_JURISDICTIONS_DIR points at the packs directly.
+    if len(here.parents) > 5:
+        candidates.insert(0, here.parents[5] / "docs" / "jurisdictions")
     for candidate in candidates:
         if candidate.is_dir():
             return candidate.resolve()

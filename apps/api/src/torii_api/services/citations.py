@@ -107,9 +107,7 @@ def _is_complete(citation: Any) -> bool:
     if not isinstance(citation, dict):
         return False
     url = str(citation.get("url") or "")
-    return bool(
-        citation.get("authority") and citation.get("title") and url.startswith("http")
-    )
+    return bool(citation.get("authority") and citation.get("title") and url.startswith("http"))
 
 
 def resolve_official_citation(

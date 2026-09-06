@@ -337,9 +337,7 @@ _CATEGORIES: tuple[ExternalCategory, ...] = (
         lead_time="Same day to two weeks, depending on the office.",
         guidance="These are issued for a specific tax year — check which year the requirement "
         "asks for before queuing.",
-        pattern=re.compile(
-            r"tax|課税|納税|residence certificate|住民票|municipal", re.IGNORECASE
-        ),
+        pattern=re.compile(r"tax|課税|納税|residence certificate|住民票|municipal", re.IGNORECASE),
     ),
 )
 
@@ -396,9 +394,7 @@ def external_tasks(checklist: list[dict[str, Any]]) -> tuple[ExternalTask, ...]:
                 category=category.code,
                 categories=tuple(entry.code for entry in matched),
                 title=_text_of(item.get("name")).strip() or category.label,
-                arranged_with=" · ".join(
-                    dict.fromkeys(entry.arranged_with for entry in described)
-                ),
+                arranged_with=" · ".join(dict.fromkeys(entry.arranged_with for entry in described)),
                 lead_time=category.lead_time,
                 guidance=" ".join(entry.guidance for entry in described),
                 how_to_obtain=_text_of(item.get("how_to_obtain")).strip(),
