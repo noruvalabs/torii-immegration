@@ -137,7 +137,9 @@ def write_revisions(records: list[RevisionRecord], *, checked_at: datetime) -> P
     body = yaml.safe_dump(
         {
             "checked_at": checked_at.isoformat(),
-            "forms": {record.code: record.as_dict() for record in sorted(records, key=lambda r: r.code)},
+            "forms": {
+                record.code: record.as_dict() for record in sorted(records, key=lambda r: r.code)
+            },
         },
         allow_unicode=True,
         sort_keys=False,

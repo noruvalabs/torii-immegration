@@ -57,7 +57,9 @@ from torii_api.services.pack_proposals import (
 router = APIRouter(prefix="/v1/admin/ops", tags=["admin-ops"])
 
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
-AdminOpsDep = Annotated[CurrentUserDep, Depends(require_roles(UserRole.ADMIN, UserRole.OPS, UserRole.EMPLOYER))]
+AdminOpsDep = Annotated[
+    CurrentUserDep, Depends(require_roles(UserRole.ADMIN, UserRole.OPS, UserRole.EMPLOYER))
+]
 
 
 # ── Request schemas ────────────────────────────────────────────────────────────
@@ -587,7 +589,9 @@ async def upsert_pack_override(
     status_code=status.HTTP_204_NO_CONTENT,
     response_class=Response,
 )
-async def delete_pack_override(override_id: int, session: SessionDep, _admin: AdminOpsDep) -> Response:
+async def delete_pack_override(
+    override_id: int, session: SessionDep, _admin: AdminOpsDep
+) -> Response:
     """Revert one edit. The pack's own value is what the scope shows again."""
     row = await session.get(PackOverride, override_id)
     if row is None:
@@ -693,8 +697,11 @@ def _get_pdf_info(code: str, citation: dict[str, Any] | None = None) -> dict[str
     }
 
 
-def _fallback_pack(jurisdiction_code: str, visa_category_code: str, action_code: str) -> dict[str, Any]:
+def _fallback_pack(
+    jurisdiction_code: str, visa_category_code: str, action_code: str
+) -> dict[str, Any]:
     import yaml
+
     from torii_api.services.content_packs import resolve_packs_dir
 
     try:
@@ -702,10 +709,18 @@ def _fallback_pack(jurisdiction_code: str, visa_category_code: str, action_code:
         jur_dir = packs_dir / jurisdiction_code.lower()
         candidates = [
             jur_dir / f"{visa_category_code}.{action_code}.yml",
-            jur_dir / f"{visa_category_code}.new_application.yml" if action_code in ("new", "new_application") else None,
-            jur_dir / f"{visa_category_code}.new.yml" if action_code in ("new", "new_application") else None,
-            jur_dir / f"{visa_category_code}.renewal.yml" if action_code in ("renewal", "extension") else None,
-            jur_dir / f"{visa_category_code}.change_of_status.yml" if action_code == "change_of_status" else None,
+            jur_dir / f"{visa_category_code}.new_application.yml"
+            if action_code in ("new", "new_application")
+            else None,
+            jur_dir / f"{visa_category_code}.new.yml"
+            if action_code in ("new", "new_application")
+            else None,
+            jur_dir / f"{visa_category_code}.renewal.yml"
+            if action_code in ("renewal", "extension")
+            else None,
+            jur_dir / f"{visa_category_code}.change_of_status.yml"
+            if action_code == "change_of_status"
+            else None,
         ]
         for cand in candidates:
             if cand and cand.is_file():
@@ -755,14 +770,18 @@ async def get_scope_details(
         )
 
     actions_result = await session.scalars(
-        select(CaseAction).where(CaseAction.jurisdiction_id == jurisdiction.id).order_by(CaseAction.id)
+        select(CaseAction)
+        .where(CaseAction.jurisdiction_id == jurisdiction.id)
+        .order_by(CaseAction.id)
     )
     all_actions = list(actions_result.all())
 
     # Find active action
     active_action: CaseAction | None = None
     if action_code:
-        active_action = next((a for a in all_actions if a.code.lower() == action_code.lower()), None)
+        active_action = next(
+            (a for a in all_actions if a.code.lower() == action_code.lower()), None
+        )
     if active_action is None and all_actions:
         active_action = next(
             (a for a in all_actions if a.code in ("new_application", "new")), all_actions[0]
@@ -806,15 +825,17 @@ async def get_scope_details(
         )
         for f in forms_rows:
             pdf_info = _get_pdf_info(f.code, f.citation)
-            form_templates.append({
-                "code": f.code,
-                "version": f.version,
-                "official_title": f.official_title,
-                "citation": f.citation or {},
-                "field_mappings": f.field_mappings or [],
-                "is_live": f.is_live,
-                **pdf_info,
-            })
+            form_templates.append(
+                {
+                    "code": f.code,
+                    "version": f.version,
+                    "official_title": f.official_title,
+                    "citation": f.citation or {},
+                    "field_mappings": f.field_mappings or [],
+                    "is_live": f.is_live,
+                    **pdf_info,
+                }
+            )
 
         # 4. Rules
         rule_row = await session.scalar(
@@ -828,7 +849,12 @@ async def get_scope_details(
             eligibility_rules = list(rule_row.rules)
 
         # Fallback if empty
-        if not intake_questions or not doc_requirements or not form_templates or not eligibility_rules:
+        if (
+            not intake_questions
+            or not doc_requirements
+            or not form_templates
+            or not eligibility_rules
+        ):
             fallback = _fallback_pack(jurisdiction.code, vc.code, active_action.code)
             if not intake_questions and fallback.get("questions"):
                 intake_questions = fallback["questions"]
@@ -859,7 +885,9 @@ async def get_scope_details(
             "name": active_action.name,
             "description": active_action.description or "",
             "is_enabled": active_action.is_enabled,
-        } if active_action else None,
+        }
+        if active_action
+        else None,
         available_actions=[
             {
                 "id": a.id,
@@ -1050,11 +1078,15 @@ async def upload_form_template_pdf(
     # Also update DB row citation if exists
     form_query = select(FormTemplate).where(FormTemplate.code.ilike(code))
     if jurisdiction_code:
-        jur = await session.scalar(select(Jurisdiction).where(Jurisdiction.code == jurisdiction_code.upper()))
+        jur = await session.scalar(
+            select(Jurisdiction).where(Jurisdiction.code == jurisdiction_code.upper())
+        )
         if jur:
             form_query = form_query.where(FormTemplate.jurisdiction_id == jur.id)
     if visa_category_code:
-        vc = await session.scalar(select(VisaCategory).where(VisaCategory.code == visa_category_code.lower()))
+        vc = await session.scalar(
+            select(VisaCategory).where(VisaCategory.code == visa_category_code.lower())
+        )
         if vc:
             form_query = form_query.where(FormTemplate.visa_category_id == vc.id)
 
@@ -1108,32 +1140,28 @@ async def list_all_form_templates(
     session: SessionDep,
 ) -> list[dict[str, Any]]:
     """List all form templates across all jurisdictions with PDF status."""
-    templates = (
-        await session.scalars(
-            select(FormTemplate).order_by(FormTemplate.code)
-        )
-    ).all()
+    templates = (await session.scalars(select(FormTemplate).order_by(FormTemplate.code))).all()
     out = []
     for t in templates:
         pdf_info = _get_pdf_info(t.code, t.citation)
         jur = await session.get(Jurisdiction, t.jurisdiction_id) if t.jurisdiction_id else None
         vc = await session.get(VisaCategory, t.visa_category_id) if t.visa_category_id else None
         ca = await session.get(CaseAction, t.case_action_id) if t.case_action_id else None
-        out.append({
-            "id": t.id,
-            "code": t.code,
-            "version": t.version,
-            "official_title": t.official_title,
-            "is_live": t.is_live,
-            "jurisdiction_code": jur.code if jur else None,
-            "jurisdiction_name": jur.name if jur else None,
-            "visa_category_code": vc.code if vc else None,
-            "visa_category_name": vc.name if vc else None,
-            "action_code": ca.code if ca else None,
-            "action_name": ca.name if ca else None,
-            "field_mappings": t.field_mappings or [],
-            **pdf_info,
-        })
+        out.append(
+            {
+                "id": t.id,
+                "code": t.code,
+                "version": t.version,
+                "official_title": t.official_title,
+                "is_live": t.is_live,
+                "jurisdiction_code": jur.code if jur else None,
+                "jurisdiction_name": jur.name if jur else None,
+                "visa_category_code": vc.code if vc else None,
+                "visa_category_name": vc.name if vc else None,
+                "action_code": ca.code if ca else None,
+                "action_name": ca.name if ca else None,
+                "field_mappings": t.field_mappings or [],
+                **pdf_info,
+            }
+        )
     return out
-
-

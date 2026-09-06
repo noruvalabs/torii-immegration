@@ -136,7 +136,9 @@ async def get_credit_balance(
             feature=tx.feature,
             case_id=tx.case_id,
             description=tx.description,
-            created_at=tx.created_at.isoformat() if hasattr(tx, "created_at") and tx.created_at else "",
+            created_at=tx.created_at.isoformat()
+            if hasattr(tx, "created_at") and tx.created_at
+            else "",
         )
         for tx in tx_list
     ]

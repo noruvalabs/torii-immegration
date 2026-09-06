@@ -244,4 +244,3 @@ async def test_intake_global_profile_sync_and_prefill(
     me_resp = await client.get("/v1/auth/me", headers=headers)
     assert me_resp.status_code == 200
     assert me_resp.json()["passport_number"] == "NEWPASS999"
-

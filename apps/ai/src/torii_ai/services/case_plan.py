@@ -268,7 +268,9 @@ class AICasePlanner:
         than one that simply repeats the applicant's own checklist in the right order.
         """
         open_tasks = [task for task in req.external_tasks if _is_open(task)]
-        open_required = [item for item in req.checklist if _is_open(item) and item.get("is_required", True)]
+        open_required = [
+            item for item in req.checklist if _is_open(item) and item.get("is_required", True)
+        ]
         filing_steps = [
             stage for stage in req.stages if str(stage.get("key") or "").startswith("filing")
         ]

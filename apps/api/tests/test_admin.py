@@ -248,13 +248,19 @@ async def test_admin_scope_details_get_and_put(client: AsyncClient, engine: Asyn
     await _seed_admin(engine)
     async with engine.begin() as conn:
         await conn.execute(
-            text("INSERT INTO jurisdictions (id, code, name, is_live) VALUES (99, 'TEST', 'Testland', 1)")
+            text(
+                "INSERT INTO jurisdictions (id, code, name, is_live) VALUES (99, 'TEST', 'Testland', 1)"
+            )
         )
         await conn.execute(
-            text("INSERT INTO visa_categories (id, jurisdiction_id, code, name, is_enabled) VALUES (991, 99, 'work', 'Work Visa', 1)")
+            text(
+                "INSERT INTO visa_categories (id, jurisdiction_id, code, name, is_enabled) VALUES (991, 99, 'work', 'Work Visa', 1)"
+            )
         )
         await conn.execute(
-            text("INSERT INTO case_actions (id, jurisdiction_id, code, name, is_enabled) VALUES (992, 99, 'new', 'New Application', 1)")
+            text(
+                "INSERT INTO case_actions (id, jurisdiction_id, code, name, is_enabled) VALUES (992, 99, 'new', 'New Application', 1)"
+            )
         )
 
     login = await client.post(
@@ -293,7 +299,9 @@ async def test_admin_scope_details_get_and_put(client: AsyncClient, engine: Asyn
                     "code": "form_01",
                     "version": "1.0",
                     "official_title": "Official Test Form",
-                    "field_mappings": [{"form_field": "f1", "answer_key": "test_q", "required": True}],
+                    "field_mappings": [
+                        {"form_field": "f1", "answer_key": "test_q", "required": True}
+                    ],
                 }
             ],
             "eligibility_rules": [
@@ -312,7 +320,9 @@ async def test_admin_scope_details_get_and_put(client: AsyncClient, engine: Asyn
     assert len(saved["eligibility_rules"]) == 1
 
 
-async def test_admin_form_template_pdf_upload_and_download(client: AsyncClient, engine: AsyncEngine) -> None:
+async def test_admin_form_template_pdf_upload_and_download(
+    client: AsyncClient, engine: AsyncEngine
+) -> None:
     await _seed_admin(engine)
     login = await client.post(
         "/v1/auth/login",
@@ -321,6 +331,7 @@ async def test_admin_form_template_pdf_upload_and_download(client: AsyncClient, 
     token = login.json()["access_token"]
 
     import io
+
     from reportlab.pdfgen import canvas
 
     buf = io.BytesIO()
@@ -345,5 +356,3 @@ async def test_admin_form_template_pdf_upload_and_download(client: AsyncClient, 
     assert get_resp.status_code == 200
     assert get_resp.headers["content-type"] == "application/pdf"
     assert len(get_resp.content) > 0
-
-

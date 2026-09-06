@@ -109,7 +109,10 @@ def build_payload(
         "case_reference": journey.get("reference") or "",
         "intake_answers": _useful_answers(answers),
         "checklist": [
-            {"name": _trim(item.get("name"), 120), "is_required": bool(item.get("is_required", True))}
+            {
+                "name": _trim(item.get("name"), 120),
+                "is_required": bool(item.get("is_required", True)),
+            }
             for item in checklist
             if _is_open(item)
         ][:_MAX_OPEN_DOCUMENTS],
@@ -154,7 +157,9 @@ def offline_plan(payload: dict[str, Any]) -> dict[str, Any]:
     than a judgement about it. Nothing here is asserted that the case did not already say.
     """
     open_tasks = [
-        task for task in payload.get("external_tasks") or [] if _is_open(task) and task.get("lead_time")
+        task
+        for task in payload.get("external_tasks") or []
+        if _is_open(task) and task.get("lead_time")
     ]
     open_documents = [
         item for item in payload.get("checklist") or [] if item.get("is_required", True)

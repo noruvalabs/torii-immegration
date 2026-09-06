@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from typing import Any
+
 from pydantic import BaseModel, Field
 
 from torii_ai.config import Settings
@@ -49,17 +50,35 @@ class AIDocDrafter:
 
     async def draft_document(self, req: AIDraftRequest) -> dict[str, Any]:
         doc_type = req.doc_type.lower()
-        title = DOC_TITLES.get(doc_type, f"Official Document ({doc_type.replace('_', ' ').title()})")
+        title = DOC_TITLES.get(
+            doc_type, f"Official Document ({doc_type.replace('_', ' ').title()})"
+        )
         answers = req.intake_answers or {}
         full_name = str(answers.get("full_name") or answers.get("applicant_name") or "Applicant")
         passport_no = str(answers.get("passport_number") or answers.get("passport_no") or "—")
         nationality = str(answers.get("nationality") or answers.get("citizenship") or "—")
-        current_country = str(answers.get("current_country") or answers.get("current_residence_country") or nationality)
-        purpose = str(answers.get("main_purpose") or answers.get("purpose_of_visit") or "Official visa application and stay")
-        employer = str(answers.get("employer_name") or answers.get("company_name") or "Sponsoring Organization")
+        current_country = str(
+            answers.get("current_country")
+            or answers.get("current_residence_country")
+            or nationality
+        )
+        purpose = str(
+            answers.get("main_purpose")
+            or answers.get("purpose_of_visit")
+            or "Official visa application and stay"
+        )
+        employer = str(
+            answers.get("employer_name") or answers.get("company_name") or "Sponsoring Organization"
+        )
         salary = str(answers.get("monthly_salary") or answers.get("remuneration") or "—")
-        stay_days = str(answers.get("stay_duration_days") or answers.get("intended_length_of_stay_days") or "15")
-        arrival_date = str(answers.get("planned_arrival_date") or answers.get("start_date") or datetime.now(UTC).strftime("%Y-%m-%d"))
+        stay_days = str(
+            answers.get("stay_duration_days") or answers.get("intended_length_of_stay_days") or "15"
+        )
+        arrival_date = str(
+            answers.get("planned_arrival_date")
+            or answers.get("start_date")
+            or datetime.now(UTC).strftime("%Y-%m-%d")
+        )
 
         system_prompt = (
             "You are an elite, highly credentialed immigration legal specialist and administrative scrivener (行政書士). "
@@ -88,7 +107,7 @@ APPLICANT PROFILE & INTAKE DATA:
 - All Intake Key-Values: {answers}
 
 VERIFIED ENCLOSED DOCUMENTS:
-{[c.get('name') for c in req.checklist if c.get('status') != 'needed'] or ['Original Passport', 'Application Form', 'Financial Certificates', 'Employment Certificate']}
+{[c.get("name") for c in req.checklist if c.get("status") != "needed"] or ["Original Passport", "Application Form", "Financial Certificates", "Employment Certificate"]}
 
 ADDITIONAL INSTRUCTIONS:
 {req.custom_instructions or "Ensure high legal precision and full adherence to immigration compliance norms."}
@@ -110,7 +129,20 @@ Please generate the complete, ready-to-file text of the {title}.
             pass
 
         # Fallback tailored text synthesis
-        fallback_text = self._build_fallback(doc_type, req, title, full_name, passport_no, nationality, current_country, purpose, employer, salary, stay_days, arrival_date)
+        fallback_text = self._build_fallback(
+            doc_type,
+            req,
+            title,
+            full_name,
+            passport_no,
+            nationality,
+            current_country,
+            purpose,
+            employer,
+            salary,
+            stay_days,
+            arrival_date,
+        )
         return {
             "doc_type": doc_type,
             "title": title,
@@ -136,11 +168,14 @@ Please generate the complete, ready-to-file text of the {title}.
     ) -> str:
         date_str = datetime.now(UTC).strftime("%B %d, %Y")
         checklist_items = [
-            f"   {i+1}. {c.get('name', 'Document')} (Verified & Attached)"
+            f"   {i + 1}. {c.get('name', 'Document')} (Verified & Attached)"
             for i, c in enumerate(req.checklist)
             if c.get("status") != "needed"
         ]
-        doc_list_str = "\n".join(checklist_items) or "   1. Valid Original Passport & Bio-Data Photocopies\n   2. Official Visa Application Form (Signed)\n   3. Day-by-Day Schedule of Stay (Itinerary Table)\n   4. Bank Statements / Proof of Financial Solvency\n   5. Employment Certificate / Business Registration"
+        doc_list_str = (
+            "\n".join(checklist_items)
+            or "   1. Valid Original Passport & Bio-Data Photocopies\n   2. Official Visa Application Form (Signed)\n   3. Day-by-Day Schedule of Stay (Itinerary Table)\n   4. Bank Statements / Proof of Financial Solvency\n   5. Employment Certificate / Business Registration"
+        )
 
         if doc_type in ("reason_letter_work_hiring", "hiring_reason"):
             return f"""================================================================================

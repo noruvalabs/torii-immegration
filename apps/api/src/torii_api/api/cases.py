@@ -953,9 +953,7 @@ async def list_cases(
         {
             a.id: a
             for a in (
-                await session.scalars(
-                    select(CaseAction).where(CaseAction.id.in_(case_action_ids))
-                )
+                await session.scalars(select(CaseAction).where(CaseAction.id.in_(case_action_ids)))
             ).all()
         }
         if case_action_ids
@@ -1050,7 +1048,12 @@ async def get_intake(
 INTAKE_KEY_ALIASES: dict[str, list[str]] = {
     "corporate_number": ["employer_corporate_number", "company_number", "organization_number"],
     "employer_corporate_number": ["corporate_number", "company_number", "organization_number"],
-    "employer_name": ["company_name", "sponsoring_organization", "host_company_name", "sponsor_name"],
+    "employer_name": [
+        "company_name",
+        "sponsoring_organization",
+        "host_company_name",
+        "sponsor_name",
+    ],
     "company_name": ["employer_name", "sponsoring_organization", "sponsor_name"],
     "sponsor_name": ["employer_name", "company_name", "sponsoring_organization"],
     "monthly_salary": ["salary_monthly", "income_monthly", "salary"],
@@ -1061,14 +1064,50 @@ INTAKE_KEY_ALIASES: dict[str, list[str]] = {
     "attendance_percentage": ["attendance_rate", "school_attendance_rate"],
     "purpose_of_visit": ["main_purpose", "purpose", "visit_purpose"],
     "main_purpose": ["purpose_of_visit", "purpose", "visit_purpose"],
-    "intended_length_of_stay_days": ["stay_duration_days", "length_of_stay_days", "stay_days", "duration_of_stay"],
-    "stay_duration_days": ["intended_length_of_stay_days", "length_of_stay_days", "stay_days", "duration_of_stay"],
-    "length_of_stay_days": ["intended_length_of_stay_days", "stay_duration_days", "stay_days", "duration_of_stay"],
-    "stay_days": ["intended_length_of_stay_days", "stay_duration_days", "length_of_stay_days", "duration_of_stay"],
-    "support_type": ["financial_support_type", "visitor_has_sufficient_funds", "has_sufficient_funds"],
-    "financial_support_type": ["support_type", "visitor_has_sufficient_funds", "has_sufficient_funds"],
-    "visitor_has_sufficient_funds": ["has_sufficient_funds", "support_type", "financial_support_type"],
-    "has_sufficient_funds": ["visitor_has_sufficient_funds", "support_type", "financial_support_type"],
+    "intended_length_of_stay_days": [
+        "stay_duration_days",
+        "length_of_stay_days",
+        "stay_days",
+        "duration_of_stay",
+    ],
+    "stay_duration_days": [
+        "intended_length_of_stay_days",
+        "length_of_stay_days",
+        "stay_days",
+        "duration_of_stay",
+    ],
+    "length_of_stay_days": [
+        "intended_length_of_stay_days",
+        "stay_duration_days",
+        "stay_days",
+        "duration_of_stay",
+    ],
+    "stay_days": [
+        "intended_length_of_stay_days",
+        "stay_duration_days",
+        "length_of_stay_days",
+        "duration_of_stay",
+    ],
+    "support_type": [
+        "financial_support_type",
+        "visitor_has_sufficient_funds",
+        "has_sufficient_funds",
+    ],
+    "financial_support_type": [
+        "support_type",
+        "visitor_has_sufficient_funds",
+        "has_sufficient_funds",
+    ],
+    "visitor_has_sufficient_funds": [
+        "has_sufficient_funds",
+        "support_type",
+        "financial_support_type",
+    ],
+    "has_sufficient_funds": [
+        "visitor_has_sufficient_funds",
+        "support_type",
+        "financial_support_type",
+    ],
     "passport_number": ["passport_no", "passport"],
     "passport_no": ["passport_number", "passport"],
     "birth_date": ["date_of_birth", "dob"],
@@ -1156,6 +1195,7 @@ async def answer_intake(
         # Check statutory form questions from _form_questions.yml
         try:
             from torii_api.services.jp_official_forms import _load_question_specs
+
             specs = _load_question_specs()
             spec = specs.get(target_key)
             if spec is None:
@@ -1165,6 +1205,7 @@ async def answer_intake(
                         break
             if spec is not None:
                 from torii_api.services.intake import IntakeQuestion
+
                 question = IntakeQuestion(
                     key=target_key,
                     prompt=spec.prompt,

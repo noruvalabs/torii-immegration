@@ -286,7 +286,9 @@ def _rule_applies(
             if key in job_offer_dependent_keys:
                 return False
 
-        has_fin_support = answers.get("has_financial_support") or answers.get("has_financial_evidence")
+        has_fin_support = answers.get("has_financial_support") or answers.get(
+            "has_financial_evidence"
+        )
         if has_fin_support is False or str(has_fin_support).strip().lower() in ("false", "no", "0"):
             sponsor_dependent_keys = {
                 "sponsor_type",

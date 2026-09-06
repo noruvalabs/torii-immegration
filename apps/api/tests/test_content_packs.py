@@ -85,10 +85,7 @@ def test_tourist_nationality_rule_evaluates_against_the_answer_intake_collects()
     pack = load_pack_by_scope("jp/tourist.new_application")
     # What the applicant is actually asked is the pack's own questions plus the items the
     # consular form adds, which is where the graded declarations come from.
-    asked = {
-        q["key"]
-        for q in merge_form_questions(pack.questions, "tourist", "new_application")
-    }
+    asked = {q["key"] for q in merge_form_questions(pack.questions, "tourist", "new_application")}
     for rule in pack.rules:
         assert rule["key"] in asked, f"rule '{rule['key']}' keys on a question nobody is asked"
 
@@ -182,12 +179,14 @@ def test_the_bundles_nest_the_way_the_ministry_describes_them() -> None:
     """Category 4 is category 3 plus the evidence that its withholding summary is absent."""
     from torii_api.services.checklist import visible_requirement_items
 
-    three = {item.code for item in visible_requirement_items(
-        _coe_documents(), {"employer_category": "category_3"}
-    )}
-    four = {item.code for item in visible_requirement_items(
-        _coe_documents(), {"employer_category": "category_4"}
-    )}
+    three = {
+        item.code
+        for item in visible_requirement_items(_coe_documents(), {"employer_category": "category_3"})
+    }
+    four = {
+        item.code
+        for item in visible_requirement_items(_coe_documents(), {"employer_category": "category_4"})
+    }
     # Everything substantive that category 3 gathers, category 4 gathers too.
     assert three - {"withholding_summary"} <= four
     assert "no_withholding_summary_reason" in four - three
@@ -219,9 +218,7 @@ def test_the_category_question_is_asked_before_its_documents_are_gated_on_it() -
         documents = pack.get("documents") or {}
         items = documents.get("items") or documents.get("requirements") or []
         gated_on = {
-            str((item.get("show_when") or {}).get("key"))
-            for item in items
-            if item.get("show_when")
+            str((item.get("show_when") or {}).get("key")) for item in items if item.get("show_when")
         }
         assert gated_on <= asked, f"{path.name}: gated on unasked answers: {gated_on - asked}"
 
@@ -290,7 +287,11 @@ def test_a_short_stay_applicant_gathers_the_bundle_for_their_own_trip() -> None:
         return {item.code for item in visible_requirement_items(documents, answers)}
 
     tourist = codes(
-        {"purpose_of_visit": "tourism", "trip_payer": "self_funded", "employment_status": "employed"}
+        {
+            "purpose_of_visit": "tourism",
+            "trip_payer": "self_funded",
+            "employment_status": "employed",
+        }
     )
     visit = codes(
         {
@@ -366,9 +367,9 @@ def test_the_two_work_scopes_share_the_employer_category_bundle() -> None:
     import yaml
 
     def codes(scope: str) -> set[str]:
-        items = yaml.safe_load(
-            (PACKS / "jp" / f"{scope}.yml").read_text(encoding="utf-8")
-        )["documents"]["items"]
+        items = yaml.safe_load((PACKS / "jp" / f"{scope}.yml").read_text(encoding="utf-8"))[
+            "documents"
+        ]["items"]
         return {item["code"] for item in items if item.get("show_when")}
 
     assert codes("work.new_application") == codes("work.change_of_status")

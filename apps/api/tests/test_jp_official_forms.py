@@ -722,14 +722,17 @@ def test_a_revised_template_is_a_queued_review_rather_than_a_red_suite() -> None
             status=STATUS_REVISED,
         )
         assert record.needs_review is True
-    assert RevisionRecord(
-        code="jp_work_extension",
-        pdf_url="",
-        sha256="same",
-        pages=7,
-        verified_sha256="same",
-        status=STATUS_CURRENT,
-    ).needs_review is False
+    assert (
+        RevisionRecord(
+            code="jp_work_extension",
+            pdf_url="",
+            sha256="same",
+            pages=7,
+            verified_sha256="same",
+            status=STATUS_CURRENT,
+        ).needs_review
+        is False
+    )
 
 
 def test_the_recorded_queue_is_readable_and_currently_clear() -> None:

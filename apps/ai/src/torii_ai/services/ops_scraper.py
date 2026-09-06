@@ -603,11 +603,7 @@ def _normalize_item_citation(
     version: str,
 ) -> None:
     item_key = str(
-        item.get("key")
-        or item.get("code")
-        or item.get("name")
-        or item.get("official_title")
-        or ""
+        item.get("key") or item.get("code") or item.get("name") or item.get("official_title") or ""
     )
     specific = resolve_official_citation(
         jurisdiction_code=jurisdiction_code,
@@ -888,7 +884,11 @@ def _fallback_structured_data(
             "citation": resolve_official_citation(
                 jurisdiction_code=jurisdiction_code,
                 visa_category=visa_category,
-                item_key_or_code="work" if "work" in visa_category.lower() else "student" if "student" in visa_category.lower() else "tourist",
+                item_key_or_code="work"
+                if "work" in visa_category.lower()
+                else "student"
+                if "student" in visa_category.lower()
+                else "tourist",
                 default_version=now_str,
             ),
         }

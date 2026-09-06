@@ -332,14 +332,30 @@ async def delete_jurisdiction(
         )
 
     # Clean up associated configuration and definition records
-    await session.execute(delete(ScopeResearch).where(ScopeResearch.jurisdiction_id == jurisdiction_id))
-    await session.execute(delete(PackOverride).where(PackOverride.jurisdiction_id == jurisdiction_id))
-    await session.execute(delete(FormTemplate).where(FormTemplate.jurisdiction_id == jurisdiction_id))
-    await session.execute(delete(DocumentRequirementSet).where(DocumentRequirementSet.jurisdiction_id == jurisdiction_id))
-    await session.execute(delete(EligibilityRuleSet).where(EligibilityRuleSet.jurisdiction_id == jurisdiction_id))
-    await session.execute(delete(IntakeDefinition).where(IntakeDefinition.jurisdiction_id == jurisdiction_id))
+    await session.execute(
+        delete(ScopeResearch).where(ScopeResearch.jurisdiction_id == jurisdiction_id)
+    )
+    await session.execute(
+        delete(PackOverride).where(PackOverride.jurisdiction_id == jurisdiction_id)
+    )
+    await session.execute(
+        delete(FormTemplate).where(FormTemplate.jurisdiction_id == jurisdiction_id)
+    )
+    await session.execute(
+        delete(DocumentRequirementSet).where(
+            DocumentRequirementSet.jurisdiction_id == jurisdiction_id
+        )
+    )
+    await session.execute(
+        delete(EligibilityRuleSet).where(EligibilityRuleSet.jurisdiction_id == jurisdiction_id)
+    )
+    await session.execute(
+        delete(IntakeDefinition).where(IntakeDefinition.jurisdiction_id == jurisdiction_id)
+    )
     await session.execute(delete(CaseAction).where(CaseAction.jurisdiction_id == jurisdiction_id))
-    await session.execute(delete(VisaCategory).where(VisaCategory.jurisdiction_id == jurisdiction_id))
+    await session.execute(
+        delete(VisaCategory).where(VisaCategory.jurisdiction_id == jurisdiction_id)
+    )
     await session.delete(jurisdiction)
     await session.flush()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
