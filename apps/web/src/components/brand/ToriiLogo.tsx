@@ -56,6 +56,7 @@ export function ToriiLogo({
     variant === "image" ? (
       <>
         {/* Light theme: Deep navy mark */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={BRAND_ASSETS.glyphTransparent}
           alt="Torii Logo"
@@ -63,6 +64,7 @@ export function ToriiLogo({
           style={dimensionStyle}
         />
         {/* Dark theme: Clean white mark */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={BRAND_ASSETS.glyphLightTransparent}
           alt="Torii Logo"
@@ -78,6 +80,7 @@ export function ToriiLogo({
         )}
         style={{ width: dimensionStyle.height, height: dimensionStyle.height }}
       >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={BRAND_ASSETS.glyphLightTransparent}
           alt="Torii Logo"

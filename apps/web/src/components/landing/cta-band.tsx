@@ -1,5 +1,6 @@
 "use client";
 
+import { Check } from "lucide-react";
 import { Reveal } from "./reveal";
 import { StartCaseButton } from "./start-case-button";
 import { useLang } from "./i18n";
@@ -10,25 +11,45 @@ export function CtaBand() {
   const t = dictionary[lang];
 
   return (
-    <section className="mx-auto max-w-6xl px-6 py-20 sm:py-28">
-      <Reveal className="relative overflow-hidden rounded-[var(--radius-lg)] bg-[var(--color-ink)] px-8 py-16 sm:px-16 sm:py-20">
-        <div
-          aria-hidden
-          className="animate-blob-drift pointer-events-none absolute -right-16 -top-24 size-[24rem] rounded-full bg-primary/30 blur-[90px]"
-        />
-        <div
-          aria-hidden
-          className="animate-blob-drift-slow pointer-events-none absolute -bottom-24 -left-16 size-[20rem] rounded-full bg-white/10 blur-[90px]"
-        />
+    <section className="mx-auto max-w-6xl px-6 pb-24 pt-4 sm:pb-28 lg:px-8">
+      <Reveal direction="scale" className="relative">
+        <div className="relative overflow-hidden rounded-3xl bg-ink px-8 py-14 sm:px-14 sm:py-18">
+          <div
+            aria-hidden
+            className="animate-blob-drift pointer-events-none absolute -right-20 -top-28 size-96 rounded-full bg-primary/30 blur-[90px]"
+          />
+          <div
+            aria-hidden
+            className="animate-blob-drift-slow pointer-events-none absolute -bottom-28 -left-20 size-80 rounded-full bg-white/10 blur-[90px]"
+          />
+          <div className="relative flex flex-col items-start gap-9 sm:flex-row sm:items-center sm:justify-between sm:gap-12">
+            <div>
+              <h2 className="text-display max-w-md text-3xl font-semibold text-ink-foreground sm:text-4xl">
+                {t.ctaBand.title}
+              </h2>
+              <p className="mt-4 max-w-md text-base leading-relaxed text-ink-foreground/70">
+                {t.ctaBand.body}
+              </p>
+            </div>
 
-        <div className="relative flex flex-col items-start gap-8 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h2 className="text-3xl font-semibold tracking-tight text-[var(--color-ink-foreground)] sm:text-4xl">
-              {t.ctaBand.title}
-            </h2>
-            <p className="mt-3 max-w-md text-base text-[var(--color-ink-foreground)]/75">{t.ctaBand.body}</p>
+            <div className="shrink-0">
+              <StartCaseButton
+                signedOutLabel={t.ctaBand.cta}
+                className="animate-sheen h-12 overflow-hidden px-6 text-[0.9375rem]"
+              />
+              <ul className="mt-4 space-y-1.5">
+                {t.cta.reassure.map((item) => (
+                  <li
+                    key={item}
+                    className="flex items-center gap-2 text-xs text-ink-foreground/65"
+                  >
+                    <Check className="size-3.5 shrink-0 text-emerald-400" />
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </div>
           </div>
-          <StartCaseButton signedOutLabel={t.ctaBand.cta} className="shrink-0 shadow-lg" />
         </div>
       </Reveal>
     </section>

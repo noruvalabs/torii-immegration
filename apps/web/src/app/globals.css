@@ -36,6 +36,12 @@
   --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, monospace;
   --font-serif: var(--font-instrument-serif), ui-serif, Georgia, serif;
+
+  /* Motion curves. One decelerating curve for everything that enters and one softer one
+     for hover and state changes, so the whole page moves with a single accent. */
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+  --ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
 }
 
 /* Dark theme — driven by next-themes stamping `class="dark"` on <html>. */
@@ -71,6 +77,8 @@
 
 html {
   scroll-behavior: smooth;
+  /* Anchored sections must clear the floating header rather than hide behind it. */
+  scroll-padding-top: 6rem;
 }
 
 body {
@@ -84,6 +92,15 @@ body {
   background-color: var(--color-torii);
   color: var(--color-torii-foreground);
 }
+
+/* Marketing headlines set tight and balanced; the default tracking reads loose at display
+   sizes, and an unbalanced last line reads as a mistake. */
+.text-display {
+  letter-spacing: -0.025em;
+  text-wrap: balance;
+}
+
+/* ─── Ambient surfaces ────────────────────────────────────────────────────────── */
 
 /* Slowly panning gradient mesh used behind marketing hero surfaces. Visible in both themes. */
 .bg-mesh-gradient {
@@ -99,6 +116,60 @@ body {
 .dark .bg-mesh-gradient {
   opacity: 0.24;
 }
+
+/* ─── Elevation ───────────────────────────────────────────────────────────────── */
+
+/* Two elevations for the whole page, so panels relate to each other instead of each one
+   picking its own shadow. Both carry a top inner hairline, which is what makes a surface
+   read as lit rather than as a box with a blur under it. */
+.shadow-panel {
+  box-shadow:
+    0 1px 0 0 rgb(255 255 255 / 0.6) inset,
+    0 1px 2px 0 rgb(15 23 42 / 0.04),
+    0 8px 24px -12px rgb(15 23 42 / 0.12);
+}
+
+.shadow-panel-lg {
+  box-shadow:
+    0 1px 0 0 rgb(255 255 255 / 0.6) inset,
+    0 2px 4px -1px rgb(15 23 42 / 0.05),
+    0 24px 48px -20px rgb(15 23 42 / 0.22);
+}
+
+.dark .shadow-panel {
+  box-shadow:
+    0 1px 0 0 rgb(255 255 255 / 0.05) inset,
+    0 8px 24px -12px rgb(0 0 0 / 0.6);
+}
+
+.dark .shadow-panel-lg {
+  box-shadow:
+    0 1px 0 0 rgb(255 255 255 / 0.06) inset,
+    0 24px 56px -20px rgb(0 0 0 / 0.75);
+}
+
+/* A gradient hairline for the one card in a row that should be picked out — drawn inside
+   the border box so it never shifts the card's layout. */
+.ring-gradient {
+  position: relative;
+}
+
+.ring-gradient::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(160deg, var(--color-primary), transparent 45%, var(--color-primary) 100%);
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* ─── Keyframes ───────────────────────────────────────────────────────────────── */
 
 @keyframes hero-progress {
   from {
@@ -121,7 +192,7 @@ body {
 }
 
 .animate-step-in {
-  animation: step-in 0.35s ease-out both;
+  animation: step-in 0.35s var(--ease-out-quart) both;
 }
 
 @keyframes blob-drift {
@@ -173,7 +244,7 @@ body {
 }
 
 /* A slow vertical drift, for the one element on the page that should feel alive rather
-   than decorated — the product demo the hero is arguing for. */
+   than decorated. */
 @keyframes float-y {
   0%,
   100% {
@@ -210,18 +281,131 @@ body {
   pointer-events: none;
 }
 
-/* Scroll-reveal: toggled by the Reveal component once an element enters the viewport. */
+/* A live-status dot: a solid core with a ring expanding out of it. Easier to read at a
+   glance than a pulsing opacity, and it never dims the dot itself. */
+@keyframes ping-ring {
+  0% {
+    transform: scale(1);
+    opacity: 0.55;
+  }
+  70%,
+  100% {
+    transform: scale(2.4);
+    opacity: 0;
+  }
+}
+
+.animate-ping-ring {
+  position: relative;
+}
+
+.animate-ping-ring::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background-color: currentColor;
+  animation: ping-ring 2.4s var(--ease-out-quart) infinite;
+}
+
+/* A single edge-to-edge pass of light, used along the top of the header once it docks. */
+@keyframes trace-x {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.animate-trace-x {
+  animation: trace-x 3.5s var(--ease-out-quart) infinite;
+}
+
+/* Continuous horizontal scroll for the proof strip. The track holds its content twice, so
+   translating by half the track width loops seamlessly. */
+@keyframes marquee-x {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.animate-marquee-x {
+  animation: marquee-x 34s linear infinite;
+}
+
+.marquee-mask {
+  mask-image: linear-gradient(to right, transparent, black 8%, black 92%, transparent);
+}
+
+/* ─── Scroll reveal ──────────────────────────────────────────────────────────── */
+
+/* Toggled by the Reveal component once an element enters the viewport. The base is a rise;
+   the modifiers change only the starting transform, so every reveal on the page shares one
+   duration and one curve. */
 .reveal {
   opacity: 0;
   transform: translateY(16px);
   transition:
-    opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1),
-    transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+    opacity 0.7s var(--ease-out-expo),
+    transform 0.7s var(--ease-out-expo),
+    filter 0.7s var(--ease-out-expo);
 }
 
-.reveal-visible {
+.reveal-blur {
+  filter: blur(6px);
+}
+
+/* Opacity only. For cards that sit shoulder to shoulder in a row. */
+.reveal-fade {
+  transform: none;
+}
+
+.reveal-left {
+  transform: translateX(-20px);
+}
+
+.reveal-right {
+  transform: translateX(20px);
+}
+
+.reveal-scale {
+  transform: scale(0.97) translateY(12px);
+}
+
+.reveal-visible,
+.reveal-visible.reveal-left,
+.reveal-visible.reveal-right,
+.reveal-visible.reveal-scale {
   opacity: 1;
-  transform: translateY(0);
+  transform: none;
+  filter: none;
+}
+
+/* ─── Accordion ──────────────────────────────────────────────────────────────── */
+
+/* Height is not animatable from `auto`, but a grid track is: the panel sits in a single
+   row that goes from 0fr to 1fr, which animates the real content height without measuring
+   it in JavaScript. */
+.accordion-panel {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.4s var(--ease-out-expo);
+}
+
+/* `min-height: 0` is load-bearing, not defensive: a grid item's automatic minimum size
+   is its content height, which holds the 0fr track open at full height and the panel
+   never closes. `overflow: hidden` then clips the content the collapsing track cuts off. */
+.accordion-panel > * {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.accordion-panel[data-open="true"] {
+  grid-template-rows: 1fr;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -231,11 +415,15 @@ body {
   .animate-gradient-pan,
   .animate-badge-pulse,
   .animate-float-y,
-  .animate-sheen::after {
+  .animate-trace-x,
+  .animate-marquee-x,
+  .animate-sheen::after,
+  .animate-ping-ring::after {
     animation: none;
   }
 
-  .animate-sheen::after {
+  .animate-sheen::after,
+  .animate-ping-ring::after {
     display: none;
   }
   [style*="hero-progress"] {
@@ -244,6 +432,13 @@ body {
   .reveal {
     opacity: 1;
     transform: none;
+    filter: none;
     transition: none;
+  }
+  .accordion-panel {
+    transition: none;
+  }
+  html {
+    scroll-behavior: auto;
   }
 }

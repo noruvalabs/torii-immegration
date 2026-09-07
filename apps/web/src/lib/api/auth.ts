@@ -63,10 +63,23 @@ export function login(emailOrUsername: string, password: string) {
   });
 }
 
-export function googleLogin(payload: { token?: string; email?: string; name?: string; avatar_url?: string }) {
+export function googleLogin(payload: {
+  token?: string;
+  code?: string;
+  redirect_uri?: string;
+  email?: string;
+  name?: string;
+  avatar_url?: string;
+}) {
   return request<AuthResponse>("/google", {
     method: "POST",
     body: JSON.stringify(payload),
+  });
+}
+
+export function getAuthConfig() {
+  return request<{ google_client_id: string | null; google_auth_enabled: boolean }>("/config", {
+    method: "GET",
   });
 }
 

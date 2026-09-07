@@ -4,14 +4,23 @@ import type { NextConfig } from "next";
 
 // Single env file for the whole monorepo (see /.env.example at the repo root) — Next.js only
 // auto-loads .env files from this app's own directory, so load the root one explicitly before
-// reading process.env below.
-loadEnvConfig(path.resolve(import.meta.dirname, "../.."));
+// reading process.env below. We pass forceReload=true so the root .env is merged even if
+// Next.js already ran an initial check on apps/web.
+loadEnvConfig(
+  path.resolve(import.meta.dirname, "../.."),
+  process.env.NODE_ENV !== "production",
+  undefined,
+  true,
+);
 
 const nextConfig: NextConfig = {
   // Standalone output keeps the production Docker image small (only the traced
   // server + its deps ship — see apps/web/Dockerfile).
   output: "standalone",
   reactStrictMode: true,
+  env: {
+    NEXT_PUBLIC_GOOGLE_CLIENT_ID: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID,
+  },
   async rewrites() {
     // Browser calls to /api/* are proxied to the FastAPI system of record. In dev this
     // points at the local API; in the container the edge (nginx) owns the routing, so

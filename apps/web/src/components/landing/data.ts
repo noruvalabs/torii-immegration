@@ -54,9 +54,9 @@ export const JP_ROUTE_ORDER: { id: JpRouteId; kanji: string }[] = [
   { id: "spouse", kanji: "日本人の配偶者等" },
 ];
 
-export type PricingTierId = "scope" | "guided" | "review";
+export type PricingTierId = "free" | "starter" | "standard" | "family";
 
-export const PRICING_TIER_ORDER: PricingTierId[] = ["scope", "guided", "review"];
+export const PRICING_TIER_ORDER: PricingTierId[] = ["free", "starter", "standard", "family"];
 
 export type BlogPostMeta = {
   slug: string;

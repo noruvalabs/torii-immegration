@@ -79,6 +79,19 @@ export default function CaseDetailPage() {
 
   useEffect(() => { void loadCase(); }, [loadCase]);
 
+  const refreshGuidance = useCallback(async () => {
+    if (!token) return;
+    try {
+      const g = await getCaseGuidance(token, caseId);
+      setGuidance(g);
+      const c = await getCase(token, caseId);
+      setCaseData(c);
+      return g;
+    } catch {
+      return null;
+    }
+  }, [token, caseId]);
+
   useEffect(() => {
     if (!token || !caseId || loading) return;
     setStepError(null);
@@ -128,27 +141,13 @@ export default function CaseDetailPage() {
           }
         });
     }
-  }, [token, caseId, activeStep, loading, caseData?.packet_snapshot]);
-
-  async function refreshGuidance() {
-    if (!token) return;
-    try {
-      const g = await getCaseGuidance(token, caseId);
-      setGuidance(g);
-      const c = await getCase(token, caseId);
-      setCaseData(c);
-      return g;
-    } catch {
-      return null;
-    }
-  }
+  }, [token, caseId, activeStep, loading, caseData?.packet_snapshot, refreshGuidance]);
 
   const handleResearchPhaseChange = useCallback((phase: string) => {
     // Research completion is the one automatic handoff — user lands on intake to start.
     setActiveStep(phaseToStep(phase));
     void refreshGuidance();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token, caseId]);
+  }, [refreshGuidance]);
 
   function trySetStep(step: Step) {
     if (guidance?.phase === "research" && step !== "research") {

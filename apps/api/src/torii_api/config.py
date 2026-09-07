@@ -8,6 +8,7 @@ the API runs with zero infrastructure; point ``TORII_DATABASE_URL`` at Postgres 
 from functools import lru_cache
 from pathlib import Path
 
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # One env file for the whole monorepo (see /.env.example at the repo root) — this file lives
@@ -74,8 +75,21 @@ class Settings(BaseSettings):
     admin_password: str = ""
 
     # --- Google Social Auth (OAuth 2.0 Client ID & Secret) --------------------
-    google_client_id: str = ""
-    google_client_secret: str = ""
+    google_client_id: str = Field(
+        default="",
+        validation_alias=AliasChoices(
+            "TORII_GOOGLE_CLIENT_ID",
+            "NEXT_PUBLIC_GOOGLE_CLIENT_ID",
+            "GOOGLE_CLIENT_ID",
+        ),
+    )
+    google_client_secret: str = Field(
+        default="",
+        validation_alias=AliasChoices(
+            "TORII_GOOGLE_CLIENT_SECRET",
+            "GOOGLE_CLIENT_SECRET",
+        ),
+    )
 
     # --- Email verification / password-reset tokens ---------------------------
     email_verification_token_expire_minutes: int = 60 * 24  # 24 hours

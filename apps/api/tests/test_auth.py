@@ -216,3 +216,11 @@ async def test_google_social_login(client: AsyncClient) -> None:
     )
     assert resp2.status_code == 200
     assert resp2.json()["user"]["email"] == "googleuser@example.com"
+
+
+async def test_auth_config(client: AsyncClient) -> None:
+    resp = await client.get("/v1/auth/config")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "google_auth_enabled" in data
+    assert "google_client_id" in data
