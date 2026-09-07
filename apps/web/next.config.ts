@@ -12,6 +12,9 @@ const nextConfig: NextConfig = {
   // server + its deps ship — see apps/web/Dockerfile).
   output: "standalone",
   reactStrictMode: true,
+  env: {
+    NEXT_PUBLIC_GOOGLE_CLIENT_ID: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID,
+  },
   async rewrites() {
     // Browser calls to /api/* are proxied to the FastAPI system of record. In dev this
     // points at the local API; in the container the edge (nginx) owns the routing, so
