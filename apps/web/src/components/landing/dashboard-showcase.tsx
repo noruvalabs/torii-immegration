@@ -12,7 +12,7 @@ import {
   Download,
   Layers,
 } from "lucide-react";
-import { Reveal } from "./reveal";
+import { SectionHeading } from "./section";
 import { useLang } from "./i18n";
 import { dictionary } from "./dictionary";
 import { cn } from "@/lib/utils";
@@ -341,10 +341,9 @@ export function DashboardShowcase() {
   const [selectedCase, setSelectedCase] = useState<CaseId>("renewal");
   const [activeTab, setActiveTab] = useState<"checklist" | "forms">("checklist");
 
-  // Parallax & 3D tilt state
-  const sectionRef = useRef<HTMLDivElement>(null);
+  // How far the section has travelled through the viewport, 0 to 1. Drives the parallax.
+  const sectionRef = useRef<HTMLElement>(null);
   const [scrollYProgress, setScrollYProgress] = useState(0.5);
-  const [mouseTilt, setMouseTilt] = useState({ x: 0, y: 0 });
 
   useEffect(() => {
     let ticking = false;
@@ -372,24 +371,15 @@ export function DashboardShowcase() {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
-  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const x = (e.clientX - rect.left) / rect.width - 0.5;
-    const y = (e.clientY - rect.top) / rect.height - 0.5;
-    setMouseTilt({ x: x * 4, y: y * -4 });
-  };
-
-  const handleMouseLeave = () => {
-    setMouseTilt({ x: 0, y: 0 });
-  };
-
   const casesMap = lang === "ja" ? CASES_JA : CASES_EN;
   const activeData = casesMap[selectedCase];
 
-  // Parallax translation calculations
-  const dashboardTranslateY = (scrollYProgress - 0.5) * -25;
-  const dashboardRotateX = (0.5 - scrollYProgress) * 4 + mouseTilt.y;
-  const dashboardRotateY = mouseTilt.x;
+  // The panel drifts a little slower than the page and the annotation chips a little
+  // faster, which is the whole parallax. It used to also rotate on both axes and follow
+  // the pointer in 3D: a mock-up that leans away when you move the mouse invites you to
+  // play with the page instead of reading the product, and every pointer move rewrote a
+  // transform on the largest element on screen.
+  const panelTranslateY = (scrollYProgress - 0.5) * -22;
 
   const chip1Y = (scrollYProgress - 0.5) * -65;
   const chip2Y = (scrollYProgress - 0.5) * 55;
@@ -399,40 +389,30 @@ export function DashboardShowcase() {
     <section
       ref={sectionRef}
       id="dashboard-showcase"
-      className="relative overflow-hidden border-t border-border/70 bg-gradient-to-b from-background via-muted/20 to-background py-20 lg:py-28"
+      className="relative overflow-hidden border-t border-border/60 bg-linear-to-b from-background via-muted/20 to-background py-20 sm:py-28"
     >
       {/* Background ambient light mesh */}
       <div
         aria-hidden
-        className="pointer-events-none absolute -top-40 left-1/2 -translate-x-1/2 size-[650px] rounded-full bg-primary/8 blur-[120px]"
+        className="pointer-events-none absolute -top-40 left-1/2 size-160 -translate-x-1/2 rounded-full bg-primary/8 blur-[120px]"
       />
       <div
         aria-hidden
-        className="pointer-events-none absolute bottom-0 left-1/4 size-[450px] rounded-full bg-blue-500/5 blur-[100px]"
+        className="pointer-events-none absolute bottom-0 left-1/4 size-112 rounded-full bg-blue-500/5 blur-[100px]"
       />
 
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        {/* Section Header */}
-        <Reveal className="mx-auto max-w-3xl text-center">
-          <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/5 px-3.5 py-1 text-xs font-medium text-primary backdrop-blur-sm">
-            <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse" />
-            <span>{t.dashboardShowcase.eyebrow}</span>
-          </div>
-          <h2 className="mt-4 text-3xl font-bold tracking-tight text-foreground sm:text-4xl lg:text-5xl">
-            {t.dashboardShowcase.title}
-          </h2>
-          <p className="mt-4 text-base leading-relaxed text-muted-foreground sm:text-lg">
-            {t.dashboardShowcase.subtitle}
-          </p>
-        </Reveal>
+      <div className="mx-auto max-w-6xl px-6 lg:px-8">
+        <SectionHeading
+          eyebrow={t.dashboardShowcase.eyebrow}
+          eyebrowIcon={
+            <span className="animate-ping-ring relative size-1.5 rounded-full bg-emerald-500 text-emerald-500" />
+          }
+          title={t.dashboardShowcase.title}
+          body={t.dashboardShowcase.subtitle}
+        />
 
-        {/* Parallax Interactive Container */}
-        <div
-          className="relative mt-14 lg:mt-16"
-          onMouseMove={handleMouseMove}
-          onMouseLeave={handleMouseLeave}
-          style={{ perspective: "1400px" }}
-        >
+        {/* Parallax container */}
+        <div className="relative mt-14 lg:mt-16">
           {/* FLOATING BADGE 1 (Top-Right: Statutory Compliance) */}
           <div
             className="pointer-events-none absolute -top-6 right-4 z-20 hidden lg:flex items-center gap-3 rounded-md border border-emerald-500/30 bg-background/95 px-3.5 py-2.5 shadow-sm backdrop-blur-md transition-transform duration-100 ease-out"
@@ -494,10 +474,9 @@ export function DashboardShowcase() {
 
           {/* MAIN DASHBOARD MOCKUP WINDOW */}
           <div
-            className="overflow-hidden rounded-lg border border-border/80 bg-card shadow-sm transition-transform duration-150 ease-out"
+            className="shadow-panel-lg overflow-hidden rounded-2xl border border-border/70 bg-card"
             style={{
-              transform: `translateY(${dashboardTranslateY}px) rotateX(${dashboardRotateX}deg) rotateY(${dashboardRotateY}deg)`,
-              transformStyle: "preserve-3d",
+              transform: `translateY(${panelTranslateY}px)`,
               willChange: "transform",
             }}
           >
@@ -604,7 +583,7 @@ export function DashboardShowcase() {
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between pb-4 border-b border-border/80">
                   <div>
                     <div className="flex items-center gap-2">
-                      <span className="font-mono text-xs font-bold text-primary">
+                      <span className="font-mono text-xs font-semibold text-primary">
                         {activeData.id}
                       </span>
                       <span className="text-muted-foreground">/</span>
@@ -612,7 +591,7 @@ export function DashboardShowcase() {
                         {lang === "ja" ? "日本 法務省・出入国在留管理庁 管轄" : "Japan ISA / MOJ Jurisdiction"}
                       </span>
                     </div>
-                    <h3 className="mt-1 text-lg sm:text-xl font-bold tracking-tight text-foreground">
+                    <h3 className="mt-1 text-lg sm:text-xl font-semibold tracking-tight text-foreground">
                       {activeData.category}
                     </h3>
                     <p className="text-xs text-muted-foreground mt-0.5">

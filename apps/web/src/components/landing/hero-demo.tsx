@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Check, ExternalLink, FileText, Clock, ShieldCheck, Search, Sparkles } from "lucide-react";
+import { Check, ExternalLink, FileText, Clock, ShieldCheck, Search } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { useLang } from "./i18n";
@@ -206,7 +206,7 @@ export function HeroDemo() {
       <div
         onMouseEnter={() => setPaused(true)}
         onMouseLeave={() => setPaused(false)}
-        className="rounded-lg border border-border/80 bg-card/95 p-4 sm:p-5 shadow-sm backdrop-blur-sm transition-all"
+        className="shadow-panel-lg rounded-2xl border border-border/70 bg-card/95 p-4 backdrop-blur-xl sm:p-5"
       >
         {/* Sleek Browser/App Chrome Header */}
         <div className="flex items-center justify-between border-b border-border/70 pb-3">
@@ -294,7 +294,7 @@ export function HeroDemo() {
         </div>
 
         {/* Step Dynamic Content View */}
-        <div className="mt-3.5 min-h-[148px] border-t border-border/70 pt-3.5">
+        <div className="mt-3.5 min-h-37 border-t border-border/70 pt-3.5">
           <StepContent id={current} demo={demo} />
         </div>
 

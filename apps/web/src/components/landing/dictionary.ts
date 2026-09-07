@@ -3,6 +3,7 @@ export const dictionary = {
     nav: {
       outcomes: "What you get",
       howItWorks: "How it works",
+      coverage: "Supported visas",
       features: "Features",
       pricing: "Pricing",
       blog: "Blog",
@@ -159,19 +160,19 @@ export const dictionary = {
       body: "No confusing legal jargon. Just step-by-step guidance for your Japan visa.",
       stages: {
         scope: {
-          title: "1. Pick your visa",
+          title: "Pick your visa",
           body: "Choose your visa type and what you need: renew your visa, switch to a new status, or apply fresh.",
         },
         intake: {
-          title: "2. Answer simple questions",
+          title: "Answer simple questions",
           body: "Clear questions in plain English. Save at any point and finish later — nothing is lost.",
         },
         eligibility: {
-          title: "3. See if you qualify & get your checklist",
+          title: "See if you qualify, and get your checklist",
           body: "See if you qualify instantly, plus a customized checklist of every document you need to bring.",
         },
         forms: {
-          title: "4. Download completed government forms",
+          title: "Download completed government forms",
           body: "Your official Ministry of Justice forms are filled out automatically and checked for mistakes before you submit.",
         },
       },
@@ -358,6 +359,11 @@ export const dictionary = {
     faq: {
       titleBefore: "Questions worth answering ",
       titleAccent: "plainly",
+      help: {
+        title: "Still deciding?",
+        body: "The blog goes further on how sourcing works and which documents actually delay a Japan filing.",
+        cta: "Read the notes",
+      },
       items: {
         lawFirm: {
           question: "Is Torii a law firm, or does it give legal advice?",
@@ -394,6 +400,13 @@ export const dictionary = {
     footer: {
       title: "File it yourself. Correctly.",
       cta: "Start free — 3 passes included",
+      tagline: "Guided Japan visa preparation, sourced to the authorities that publish the rules.",
+      createAccount: "Create account",
+      groups: {
+        product: "Product",
+        routes: "Visa routes",
+        resources: "Resources",
+      },
       disclaimer:
         "Torii is a working codename. Guided form preparation — not legal advice. Every instruction is sourced to the official government page it came from.",
     },
@@ -402,6 +415,7 @@ export const dictionary = {
     nav: {
       outcomes: "得られるもの",
       howItWorks: "利用の流れ",
+      coverage: "対応ビザ",
       features: "特長",
       pricing: "料金",
       blog: "ブログ",
@@ -752,6 +766,11 @@ export const dictionary = {
     faq: {
       titleBefore: "疑問に、",
       titleAccent: "率直に",
+      help: {
+        title: "まだ検討中ですか？",
+        body: "出典の仕組みと、日本での申請が実際に遅れる原因については、ブログで詳しく解説しています。",
+        cta: "記事を読む",
+      },
       items: {
         lawFirm: {
           question: "Toriiは法律事務所ですか？法律相談はできますか？",
@@ -788,6 +807,13 @@ export const dictionary = {
     footer: {
       title: "自分自身で、正しく申請する。",
       cta: "無料で始める — 3パス付き",
+      tagline: "日本のビザ申請をガイドします。すべての案内に、規則を公表している当局の出典が付きます。",
+      createAccount: "アカウント作成",
+      groups: {
+        product: "プロダクト",
+        routes: "対応ビザ",
+        resources: "参考情報",
+      },
       disclaimer:
         "Toriiは開発中のプロジェクト名です。申請書類準備のガイドであり、法律相談ではありません。すべての案内には、根拠となる公式の政府ページの出典が付きます。",
     },
