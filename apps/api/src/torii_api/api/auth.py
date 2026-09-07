@@ -41,8 +41,15 @@ class LoginIn(BaseModel):
     password: str = Field(min_length=1, max_length=128)
 
 
+class AuthConfigOut(BaseModel):
+    google_client_id: str | None = None
+    google_auth_enabled: bool = False
+
+
 class GoogleAuthIn(BaseModel):
     token: str | None = None
+    code: str | None = None
+    redirect_uri: str | None = None
     email: str | None = None
     name: str | None = None
     avatar_url: str | None = None
@@ -201,6 +208,16 @@ async def login(payload: LoginIn, session: SessionDep, settings: SettingsDep) ->
     return TokenOut(access_token=token, user=UserOut.model_validate(user))
 
 
+@router.get("/config", response_model=AuthConfigOut)
+async def get_auth_config(settings: SettingsDep) -> AuthConfigOut:
+    """Return public authentication configuration."""
+    client_id = settings.google_client_id.strip() if settings.google_client_id else ""
+    return AuthConfigOut(
+        google_client_id=client_id or None,
+        google_auth_enabled=bool(client_id),
+    )
+
+
 @router.post("/google", response_model=TokenOut)
 async def google_login(
     payload: GoogleAuthIn,
@@ -216,7 +233,49 @@ async def google_login(
     name = payload.name
     avatar_url = payload.avatar_url
 
-    if payload.token:
+    # 1. If an authorization code was provided, exchange it for tokens with Google
+    if payload.code and settings.google_client_id and settings.google_client_secret:
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as http_client:
+                token_resp = await http_client.post(
+                    "https://oauth2.googleapis.com/token",
+                    data={
+                        "code": payload.code,
+                        "client_id": settings.google_client_id,
+                        "client_secret": settings.google_client_secret,
+                        "redirect_uri": payload.redirect_uri
+                        or f"{settings.app_base_url}/callback/google",
+                        "grant_type": "authorization_code",
+                    },
+                )
+                if token_resp.status_code == 200:
+                    token_data = token_resp.json()
+                    access_tok = token_data.get("access_token")
+                    id_tok = token_data.get("id_token")
+                    if access_tok:
+                        u_resp = await http_client.get(
+                            "https://www.googleapis.com/oauth2/v3/userinfo",
+                            headers={"Authorization": f"Bearer {access_tok}"},
+                        )
+                        if u_resp.status_code == 200:
+                            g_data = u_resp.json()
+                            email = (g_data.get("email") or email or "").strip().lower() or None
+                            name = g_data.get("name") or name
+                            avatar_url = g_data.get("picture") or avatar_url
+                    elif id_tok:
+                        t_resp = await http_client.get(
+                            f"https://oauth2.googleapis.com/tokeninfo?id_token={id_tok}"
+                        )
+                        if t_resp.status_code == 200:
+                            g_data = t_resp.json()
+                            email = (g_data.get("email") or email or "").strip().lower() or None
+                            name = g_data.get("name") or name
+                            avatar_url = g_data.get("picture") or avatar_url
+        except Exception:
+            pass
+
+    # 2. If a direct access_token or id_token was provided, verify with Google
+    if not email and payload.token:
         try:
             async with httpx.AsyncClient(timeout=10.0) as http_client:
                 res = await http_client.get(

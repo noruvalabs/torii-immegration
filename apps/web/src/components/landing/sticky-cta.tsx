@@ -33,7 +33,7 @@ export function StickyCta() {
   return (
     <div
       className={cn(
-        "fixed inset-x-0 bottom-0 z-40 border-t border-border/60 bg-background/90 px-4 py-3 backdrop-blur-lg transition-transform duration-300 sm:hidden",
+        "fixed inset-x-0 bottom-0 z-40 border-t border-border/60 bg-background/85 px-4 pb-4 pt-3 backdrop-blur-xl transition-transform duration-500 ease-out-expo sm:hidden",
         visible ? "translate-y-0" : "translate-y-full",
       )}
       // Off-screen it must not be reachable by tab or read aloud.
@@ -42,7 +42,7 @@ export function StickyCta() {
       <Link
         href={user ? "/scope" : "/register"}
         tabIndex={visible ? undefined : -1}
-        className="flex w-full items-center justify-center rounded-full bg-primary px-6 py-3 text-sm font-medium text-primary-foreground shadow-lg"
+        className="animate-sheen relative flex w-full items-center justify-center overflow-hidden rounded-full bg-primary px-6 py-3.5 text-sm font-medium text-primary-foreground transition-transform active:scale-[0.98]"
       >
         {user ? t.nav.startCase : t.cta.stickyCta}
       </Link>

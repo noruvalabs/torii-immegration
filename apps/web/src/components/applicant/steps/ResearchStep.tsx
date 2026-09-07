@@ -178,7 +178,6 @@ export function ResearchStep({ caseId, token, onPhaseChange }: ResearchStepProps
 
   const failed = guidance?.blocked_reason === "research_failed";
   const researchStatus = guidance?.research_status ?? (failed ? "failed" : "running");
-  const serverSteps = guidance?.research_steps ?? [];
 
   const displaySteps = useMemo(() => {
     if (failed) {
@@ -189,11 +188,12 @@ export function ResearchStep({ caseId, token, onPhaseChange }: ResearchStepProps
         state: "done" as const,
       }));
     }
+    const serverSteps = guidance?.research_steps ?? [];
     if (serverSteps.length > 0) {
       return mapServerSteps(serverSteps, researchStatus === "running" || researchStatus === "queued");
     }
     return Array.from(yieldFallbackSteps(elapsed));
-  }, [serverSteps, researchStatus, elapsed, failed]);
+  }, [guidance?.research_steps, researchStatus, elapsed, failed]);
 
   const doneCount = displaySteps.filter((s) => s.state === "done").length;
   const totalCount = Math.max(displaySteps.length, 1);

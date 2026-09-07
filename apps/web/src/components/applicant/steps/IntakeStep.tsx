@@ -19,7 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ALL_COUNTRIES, matchCountry, searchCountries, type Country } from "@/lib/countries";
-import type { IntakeState, User } from "./types";
+import type { IntakeState, IntakeQuestion, User } from "./types";
 
 type IntakeStepProps = {
   state: IntakeState;
@@ -314,7 +314,7 @@ export function IntakeStep({ state, profile, onAnswer, onProceedToEligibility, t
 
   // Group questions by section if present, or assign defaults
   const sectionsMap = useMemo(() => {
-    const map = new Map<string, typeof state.questions>();
+    const map = new Map<string, IntakeQuestion[]>();
     for (const q of state.questions) {
       const sec = q.section || "General Details";
       if (!map.has(sec)) map.set(sec, []);
