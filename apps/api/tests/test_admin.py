@@ -341,18 +341,25 @@ async def test_admin_form_template_pdf_upload_and_download(
     pdf_bytes = buf.getvalue()
 
     files = {"file": ("test_form.pdf", pdf_bytes, "application/pdf")}
-    resp = await client.post(
-        "/v1/admin/ops/form-templates/TEST_FORM_01/upload-pdf",
-        files=files,
-        headers={"Authorization": f"Bearer {token}"},
-    )
-    assert resp.status_code == 200
-    res = resp.json()
-    assert res["success"] is True
-    assert res["code"] == "TEST_FORM_01"
-    assert res["pages"] == 1
+    try:
+        resp = await client.post(
+            "/v1/admin/ops/form-templates/TEST_FORM_01/upload-pdf",
+            files=files,
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert resp.status_code == 200
+        res = resp.json()
+        assert res["success"] is True
+        assert res["code"] == "TEST_FORM_01"
+        assert res["pages"] == 1
 
-    get_resp = await client.get("/v1/admin/ops/form-templates/TEST_FORM_01/pdf")
-    assert get_resp.status_code == 200
-    assert get_resp.headers["content-type"] == "application/pdf"
-    assert len(get_resp.content) > 0
+        get_resp = await client.get("/v1/admin/ops/form-templates/TEST_FORM_01/pdf")
+        assert get_resp.status_code == 200
+        assert get_resp.headers["content-type"] == "application/pdf"
+        assert len(get_resp.content) > 0
+    finally:
+        from torii_api.services.official_form_store import cache_dir
+
+        test_pdf = cache_dir() / "test_form_01.pdf"
+        if test_pdf.is_file():
+            test_pdf.unlink(missing_ok=True)

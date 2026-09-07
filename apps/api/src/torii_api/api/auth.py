@@ -243,7 +243,8 @@ async def google_login(
                         "code": payload.code,
                         "client_id": settings.google_client_id,
                         "client_secret": settings.google_client_secret,
-                        "redirect_uri": payload.redirect_uri or f"{settings.app_base_url}/callback/google",
+                        "redirect_uri": payload.redirect_uri
+                        or f"{settings.app_base_url}/callback/google",
                         "grant_type": "authorization_code",
                     },
                 )

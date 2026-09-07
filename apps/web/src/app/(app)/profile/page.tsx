@@ -182,6 +182,7 @@ export default function ProfilePage() {
                       <Loader2 className="size-5 text-primary animate-spin" />
                     </div>
                   ) : avatar ? (
+                    /* eslint-disable-next-line @next/next/no-img-element */
                     <img
                       src={avatar}
                       alt="Profile Avatar"
