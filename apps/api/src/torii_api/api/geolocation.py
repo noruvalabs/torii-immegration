@@ -250,12 +250,17 @@ async def list_application_types(
                 # intake definition is ops's work in progress, not an offer.
                 intake_actions = await session.scalars(
                     select(CaseAction)
-                    .join(IntakeDefinition, IntakeDefinition.case_action_id == CaseAction.id)
-                    .where(IntakeDefinition.jurisdiction_id == jurisdiction.id)
-                    .where(IntakeDefinition.visa_category_id == visa_cat.id)
-                    .where(IntakeDefinition.is_live.is_(True))
+                    .where(CaseAction.jurisdiction_id == jurisdiction.id)
                     .where(CaseAction.is_enabled.is_(True))
-                    .distinct()
+                    .where(
+                        CaseAction.id.in_(
+                            select(IntakeDefinition.case_action_id)
+                            .where(IntakeDefinition.jurisdiction_id == jurisdiction.id)
+                            .where(IntakeDefinition.visa_category_id == visa_cat.id)
+                            .where(IntakeDefinition.is_live.is_(True))
+                        )
+                    )
+                    .order_by(CaseAction.code)
                 )
                 action_list = list(intake_actions.all())
 
