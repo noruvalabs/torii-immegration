@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Loader2, AlertCircle } from "lucide-react";
@@ -13,31 +13,52 @@ export default function GoogleCallbackPage() {
   const router = useRouter();
   const { setAuth } = useAuth();
   const [error, setError] = useState<string | null>(null);
+  const processedRef = useRef(false);
 
   useEffect(() => {
+    if (processedRef.current) return;
+    processedRef.current = true;
+
     async function processOAuth() {
       try {
-        // Parse token from hash (#access_token=...) or query string (?token=...)
+        // Parse parameters from hash (#access_token=...) and query string (?code=...)
         const hash = window.location.hash.substring(1);
         const hashParams = new URLSearchParams(hash);
         const searchParams = new URLSearchParams(window.location.search);
+
+        const errorParam =
+          hashParams.get("error") ||
+          searchParams.get("error");
+        const errorDesc =
+          hashParams.get("error_description") ||
+          searchParams.get("error_description");
+
+        if (errorParam) {
+          setError(
+            errorDesc
+              ? `Google authorization error: ${errorDesc}`
+              : `Google authorization was denied: ${errorParam}`,
+          );
+          return;
+        }
 
         const accessToken =
           hashParams.get("access_token") ||
           searchParams.get("token") ||
           hashParams.get("id_token");
 
-        if (!accessToken) {
-          const errorParam = hashParams.get("error") || searchParams.get("error");
-          if (errorParam) {
-            setError(`Google authorization was denied: ${errorParam}`);
-            return;
-          }
-          setError("No authentication token was returned from Google.");
+        const authCode = searchParams.get("code");
+
+        if (!accessToken && !authCode) {
+          setError("No authentication token or authorization code was returned from Google.");
           return;
         }
 
-        const res = await googleLogin({ token: accessToken });
+        const redirectUri = `${window.location.origin}/callback/google`;
+        const res = authCode
+          ? await googleLogin({ code: authCode, redirect_uri: redirectUri })
+          : await googleLogin({ token: accessToken! });
+
         setAuth(res.access_token, res.user);
 
         const stateParam = hashParams.get("state") || searchParams.get("state");

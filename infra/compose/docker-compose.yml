@@ -125,10 +125,14 @@ services:
       # Repo root, not apps/web — the web Dockerfile needs the workspace pnpm lockfile.
       context: ../..
       dockerfile: apps/web/Dockerfile
+      args:
+        NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${NEXT_PUBLIC_GOOGLE_CLIENT_ID:-}
     restart: unless-stopped
     env_file: .env
     environment:
       API_INTERNAL_BASE_URL: ${API_INTERNAL_BASE_URL:-http://api:8000}
+      NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${NEXT_PUBLIC_GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-${TORII_GOOGLE_CLIENT_ID:-}}
     depends_on:
       api:
         condition: service_healthy

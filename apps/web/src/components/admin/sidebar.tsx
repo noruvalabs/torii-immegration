@@ -18,6 +18,7 @@ import {
   User as UserIcon,
 } from "lucide-react";
 import { ToriiLogo } from "@/components/brand/ToriiLogo";
+import { UserAvatar } from "@/components/ui/avatar";
 
 export function Sidebar() {
   const pathname = usePathname();
@@ -160,9 +161,14 @@ export function Sidebar() {
             }}
             className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-semibold text-foreground hover:bg-muted/70 transition-colors group"
           >
-            <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary to-primary/70 text-primary-foreground font-bold text-[11px] shadow-xs">
-              {initials}
-            </div>
+            <UserAvatar
+              src={user?.avatar_url}
+              alt={displayName}
+              initials={initials}
+              sizeClassName="size-7"
+              textClassName="text-[11px]"
+              gradientClassName="bg-gradient-to-br from-primary to-primary/70 text-primary-foreground"
+            />
             <div className="flex flex-col min-w-0 flex-1">
               <span className="text-xs font-bold text-foreground truncate">{displayName}</span>
               <span className="text-[10px] text-muted-foreground truncate">{user?.email}</span>
@@ -238,9 +244,14 @@ export function Sidebar() {
               : "border-transparent hover:bg-muted/50 hover:border-border/60",
           )}
         >
-          <div className="flex size-8 items-center justify-center rounded-full bg-gradient-to-br from-primary to-primary/70 text-primary-foreground font-bold text-xs shadow-xs">
-            {initials}
-          </div>
+          <UserAvatar
+            src={user?.avatar_url}
+            alt={displayName}
+            initials={initials}
+            sizeClassName="size-8"
+            textClassName="text-xs"
+            gradientClassName="bg-gradient-to-br from-primary to-primary/70 text-primary-foreground"
+          />
         </button>
       ) : (
         <button
@@ -254,9 +265,14 @@ export function Sidebar() {
           )}
         >
           <div className="flex items-center gap-2.5 min-w-0">
-            <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary to-primary/70 text-primary-foreground font-bold text-xs shadow-xs">
-              {initials}
-            </div>
+            <UserAvatar
+              src={user?.avatar_url}
+              alt={displayName}
+              initials={initials}
+              sizeClassName="size-8"
+              textClassName="text-xs"
+              gradientClassName="bg-gradient-to-br from-primary to-primary/70 text-primary-foreground"
+            />
             <div className="flex flex-col min-w-0">
               <span className="truncate text-xs font-semibold text-foreground leading-tight">
                 {displayName}

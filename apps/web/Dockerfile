@@ -25,6 +25,8 @@ COPY --from=deps /app/apps/web/node_modules ./apps/web/node_modules
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/web ./apps/web
 ENV NEXT_TELEMETRY_DISABLED=1
+ARG NEXT_PUBLIC_GOOGLE_CLIENT_ID
+ENV NEXT_PUBLIC_GOOGLE_CLIENT_ID=$NEXT_PUBLIC_GOOGLE_CLIENT_ID
 RUN pnpm --filter web build
 
 FROM base AS runner
