@@ -127,6 +127,52 @@ async def test_list_application_types_tourist_filters_to_single_entry(
     assert data[0]["name"] == "Tourist / Entry Visa"
 
 
+async def test_application_types_for_spouse_route_succeeds(
+    client: AsyncClient, engine: AsyncEngine
+) -> None:
+    async with engine.begin() as conn:
+        await conn.execute(
+            text("INSERT INTO jurisdictions (code, name, is_live) VALUES ('JP', 'Japan', 1)")
+        )
+        jid = (
+            await conn.execute(text("SELECT id FROM jurisdictions WHERE code = 'JP'"))
+        ).scalar_one()
+        await conn.execute(
+            text(
+                "INSERT INTO visa_categories (jurisdiction_id, code, name, is_live)"
+                f" VALUES ({jid}, 'spouse', 'Spouse', 1)"
+            )
+        )
+        vc_id = (
+            await conn.execute(
+                text(f"SELECT id FROM visa_categories WHERE jurisdiction_id = {jid}")
+            )
+        ).scalar_one()
+        await conn.execute(
+            text(
+                "INSERT INTO case_actions (jurisdiction_id, code, name, is_live)"
+                f" VALUES ({jid}, 'new_application', 'New application', 1)"
+            )
+        )
+        ca_id = (
+            await conn.execute(text(f"SELECT id FROM case_actions WHERE jurisdiction_id = {jid}"))
+        ).scalar_one()
+        await conn.execute(
+            text(
+                "INSERT INTO intake_definitions (jurisdiction_id, visa_category_id, case_action_id, questions, is_live)"
+                f" VALUES ({jid}, {vc_id}, {ca_id}, '[]', 1)"
+            )
+        )
+
+    resp = await client.get(
+        "/v1/geo/application-types", params={"destination": "JP", "visa_type": "spouse"}
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert len(data) >= 1
+    assert data[0]["code"] in ("new", "new_application")
+
+
 # ── Which destinations are offered ─────────────────────────────────────────────────
 # US is parked (docs/jurisdictions/us/_jurisdiction.yml). Offering a destination whose
 # content packs are not live sends the applicant to an empty scope.
