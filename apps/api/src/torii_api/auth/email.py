@@ -3,14 +3,19 @@
 from __future__ import annotations
 
 import smtplib
+from email.mime.image import MIMEImage
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from pathlib import Path
 
 import structlog
 
 from torii_api.config import Settings
 
 log = structlog.get_logger()
+
+ASSETS_DIR = Path(__file__).resolve().parent / "assets"
+LOGO_PATH = ASSETS_DIR / "logo-icon.png"
 
 
 def send_email(
@@ -21,13 +26,7 @@ def send_email(
     text_body: str | None = None,
     settings: Settings,
 ) -> bool:
-    """Send an HTML email (with optional plain text part) via SMTP. Returns True on success, False on failure.
-
-    When ``smtp_host`` is not configured the send is skipped with a warning log (so
-    local dev / CI never blocks on missing SMTP). The verification / reset token is
-    always returned to the API response in dev mode so the flow can be tested without
-    an email server.
-    """
+    """Send an HTML email (with optional plain text part and inline logo) via SMTP."""
     if not settings.smtp_host:
         log.warning("email.smtp_not_configured", to=to_email, subject=subject)
         return False
@@ -39,15 +38,27 @@ def send_email(
         log.info("email.skipped_reserved_test_domain", to=to_email, subject=subject)
         return True
 
-    msg = MIMEMultipart("alternative")
+    msg = MIMEMultipart("related")
     msg["From"] = f"{settings.smtp_from_name} <{settings.smtp_from_email}>"
     msg["To"] = to_email
     msg["Subject"] = subject
 
-    # Plain text version first for non-HTML email clients and optimal anti-spam score
+    alt_part = MIMEMultipart("alternative")
     if text_body:
-        msg.attach(MIMEText(text_body, "plain", "utf-8"))
-    msg.attach(MIMEText(html_body, "html", "utf-8"))
+        alt_part.attach(MIMEText(text_body, "plain", "utf-8"))
+    alt_part.attach(MIMEText(html_body, "html", "utf-8"))
+    msg.attach(alt_part)
+
+    # Attach official Torii logo as inline MIME attachment so it displays across all email clients
+    if LOGO_PATH.exists():
+        try:
+            with open(LOGO_PATH, "rb") as f:
+                img = MIMEImage(f.read(), _subtype="png")
+            img.add_header("Content-ID", "<torii_logo>")
+            img.add_header("Content-Disposition", "inline", filename="logo.png")
+            msg.attach(img)
+        except Exception as exc:
+            log.warning("email.attach_logo_failed", error=str(exc))
 
     try:
         if settings.smtp_tls:
@@ -94,7 +105,6 @@ def build_verification_email_body(
     """Build the modern responsive HTML body for the email-verification message matching Torii's site theme."""
     display_name = username or "there"
     clean_base = base_url.rstrip("/")
-    logo_icon_url = f"{clean_base}/brand/logo-icon.png"
 
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -113,24 +123,24 @@ def build_verification_email_body(
                         <td style="background-color: #0f172a; padding: 24px 32px;">
                             <table cellpadding="0" cellspacing="0" border="0" role="presentation">
                                 <tr>
-                                    <td style="vertical-align: middle; padding-right: 12px;">
+                                    <td style="vertical-align: middle; padding-right: 14px;">
                                         <a href="{clean_base}" target="_blank" style="text-decoration: none; display: block;">
-                                            <img src="{logo_icon_url}" alt="Torii" width="40" height="40" style="display: block; width: 40px; height: 40px; border: 0; outline: none; border-radius: 8px; background-color: #1e293b; padding: 2px;" />
+                                            <img src="cid:torii_logo" alt="Torii" width="36" height="36" style="display: block; width: 36px; height: 36px; border: 0; outline: none; border-radius: 8px;" />
                                         </a>
                                     </td>
                                     <td style="vertical-align: middle;">
                                         <a href="{clean_base}" target="_blank" style="text-decoration: none; display: block;">
-                                            <div style="font-size: 22px; font-weight: 800; color: #ffffff; letter-spacing: -0.5px; line-height: 1.1;">Torii</div>
-                                            <div style="font-size: 9px; font-weight: 700; color: #f97316; letter-spacing: 1.5px; text-transform: uppercase; margin-top: 3px;">Immigration Platform</div>
+                                            <div style="font-size: 22px; font-weight: 700; color: #ffffff; line-height: 1.1;">Torii</div>
+                                            <div style="font-size: 10px; font-weight: 600; color: #94a3b8; letter-spacing: 1.2px; text-transform: uppercase; margin-top: 3px;">Immigration Platform</div>
                                         </a>
                                     </td>
                                 </tr>
                             </table>
                         </td>
                     </tr>
-                    <!-- Torii Vermillion Accent Line -->
+                    <!-- Primary Blue Accent Line (Matches Site Landing Theme) -->
                     <tr>
-                        <td style="height: 3px; background: linear-gradient(90deg, #d94906 0%, #ea580c 50%, #f97316 100%); line-height: 3px; font-size: 0;">&nbsp;</td>
+                        <td style="height: 3px; background-color: #2563eb; line-height: 3px; font-size: 0;">&nbsp;</td>
                     </tr>
                     <!-- Main Content -->
                     <tr>
@@ -138,20 +148,20 @@ def build_verification_email_body(
                             <h1 style="margin: 0 0 16px 0; font-size: 22px; font-weight: 700; color: #0f172a; letter-spacing: -0.3px;">Verify your email address</h1>
                             <p style="margin: 0 0 16px 0; font-size: 15px; line-height: 24px; color: #334155;">Hi <strong>{display_name}</strong>,</p>
                             <p style="margin: 0 0 24px 0; font-size: 15px; line-height: 24px; color: #334155;">
-                                Welcome to Torii! To activate your account and begin preparing your official immigration filing dossier, please confirm your email address:
+                                Welcome to Torii! To activate your account and start preparing your official immigration dossier, please verify your email address:
                             </p>
-                            <!-- Action Button (Torii Vermillion) -->
+                            <!-- Action Button (Primary Landing Blue: #2563eb) -->
                             <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="margin: 30px 0;">
                                 <tr>
                                     <td align="center">
-                                        <a href="{verification_url}" target="_blank" style="display: inline-block; background-color: #d94906; color: #ffffff; font-size: 15px; font-weight: 600; text-decoration: none; padding: 14px 34px; border-radius: 8px; box-shadow: 0 4px 12px rgba(217, 73, 6, 0.35);">Verify Email Address</a>
+                                        <a href="{verification_url}" target="_blank" style="display: inline-block; background-color: #2563eb; color: #ffffff; font-size: 15px; font-weight: 600; text-decoration: none; padding: 14px 34px; border-radius: 8px; box-shadow: 0 2px 4px rgba(37, 99, 235, 0.25);">Verify Email Address</a>
                                     </td>
                                 </tr>
                             </table>
                             <!-- Fallback Link Box -->
-                            <div style="background-color: #fff7ed; border-left: 3px solid #d94906; border-radius: 0 8px 8px 0; padding: 14px 16px; margin: 24px 0;">
-                                <p style="margin: 0 0 6px 0; font-size: 11px; font-weight: 700; color: #9a3412; text-transform: uppercase; letter-spacing: 0.5px;">Or copy and paste this URL into your browser:</p>
-                                <a href="{verification_url}" style="font-size: 13px; color: #d94906; word-break: break-all; text-decoration: underline; line-height: 18px;">{verification_url}</a>
+                            <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-left: 3px solid #2563eb; border-radius: 0 8px 8px 0; padding: 14px 16px; margin: 24px 0;">
+                                <p style="margin: 0 0 6px 0; font-size: 11px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px;">Or copy and paste this link:</p>
+                                <a href="{verification_url}" style="font-size: 13px; color: #2563eb; word-break: break-all; text-decoration: underline; line-height: 18px;">{verification_url}</a>
                             </div>
                             <p style="margin: 24px 0 0 0; font-size: 13px; line-height: 20px; color: #64748b;">
                                 If you did not create an account with Torii, you can safely ignore this email.
@@ -161,11 +171,8 @@ def build_verification_email_body(
                     <!-- Footer -->
                     <tr>
                         <td style="padding: 20px 32px; background-color: #f8fafc; border-top: 1px solid #e2e8f0; text-align: center;">
-                            <p style="margin: 0 0 4px 0; font-size: 12px; font-weight: 500; color: #64748b;">
+                            <p style="margin: 0; font-size: 12px; color: #64748b;">
                                 &copy; Torii Immigration — Official immigration application & dossier management.
-                            </p>
-                            <p style="margin: 0; font-size: 11px; color: #94a3b8;">
-                                Japanese Visa & Status of Residence Documentation System
                             </p>
                         </td>
                     </tr>
@@ -203,7 +210,6 @@ def build_password_reset_email_body(
     """Build the modern responsive HTML body for the password-reset message matching Torii's site theme."""
     display_name = username or "there"
     clean_base = base_url.rstrip("/")
-    logo_icon_url = f"{clean_base}/brand/logo-icon.png"
 
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -222,24 +228,24 @@ def build_password_reset_email_body(
                         <td style="background-color: #0f172a; padding: 24px 32px;">
                             <table cellpadding="0" cellspacing="0" border="0" role="presentation">
                                 <tr>
-                                    <td style="vertical-align: middle; padding-right: 12px;">
+                                    <td style="vertical-align: middle; padding-right: 14px;">
                                         <a href="{clean_base}" target="_blank" style="text-decoration: none; display: block;">
-                                            <img src="{logo_icon_url}" alt="Torii" width="40" height="40" style="display: block; width: 40px; height: 40px; border: 0; outline: none; border-radius: 8px; background-color: #1e293b; padding: 2px;" />
+                                            <img src="cid:torii_logo" alt="Torii" width="36" height="36" style="display: block; width: 36px; height: 36px; border: 0; outline: none; border-radius: 8px;" />
                                         </a>
                                     </td>
                                     <td style="vertical-align: middle;">
                                         <a href="{clean_base}" target="_blank" style="text-decoration: none; display: block;">
-                                            <div style="font-size: 22px; font-weight: 800; color: #ffffff; letter-spacing: -0.5px; line-height: 1.1;">Torii</div>
-                                            <div style="font-size: 9px; font-weight: 700; color: #f97316; letter-spacing: 1.5px; text-transform: uppercase; margin-top: 3px;">Immigration Platform</div>
+                                            <div style="font-size: 22px; font-weight: 700; color: #ffffff; line-height: 1.1;">Torii</div>
+                                            <div style="font-size: 10px; font-weight: 600; color: #94a3b8; letter-spacing: 1.2px; text-transform: uppercase; margin-top: 3px;">Immigration Platform</div>
                                         </a>
                                     </td>
                                 </tr>
                             </table>
                         </td>
                     </tr>
-                    <!-- Torii Vermillion Accent Line -->
+                    <!-- Primary Blue Accent Line (Matches Site Landing Theme) -->
                     <tr>
-                        <td style="height: 3px; background: linear-gradient(90deg, #d94906 0%, #ea580c 50%, #f97316 100%); line-height: 3px; font-size: 0;">&nbsp;</td>
+                        <td style="height: 3px; background-color: #2563eb; line-height: 3px; font-size: 0;">&nbsp;</td>
                     </tr>
                     <!-- Main Content -->
                     <tr>
@@ -249,18 +255,18 @@ def build_password_reset_email_body(
                             <p style="margin: 0 0 24px 0; font-size: 15px; line-height: 24px; color: #334155;">
                                 We received a request to reset your Torii account password. Click the button below to choose a new password:
                             </p>
-                            <!-- Action Button (Torii Vermillion) -->
+                            <!-- Action Button (Primary Landing Blue: #2563eb) -->
                             <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="margin: 30px 0;">
                                 <tr>
                                     <td align="center">
-                                        <a href="{reset_url}" target="_blank" style="display: inline-block; background-color: #d94906; color: #ffffff; font-size: 15px; font-weight: 600; text-decoration: none; padding: 14px 34px; border-radius: 8px; box-shadow: 0 4px 12px rgba(217, 73, 6, 0.35);">Reset Password</a>
+                                        <a href="{reset_url}" target="_blank" style="display: inline-block; background-color: #2563eb; color: #ffffff; font-size: 15px; font-weight: 600; text-decoration: none; padding: 14px 34px; border-radius: 8px; box-shadow: 0 2px 4px rgba(37, 99, 235, 0.25);">Reset Password</a>
                                     </td>
                                 </tr>
                             </table>
                             <!-- Fallback Link Box -->
-                            <div style="background-color: #fff7ed; border-left: 3px solid #d94906; border-radius: 0 8px 8px 0; padding: 14px 16px; margin: 24px 0;">
-                                <p style="margin: 0 0 6px 0; font-size: 11px; font-weight: 700; color: #9a3412; text-transform: uppercase; letter-spacing: 0.5px;">Or copy and paste this URL into your browser:</p>
-                                <a href="{reset_url}" style="font-size: 13px; color: #d94906; word-break: break-all; text-decoration: underline; line-height: 18px;">{reset_url}</a>
+                            <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-left: 3px solid #2563eb; border-radius: 0 8px 8px 0; padding: 14px 16px; margin: 24px 0;">
+                                <p style="margin: 0 0 6px 0; font-size: 11px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px;">Or copy and paste this link:</p>
+                                <a href="{reset_url}" style="font-size: 13px; color: #2563eb; word-break: break-all; text-decoration: underline; line-height: 18px;">{reset_url}</a>
                             </div>
                             <p style="margin: 24px 0 0 0; font-size: 13px; line-height: 20px; color: #64748b;">
                                 This link expires in 1 hour. If you didn't request a password reset, you can safely ignore this email.
@@ -270,11 +276,8 @@ def build_password_reset_email_body(
                     <!-- Footer -->
                     <tr>
                         <td style="padding: 20px 32px; background-color: #f8fafc; border-top: 1px solid #e2e8f0; text-align: center;">
-                            <p style="margin: 0 0 4px 0; font-size: 12px; font-weight: 500; color: #64748b;">
+                            <p style="margin: 0; font-size: 12px; color: #64748b;">
                                 &copy; Torii Immigration — Official immigration application & dossier management.
-                            </p>
-                            <p style="margin: 0; font-size: 11px; color: #94a3b8;">
-                                Japanese Visa & Status of Residence Documentation System
                             </p>
                         </td>
                     </tr>
