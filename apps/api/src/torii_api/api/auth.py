@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from urllib.parse import urlparse
 
-from fastapi import APIRouter, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, HTTPException, Query, Request, UploadFile, status
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
@@ -24,6 +25,7 @@ from torii_api.auth.security import (
     hash_token,
     verify_password,
 )
+from torii_api.config import Settings
 from torii_api.db.models import CreditTransaction, User, UserRole
 
 router = APIRouter(prefix="/v1/auth", tags=["auth"])
@@ -128,11 +130,40 @@ async def _find_user_by_email_or_username(session: SessionDep, identifier: str) 
     )
 
 
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+
+def _resolve_app_base_url(request: Request, settings: Settings) -> str:
+    """Resolve public frontend base URL from incoming request headers or fallback settings."""
+    origin = request.headers.get("origin")
+    if origin and origin.startswith(("http://", "https://")):
+        return origin.rstrip("/")
+
+    referer = request.headers.get("referer")
+    if referer and referer.startswith(("http://", "https://")):
+        p = urlparse(referer)
+        return f"{p.scheme}://{p.netloc}".rstrip("/")
+
+    host = request.headers.get("x-forwarded-host") or request.headers.get("host")
+    if host:
+        proto = request.headers.get("x-forwarded-proto") or (
+            "https" if "noruvalabs" in host or "torii" in host else "http"
+        )
+        return f"{proto}://{host}".rstrip("/")
+
+    return settings.app_base_url.rstrip("/")
+
+
 # ── Registration ──────────────────────────────────────────────────────────────
 
 
 @router.post("/register", response_model=TokenOut, status_code=status.HTTP_201_CREATED)
-async def register(payload: RegisterIn, session: SessionDep, settings: SettingsDep) -> TokenOut:
+async def register(
+    payload: RegisterIn,
+    session: SessionDep,
+    settings: SettingsDep,
+    request: Request,
+) -> TokenOut:
     """Create an applicant account, send a verification email, return a bearer token."""
     email = _normalize_email(payload.email)
 
@@ -173,14 +204,15 @@ async def register(payload: RegisterIn, session: SessionDep, settings: SettingsD
     await session.flush()
 
     # Send verification email (best-effort — never blocks registration)
-    verification_url = f"{settings.app_base_url}/verify-email?token={raw_verification_token}"
+    base_url = _resolve_app_base_url(request, settings)
+    verification_url = f"{base_url}/verify-email?token={raw_verification_token}"
     send_email(
         to_email=email,
         subject="Verify your Torii email address",
         html_body=build_verification_email_body(
             username=payload.username,
             verification_url=verification_url,
-            base_url=settings.app_base_url,
+            base_url=base_url,
         ),
         text_body=build_verification_email_text(
             username=payload.username,
@@ -209,6 +241,11 @@ async def login(payload: LoginIn, session: SessionDep, settings: SettingsDep) ->
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Account is disabled",
+        )
+    if settings.require_email_verification and not user.email_verified:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Please verify your email address before signing in. Check your inbox for the verification link.",
         )
     token = create_access_token(user_id=user.id, role=user.role, settings=settings)
     return TokenOut(access_token=token, user=UserOut.model_validate(user))
@@ -449,7 +486,10 @@ async def verify_email(session: SessionDep, token: str = Query(...)) -> MessageO
 
 @router.post("/resend-verification", response_model=MessageOut)
 async def resend_verification(
-    payload: ForgotPasswordIn, session: SessionDep, settings: SettingsDep
+    payload: ForgotPasswordIn,
+    session: SessionDep,
+    settings: SettingsDep,
+    request: Request,
 ) -> MessageOut:
     """Resend the email-verification link. Always returns 200 to prevent enumeration."""
     email = _normalize_email(payload.email)
@@ -460,14 +500,15 @@ async def resend_verification(
         user.email_verification_token = hash_token(raw_token)
         await session.flush()
 
-        verification_url = f"{settings.app_base_url}/verify-email?token={raw_token}"
+        base_url = _resolve_app_base_url(request, settings)
+        verification_url = f"{base_url}/verify-email?token={raw_token}"
         send_email(
             to_email=email,
             subject="Verify your Torii email address",
             html_body=build_verification_email_body(
                 username=user.username,
                 verification_url=verification_url,
-                base_url=settings.app_base_url,
+                base_url=base_url,
             ),
             text_body=build_verification_email_text(
                 username=user.username,
@@ -484,7 +525,10 @@ async def resend_verification(
 
 @router.post("/forgot-password", response_model=MessageOut)
 async def forgot_password(
-    payload: ForgotPasswordIn, session: SessionDep, settings: SettingsDep
+    payload: ForgotPasswordIn,
+    session: SessionDep,
+    settings: SettingsDep,
+    request: Request,
 ) -> MessageOut:
     """Send a password-reset email. Always returns 200 to prevent enumeration."""
     email = _normalize_email(payload.email)
@@ -498,14 +542,15 @@ async def forgot_password(
         )
         await session.flush()
 
-        reset_url = f"{settings.app_base_url}/reset-password?token={raw_token}"
+        base_url = _resolve_app_base_url(request, settings)
+        reset_url = f"{base_url}/reset-password?token={raw_token}"
         send_email(
             to_email=email,
             subject="Reset your Torii password",
             html_body=build_password_reset_email_body(
                 username=user.username,
                 reset_url=reset_url,
-                base_url=settings.app_base_url,
+                base_url=base_url,
             ),
             text_body=build_password_reset_email_text(
                 username=user.username,
