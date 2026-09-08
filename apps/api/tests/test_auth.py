@@ -402,4 +402,3 @@ async def test_verify_email_expires(client: AsyncClient, monkeypatch) -> None:
     verify_resp = await client.get(f"/v1/auth/verify-email?token={raw_token}")
     assert verify_resp.status_code == 400
     assert "expired" in verify_resp.json()["detail"].lower()
-
