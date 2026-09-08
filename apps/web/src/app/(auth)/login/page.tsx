@@ -3,6 +3,8 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { User, Lock, ArrowRight, Sparkles } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,6 +13,7 @@ import { initiateGoogleLogin } from "@/lib/auth/google";
 import { useAuth } from "@/lib/auth-context";
 import { useI18n } from "@/lib/i18n";
 import { ToriiLogo } from "@/components/brand/ToriiLogo";
+import { loginSchema, type LoginFormData } from "@/lib/schemas/auth";
 
 export function GoogleLogo() {
   return (
@@ -36,27 +39,32 @@ export function GoogleLogo() {
 }
 
 export default function LoginPage() {
-  const [emailOrUsername, setEmailOrUsername] = useState("");
-  const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
   const [googleSubmitting, setGoogleSubmitting] = useState(false);
   const { setAuth } = useAuth();
   const { lang, t } = useI18n();
   const router = useRouter();
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+  } = useForm<LoginFormData>({
+    resolver: zodResolver(loginSchema),
+    defaultValues: {
+      emailOrUsername: "",
+      password: "",
+    },
+  });
+
+  async function onSubmit(data: LoginFormData) {
     setError(null);
-    setSubmitting(true);
     try {
-      const res = await login(emailOrUsername, password);
+      const res = await login(data.emailOrUsername, data.password);
       setAuth(res.access_token, res.user);
       router.push(res.user.role === "applicant" ? "/dashboard" : "/admin");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");
-    } finally {
-      setSubmitting(false);
     }
   }
 
@@ -97,7 +105,7 @@ export default function LoginPage() {
             type="button"
             variant="outline"
             onClick={handleGoogleLogin}
-            disabled={googleSubmitting || submitting}
+            disabled={googleSubmitting || isSubmitting}
             className="w-full justify-center gap-2 h-10 border bg-background hover:bg-muted font-medium text-xs shadow-xs rounded-md"
           >
             <GoogleLogo />
@@ -112,7 +120,7 @@ export default function LoginPage() {
             <div className="border-t flex-1 border-border" />
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-3.5">
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-3.5">
             <label className="flex flex-col gap-1 text-xs font-semibold">
               <span className="text-muted-foreground">
                 {t("auth_email_username", "Email or username")}
@@ -121,13 +129,20 @@ export default function LoginPage() {
                 <User className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
                 <input
                   type="text"
-                  required
-                  value={emailOrUsername}
-                  onChange={(e) => setEmailOrUsername(e.target.value)}
+                  {...register("emailOrUsername")}
                   placeholder="applicant1@example.com"
-                  className="h-9 w-full rounded-md border bg-background pl-9 pr-3 text-xs outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  className={`h-9 w-full rounded-md border bg-background pl-9 pr-3 text-xs outline-none focus-visible:ring-1 focus-visible:ring-ring ${
+                    errors.emailOrUsername
+                      ? "border-[var(--color-danger)] focus-visible:ring-[var(--color-danger)]"
+                      : ""
+                  }`}
                 />
               </div>
+              {errors.emailOrUsername && (
+                <span className="text-[11px] font-normal text-[var(--color-danger)]">
+                  {errors.emailOrUsername.message}
+                </span>
+              )}
             </label>
 
             <label className="flex flex-col gap-1 text-xs font-semibold">
@@ -144,14 +159,20 @@ export default function LoginPage() {
                 <Lock className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
                 <input
                   type="password"
-                  required
-                  minLength={6}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  {...register("password")}
                   placeholder="••••••••"
-                  className="h-9 w-full rounded-md border bg-background pl-9 pr-3 text-xs outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  className={`h-9 w-full rounded-md border bg-background pl-9 pr-3 text-xs outline-none focus-visible:ring-1 focus-visible:ring-ring ${
+                    errors.password
+                      ? "border-[var(--color-danger)] focus-visible:ring-[var(--color-danger)]"
+                      : ""
+                  }`}
                 />
               </div>
+              {errors.password && (
+                <span className="text-[11px] font-normal text-[var(--color-danger)]">
+                  {errors.password.message}
+                </span>
+              )}
             </label>
 
             {error && (
@@ -160,8 +181,8 @@ export default function LoginPage() {
               </p>
             )}
 
-            <Button type="submit" disabled={submitting || googleSubmitting} className="w-full text-xs font-semibold h-9 shadow-xs rounded-md">
-              {submitting ? t("loading", "Signing in…") : t("sign_in", "Sign in")}
+            <Button type="submit" disabled={isSubmitting || googleSubmitting} className="w-full text-xs font-semibold h-9 shadow-xs rounded-md">
+              {isSubmitting ? t("loading", "Signing in…") : t("sign_in", "Sign in")}
               <ArrowRight className="ml-1.5 size-3.5" />
             </Button>
 

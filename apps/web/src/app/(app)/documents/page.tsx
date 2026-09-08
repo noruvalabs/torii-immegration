@@ -37,18 +37,30 @@ import { PaginationBar } from "@/components/ui/pagination";
 import { useAuth } from "@/lib/auth-context";
 import { formatErrorMessage } from "@/lib/api/errors";
 import {
-  getWallet,
-  uploadDocument,
-  deleteDocument,
-  getDocumentTypes,
-  getWalletSummary,
   getDocumentVersions,
-  patchWalletDocument,
   type WalletDocument,
   type WalletSummary,
   type DocumentType,
   type DocumentVersion,
 } from "@/lib/api/wallet";
+import {
+  useWalletQuery,
+  useWalletSummaryQuery,
+  useDocumentTypesQuery,
+  useUploadDocumentMutation,
+  useDeleteDocumentMutation,
+  usePatchDocumentMutation,
+} from "@/lib/queries/wallet";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import {
+  documentUploadSchema,
+  type DocumentUploadFormData,
+  documentMetadataSchema,
+  type DocumentMetadataFormData,
+  documentVersionSchema,
+  type DocumentVersionFormData,
+} from "@/lib/schemas/document";
 
 const DEFAULT_DOC_TYPES: DocumentType[] = [
   { code: "passport", name: "Valid Passport", category: "identity" },
@@ -73,21 +85,37 @@ function formatBytes(bytes?: number | null) {
 
 export default function DocumentVaultPage() {
   const { token } = useAuth();
-  const [documents, setDocuments] = useState<WalletDocument[]>([]);
-  const [summary, setSummary] = useState<WalletSummary | null>(null);
-  const [docTypes, setDocTypes] = useState<DocumentType[]>(DEFAULT_DOC_TYPES);
-  const [loading, setLoading] = useState(true);
-  const [uploading, setUploading] = useState(false);
+  const { data: walletDocs = [], isLoading: docsLoading } = useWalletQuery(token);
+  const { data: summary = null, isLoading: summaryLoading } = useWalletSummaryQuery(token);
+  const { data: typesFromQuery = [] } = useDocumentTypesQuery(token);
+  const docTypes = typesFromQuery.length > 0 ? typesFromQuery : DEFAULT_DOC_TYPES;
+
+  let documents = walletDocs;
+  if ((!documents || documents.length === 0) && summary?.documents_by_category) {
+    documents = Object.values(summary.documents_by_category).flat() as WalletDocument[];
+  }
+
+  const uploadMutation = useUploadDocumentMutation(token);
+  const deleteMutation = useDeleteDocumentMutation(token);
+  const patchMutation = usePatchDocumentMutation(token);
+
+  const loading = (docsLoading || summaryLoading) && documents.length === 0;
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   // Upload Form state
-  const [selectedType, setSelectedType] = useState("passport");
-  const [docName, setDocName] = useState("");
-  const [issuedDate, setIssuedDate] = useState("");
-  const [expiryDate, setExpiryDate] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [activeCategory, setActiveCategory] = useState<string>("All");
+
+  const uploadForm = useForm<DocumentUploadFormData>({
+    resolver: zodResolver(documentUploadSchema),
+    defaultValues: {
+      selectedType: "passport",
+      docName: "",
+      issuedDate: "",
+      expiryDate: "",
+    },
+  });
 
   // Interactive Modals state
   const [viewingDoc, setViewingDoc] = useState<WalletDocument | null>(null);
@@ -96,51 +124,27 @@ export default function DocumentVaultPage() {
 
   const [updatingDoc, setUpdatingDoc] = useState<WalletDocument | null>(null);
   const [updateFile, setUpdateFile] = useState<File | null>(null);
-  const [updateName, setUpdateName] = useState("");
-  const [updateIssuedDate, setUpdateIssuedDate] = useState("");
-  const [updateExpiryDate, setUpdateExpiryDate] = useState("");
-  const [updateNotes, setUpdateNotes] = useState("");
-  const [savingUpdate, setSavingUpdate] = useState(false);
+
+  const versionForm = useForm<DocumentVersionFormData>({
+    resolver: zodResolver(documentVersionSchema),
+    defaultValues: {
+      name: "",
+      issuedDate: "",
+      expiryDate: "",
+      notes: "",
+    },
+  });
 
   const [editingDoc, setEditingDoc] = useState<WalletDocument | null>(null);
-  const [editName, setEditName] = useState("");
-  const [editIssuedDate, setEditIssuedDate] = useState("");
-  const [editExpiryDate, setEditExpiryDate] = useState("");
-  const [savingEdit, setSavingEdit] = useState(false);
 
-  const loadVault = useCallback(async () => {
-    if (!token) return;
-    setLoading(true);
-    try {
-      const [docs, sumRes, typesRes] = await Promise.all([
-        getWallet(token).catch((err) => {
-          console.error("Failed to load wallet docs:", err);
-          return [] as WalletDocument[];
-        }),
-        getWalletSummary(token).catch(() => null),
-        getDocumentTypes(token).catch(() => ({ document_types: DEFAULT_DOC_TYPES })),
-      ]);
-
-      let resolvedDocs = docs;
-      if ((!resolvedDocs || resolvedDocs.length === 0) && sumRes?.documents_by_category) {
-        resolvedDocs = Object.values(sumRes.documents_by_category).flat() as WalletDocument[];
-      }
-
-      setDocuments(resolvedDocs || []);
-      setSummary(sumRes);
-      if (typesRes?.document_types?.length) {
-        setDocTypes(typesRes.document_types);
-      }
-    } catch {
-      setError("Failed to load documents.");
-    } finally {
-      setLoading(false);
-    }
-  }, [token]);
-
-  useEffect(() => {
-    void loadVault();
-  }, [loadVault]);
+  const editForm = useForm<DocumentMetadataFormData>({
+    resolver: zodResolver(documentMetadataSchema),
+    defaultValues: {
+      name: "",
+      issued_date: "",
+      expiry_date: "",
+    },
+  });
 
   // Open View Modal & fetch version history
   async function handleOpenView(doc: WalletDocument) {
@@ -160,110 +164,99 @@ export default function DocumentVaultPage() {
   function handleOpenUpdate(doc: WalletDocument) {
     setUpdatingDoc(doc);
     setUpdateFile(null);
-    setUpdateName(doc.name);
-    setUpdateIssuedDate(doc.issued_date || "");
-    setUpdateExpiryDate(doc.expiry_date || "");
-    setUpdateNotes("");
+    versionForm.reset({
+      name: doc.name,
+      issuedDate: doc.issued_date || "",
+      expiryDate: doc.expiry_date || "",
+      notes: "",
+    });
   }
 
   // Open Edit Metadata Modal
   function handleOpenEdit(doc: WalletDocument) {
     setEditingDoc(doc);
-    setEditName(doc.name);
-    setEditIssuedDate(doc.issued_date || "");
-    setEditExpiryDate(doc.expiry_date || "");
+    editForm.reset({
+      name: doc.name,
+      issued_date: doc.issued_date || "",
+      expiry_date: doc.expiry_date || "",
+    });
   }
 
-  async function handleUpload(e: React.FormEvent) {
-    e.preventDefault();
+  async function onUploadSubmit(data: DocumentUploadFormData) {
     if (!file) {
       setError("Please select a file to upload.");
       return;
     }
-    setUploading(true);
     setError(null);
     setSuccessMsg(null);
 
     try {
-      const matchedType = docTypes.find((t) => t.code === selectedType);
-      const nameToUse = docName.trim() || matchedType?.name || selectedType;
-      await uploadDocument(
-        token,
+      const matchedType = docTypes.find((t) => t.code === data.selectedType);
+      const nameToUse = data.docName?.trim() || matchedType?.name || data.selectedType;
+      await uploadMutation.mutateAsync({
         file,
-        selectedType,
-        nameToUse,
-        issuedDate || undefined,
-        expiryDate || undefined
-      );
+        docType: data.selectedType,
+        name: nameToUse,
+        issuedDate: data.issuedDate || undefined,
+        expiryDate: data.expiryDate || undefined,
+      });
       setSuccessMsg(`"${nameToUse}" saved to Document Vault successfully.`);
       setFile(null);
-      setDocName("");
-      setIssuedDate("");
-      setExpiryDate("");
-      await loadVault();
+      uploadForm.reset({
+        selectedType: "passport",
+        docName: "",
+        issuedDate: "",
+        expiryDate: "",
+      });
     } catch (err) {
       setError(formatErrorMessage(err));
-    } finally {
-      setUploading(false);
     }
   }
 
-  async function handleSaveNewVersion(e: React.FormEvent) {
-    e.preventDefault();
+  async function onSaveNewVersion(data: DocumentVersionFormData) {
     if (!updatingDoc) return;
     if (!updateFile) {
       setError("Please select a replacement file to upload as a new version.");
       return;
     }
-    setSavingUpdate(true);
     setError(null);
     setSuccessMsg(null);
 
     try {
-      const nameToUse = updateName.trim() || updatingDoc.name;
-      await uploadDocument(
-        token,
-        updateFile,
-        updatingDoc.doc_type,
-        nameToUse,
-        updateIssuedDate || undefined,
-        updateExpiryDate || undefined,
-        updateNotes || undefined
-      );
+      const nameToUse = data.name?.trim() || updatingDoc.name;
+      await uploadMutation.mutateAsync({
+        file: updateFile,
+        docType: updatingDoc.doc_type,
+        name: nameToUse,
+        issuedDate: data.issuedDate || undefined,
+        expiryDate: data.expiryDate || undefined,
+        notes: data.notes || undefined,
+      });
       setSuccessMsg(`New version for "${nameToUse}" saved successfully (v${updatingDoc.version + 1}).`);
       setUpdatingDoc(null);
-      await loadVault();
     } catch (err) {
       setError(formatErrorMessage(err));
-    } finally {
-      setSavingUpdate(false);
     }
   }
 
-  async function handleSaveMetadata(e: React.FormEvent) {
-    e.preventDefault();
+  async function onSaveMetadata(data: DocumentMetadataFormData) {
     if (!editingDoc) return;
-    setSavingEdit(true);
     setError(null);
     setSuccessMsg(null);
 
     try {
-      await patchWalletDocument(
-        editingDoc.id,
-        {
-          name: editName.trim() || editingDoc.name,
-          issued_date: editIssuedDate || undefined,
-          expiry_date: editExpiryDate || undefined,
+      await patchMutation.mutateAsync({
+        documentId: editingDoc.id,
+        data: {
+          name: data.name.trim(),
+          issued_date: data.issued_date || undefined,
+          expiry_date: data.expiry_date || undefined,
         },
-        token
-      );
-      setSuccessMsg(`Document details updated for "${editName}".`);
+      });
+      setSuccessMsg(`Document details updated for "${data.name}".`);
       setEditingDoc(null);
-      await loadVault();
     } catch (err) {
       setError(formatErrorMessage(err));
-    } finally {
-      setSavingEdit(false);
     }
   }
 
@@ -271,9 +264,8 @@ export default function DocumentVaultPage() {
     if (!confirm(`Remove "${name}" from your Document Vault?`)) return;
     setError(null);
     try {
-      await deleteDocument(docId, token);
+      await deleteMutation.mutateAsync(docId);
       setSuccessMsg(`Document "${name}" removed.`);
-      await loadVault();
     } catch (err) {
       setError(formatErrorMessage(err));
     }
@@ -383,16 +375,17 @@ export default function DocumentVaultPage() {
           <h2 className="text-base font-semibold flex items-center gap-2">
             <Plus className="size-4 text-primary" /> Add New Document to Vault
           </h2>
-          <form onSubmit={handleUpload} className="mt-4 space-y-4">
+          <form onSubmit={uploadForm.handleSubmit(onUploadSubmit)} className="mt-4 space-y-4">
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
                 <label className="block text-xs font-medium text-muted-foreground mb-1">
                   Document Type *
                 </label>
                 <select
-                  value={selectedType}
-                  onChange={(e) => setSelectedType(e.target.value)}
-                  className="w-full rounded-[var(--radius)] border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                  {...uploadForm.register("selectedType")}
+                  className={`w-full rounded-[var(--radius)] border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary ${
+                    uploadForm.formState.errors.selectedType ? "border-[var(--color-danger)]" : ""
+                  }`}
                 >
                   {docTypes.map((t) => (
                     <option key={t.code} value={t.code}>
@@ -400,6 +393,11 @@ export default function DocumentVaultPage() {
                     </option>
                   ))}
                 </select>
+                {uploadForm.formState.errors.selectedType && (
+                  <span className="mt-1 block text-[11px] text-[var(--color-danger)]">
+                    {uploadForm.formState.errors.selectedType.message}
+                  </span>
+                )}
               </div>
 
               <div>
@@ -409,8 +407,7 @@ export default function DocumentVaultPage() {
                 <input
                   type="text"
                   placeholder="e.g. Primary Passport (2024-2034)"
-                  value={docName}
-                  onChange={(e) => setDocName(e.target.value)}
+                  {...uploadForm.register("docName")}
                   className="w-full rounded-[var(--radius)] border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                 />
               </div>
@@ -423,8 +420,7 @@ export default function DocumentVaultPage() {
                 </label>
                 <input
                   type="date"
-                  value={issuedDate}
-                  onChange={(e) => setIssuedDate(e.target.value)}
+                  {...uploadForm.register("issuedDate")}
                   className="w-full rounded-[var(--radius)] border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                 />
               </div>
@@ -435,8 +431,7 @@ export default function DocumentVaultPage() {
                 </label>
                 <input
                   type="date"
-                  value={expiryDate}
-                  onChange={(e) => setExpiryDate(e.target.value)}
+                  {...uploadForm.register("expiryDate")}
                   className="w-full rounded-[var(--radius)] border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                 />
               </div>
@@ -463,8 +458,8 @@ export default function DocumentVaultPage() {
             </div>
 
             <div className="flex justify-end pt-2">
-              <Button type="submit" disabled={uploading}>
-                {uploading ? (
+              <Button type="submit" disabled={uploadMutation.isPending}>
+                {uploadMutation.isPending ? (
                   <>
                     <Loader2 className="mr-2 size-4 animate-spin" /> Saving...
                   </>
@@ -917,7 +912,7 @@ export default function DocumentVaultPage() {
               </button>
             </div>
 
-            <form onSubmit={handleSaveNewVersion} className="space-y-4 pt-1">
+            <form onSubmit={versionForm.handleSubmit(onSaveNewVersion)} className="space-y-4 pt-1">
               <div>
                 <label className="block text-xs font-medium text-muted-foreground mb-1">
                   Select Replacement File *
@@ -941,8 +936,7 @@ export default function DocumentVaultPage() {
                 </label>
                 <input
                   type="text"
-                  value={updateName}
-                  onChange={(e) => setUpdateName(e.target.value)}
+                  {...versionForm.register("name")}
                   className="w-full rounded-[var(--radius)] border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                 />
               </div>
@@ -954,8 +948,7 @@ export default function DocumentVaultPage() {
                   </label>
                   <input
                     type="date"
-                    value={updateIssuedDate}
-                    onChange={(e) => setUpdateIssuedDate(e.target.value)}
+                    {...versionForm.register("issuedDate")}
                     className="w-full rounded-[var(--radius)] border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                   />
                 </div>
@@ -965,8 +958,7 @@ export default function DocumentVaultPage() {
                   </label>
                   <input
                     type="date"
-                    value={updateExpiryDate}
-                    onChange={(e) => setUpdateExpiryDate(e.target.value)}
+                    {...versionForm.register("expiryDate")}
                     className="w-full rounded-[var(--radius)] border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                   />
                 </div>
@@ -979,8 +971,7 @@ export default function DocumentVaultPage() {
                 <input
                   type="text"
                   placeholder="e.g. Renewed passport with 10-year validity"
-                  value={updateNotes}
-                  onChange={(e) => setUpdateNotes(e.target.value)}
+                  {...versionForm.register("notes")}
                   className="w-full rounded-[var(--radius)] border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                 />
               </div>
@@ -989,8 +980,8 @@ export default function DocumentVaultPage() {
                 <Button variant="ghost" type="button" onClick={() => setUpdatingDoc(null)}>
                   Cancel
                 </Button>
-                <Button type="submit" disabled={savingUpdate || !updateFile}>
-                  {savingUpdate ? (
+                <Button type="submit" disabled={uploadMutation.isPending || !updateFile}>
+                  {uploadMutation.isPending ? (
                     <>
                       <Loader2 className="mr-2 size-4 animate-spin" /> Saving Version...
                     </>
@@ -1025,18 +1016,23 @@ export default function DocumentVaultPage() {
               </button>
             </div>
 
-            <form onSubmit={handleSaveMetadata} className="space-y-4 pt-1">
+            <form onSubmit={editForm.handleSubmit(onSaveMetadata)} className="space-y-4 pt-1">
               <div>
                 <label className="block text-xs font-medium text-muted-foreground mb-1">
                   Display Name *
                 </label>
                 <input
                   type="text"
-                  required
-                  value={editName}
-                  onChange={(e) => setEditName(e.target.value)}
-                  className="w-full rounded-[var(--radius)] border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                  {...editForm.register("name")}
+                  className={`w-full rounded-[var(--radius)] border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary ${
+                    editForm.formState.errors.name ? "border-[var(--color-danger)]" : ""
+                  }`}
                 />
+                {editForm.formState.errors.name && (
+                  <span className="mt-1 block text-[11px] text-[var(--color-danger)]">
+                    {editForm.formState.errors.name.message}
+                  </span>
+                )}
               </div>
 
               <div>
@@ -1045,8 +1041,7 @@ export default function DocumentVaultPage() {
                 </label>
                 <input
                   type="date"
-                  value={editIssuedDate}
-                  onChange={(e) => setEditIssuedDate(e.target.value)}
+                  {...editForm.register("issued_date")}
                   className="w-full rounded-[var(--radius)] border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                 />
               </div>
@@ -1057,8 +1052,7 @@ export default function DocumentVaultPage() {
                 </label>
                 <input
                   type="date"
-                  value={editExpiryDate}
-                  onChange={(e) => setEditExpiryDate(e.target.value)}
+                  {...editForm.register("expiry_date")}
                   className="w-full rounded-[var(--radius)] border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                 />
               </div>
@@ -1067,8 +1061,8 @@ export default function DocumentVaultPage() {
                 <Button variant="ghost" type="button" onClick={() => setEditingDoc(null)}>
                   Cancel
                 </Button>
-                <Button type="submit" disabled={savingEdit}>
-                  {savingEdit ? (
+                <Button type="submit" disabled={patchMutation.isPending}>
+                  {patchMutation.isPending ? (
                     <>
                       <Loader2 className="mr-2 size-4 animate-spin" /> Saving...
                     </>
