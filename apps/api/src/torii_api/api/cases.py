@@ -1403,7 +1403,6 @@ async def unarchive_case(
     return await _enrich_case(session, case)
 
 
-
 @router.delete(
     "/{case_id}",
     status_code=status.HTTP_204_NO_CONTENT,

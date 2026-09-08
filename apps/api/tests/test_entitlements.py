@@ -144,4 +144,3 @@ async def test_submitted_case_packet_accessible_without_payment(
     assert case_res.json()["packet_snapshot"]["case_reference"] == "JP-SUB-1"
 
     get_settings.cache_clear()
-

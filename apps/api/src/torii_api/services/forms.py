@@ -24,13 +24,41 @@ class FilledForm(BaseModel):
 
 FORM_ANSWER_KEY_ALIASES: dict[str, list[str]] = {
     "visitor_full_name": ["full_name", "applicant_name", "visitor_name", "beneficiary_name"],
-    "visitor_nationality": ["nationality", "country_of_citizenship", "primary_citizenship", "citizenship", "country_of_nationality"],
+    "visitor_nationality": [
+        "nationality",
+        "country_of_citizenship",
+        "primary_citizenship",
+        "citizenship",
+        "country_of_nationality",
+    ],
     "visitor_passport_number": ["passport_number", "passport_no"],
     "full_name": ["applicant_name", "visitor_full_name", "visitor_name", "beneficiary_name"],
-    "nationality": ["visitor_nationality", "country_of_citizenship", "primary_citizenship", "citizenship", "country_of_nationality"],
-    "citizenship": ["nationality", "visitor_nationality", "country_of_citizenship", "primary_citizenship", "country_of_nationality"],
-    "country_of_nationality": ["nationality", "citizenship", "country_of_citizenship", "visitor_nationality"],
-    "country_of_citizenship": ["nationality", "citizenship", "country_of_nationality", "visitor_nationality"],
+    "nationality": [
+        "visitor_nationality",
+        "country_of_citizenship",
+        "primary_citizenship",
+        "citizenship",
+        "country_of_nationality",
+    ],
+    "citizenship": [
+        "nationality",
+        "visitor_nationality",
+        "country_of_citizenship",
+        "primary_citizenship",
+        "country_of_nationality",
+    ],
+    "country_of_nationality": [
+        "nationality",
+        "citizenship",
+        "country_of_citizenship",
+        "visitor_nationality",
+    ],
+    "country_of_citizenship": [
+        "nationality",
+        "citizenship",
+        "country_of_nationality",
+        "visitor_nationality",
+    ],
     "home_town_city": ["home_city", "hometown", "city_in_home_country"],
     "home_city": ["home_town_city", "hometown", "city_in_home_country"],
     "hometown": ["home_town_city", "home_city", "city_in_home_country"],
@@ -305,10 +333,7 @@ def fill_form(field_mappings: list[dict[str, Any]], answers: dict[str, Any]) -> 
                 for a in [key, clean_key, *aliases]
                 if standard_label_map.get(a)
             )
-            or any(
-                a.replace("_", " ").title() in filled
-                for a in [key, clean_key, *aliases]
-            )
+            or any(a.replace("_", " ").title() in filled for a in [key, clean_key, *aliases])
             or canonical in seen_canonical_aliases
             or clean_key in seen_canonical_aliases
         )

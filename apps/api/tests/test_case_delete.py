@@ -117,7 +117,9 @@ async def test_delete_case_rejects_submitted(client: AsyncClient, engine: AsyncE
     assert resp.status_code == 409
 
 
-async def test_archive_and_unarchive_submitted_case(client: AsyncClient, engine: AsyncEngine) -> None:
+async def test_archive_and_unarchive_submitted_case(
+    client: AsyncClient, engine: AsyncEngine
+) -> None:
     await _seed_minimal_us_scope(engine)
 
     register = await client.post(
@@ -162,4 +164,3 @@ async def test_archive_and_unarchive_submitted_case(client: AsyncClient, engine:
     unarch_resp = await client.post(f"/v1/cases/{case_id}/unarchive", headers=headers)
     assert unarch_resp.status_code == 200
     assert unarch_resp.json()["is_archived"] is False
-

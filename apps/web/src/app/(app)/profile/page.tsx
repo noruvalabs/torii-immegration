@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
-import { useForm, Controller } from "react-hook-form";
+import { useForm, Controller, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
   User as UserIcon,
@@ -57,7 +57,6 @@ export default function ProfilePage() {
     handleSubmit,
     reset,
     control,
-    watch,
     formState: { errors, isSubmitting },
   } = useForm<ProfileFormData>({
     resolver: zodResolver(profileSchema),
@@ -71,7 +70,7 @@ export default function ProfilePage() {
     },
   });
 
-  const watchedFullName = watch("full_name");
+  const watchedFullName = useWatch({ control, name: "full_name" });
 
   // Sync form whenever user state is loaded or updated in auth context / query
   useEffect(() => {

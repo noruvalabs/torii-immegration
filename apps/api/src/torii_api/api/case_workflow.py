@@ -572,6 +572,7 @@ async def patch_checklist_item(
 
 def _normalize_extracted_key(key: str) -> str:
     import re
+
     cleaned = re.sub(r"^[\d\.\s\-_]+", "", key.strip())
     jp_map = {
         "国籍": "nationality",
@@ -622,7 +623,12 @@ def _apply_extracted_fields_to_case_and_user(
         ):
             user.full_name = val_str
             answers["full_name"] = val_str
-        elif norm_key in ("nationality", "citizenship", "country_of_citizenship", "country_of_nationality"):
+        elif norm_key in (
+            "nationality",
+            "citizenship",
+            "country_of_citizenship",
+            "country_of_nationality",
+        ):
             user.nationality = val_str
             answers["nationality"] = val_str
         elif norm_key in ("passport_number", "passport_no", "passport_num"):

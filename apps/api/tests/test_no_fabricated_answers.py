@@ -392,6 +392,7 @@ def test_fill_form_deduplicates_synonym_aliases() -> None:
 def test_apply_extracted_fields_normalizes_statutory_and_japanese_keys() -> None:
     """Document extraction keys like '6.国籍' or '生年月日' must normalize to canonical keys."""
     from unittest.mock import MagicMock
+
     from torii_api.api.case_workflow import _apply_extracted_fields_to_case_and_user
 
     mock_case = MagicMock()
@@ -411,4 +412,3 @@ def test_apply_extracted_fields_normalizes_statutory_and_japanese_keys() -> None
     assert mock_case.intake_answers["full_name"] == "Hasib Rahman"
     assert mock_user.nationality == "Bangladesh"
     assert mock_user.full_name == "Hasib Rahman"
-

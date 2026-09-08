@@ -624,7 +624,10 @@ export function FormsStep({
   const { data: officialFormsData } = useOfficialFormsQuery(token, caseId ?? 0, Boolean(token && caseId));
   const { data: filingData } = useFilingQuery(token, caseId ?? 0, Boolean(token && caseId));
 
-  const officialForms = officialFormsData?.forms ?? [];
+  const officialForms = useMemo(
+    () => officialFormsData?.forms ?? [],
+    [officialFormsData?.forms],
+  );
   const filing = filingData ?? null;
   const [expandedFormKeys, setExpandedFormKeys] = useState<Record<string, boolean>>({});
   const [fieldSearchQueries, setFieldSearchQueries] = useState<Record<string, string>>({});
