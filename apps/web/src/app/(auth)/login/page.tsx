@@ -176,9 +176,16 @@ export default function LoginPage() {
             </label>
 
             {error && (
-              <p className="rounded-md border border-[var(--color-danger)]/30 bg-[var(--color-danger)]/10 px-3 py-2 text-xs text-[var(--color-danger)]">
-                {error}
-              </p>
+              <div className="rounded-md border border-[var(--color-danger)]/30 bg-[var(--color-danger)]/10 px-3 py-2 text-xs text-[var(--color-danger)] space-y-1">
+                <p>{error}</p>
+                {error.toLowerCase().includes("verify") && (
+                  <p className="pt-0.5 font-medium">
+                    <Link href="/verify-email" className="underline hover:opacity-80">
+                      Resend verification link &rarr;
+                    </Link>
+                  </p>
+                )}
+              </div>
             )}
 
             <Button type="submit" disabled={isSubmitting || googleSubmitting} className="w-full text-xs font-semibold h-9 shadow-xs rounded-md">

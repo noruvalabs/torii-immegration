@@ -106,6 +106,8 @@ class Settings(BaseSettings):
 
     # --- Base URL for building email links ------------------------------------
     app_base_url: str = "http://localhost:3000"
+    # Require email verification before allowing login (US-20)
+    require_email_verification: bool = False
 
     # --- AI service (OPS scraper, assistant chat) ------------------------------
     ai_service_url: str = "http://localhost:8001"

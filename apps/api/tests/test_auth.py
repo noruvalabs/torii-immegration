@@ -224,3 +224,44 @@ async def test_auth_config(client: AsyncClient) -> None:
     data = resp.json()
     assert "google_auth_enabled" in data
     assert "google_client_id" in data
+
+
+async def test_login_rejects_unverified_user_when_required(
+    client: AsyncClient, monkeypatch
+) -> None:
+    from torii_api.config import get_settings
+
+    settings = get_settings()
+    monkeypatch.setattr(settings, "require_email_verification", True)
+
+    resp = await client.post(
+        "/v1/auth/register",
+        json={"email": "needsverify@example.com", "password": "secure-password"},
+    )
+    assert resp.status_code == 201
+
+    login_resp = await client.post(
+        "/v1/auth/login",
+        json={"email_or_username": "needsverify@example.com", "password": "secure-password"},
+    )
+    assert login_resp.status_code == 403
+    assert "verify your email" in login_resp.json()["detail"].lower()
+
+
+async def test_register_respects_request_origin(client: AsyncClient, monkeypatch) -> None:
+    sent_emails = []
+
+    def mock_send_email(**kwargs):
+        sent_emails.append(kwargs)
+        return True
+
+    monkeypatch.setattr("torii_api.api.auth.send_email", mock_send_email)
+
+    resp = await client.post(
+        "/v1/auth/register",
+        json={"email": "dynamic_url@test.com", "password": "secure-password"},
+        headers={"Origin": "https://visa.noruvalabs.com"},
+    )
+    assert resp.status_code == 201
+    assert len(sent_emails) == 1
+    assert "https://visa.noruvalabs.com/verify-email?token=" in sent_emails[0]["html_body"]

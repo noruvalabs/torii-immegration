@@ -8,7 +8,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Mail, Lock, User, ArrowRight } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { register as registerApi } from "@/lib/api/auth";
+import { register as registerApi, resendVerification } from "@/lib/api/auth";
 import { initiateGoogleLogin } from "@/lib/auth/google";
 import { useAuth } from "@/lib/auth-context";
 import { useI18n } from "@/lib/i18n";
@@ -19,9 +19,10 @@ import { registerSchema, type RegisterFormData } from "@/lib/schemas/auth";
 export default function RegisterPage() {
   const [error, setError] = useState<string | null>(null);
   const [googleSubmitting, setGoogleSubmitting] = useState(false);
-  const { setAuth } = useAuth();
+  const [submittedEmail, setSubmittedEmail] = useState<string | null>(null);
+  const [resendSent, setResendSent] = useState(false);
+  const [resending, setResending] = useState(false);
   const { lang, t } = useI18n();
-  const router = useRouter();
 
   const {
     register,
@@ -40,9 +41,8 @@ export default function RegisterPage() {
   async function onSubmit(data: RegisterFormData) {
     setError(null);
     try {
-      const res = await registerApi(data.email, data.password, data.username || undefined);
-      setAuth(res.access_token, res.user);
-      router.push(res.user.role === "applicant" ? "/dashboard" : "/admin");
+      await registerApi(data.email, data.password, data.username || undefined);
+      setSubmittedEmail(data.email);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Registration failed");
     }
@@ -59,6 +59,78 @@ export default function RegisterPage() {
         setGoogleSubmitting(false);
       },
     });
+  }
+
+  if (submittedEmail) {
+    return (
+      <div className="w-full max-w-md space-y-4">
+        <div className="flex items-center px-1">
+          <Link href="/" className="flex items-center gap-3 font-bold">
+            <ToriiLogo size={36} />
+            <span className="text-xl tracking-tight">Torii</span>
+          </Link>
+        </div>
+
+        <Card className="border shadow-md">
+          <CardHeader className="space-y-2 text-center pb-2">
+            <div className="mx-auto my-2 flex size-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+              <Mail className="size-6" />
+            </div>
+            <CardTitle className="text-xl font-bold">
+              Check your email
+            </CardTitle>
+            <CardDescription className="text-xs">
+              We&apos;ve sent a verification link to{" "}
+              <span className="font-semibold text-foreground">{submittedEmail}</span>.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4 text-center">
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Please check your inbox and click the verification link to activate your Torii account before signing in.
+            </p>
+
+            <div className="pt-2">
+              <Link href="/login">
+                <Button className="w-full text-xs font-semibold h-9 shadow-xs rounded-md">
+                  Proceed to Sign in
+                  <ArrowRight className="ml-1.5 size-3.5" />
+                </Button>
+              </Link>
+            </div>
+
+            <div className="border-t border-border pt-3">
+              <p className="text-xs text-muted-foreground">
+                Didn&apos;t receive the email?{" "}
+                {resendSent ? (
+                  <span className="text-green-600 dark:text-green-400 font-medium">
+                    Verification link resent!
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={resending}
+                    onClick={async () => {
+                      setResending(true);
+                      try {
+                        await resendVerification(submittedEmail);
+                        setResendSent(true);
+                      } catch {
+                        setResendSent(true);
+                      } finally {
+                        setResending(false);
+                      }
+                    }}
+                    className="font-semibold text-primary hover:underline"
+                  >
+                    {resending ? "Sending…" : "Resend link"}
+                  </button>
+                )}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
   }
 
   return (
