@@ -3,19 +3,14 @@
 from __future__ import annotations
 
 import smtplib
-from email.mime.image import MIMEImage
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from pathlib import Path
 
 import structlog
 
 from torii_api.config import Settings
 
 log = structlog.get_logger()
-
-ASSETS_DIR = Path(__file__).resolve().parent / "assets"
-LOGO_PATH = ASSETS_DIR / "logo-icon.png"
 
 
 def send_email(
@@ -26,7 +21,7 @@ def send_email(
     text_body: str | None = None,
     settings: Settings,
 ) -> bool:
-    """Send an HTML email (with optional plain text part and inline logo) via SMTP."""
+    """Send an HTML email (with optional plain text part) via SMTP."""
     if not settings.smtp_host:
         log.warning("email.smtp_not_configured", to=to_email, subject=subject)
         return False
@@ -38,27 +33,14 @@ def send_email(
         log.info("email.skipped_reserved_test_domain", to=to_email, subject=subject)
         return True
 
-    msg = MIMEMultipart("related")
+    msg = MIMEMultipart("alternative")
     msg["From"] = f"{settings.smtp_from_name} <{settings.smtp_from_email}>"
     msg["To"] = to_email
     msg["Subject"] = subject
 
-    alt_part = MIMEMultipart("alternative")
     if text_body:
-        alt_part.attach(MIMEText(text_body, "plain", "utf-8"))
-    alt_part.attach(MIMEText(html_body, "html", "utf-8"))
-    msg.attach(alt_part)
-
-    # Attach official Torii logo as inline MIME attachment so it displays across all email clients
-    if LOGO_PATH.exists():
-        try:
-            with open(LOGO_PATH, "rb") as f:
-                img = MIMEImage(f.read(), _subtype="png")
-            img.add_header("Content-ID", "<torii_logo>")
-            img.add_header("Content-Disposition", "inline", filename="logo.png")
-            msg.attach(img)
-        except Exception as exc:
-            log.warning("email.attach_logo_failed", error=str(exc))
+        msg.attach(MIMEText(text_body, "plain", "utf-8"))
+    msg.attach(MIMEText(html_body, "html", "utf-8"))
 
     try:
         if settings.smtp_tls:
@@ -118,24 +100,13 @@ def build_verification_email_body(
         <tr>
             <td align="center">
                 <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="max-width: 520px; background-color: #ffffff; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05); border: 1px solid #e2e8f0; overflow: hidden;">
-                    <!-- Brand Header with Official Logo -->
+                    <!-- Brand Header (Text Only) -->
                     <tr>
-                        <td style="background-color: #0f172a; padding: 24px 32px;">
-                            <table cellpadding="0" cellspacing="0" border="0" role="presentation">
-                                <tr>
-                                    <td style="vertical-align: middle; padding-right: 14px;">
-                                        <a href="{clean_base}" target="_blank" style="text-decoration: none; display: block;">
-                                            <img src="cid:torii_logo" alt="Torii" width="36" height="36" style="display: block; width: 36px; height: 36px; border: 0; outline: none; border-radius: 8px;" />
-                                        </a>
-                                    </td>
-                                    <td style="vertical-align: middle;">
-                                        <a href="{clean_base}" target="_blank" style="text-decoration: none; display: block;">
-                                            <div style="font-size: 22px; font-weight: 700; color: #ffffff; line-height: 1.1;">Torii</div>
-                                            <div style="font-size: 10px; font-weight: 600; color: #94a3b8; letter-spacing: 1.2px; text-transform: uppercase; margin-top: 3px;">Immigration Platform</div>
-                                        </a>
-                                    </td>
-                                </tr>
-                            </table>
+                        <td style="background-color: #0f172a; padding: 26px 32px;">
+                            <a href="{clean_base}" target="_blank" style="text-decoration: none; display: block;">
+                                <div style="font-size: 24px; font-weight: 700; color: #ffffff; line-height: 1.1; letter-spacing: -0.4px;">Torii</div>
+                                <div style="font-size: 11px; font-weight: 600; color: #94a3b8; letter-spacing: 1.5px; text-transform: uppercase; margin-top: 4px;">Immigration Platform</div>
+                            </a>
                         </td>
                     </tr>
                     <!-- Primary Blue Accent Line (Matches Site Landing Theme) -->
@@ -223,24 +194,13 @@ def build_password_reset_email_body(
         <tr>
             <td align="center">
                 <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="max-width: 520px; background-color: #ffffff; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05); border: 1px solid #e2e8f0; overflow: hidden;">
-                    <!-- Brand Header with Official Logo -->
+                    <!-- Brand Header (Text Only) -->
                     <tr>
-                        <td style="background-color: #0f172a; padding: 24px 32px;">
-                            <table cellpadding="0" cellspacing="0" border="0" role="presentation">
-                                <tr>
-                                    <td style="vertical-align: middle; padding-right: 14px;">
-                                        <a href="{clean_base}" target="_blank" style="text-decoration: none; display: block;">
-                                            <img src="cid:torii_logo" alt="Torii" width="36" height="36" style="display: block; width: 36px; height: 36px; border: 0; outline: none; border-radius: 8px;" />
-                                        </a>
-                                    </td>
-                                    <td style="vertical-align: middle;">
-                                        <a href="{clean_base}" target="_blank" style="text-decoration: none; display: block;">
-                                            <div style="font-size: 22px; font-weight: 700; color: #ffffff; line-height: 1.1;">Torii</div>
-                                            <div style="font-size: 10px; font-weight: 600; color: #94a3b8; letter-spacing: 1.2px; text-transform: uppercase; margin-top: 3px;">Immigration Platform</div>
-                                        </a>
-                                    </td>
-                                </tr>
-                            </table>
+                        <td style="background-color: #0f172a; padding: 26px 32px;">
+                            <a href="{clean_base}" target="_blank" style="text-decoration: none; display: block;">
+                                <div style="font-size: 24px; font-weight: 700; color: #ffffff; line-height: 1.1; letter-spacing: -0.4px;">Torii</div>
+                                <div style="font-size: 11px; font-weight: 600; color: #94a3b8; letter-spacing: 1.5px; text-transform: uppercase; margin-top: 4px;">Immigration Platform</div>
+                            </a>
                         </td>
                     </tr>
                     <!-- Primary Blue Accent Line (Matches Site Landing Theme) -->
