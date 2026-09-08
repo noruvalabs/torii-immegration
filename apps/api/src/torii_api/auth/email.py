@@ -91,26 +91,46 @@ def build_verification_email_body(
     verification_url: str,
     base_url: str,
 ) -> str:
-    """Build the modern responsive HTML body for the email-verification message."""
+    """Build the modern responsive HTML body for the email-verification message matching Torii's site theme."""
     display_name = username or "there"
+    clean_base = base_url.rstrip("/")
+    logo_icon_url = f"{clean_base}/brand/logo-icon.png"
+
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Verify your email address</title>
+    <title>Verify your email address - Torii</title>
 </head>
 <body style="margin: 0; padding: 0; background-color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; color: #1e293b;">
     <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background-color: #f8fafc; padding: 40px 16px;">
         <tr>
             <td align="center">
                 <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="max-width: 520px; background-color: #ffffff; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05); border: 1px solid #e2e8f0; overflow: hidden;">
-                    <!-- Brand Header -->
+                    <!-- Brand Header with Official Logo -->
                     <tr>
-                        <td style="background-color: #0f172a; padding: 28px 32px; text-align: left;">
-                            <span style="font-size: 22px; font-weight: 700; color: #ffffff; letter-spacing: -0.5px;">⛩️ Torii</span>
-                            <span style="font-size: 13px; color: #94a3b8; margin-left: 8px; font-weight: 500;">Immigration Platform</span>
+                        <td style="background-color: #0f172a; padding: 24px 32px;">
+                            <table cellpadding="0" cellspacing="0" border="0" role="presentation">
+                                <tr>
+                                    <td style="vertical-align: middle; padding-right: 12px;">
+                                        <a href="{clean_base}" target="_blank" style="text-decoration: none; display: block;">
+                                            <img src="{logo_icon_url}" alt="Torii" width="40" height="40" style="display: block; width: 40px; height: 40px; border: 0; outline: none; border-radius: 8px; background-color: #1e293b; padding: 2px;" />
+                                        </a>
+                                    </td>
+                                    <td style="vertical-align: middle;">
+                                        <a href="{clean_base}" target="_blank" style="text-decoration: none; display: block;">
+                                            <div style="font-size: 22px; font-weight: 800; color: #ffffff; letter-spacing: -0.5px; line-height: 1.1;">Torii</div>
+                                            <div style="font-size: 9px; font-weight: 700; color: #f97316; letter-spacing: 1.5px; text-transform: uppercase; margin-top: 3px;">Immigration Platform</div>
+                                        </a>
+                                    </td>
+                                </tr>
+                            </table>
                         </td>
+                    </tr>
+                    <!-- Torii Vermillion Accent Line -->
+                    <tr>
+                        <td style="height: 3px; background: linear-gradient(90deg, #d94906 0%, #ea580c 50%, #f97316 100%); line-height: 3px; font-size: 0;">&nbsp;</td>
                     </tr>
                     <!-- Main Content -->
                     <tr>
@@ -118,31 +138,34 @@ def build_verification_email_body(
                             <h1 style="margin: 0 0 16px 0; font-size: 22px; font-weight: 700; color: #0f172a; letter-spacing: -0.3px;">Verify your email address</h1>
                             <p style="margin: 0 0 16px 0; font-size: 15px; line-height: 24px; color: #334155;">Hi <strong>{display_name}</strong>,</p>
                             <p style="margin: 0 0 24px 0; font-size: 15px; line-height: 24px; color: #334155;">
-                                Welcome to Torii! To activate your account and start preparing your official immigration dossier, please verify your email address.
+                                Welcome to Torii! To activate your account and begin preparing your official immigration filing dossier, please confirm your email address:
                             </p>
-                            <!-- Action Button -->
+                            <!-- Action Button (Torii Vermillion) -->
                             <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="margin: 30px 0;">
                                 <tr>
                                     <td align="center">
-                                        <a href="{verification_url}" target="_blank" style="display: inline-block; background-color: #4f46e5; color: #ffffff; font-size: 15px; font-weight: 600; text-decoration: none; padding: 14px 32px; border-radius: 8px; box-shadow: 0 2px 4px rgba(79, 70, 229, 0.3);">Verify Email Address</a>
+                                        <a href="{verification_url}" target="_blank" style="display: inline-block; background-color: #d94906; color: #ffffff; font-size: 15px; font-weight: 600; text-decoration: none; padding: 14px 34px; border-radius: 8px; box-shadow: 0 4px 12px rgba(217, 73, 6, 0.35);">Verify Email Address</a>
                                     </td>
                                 </tr>
                             </table>
-                            <!-- Fallback Link -->
-                            <div style="background-color: #f1f5f9; border-radius: 8px; padding: 14px 16px; margin: 24px 0;">
-                                <p style="margin: 0 0 6px 0; font-size: 12px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px;">Or copy and paste this link:</p>
-                                <a href="{verification_url}" style="font-size: 13px; color: #4f46e5; word-break: break-all; text-decoration: underline; line-height: 18px;">{verification_url}</a>
+                            <!-- Fallback Link Box -->
+                            <div style="background-color: #fff7ed; border-left: 3px solid #d94906; border-radius: 0 8px 8px 0; padding: 14px 16px; margin: 24px 0;">
+                                <p style="margin: 0 0 6px 0; font-size: 11px; font-weight: 700; color: #9a3412; text-transform: uppercase; letter-spacing: 0.5px;">Or copy and paste this URL into your browser:</p>
+                                <a href="{verification_url}" style="font-size: 13px; color: #d94906; word-break: break-all; text-decoration: underline; line-height: 18px;">{verification_url}</a>
                             </div>
                             <p style="margin: 24px 0 0 0; font-size: 13px; line-height: 20px; color: #64748b;">
-                                If you did not register for an account with Torii, you can safely ignore this email.
+                                If you did not create an account with Torii, you can safely ignore this email.
                             </p>
                         </td>
                     </tr>
                     <!-- Footer -->
                     <tr>
                         <td style="padding: 20px 32px; background-color: #f8fafc; border-top: 1px solid #e2e8f0; text-align: center;">
-                            <p style="margin: 0; font-size: 12px; color: #94a3b8;">
-                                &copy; Torii Immigration — Guided immigration form preparation & dossier management.
+                            <p style="margin: 0 0 4px 0; font-size: 12px; font-weight: 500; color: #64748b;">
+                                &copy; Torii Immigration — Official immigration application & dossier management.
+                            </p>
+                            <p style="margin: 0; font-size: 11px; color: #94a3b8;">
+                                Japanese Visa & Status of Residence Documentation System
                             </p>
                         </td>
                     </tr>
@@ -177,26 +200,46 @@ def build_password_reset_email_body(
     reset_url: str,
     base_url: str,
 ) -> str:
-    """Build the modern responsive HTML body for the password-reset message."""
+    """Build the modern responsive HTML body for the password-reset message matching Torii's site theme."""
     display_name = username or "there"
+    clean_base = base_url.rstrip("/")
+    logo_icon_url = f"{clean_base}/brand/logo-icon.png"
+
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Reset your password</title>
+    <title>Reset your password - Torii</title>
 </head>
 <body style="margin: 0; padding: 0; background-color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; color: #1e293b;">
     <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background-color: #f8fafc; padding: 40px 16px;">
         <tr>
             <td align="center">
                 <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="max-width: 520px; background-color: #ffffff; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05); border: 1px solid #e2e8f0; overflow: hidden;">
-                    <!-- Brand Header -->
+                    <!-- Brand Header with Official Logo -->
                     <tr>
-                        <td style="background-color: #0f172a; padding: 28px 32px; text-align: left;">
-                            <span style="font-size: 22px; font-weight: 700; color: #ffffff; letter-spacing: -0.5px;">⛩️ Torii</span>
-                            <span style="font-size: 13px; color: #94a3b8; margin-left: 8px; font-weight: 500;">Immigration Platform</span>
+                        <td style="background-color: #0f172a; padding: 24px 32px;">
+                            <table cellpadding="0" cellspacing="0" border="0" role="presentation">
+                                <tr>
+                                    <td style="vertical-align: middle; padding-right: 12px;">
+                                        <a href="{clean_base}" target="_blank" style="text-decoration: none; display: block;">
+                                            <img src="{logo_icon_url}" alt="Torii" width="40" height="40" style="display: block; width: 40px; height: 40px; border: 0; outline: none; border-radius: 8px; background-color: #1e293b; padding: 2px;" />
+                                        </a>
+                                    </td>
+                                    <td style="vertical-align: middle;">
+                                        <a href="{clean_base}" target="_blank" style="text-decoration: none; display: block;">
+                                            <div style="font-size: 22px; font-weight: 800; color: #ffffff; letter-spacing: -0.5px; line-height: 1.1;">Torii</div>
+                                            <div style="font-size: 9px; font-weight: 700; color: #f97316; letter-spacing: 1.5px; text-transform: uppercase; margin-top: 3px;">Immigration Platform</div>
+                                        </a>
+                                    </td>
+                                </tr>
+                            </table>
                         </td>
+                    </tr>
+                    <!-- Torii Vermillion Accent Line -->
+                    <tr>
+                        <td style="height: 3px; background: linear-gradient(90deg, #d94906 0%, #ea580c 50%, #f97316 100%); line-height: 3px; font-size: 0;">&nbsp;</td>
                     </tr>
                     <!-- Main Content -->
                     <tr>
@@ -204,20 +247,20 @@ def build_password_reset_email_body(
                             <h1 style="margin: 0 0 16px 0; font-size: 22px; font-weight: 700; color: #0f172a; letter-spacing: -0.3px;">Reset your password</h1>
                             <p style="margin: 0 0 16px 0; font-size: 15px; line-height: 24px; color: #334155;">Hi <strong>{display_name}</strong>,</p>
                             <p style="margin: 0 0 24px 0; font-size: 15px; line-height: 24px; color: #334155;">
-                                We received a request to reset your password. Click the button below to choose a new password:
+                                We received a request to reset your Torii account password. Click the button below to choose a new password:
                             </p>
-                            <!-- Action Button -->
+                            <!-- Action Button (Torii Vermillion) -->
                             <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="margin: 30px 0;">
                                 <tr>
                                     <td align="center">
-                                        <a href="{reset_url}" target="_blank" style="display: inline-block; background-color: #4f46e5; color: #ffffff; font-size: 15px; font-weight: 600; text-decoration: none; padding: 14px 32px; border-radius: 8px; box-shadow: 0 2px 4px rgba(79, 70, 229, 0.3);">Reset Password</a>
+                                        <a href="{reset_url}" target="_blank" style="display: inline-block; background-color: #d94906; color: #ffffff; font-size: 15px; font-weight: 600; text-decoration: none; padding: 14px 34px; border-radius: 8px; box-shadow: 0 4px 12px rgba(217, 73, 6, 0.35);">Reset Password</a>
                                     </td>
                                 </tr>
                             </table>
-                            <!-- Fallback Link -->
-                            <div style="background-color: #f1f5f9; border-radius: 8px; padding: 14px 16px; margin: 24px 0;">
-                                <p style="margin: 0 0 6px 0; font-size: 12px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px;">Or copy and paste this link:</p>
-                                <a href="{reset_url}" style="font-size: 13px; color: #4f46e5; word-break: break-all; text-decoration: underline; line-height: 18px;">{reset_url}</a>
+                            <!-- Fallback Link Box -->
+                            <div style="background-color: #fff7ed; border-left: 3px solid #d94906; border-radius: 0 8px 8px 0; padding: 14px 16px; margin: 24px 0;">
+                                <p style="margin: 0 0 6px 0; font-size: 11px; font-weight: 700; color: #9a3412; text-transform: uppercase; letter-spacing: 0.5px;">Or copy and paste this URL into your browser:</p>
+                                <a href="{reset_url}" style="font-size: 13px; color: #d94906; word-break: break-all; text-decoration: underline; line-height: 18px;">{reset_url}</a>
                             </div>
                             <p style="margin: 24px 0 0 0; font-size: 13px; line-height: 20px; color: #64748b;">
                                 This link expires in 1 hour. If you didn't request a password reset, you can safely ignore this email.
@@ -227,8 +270,11 @@ def build_password_reset_email_body(
                     <!-- Footer -->
                     <tr>
                         <td style="padding: 20px 32px; background-color: #f8fafc; border-top: 1px solid #e2e8f0; text-align: center;">
-                            <p style="margin: 0; font-size: 12px; color: #94a3b8;">
-                                &copy; Torii Immigration — Guided immigration form preparation & dossier management.
+                            <p style="margin: 0 0 4px 0; font-size: 12px; font-weight: 500; color: #64748b;">
+                                &copy; Torii Immigration — Official immigration application & dossier management.
+                            </p>
+                            <p style="margin: 0; font-size: 11px; color: #94a3b8;">
+                                Japanese Visa & Status of Residence Documentation System
                             </p>
                         </td>
                     </tr>
