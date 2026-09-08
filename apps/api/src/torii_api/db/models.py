@@ -55,6 +55,7 @@ class User(TimestampMixin, Base):
     email_verification_token: Mapped[str | None] = mapped_column(
         String(128), unique=True, index=True, nullable=True
     )
+    email_verification_expires: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
     password_reset_token: Mapped[str | None] = mapped_column(
         String(128), unique=True, index=True, nullable=True
     )

@@ -26,7 +26,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth-context";
 import { useI18n } from "@/lib/i18n";
-import type { ProfileUpdate } from "@/lib/api/auth";
+import { changePassword, type ProfileUpdate } from "@/lib/api/auth";
 import {
   useProfileQuery,
   useUpdateProfileMutation,
@@ -49,6 +49,42 @@ export default function ProfilePage() {
   const [avatar, setAvatar] = useState<string | null>(user?.avatar_url ?? null);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const [currentPw, setCurrentPw] = useState("");
+  const [newPw, setNewPw] = useState("");
+  const [confirmPw, setConfirmPw] = useState("");
+  const [pwError, setPwError] = useState<string | null>(null);
+  const [pwSuccess, setPwSuccess] = useState<string | null>(null);
+  const [pwSubmitting, setPwSubmitting] = useState(false);
+
+  async function handlePasswordChange(e: React.FormEvent) {
+    e.preventDefault();
+    setPwError(null);
+    setPwSuccess(null);
+
+    if (!token) return;
+    if (newPw.length < 8) {
+      setPwError("New password must be at least 8 characters long");
+      return;
+    }
+    if (newPw !== confirmPw) {
+      setPwError("New passwords do not match");
+      return;
+    }
+
+    setPwSubmitting(true);
+    try {
+      const res = await changePassword(token, currentPw, newPw);
+      setPwSuccess(res.detail || "Password changed successfully");
+      setCurrentPw("");
+      setNewPw("");
+      setConfirmPw("");
+    } catch (err) {
+      setPwError(err instanceof Error ? err.message : "Failed to change password");
+    } finally {
+      setPwSubmitting(false);
+    }
+  }
 
   const currentUser = profileUser || user;
 
@@ -536,11 +572,70 @@ export default function ProfilePage() {
                   {user?.role || "applicant"}
                 </Badge>
               </div>
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between border-b pb-2">
                 <span className="text-muted-foreground">Email Status:</span>
                 <span className="text-emerald-600 font-medium flex items-center gap-1">
                   <ShieldCheck className="size-3" /> Verified
                 </span>
+              </div>
+
+              {/* Password Change Form */}
+              <div className="pt-2">
+                <p className="font-semibold text-foreground mb-2">Change Password</p>
+                {pwSuccess && (
+                  <p className="rounded-md border border-emerald-500/30 bg-emerald-500/10 p-2 text-[11px] text-emerald-700 dark:text-emerald-400 mb-2 font-medium">
+                    ✓ {pwSuccess}
+                  </p>
+                )}
+                {pwError && (
+                  <p className="rounded-md border border-[var(--color-danger)]/30 bg-[var(--color-danger)]/10 p-2 text-[11px] text-[var(--color-danger)] mb-2">
+                    {pwError}
+                  </p>
+                )}
+                <form onSubmit={handlePasswordChange} className="space-y-2">
+                  <label className="block">
+                    <span className="text-[11px] text-muted-foreground block mb-0.5">Current password</span>
+                    <input
+                      type="password"
+                      required
+                      value={currentPw}
+                      onChange={(e) => setCurrentPw(e.target.value)}
+                      placeholder="••••••••"
+                      className="h-8 w-full rounded-md border bg-background px-2.5 text-xs outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="text-[11px] text-muted-foreground block mb-0.5">New password</span>
+                    <input
+                      type="password"
+                      required
+                      minLength={8}
+                      value={newPw}
+                      onChange={(e) => setNewPw(e.target.value)}
+                      placeholder="At least 8 characters"
+                      className="h-8 w-full rounded-md border bg-background px-2.5 text-xs outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="text-[11px] text-muted-foreground block mb-0.5">Confirm new password</span>
+                    <input
+                      type="password"
+                      required
+                      minLength={8}
+                      value={confirmPw}
+                      onChange={(e) => setConfirmPw(e.target.value)}
+                      placeholder="Repeat new password"
+                      className="h-8 w-full rounded-md border bg-background px-2.5 text-xs outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    />
+                  </label>
+                  <Button
+                    type="submit"
+                    disabled={pwSubmitting || !currentPw || !newPw || !confirmPw}
+                    className="w-full text-xs font-semibold h-8 rounded-md mt-1"
+                  >
+                    {pwSubmitting ? "Updating…" : "Update Password"}
+                  </Button>
+                </form>
               </div>
             </CardContent>
           </Card>
