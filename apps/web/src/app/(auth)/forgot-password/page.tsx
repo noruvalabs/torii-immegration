@@ -2,28 +2,38 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { Mail, ArrowLeft, CheckCircle2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { forgotPassword } from "@/lib/api/auth";
+import { forgotPasswordSchema, type ForgotPasswordFormData } from "@/lib/schemas/auth";
 
 export default function ForgotPasswordPage() {
-  const [email, setEmail] = useState("");
+  const [submittedEmail, setSubmittedEmail] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+  } = useForm<ForgotPasswordFormData>({
+    resolver: zodResolver(forgotPasswordSchema),
+    defaultValues: {
+      email: "",
+    },
+  });
+
+  async function onSubmit(data: ForgotPasswordFormData) {
     setError(null);
-    setSubmitting(true);
     try {
-      await forgotPassword(email);
+      await forgotPassword(data.email);
+      setSubmittedEmail(data.email);
       setSuccess(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
-    } finally {
-      setSubmitting(false);
     }
   }
 
@@ -37,7 +47,7 @@ export default function ForgotPasswordPage() {
           <div className="flex flex-col items-center gap-3 py-4 text-center">
             <CheckCircle2 className="size-10 text-green-500" />
             <p className="text-sm text-muted-foreground">
-              If an account exists with <strong>{email}</strong>, we&apos;ve sent a
+              If an account exists with <strong>{submittedEmail}</strong>, we&apos;ve sent a
               password-reset link.
             </p>
           </div>
@@ -58,7 +68,7 @@ export default function ForgotPasswordPage() {
         <CardTitle>Forgot your password?</CardTitle>
       </CardHeader>
       <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <p className="text-sm text-muted-foreground">
             Enter your email and we&apos;ll send you a link to reset your password.
           </p>
@@ -69,13 +79,18 @@ export default function ForgotPasswordPage() {
               <Mail className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
               <input
                 type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                {...register("email")}
                 placeholder="you@example.com"
-                className="h-9 w-full rounded-[var(--radius)] border bg-background pl-9 pr-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className={`h-9 w-full rounded-[var(--radius)] border bg-background pl-9 pr-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                  errors.email ? "border-[var(--color-danger)] focus-visible:ring-[var(--color-danger)]" : ""
+                }`}
               />
             </div>
+            {errors.email && (
+              <span className="text-[11px] font-normal text-[var(--color-danger)]">
+                {errors.email.message}
+              </span>
+            )}
           </label>
 
           {error && (
@@ -84,8 +99,8 @@ export default function ForgotPasswordPage() {
             </p>
           )}
 
-          <Button type="submit" disabled={submitting} className="w-full">
-            {submitting ? "Sending…" : "Send reset link"}
+          <Button type="submit" disabled={isSubmitting} className="w-full">
+            {isSubmitting ? "Sending…" : "Send reset link"}
           </Button>
 
           <p className="text-center text-sm text-muted-foreground">

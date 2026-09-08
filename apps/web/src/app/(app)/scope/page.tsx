@@ -7,14 +7,17 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/lib/auth-context";
 import {
-  getAllGeoData,
-  getVisaTypes,
-  getApplicationTypes,
-  type GeoData,
   type Destination,
   type VisaType,
   type ApplicationType,
 } from "@/lib/api/geo";
+import {
+  useGeoDataQuery,
+  useVisaTypesQuery,
+  useApplicationTypesQuery,
+} from "@/lib/queries/geo";
+import { caseKeys } from "@/lib/queries/cases";
+import { useQueryClient } from "@tanstack/react-query";
 import { updateProfile } from "@/lib/api/auth";
 import {
   scopeCase,
@@ -54,12 +57,10 @@ const STEP_LABELS: Record<Step, string> = {
 
 export default function ScopePage() {
   const { token, user } = useAuth();
+  const queryClient = useQueryClient();
   const [step, setStep] = useState<Step>("identity");
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
   const [savingIdentity, setSavingIdentity] = useState(false);
-
-  const [geoData, setGeoData] = useState<GeoData | null>(null);
 
   const [residenceCountry, setResidenceCountry] = useState<string>("BD");
   const [nationality, setNationality] = useState<string>("BD");
@@ -69,13 +70,18 @@ export default function ScopePage() {
 
   const [submitting, setSubmitting] = useState(false);
   const [createdCase, setCreatedCase] = useState<CaseResult | null>(null);
-  const [dynamicVisaTypes, setDynamicVisaTypes] = useState<VisaType[] | null>(null);
-  const [dynamicAppTypes, setDynamicAppTypes] = useState<ApplicationType[] | null>(null);
-  // One flag per list. Sharing one meant a Back out of the application step, while its
-  // fetch was still in flight, put a spinner over an already-loaded visa-type list.
-  const [loadingVisaTypes, setLoadingVisaTypes] = useState(false);
-  const [loadingAppTypes, setLoadingAppTypes] = useState(false);
   const [visaFilter, setVisaFilter] = useState("");
+
+  const { data: geoData = null, isLoading: geoLoading } = useGeoDataQuery(Boolean(token));
+  const { data: dynamicVisaTypes = null, isLoading: loadingVisaTypes } = useVisaTypesQuery(
+    selectedDestination?.code,
+  );
+  const { data: dynamicAppTypes = null, isLoading: loadingAppTypes } = useApplicationTypesQuery(
+    selectedDestination?.code,
+    selectedVisaType?.code,
+  );
+
+  const loading = geoLoading && !geoData;
 
   // Seed residence/nationality once from profile — never re-run after Continue saves profile.
   const seededFromProfileRef = useRef(false);
@@ -83,85 +89,14 @@ export default function ScopePage() {
   userRef.current = user;
 
   useEffect(() => {
-    if (!token) return;
-    let cancelled = false;
-    void (async () => {
-      try {
-        setLoading(true);
-        const data = await getAllGeoData();
-        if (cancelled) return;
-        setGeoData(data);
-
-        if (!seededFromProfileRef.current) {
-          const profile = userRef.current;
-          const fallback = data.detected_country.country_code;
-          setResidenceCountry(
-            matchCountry(profile?.current_country, fallback).code,
-          );
-          setNationality(
-            matchCountry(profile?.nationality, fallback).code,
-          );
-          seededFromProfileRef.current = true;
-        }
-      } catch {
-        if (!cancelled) setError("Could not load destination data. Is the API running?");
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [token]);
-
-  useEffect(() => {
-    setDynamicVisaTypes(null);
-    setDynamicAppTypes(null);
-    if (!selectedDestination) return;
-    let cancelled = false;
-    void (async () => {
-      try {
-        setLoadingVisaTypes(true);
-        const vTypes = await getVisaTypes(selectedDestination.code);
-        if (cancelled) return;
-        setDynamicVisaTypes(vTypes);
-      } catch {
-        // Leave the list cleared. Keeping the previous country's routes on screen is
-        // worse than showing nothing: every one of them would be refused at the end.
-        if (!cancelled) {
-          setError("Could not load visa types for this destination. Please try again.");
-        }
-      } finally {
-        if (!cancelled) setLoadingVisaTypes(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [selectedDestination]);
-
-  useEffect(() => {
-    setDynamicAppTypes(null);
-    if (!selectedDestination || !selectedVisaType) return;
-    let cancelled = false;
-    void (async () => {
-      try {
-        setLoadingAppTypes(true);
-        const aTypes = await getApplicationTypes(selectedDestination.code, selectedVisaType.code);
-        if (cancelled) return;
-        setDynamicAppTypes(aTypes);
-      } catch {
-        if (!cancelled) {
-          setError("Could not load application types for this visa. Please try again.");
-        }
-      } finally {
-        if (!cancelled) setLoadingAppTypes(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [selectedDestination, selectedVisaType]);
+    if (geoData && !seededFromProfileRef.current) {
+      const profile = userRef.current;
+      const fallback = geoData.detected_country.country_code;
+      setResidenceCountry(matchCountry(profile?.current_country, fallback).code);
+      setNationality(matchCountry(profile?.nationality, fallback).code);
+      seededFromProfileRef.current = true;
+    }
+  }, [geoData]);
 
   function goBack() {
     const i = STEP_ORDER.indexOf(step);
@@ -235,6 +170,7 @@ export default function ScopePage() {
         residence_country: residenceCountry,
       });
       setCreatedCase(result);
+      void queryClient.invalidateQueries({ queryKey: caseKeys.list() });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to create case");
     } finally {

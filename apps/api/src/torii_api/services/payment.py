@@ -162,7 +162,10 @@ async def case_has_packet_entitlement(
     case_id: int,
     user_id: int,
 ) -> bool:
-    """True when a completed payment unlocks packet download (US-22.2)."""
+    """True when a completed payment or credit entitlement unlocks packet download (US-22.2)."""
+    case = await db.get(Case, case_id)
+    if case and (case.is_entitled or case.status == "submitted"):
+        return True
     result = await db.execute(
         select(Payment.id).where(
             Payment.case_id == case_id,

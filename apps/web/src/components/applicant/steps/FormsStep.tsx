@@ -23,9 +23,8 @@ import {
   answerIntake,
   patchCase,
   downloadOfficialForm,
-  getFiling,
-  getOfficialForms,
 } from "@/lib/api/cases";
+import { useOfficialFormsQuery, useFilingQuery } from "@/lib/queries/cases";
 import type { FilingInfo, OfficialForm, PortalPack } from "@/lib/api/cases";
 import { toast } from "@/components/ui/sonner";
 import type { GeneratedForm } from "./types";
@@ -311,160 +310,80 @@ export function isFieldRequired(key: string): boolean {
   return false;
 }
 
-function categorizeFields(filledFields: Record<string, unknown>): FormFieldGroup[] {
-  const standardGroups: Array<{
-    title: string;
-    keys: Array<{ key: string; label: string; aliases?: string[] }>;
-  }> = [
-    {
-      title: "Applicant & Identity",
-      keys: [
-        { key: "full_name", label: "Full Name", aliases: ["applicant_name", "visitor_full_name"] },
-        { key: "nationality", label: "Nationality / Region", aliases: ["country_of_citizenship", "visitor_nationality"] },
-        { key: "date_of_birth", label: "Date of Birth", aliases: ["dob"] },
-        { key: "sex", label: "Gender", aliases: ["gender"] },
-        { key: "marital_status", label: "Marital Status" },
-        { key: "place_of_birth", label: "Place of Birth" },
-        { key: "home_town_city", label: "Home Town / City" },
-      ],
-    },
-    {
-      title: "Passport & Residence Status",
-      keys: [
-        { key: "passport_number", label: "Passport Number" },
-        { key: "passport_expiry_date", label: "Passport Expiration Date", aliases: ["passport_expiry"] },
-        { key: "current_status_of_residence", label: "Current Residence Status", aliases: ["current_visa_status", "current_residence_status"] },
-        { key: "current_period_of_stay", label: "Current Period of Stay", aliases: ["current_period_of_stay_years"] },
-        { key: "current_status_expiry_date", label: "Residence Expiration Date", aliases: ["current_stay_expiry_date", "residence_card_expiry"] },
-        { key: "residence_card_number", label: "Residence Card Number" },
-      ],
-    },
-    {
-      title: "Address & Contact in Japan",
-      keys: [
-        { key: "current_japan_address", label: "Address in Japan", aliases: ["registered_address_japan", "address_in_japan"] },
-        { key: "telephone_japan", label: "Telephone Number", aliases: ["phone_number", "contact_phone"] },
-        { key: "mobile_phone", label: "Cellular / Mobile Phone", aliases: ["mobile_phone_japan"] },
-      ],
-    },
-    {
-      title: "Application Details",
-      keys: [
-        { key: "desired_period_of_stay", label: "Desired Length of Extension", aliases: ["desired_period", "desired_extension_days"] },
-        { key: "reason_for_extension", label: "Reason for Application", aliases: ["extension_explanation_details", "reason_for_change"] },
-        { key: "criminal_record", label: "Criminal Record Disclosures", aliases: ["criminal_record_any", "criminal_disclosures"] },
-        { key: "has_family_in_japan", label: "Family in Japan", aliases: ["family_in_japan"] },
-      ],
-    },
-    {
-      title: "Employment & Sponsor (Organization Part)",
-      keys: [
-        { key: "employer_name", label: "Employer / Company Name", aliases: ["sponsor_name", "company_name"] },
-        { key: "employer_corporate_number", label: "Corporate Number", aliases: ["corporate_number"] },
-        { key: "employer_category", label: "Tax / Employer Category", aliases: ["company_category"] },
-        { key: "occupation", label: "Job Title / Occupation", aliases: ["job_title", "duties"] },
-        { key: "annual_salary", label: "Annual Salary / Remuneration", aliases: ["salary", "annual_income_jpy", "current_annual_income"] },
-        { key: "employer_address", label: "Company Address in Japan", aliases: ["place_of_employment_address"] },
-        { key: "employer_phone", label: "Company Phone Number", aliases: ["place_of_employment_tel"] },
-      ],
-    },
-    {
-      title: "Education & Qualifications",
-      keys: [
-        { key: "education_level", label: "Highest Education Level", aliases: ["final_education"] },
-        { key: "school_name", label: "Name of Last School Attended", aliases: ["institution_name"] },
-        { key: "major_field", label: "Major / Field of Study", aliases: ["field_of_study", "major"] },
-        { key: "graduation_date", label: "Date of Graduation", aliases: ["graduation_year_month"] },
-      ],
-    },
-  ];
-
-  const result: FormFieldGroup[] = [];
-  const handledKeys = new Set<string>();
-
-  for (const group of standardGroups) {
-    const fields: FormFieldItem[] = [];
-    for (const item of group.keys) {
-      let val = filledFields[item.key];
-      if (val === undefined || val === null || val === "") {
-        for (const alias of item.aliases || []) {
-          if (filledFields[alias] !== undefined && filledFields[alias] !== null && filledFields[alias] !== "") {
-            val = filledFields[alias];
-            handledKeys.add(alias);
-            break;
-          }
-        }
-      }
-      if (val !== undefined && val !== null && val !== "") {
-        handledKeys.add(item.key);
-        for (const a of item.aliases || []) handledKeys.add(a);
-        fields.push({
-          key: item.key,
-          label: item.label,
-          value: String(val),
-        });
-      }
-    }
-    if (fields.length > 0) {
-      result.push({ title: group.title, fields });
-    }
-  }
-
-  const otherFields: FormFieldItem[] = [];
-  for (const [k, v] of Object.entries(filledFields)) {
-    if (handledKeys.has(k)) continue;
-    if (k.startsWith("_") || v === null || v === "" || v === undefined) continue;
-    if (k.includes("is_") || k.includes("_flag") || typeof v === "boolean") continue;
-
-    otherFields.push({
-      key: k,
-      label: k.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
-      value: String(v),
-    });
-  }
-
-  if (otherFields.length > 0) {
-    result.push({ title: "Other Application Fields", fields: otherFields });
-  }
-
-  return result;
-}
-
 const FIELD_ALIAS_GROUPS: string[][] = [
   ["intended_length_of_stay_days", "stay_duration_days", "length_of_stay_days", "stay_days", "visit.length_of_stay_days", "duration_of_stay", "duration"],
   ["support_type", "financial.support_type", "financial_support_type", "visitor_has_sufficient_funds", "has_sufficient_funds", "trip_payer"],
-  ["full_name", "applicant_name", "visitor_full_name", "visitor.full_name", "name", "legal_name", "full_legal_name"],
-  ["nationality", "visitor_nationality", "visitor.nationality", "country_of_citizenship", "citizenship", "primary_citizenship"],
-  ["passport_number", "passport_no", "visitor_passport_number", "visitor.passport_number", "passport_num", "travel_document_number"],
-  ["date_of_birth", "dob", "birth_date", "applicant_dob", "applicant_date_of_birth"],
-  ["passport_expiry_date", "passport_expiry", "passport_expiration_date", "passport_valid_until"],
-  ["purpose_of_visit", "main_purpose", "purpose", "visit.purpose", "purpose_of_stay", "trip_purpose"],
-  ["relationship", "relationship_to_visitor", "sponsor_relationship", "relationship_to_applicant"],
-  ["residence_card_number", "guarantor.residence_card_number", "residence_card_no", "zairyu_card_number", "alien_registration_number"],
-  ["current_japan_address", "registered_address_japan", "address_in_japan", "residential_address_japan", "japan_address"],
-  ["telephone_japan", "phone_number", "contact_phone", "phone_japan", "telephone_number"],
-  ["mobile_phone", "mobile_phone_japan", "cell_phone"],
-  ["current_residence_country", "residence_country", "country_of_residence", "current_location_country", "current_country"],
-  ["employer_name", "company_name", "sponsor_name", "sponsoring_organization", "host_company_name", "employer"],
-  ["corporate_number", "employer_corporate_number", "company_number", "organization_number"],
-  ["salary", "monthly_salary", "annual_salary_jpy", "salary_monthly", "income_monthly"],
+  ["full_name", "applicant_name", "visitor_full_name", "visitor.full_name", "applicant.full_name", "name", "legal_name", "full_legal_name", "applicant full name", "applicant name (as in passport)"],
+  ["nationality", "visitor_nationality", "visitor.nationality", "applicant.nationality", "country_of_citizenship", "citizenship", "primary_citizenship", "country_of_nationality", "nationality_or_region", "nationality / region", "nationality / citizenship", "6.国籍", "国籍", "国籍・地域"],
+  ["home_town_city", "home_city", "hometown", "city_in_home_country", "home_town", "home town / city", "home town city"],
+  ["current_country", "current_location_country", "current_residence_country", "residence_country", "country_of_residence", "country_of_current_residence", "country of current residence", "country of residence"],
+  ["passport_number", "passport_no", "visitor_passport_number", "visitor.passport_number", "applicant.passport_number", "passport_num", "travel_document_number", "passport number"],
+  ["date_of_birth", "dob", "birth_date", "applicant_dob", "applicant_date_of_birth", "date of birth", "date of birth (yyyy-mm-dd)"],
+  ["place_of_birth", "birth_place", "city_of_birth", "country_of_birth", "place of birth", "place / country of birth"],
+  ["passport_expiry_date", "passport_expiry", "passport_expiration_date", "passport_valid_until", "applicant.passport_expiry", "passport expiration date", "passport expiry date"],
+  ["purpose_of_visit", "main_purpose", "purpose", "visit.purpose", "purpose_of_stay", "trip_purpose", "purpose of visit to japan", "main purpose of visit"],
+  ["relationship", "relationship_to_visitor", "sponsor_relationship", "relationship_to_applicant", "relationship_to_supporter"],
+  ["residence_card_number", "guarantor.residence_card_number", "residence_card_no", "zairyu_card_number", "alien_registration_number", "residence.card_number", "residence card number"],
+  ["current_status_of_residence", "current_visa_status", "current_residence_status", "status_of_residence", "current residence status"],
+  ["current_period_of_stay", "current_period_of_stay_years", "period_of_stay", "current period of stay"],
+  ["current_status_expiry_date", "current_stay_expiry_date", "residence_card_expiry", "expiry_date_stay", "residence.card_expiry", "residence expiration date"],
+  ["current_japan_address", "registered_address_japan", "address_in_japan", "residential_address_japan", "japan_address", "residence.address", "address in japan", "registered address japan"],
+  ["telephone_japan", "phone_number", "contact_phone", "phone_japan", "telephone_number", "telephone number"],
+  ["mobile_phone", "mobile_phone_japan", "cell_phone", "cellular / mobile phone"],
+  ["employer_name", "company_name", "sponsor_name", "sponsoring_organization", "host_company_name", "employer", "employer / company name"],
+  ["corporate_number", "employer_corporate_number", "company_number", "organization_number", "corporate number"],
+  ["salary", "monthly_salary", "annual_salary_jpy", "salary_monthly", "income_monthly", "annual_salary", "annual salary / remuneration", "monthly salary / income"],
+  ["desired_period_of_stay", "desired_period", "desired_extension_days", "desired_stay_duration", "desired length of extension"],
+  ["reason_for_extension", "extension_explanation_details", "reason_for_change", "reason_for_application", "reason for application"],
+  ["criminal_record", "criminal_record_any", "has_criminal_record", "criminal_disclosures", "criminal record disclosures", "criminal record / offence history (no/yes)"],
+  ["has_family_in_japan", "family_in_japan", "relatives_in_japan", "family in japan"],
+  ["occupation", "current_profession", "job_title", "duties", "job title / occupation", "current profession / occupation"],
+  ["sex", "gender", "sex / gender"],
+  ["marital_status", "marital status"],
+  ["school_name", "institution_name", "last_school_attended", "school.name", "name of last school attended", "school name"],
+  ["education_level", "final_education", "highest_education", "highest education level", "education level"],
+  ["major_field", "field_of_study", "major", "major / field of study"],
+  ["graduation_date", "graduation_year_month", "date_of_graduation", "date of graduation"],
   ["attendance_rate", "school.attendance_rate", "school_attendance_rate"],
   ["school_completed", "enrollment_status", "school.enrollment_status", "school_enrollment_status"],
 ];
 
+function normalizeFieldKey(k: string): string {
+  return k
+    .toLowerCase()
+    .trim()
+    .replace(/^[\d\.\s\-_]+/, "")
+    .replace(/\(.*?\)/g, "")
+    .replace(/[_\s\-\/]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
 function getCanonicalAliasGroup(key: string): string[] | null {
-  const norm = key.toLowerCase();
+  const norm = normalizeFieldKey(key);
   const clean = norm.split(".").pop() || norm;
+  if (clean === "国籍" || clean === "国籍_地域") {
+    return FIELD_ALIAS_GROUPS.find((g) => g[0] === "nationality") || null;
+  }
+  if (clean === "氏名" || clean === "名前") {
+    return FIELD_ALIAS_GROUPS.find((g) => g[0] === "full_name") || null;
+  }
+  if (clean === "生年月日") {
+    return FIELD_ALIAS_GROUPS.find((g) => g[0] === "date_of_birth") || null;
+  }
   for (const group of FIELD_ALIAS_GROUPS) {
-    if (group.some((g) => g.toLowerCase() === norm || g.toLowerCase() === clean)) {
-      return group;
+    for (const item of group) {
+      const normItem = normalizeFieldKey(item);
+      const cleanItem = normItem.split(".").pop() || normItem;
+      if (norm === normItem || clean === cleanItem || norm === cleanItem || clean === normItem) {
+        return group;
+      }
     }
   }
   return null;
 }
 
 function isFieldAlreadyAnswered(key: string, filledAnswers: Record<string, unknown>): boolean {
-  const norm = key.toLowerCase();
+  const norm = normalizeFieldKey(key);
   const clean = norm.split(".").pop() || norm;
   if (filledAnswers[key] !== undefined && filledAnswers[key] !== null && filledAnswers[key] !== "") return true;
   if (filledAnswers[clean] !== undefined && filledAnswers[clean] !== null && filledAnswers[clean] !== "") return true;
@@ -506,6 +425,188 @@ function deduplicateMissingFields(fields: string[], filledAnswers: Record<string
   return result;
 }
 
+function categorizeFields(filledFields: Record<string, unknown>): FormFieldGroup[] {
+  const standardGroups: Array<{
+    title: string;
+    keys: Array<{ key: string; label: string; aliases?: string[] }>;
+  }> = [
+    {
+      title: "Applicant & Identity",
+      keys: [
+        { key: "full_name", label: "Full Name", aliases: ["applicant_name", "visitor_full_name", "applicant.full_name"] },
+        { key: "nationality", label: "Nationality / Region", aliases: ["country_of_citizenship", "visitor_nationality", "citizenship", "country_of_nationality", "applicant.nationality"] },
+        { key: "date_of_birth", label: "Date of Birth", aliases: ["dob", "birth_date"] },
+        { key: "sex", label: "Gender", aliases: ["gender"] },
+        { key: "marital_status", label: "Marital Status" },
+        { key: "place_of_birth", label: "Place of Birth", aliases: ["birth_place", "city_of_birth"] },
+        { key: "home_town_city", label: "Home Town / City", aliases: ["home_city", "hometown", "city_in_home_country"] },
+      ],
+    },
+    {
+      title: "Passport & Residence Status",
+      keys: [
+        { key: "passport_number", label: "Passport Number", aliases: ["passport_no", "applicant.passport_number"] },
+        { key: "passport_expiry_date", label: "Passport Expiration Date", aliases: ["passport_expiry", "applicant.passport_expiry"] },
+        { key: "current_status_of_residence", label: "Current Residence Status", aliases: ["current_visa_status", "current_residence_status", "status_of_residence"] },
+        { key: "current_period_of_stay", label: "Current Period of Stay", aliases: ["current_period_of_stay_years", "period_of_stay"] },
+        { key: "current_status_expiry_date", label: "Residence Expiration Date", aliases: ["current_stay_expiry_date", "residence_card_expiry", "expiry_date_stay"] },
+        { key: "residence_card_number", label: "Residence Card Number", aliases: ["residence_card_no", "zairyu_card_number", "residence.card_number"] },
+      ],
+    },
+    {
+      title: "Address & Contact in Japan",
+      keys: [
+        { key: "current_japan_address", label: "Address in Japan", aliases: ["registered_address_japan", "address_in_japan", "residential_address_japan", "residence.address"] },
+        { key: "telephone_japan", label: "Telephone Number", aliases: ["phone_number", "contact_phone", "phone_japan", "telephone_number"] },
+        { key: "mobile_phone", label: "Cellular / Mobile Phone", aliases: ["mobile_phone_japan", "cell_phone"] },
+      ],
+    },
+    {
+      title: "Application Details",
+      keys: [
+        { key: "desired_period_of_stay", label: "Desired Length of Extension", aliases: ["desired_period", "desired_extension_days"] },
+        { key: "reason_for_extension", label: "Reason for Application", aliases: ["extension_explanation_details", "reason_for_change"] },
+        { key: "criminal_record", label: "Criminal Record Disclosures", aliases: ["criminal_record_any", "criminal_disclosures"] },
+        { key: "has_family_in_japan", label: "Family in Japan", aliases: ["family_in_japan", "relatives_in_japan"] },
+      ],
+    },
+    {
+      title: "Employment & Sponsor (Organization Part)",
+      keys: [
+        { key: "employer_name", label: "Employer / Company Name", aliases: ["sponsor_name", "company_name"] },
+        { key: "employer_corporate_number", label: "Corporate Number", aliases: ["corporate_number"] },
+        { key: "employer_category", label: "Tax / Employer Category", aliases: ["company_category"] },
+        { key: "occupation", label: "Job Title / Occupation", aliases: ["job_title", "duties"] },
+        { key: "annual_salary", label: "Annual Salary / Remuneration", aliases: ["salary", "annual_income_jpy", "current_annual_income"] },
+        { key: "employer_address", label: "Company Address in Japan", aliases: ["place_of_employment_address"] },
+        { key: "employer_phone", label: "Company Phone Number", aliases: ["place_of_employment_tel"] },
+      ],
+    },
+    {
+      title: "Education & Qualifications",
+      keys: [
+        { key: "education_level", label: "Highest Education Level", aliases: ["final_education", "highest_education"] },
+        { key: "school_name", label: "Name of Last School Attended", aliases: ["institution_name", "school.name"] },
+        { key: "major_field", label: "Major / Field of Study", aliases: ["field_of_study", "major"] },
+        { key: "graduation_date", label: "Date of Graduation", aliases: ["graduation_year_month"] },
+      ],
+    },
+  ];
+
+  const result: FormFieldGroup[] = [];
+  const handledKeys = new Set<string>();
+  const handledLabels = new Set<string>();
+
+  for (const group of standardGroups) {
+    const fields: FormFieldItem[] = [];
+    for (const item of group.keys) {
+      let val = filledFields[item.key];
+      if (val === undefined || val === null || val === "") {
+        for (const alias of item.aliases || []) {
+          if (filledFields[alias] !== undefined && filledFields[alias] !== null && filledFields[alias] !== "") {
+            val = filledFields[alias];
+            handledKeys.add(alias);
+            break;
+          }
+        }
+      }
+      if (val === undefined || val === null || val === "") {
+        const agroup = getCanonicalAliasGroup(item.key);
+        if (agroup) {
+          for (const alias of agroup) {
+            if (filledFields[alias] !== undefined && filledFields[alias] !== null && filledFields[alias] !== "") {
+              val = filledFields[alias];
+              handledKeys.add(alias);
+              break;
+            }
+          }
+        }
+      }
+
+      if (val !== undefined && val !== null && val !== "") {
+        handledKeys.add(item.key);
+        handledKeys.add(item.key.toLowerCase());
+        handledLabels.add(normalizeFieldKey(item.label));
+
+        for (const a of item.aliases || []) {
+          handledKeys.add(a);
+          handledKeys.add(a.toLowerCase());
+          handledKeys.add(normalizeFieldKey(a));
+        }
+
+        const agroup = getCanonicalAliasGroup(item.key);
+        if (agroup) {
+          for (const a of agroup) {
+            handledKeys.add(a);
+            handledKeys.add(a.toLowerCase());
+            handledKeys.add(normalizeFieldKey(a));
+            handledLabels.add(normalizeFieldKey(a));
+          }
+        }
+
+        fields.push({
+          key: item.key,
+          label: item.label,
+          value: String(val),
+        });
+      }
+    }
+    if (fields.length > 0) {
+      result.push({ title: group.title, fields });
+    }
+  }
+
+  const otherFields: FormFieldItem[] = [];
+  const seenOtherCanonical = new Set<string>();
+
+  for (const [k, v] of Object.entries(filledFields)) {
+    if (v === null || v === "" || v === undefined) continue;
+    if (k.startsWith("_") || k.includes("is_") || k.includes("_flag") || typeof v === "boolean") continue;
+
+    const normK = normalizeFieldKey(k);
+    if (handledKeys.has(k) || handledKeys.has(k.toLowerCase()) || handledKeys.has(normK)) continue;
+
+    const group = getCanonicalAliasGroup(k);
+    if (group) {
+      const alreadyHandledInStandard = group.some(
+        (alias) =>
+          handledKeys.has(alias) ||
+          handledKeys.has(alias.toLowerCase()) ||
+          handledKeys.has(normalizeFieldKey(alias))
+      );
+      if (alreadyHandledInStandard) continue;
+
+      const canonical = group[0];
+      if (seenOtherCanonical.has(canonical)) continue;
+      seenOtherCanonical.add(canonical);
+    }
+
+    const cleanLabel = k
+      .replace(/^[\d\.\s\-_]+/, "")
+      .replace(/_/g, " ")
+      .replace(/\b\w/g, (c) => c.toUpperCase())
+      .trim();
+    const normLabel = normalizeFieldKey(cleanLabel);
+    if (handledLabels.has(normLabel)) continue;
+
+    handledLabels.add(normLabel);
+    handledKeys.add(k);
+    handledKeys.add(k.toLowerCase());
+
+    otherFields.push({
+      key: k,
+      label: cleanLabel,
+      value: String(v),
+    });
+  }
+
+  if (otherFields.length > 0) {
+    result.push({ title: "Other Application Fields", fields: otherFields });
+  }
+
+  return result;
+}
+
 export function FormsStep({
   forms,
   loading,
@@ -520,26 +621,17 @@ export function FormsStep({
   const [missingFieldInputs, setMissingFieldInputs] = useState<Record<string, string>>({});
   const [savingMissingField, setSavingMissingField] = useState<string | null>(null);
   const [justSavedField, setJustSavedField] = useState<string | null>(null);
-  const [officialForms, setOfficialForms] = useState<OfficialForm[]>([]);
-  const [filing, setFiling] = useState<FilingInfo | null>(null);
+  const { data: officialFormsData } = useOfficialFormsQuery(token, caseId ?? 0, Boolean(token && caseId));
+  const { data: filingData } = useFilingQuery(token, caseId ?? 0, Boolean(token && caseId));
+
+  const officialForms = useMemo(
+    () => officialFormsData?.forms ?? [],
+    [officialFormsData?.forms],
+  );
+  const filing = filingData ?? null;
   const [expandedFormKeys, setExpandedFormKeys] = useState<Record<string, boolean>>({});
   const [fieldSearchQueries, setFieldSearchQueries] = useState<Record<string, string>>({});
   const [missingFieldFilter, setMissingFieldFilter] = useState<Record<string, "all" | "required" | "optional">>({});
-
-  useEffect(() => {
-    if (!token || !caseId) return;
-    let cancelled = false;
-    Promise.allSettled([getOfficialForms(token, caseId), getFiling(token, caseId)]).then(
-      ([formsResult, filingResult]) => {
-        if (cancelled) return;
-        setOfficialForms(formsResult.status === "fulfilled" ? formsResult.value.forms : []);
-        setFiling(filingResult.status === "fulfilled" ? filingResult.value : null);
-      },
-    );
-    return () => {
-      cancelled = true;
-    };
-  }, [token, caseId]);
 
   const portalPack: PortalPack | undefined =
     filing?.filing_mode === "online_portal" ? filing.portal_pack : undefined;

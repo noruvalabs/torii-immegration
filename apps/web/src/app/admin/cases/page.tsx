@@ -15,7 +15,8 @@ import {
 } from "@/components/ui/table";
 import { PaginationBar } from "@/components/ui/pagination";
 import { useAuth } from "@/lib/auth-context";
-import { adminListCases, type AdminCase } from "@/lib/api/cases";
+import type { AdminCase } from "@/lib/api/cases";
+import { useAdminCasesQuery } from "@/lib/queries/admin";
 
 const statusConfig: Record<string, { label: string; tone: "default" | "success" | "warning" | "danger" | "muted" }> = {
   draft: { label: "Draft", tone: "muted" },
@@ -28,29 +29,14 @@ const statusConfig: Record<string, { label: string; tone: "default" | "success" 
 
 export default function CasesPage() {
   const { token } = useAuth();
-  const [cases, setCases] = useState<AdminCase[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState("");
+  const { data: cases = [], isLoading, isError } = useAdminCasesQuery(token, { status: filter || undefined });
   const [search, setSearch] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
-  const load = useCallback(async () => {
-    if (!token) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await adminListCases(token, { status: filter || undefined });
-      setCases(data);
-    } catch {
-      setError("Could not load cases.");
-    } finally {
-      setLoading(false);
-    }
-  }, [token, filter]);
-
-  useEffect(() => { void load(); }, [load]);
+  const loading = isLoading && cases.length === 0;
+  const error = isError ? "Could not load cases." : null;
 
   // Reset to page 1 whenever filter or search query changes
   useEffect(() => {

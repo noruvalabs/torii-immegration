@@ -2,6 +2,8 @@
 
 import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
+import { useForm, Controller, useWatch } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import {
   User as UserIcon,
   Loader2,
@@ -24,57 +26,66 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth-context";
 import { useI18n } from "@/lib/i18n";
-import { getProfile, updateProfile, uploadAvatar, type ProfileUpdate } from "@/lib/api/auth";
+import type { ProfileUpdate } from "@/lib/api/auth";
+import {
+  useProfileQuery,
+  useUpdateProfileMutation,
+  useUploadAvatarMutation,
+} from "@/lib/queries/profile";
 import { CountrySelector } from "@/components/ui/country-selector";
+import { profileSchema, type ProfileFormData } from "@/lib/schemas/profile";
 
 export default function ProfilePage() {
   const { user, token, setAuth } = useAuth();
   const { lang, setLang, t, isJapanUser } = useI18n();
   const { theme, setTheme } = useTheme();
-  const [saving, setSaving] = useState(false);
+
+  const { data: profileUser } = useProfileQuery(token, user);
+  const updateProfileMutation = useUpdateProfileMutation(token);
+  const uploadAvatarMutation = useUploadAvatarMutation(token);
+
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [avatar, setAvatar] = useState<string | null>(user?.avatar_url ?? null);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [form, setForm] = useState<ProfileUpdate>({
-    full_name: user?.full_name ?? "",
-    nationality: user?.nationality ?? "",
-    passport_number: user?.passport_number ?? "",
-    passport_expiry: user?.passport_expiry ?? "",
-    date_of_birth: user?.date_of_birth ?? "",
-    current_country: user?.current_country ?? "",
+  const currentUser = profileUser || user;
+
+  const {
+    register,
+    handleSubmit,
+    reset,
+    control,
+    formState: { errors, isSubmitting },
+  } = useForm<ProfileFormData>({
+    resolver: zodResolver(profileSchema),
+    defaultValues: {
+      full_name: currentUser?.full_name ?? "",
+      nationality: currentUser?.nationality ?? "",
+      passport_number: currentUser?.passport_number ?? "",
+      passport_expiry: currentUser?.passport_expiry ?? "",
+      date_of_birth: currentUser?.date_of_birth ?? "",
+      current_country: currentUser?.current_country ?? "",
+    },
   });
 
-  // Sync form whenever user state is loaded or updated in auth context
+  const watchedFullName = useWatch({ control, name: "full_name" });
+
+  // Sync form whenever user state is loaded or updated in auth context / query
   useEffect(() => {
-    if (user) {
-      setForm({
-        full_name: user.full_name ?? "",
-        nationality: user.nationality ?? "",
-        passport_number: user.passport_number ?? "",
-        passport_expiry: user.passport_expiry ?? "",
-        date_of_birth: user.date_of_birth ?? "",
-        current_country: user.current_country ?? "",
+    if (currentUser) {
+      reset({
+        full_name: currentUser.full_name ?? "",
+        nationality: currentUser.nationality ?? "",
+        passport_number: currentUser.passport_number ?? "",
+        passport_expiry: currentUser.passport_expiry ?? "",
+        date_of_birth: currentUser.date_of_birth ?? "",
+        current_country: currentUser.current_country ?? "",
       });
-      setAvatar(user.avatar_url ?? null);
+      setAvatar(currentUser.avatar_url ?? null);
     }
-  }, [user]);
-
-  // Always fetch the freshest profile on mount
-  useEffect(() => {
-    if (!token) return;
-    getProfile(token)
-      .then((fresh) => {
-        setAuth(token, fresh);
-      })
-      .catch(() => {});
-  }, [token, setAuth]);
-
-  function update(key: keyof ProfileUpdate, value: string) {
-    setForm((prev) => ({ ...prev, [key]: value }));
-  }
+  }, [currentUser, reset]);
 
   async function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -89,7 +100,7 @@ export default function ProfilePage() {
     setError(null);
 
     try {
-      const updated = await uploadAvatar(token, file);
+      const updated = await uploadAvatarMutation.mutateAsync(file);
       setAvatar(updated.avatar_url);
       setAuth(token, updated);
       setSuccessMsg("Profile photo updated successfully.");
@@ -100,26 +111,27 @@ export default function ProfilePage() {
     }
   }
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  async function onSubmit(data: ProfileFormData) {
     if (!token) return;
-    setSaving(true);
     setError(null);
     setSuccessMsg(null);
     try {
-      const updated = await updateProfile(token, form);
+      const updated = await updateProfileMutation.mutateAsync({
+        full_name: data.full_name,
+        nationality: data.nationality,
+        passport_number: data.passport_number || undefined,
+        passport_expiry: data.passport_expiry || undefined,
+        date_of_birth: data.date_of_birth || undefined,
+        current_country: data.current_country,
+      });
       setAuth(token, updated);
       setSuccessMsg("Profile details saved successfully. All future cases and questionnaires will auto-fill with these details.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save profile");
-    } finally {
-      setSaving(false);
     }
   }
 
-  const isValid = Boolean(
-    form.full_name && form.nationality && form.passport_number && form.current_country,
-  );
+  const isSaving = isSubmitting || updateProfileMutation.isPending;
 
   return (
     <div className="w-full max-w-7xl mx-auto space-y-6">
@@ -208,7 +220,7 @@ export default function ProfilePage() {
                 <div className="text-center sm:text-left flex-1 min-w-0">
                   <div className="flex items-center justify-center sm:justify-start gap-2">
                     <p className="text-sm font-semibold text-foreground">
-                      {form.full_name || user?.email?.split("@")[0] || "Applicant Photo"}
+                      {watchedFullName || user?.email?.split("@")[0] || "Applicant Photo"}
                     </p>
                     {user?.email_verified && (
                       <Badge tone="success" className="text-[9px] py-0 px-1.5">
@@ -239,61 +251,85 @@ export default function ProfilePage() {
               </div>
 
               {/* Input Form Fields */}
-              <form onSubmit={(e) => void handleSubmit(e)} className="space-y-5">
+              <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <Field label="Full name (as on passport)" required>
+                  <Field label="Full name (as on passport)" required error={errors.full_name?.message}>
                     <input
                       type="text"
-                      value={form.full_name ?? ""}
-                      onChange={(e) => update("full_name", e.target.value)}
-                      className="w-full rounded-[var(--radius)] border bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      {...register("full_name")}
+                      className={`w-full rounded-[var(--radius)] border bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                        errors.full_name
+                          ? "border-[var(--color-danger)] focus-visible:ring-[var(--color-danger)]"
+                          : ""
+                      }`}
                       placeholder="e.g. Yuki Tanaka"
                     />
                   </Field>
 
-                  <Field label="Date of birth">
+                  <Field label="Date of birth" error={errors.date_of_birth?.message}>
                     <input
                       type="date"
-                      value={form.date_of_birth ?? ""}
-                      onChange={(e) => update("date_of_birth", e.target.value)}
-                      className="w-full rounded-[var(--radius)] border bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      {...register("date_of_birth")}
+                      className={`w-full rounded-[var(--radius)] border bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                        errors.date_of_birth
+                          ? "border-[var(--color-danger)] focus-visible:ring-[var(--color-danger)]"
+                          : ""
+                      }`}
                     />
                   </Field>
 
-                  <Field label="Nationality" required>
-                    <CountrySelector
-                      value={form.nationality ?? ""}
-                      valueType="name"
-                      placeholder="Select nationality..."
-                      onChange={(val) => update("nationality", val)}
+                  <Field label="Nationality" required error={errors.nationality?.message}>
+                    <Controller
+                      name="nationality"
+                      control={control}
+                      render={({ field }) => (
+                        <CountrySelector
+                          value={field.value ?? ""}
+                          valueType="name"
+                          placeholder="Select nationality..."
+                          onChange={field.onChange}
+                        />
+                      )}
                     />
                   </Field>
 
-                  <Field label="Current country of residence" required>
-                    <CountrySelector
-                      value={form.current_country ?? ""}
-                      valueType="name"
-                      placeholder="Select residence country..."
-                      onChange={(val) => update("current_country", val)}
+                  <Field label="Current country of residence" required error={errors.current_country?.message}>
+                    <Controller
+                      name="current_country"
+                      control={control}
+                      render={({ field }) => (
+                        <CountrySelector
+                          value={field.value ?? ""}
+                          valueType="name"
+                          placeholder="Select residence country..."
+                          onChange={field.onChange}
+                        />
+                      )}
                     />
                   </Field>
 
-                  <Field label="Passport number" required>
+                  <Field label="Passport number" error={errors.passport_number?.message}>
                     <input
                       type="text"
-                      value={form.passport_number ?? ""}
-                      onChange={(e) => update("passport_number", e.target.value)}
-                      className="w-full rounded-[var(--radius)] border bg-background px-3 py-2 text-sm uppercase outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      {...register("passport_number")}
+                      className={`w-full rounded-[var(--radius)] border bg-background px-3 py-2 text-sm uppercase outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                        errors.passport_number
+                          ? "border-[var(--color-danger)] focus-visible:ring-[var(--color-danger)]"
+                          : ""
+                      }`}
                       placeholder="e.g. TK4567890"
                     />
                   </Field>
 
-                  <Field label="Passport expiry date">
+                  <Field label="Passport expiry date" error={errors.passport_expiry?.message}>
                     <input
                       type="date"
-                      value={form.passport_expiry ?? ""}
-                      onChange={(e) => update("passport_expiry", e.target.value)}
-                      className="w-full rounded-[var(--radius)] border bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      {...register("passport_expiry")}
+                      className={`w-full rounded-[var(--radius)] border bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                        errors.passport_expiry
+                          ? "border-[var(--color-danger)] focus-visible:ring-[var(--color-danger)]"
+                          : ""
+                      }`}
                     />
                   </Field>
                 </div>
@@ -301,10 +337,10 @@ export default function ProfilePage() {
                 <div className="flex items-center justify-end pt-3 border-t">
                   <Button
                     type="submit"
-                    disabled={!isValid || saving}
+                    disabled={isSaving}
                     className="min-w-36 h-9 text-sm font-semibold gap-2 shadow-xs"
                   >
-                    {saving ? (
+                    {isSaving ? (
                       <>
                         <Loader2 className="size-4 animate-spin" /> Saving…
                       </>
@@ -517,10 +553,12 @@ export default function ProfilePage() {
 function Field({
   label,
   required,
+  error,
   children,
 }: {
   label: string;
   required?: boolean;
+  error?: string;
   children: React.ReactNode;
 }) {
   return (
@@ -530,6 +568,11 @@ function Field({
         {required && <span className="text-[var(--color-danger)] font-bold"> *</span>}
       </span>
       {children}
+      {error && (
+        <span className="mt-1 block text-[11px] font-normal text-[var(--color-danger)]">
+          {error}
+        </span>
+      )}
     </label>
   );
 }

@@ -3,10 +3,13 @@
 import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { Lock, CheckCircle2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { resetPassword } from "@/lib/api/auth";
+import { resetPasswordSchema, type ResetPasswordFormData } from "@/lib/schemas/auth";
 
 export default function ResetPasswordPage() {
   // useSearchParams must be wrapped in Suspense so the page can be statically
@@ -22,34 +25,33 @@ function ResetPasswordForm() {
   const searchParams = useSearchParams();
   const token = searchParams.get("token") ?? "";
 
-  const [password, setPassword] = useState("");
-  const [confirm, setConfirm] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setError(null);
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+  } = useForm<ResetPasswordFormData>({
+    resolver: zodResolver(resetPasswordSchema),
+    defaultValues: {
+      password: "",
+      confirm: "",
+    },
+  });
 
-    if (password !== confirm) {
-      setError("Passwords do not match");
-      return;
-    }
-
+  async function onSubmit(data: ResetPasswordFormData) {
     if (!token) {
       setError("Invalid or missing reset token");
       return;
     }
 
-    setSubmitting(true);
+    setError(null);
     try {
-      await resetPassword(token, password);
+      await resetPassword(token, data.password);
       setSuccess(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
-    } finally {
-      setSubmitting(false);
     }
   }
 
@@ -100,21 +102,25 @@ function ResetPasswordForm() {
         <CardTitle>Reset your password</CardTitle>
       </CardHeader>
       <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <label className="flex flex-col gap-1 text-sm">
             <span className="text-muted-foreground">New password</span>
             <div className="relative">
               <Lock className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
               <input
                 type="password"
-                required
-                minLength={8}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                {...register("password")}
                 placeholder="••••••••"
-                className="h-9 w-full rounded-[var(--radius)] border bg-background pl-9 pr-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className={`h-9 w-full rounded-[var(--radius)] border bg-background pl-9 pr-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                  errors.password ? "border-[var(--color-danger)] focus-visible:ring-[var(--color-danger)]" : ""
+                }`}
               />
             </div>
+            {errors.password && (
+              <span className="text-[11px] font-normal text-[var(--color-danger)]">
+                {errors.password.message}
+              </span>
+            )}
           </label>
 
           <label className="flex flex-col gap-1 text-sm">
@@ -123,14 +129,18 @@ function ResetPasswordForm() {
               <Lock className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
               <input
                 type="password"
-                required
-                minLength={8}
-                value={confirm}
-                onChange={(e) => setConfirm(e.target.value)}
+                {...register("confirm")}
                 placeholder="••••••••"
-                className="h-9 w-full rounded-[var(--radius)] border bg-background pl-9 pr-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className={`h-9 w-full rounded-[var(--radius)] border bg-background pl-9 pr-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                  errors.confirm ? "border-[var(--color-danger)] focus-visible:ring-[var(--color-danger)]" : ""
+                }`}
               />
             </div>
+            {errors.confirm && (
+              <span className="text-[11px] font-normal text-[var(--color-danger)]">
+                {errors.confirm.message}
+              </span>
+            )}
           </label>
 
           {error && (
@@ -139,8 +149,8 @@ function ResetPasswordForm() {
             </p>
           )}
 
-          <Button type="submit" disabled={submitting} className="w-full">
-            {submitting ? "Resetting…" : "Reset password"}
+          <Button type="submit" disabled={isSubmitting} className="w-full">
+            {isSubmitting ? "Resetting…" : "Reset password"}
           </Button>
 
           <p className="text-center text-sm text-muted-foreground">

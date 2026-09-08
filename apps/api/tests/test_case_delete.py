@@ -115,3 +115,52 @@ async def test_delete_case_rejects_submitted(client: AsyncClient, engine: AsyncE
 
     resp = await client.delete(f"/v1/cases/{case_id}", headers=headers)
     assert resp.status_code == 409
+
+
+async def test_archive_and_unarchive_submitted_case(
+    client: AsyncClient, engine: AsyncEngine
+) -> None:
+    await _seed_minimal_us_scope(engine)
+
+    register = await client.post(
+        "/v1/auth/register",
+        json={"email": "archive-submitted@example.com", "password": "secure-pass"},
+    )
+    assert register.status_code == 201
+    token = register.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    scoped = await client.post(
+        "/v1/cases/scope",
+        headers=headers,
+        json={
+            "jurisdiction_code": "US",
+            "visa_category_code": "h1b",
+            "action_code": "renewal",
+            "locale": "en",
+        },
+    )
+    assert scoped.status_code == 201
+    case_id = scoped.json()["id"]
+
+    # Mark as submitted
+    async with engine.begin() as conn:
+        await conn.execute(
+            text("UPDATE cases SET status = 'submitted' WHERE id = :id"), {"id": case_id}
+        )
+
+    # Archive the submitted case
+    arch_resp = await client.post(f"/v1/cases/{case_id}/archive", headers=headers)
+    assert arch_resp.status_code == 200
+    assert arch_resp.json()["is_archived"] is True
+
+    # Check listing returns is_archived=True
+    list_resp = await client.get("/v1/cases", headers=headers)
+    assert list_resp.status_code == 200
+    cases = list_resp.json()
+    assert any(c["id"] == case_id and c["is_archived"] is True for c in cases)
+
+    # Unarchive the submitted case
+    unarch_resp = await client.post(f"/v1/cases/{case_id}/unarchive", headers=headers)
+    assert unarch_resp.status_code == 200
+    assert unarch_resp.json()["is_archived"] is False

@@ -1,19 +1,29 @@
 "use client";
 
-import { Check, AlertTriangle, Info, ShieldCheck, ShieldAlert, Sparkles, ExternalLink } from "lucide-react";
+import { Check, AlertTriangle, Info, ShieldCheck, ShieldAlert, Sparkles, ExternalLink, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import type { ReviewResult } from "./types";
+import type { ReviewResult, IntakeQuestion } from "./types";
+import { resolveFieldInfo } from "./types";
 
 type ReviewStepProps = {
   result: ReviewResult | null;
   loading: boolean;
   onReview: () => void;
   onAcknowledge: () => void;
+  questions?: IntakeQuestion[];
+  onNavigateToQuestion?: (targetKey: string) => void;
 };
 
-export function ReviewStep({ result, loading, onReview, onAcknowledge }: ReviewStepProps) {
+export function ReviewStep({
+  result,
+  loading,
+  onReview,
+  onAcknowledge,
+  questions = [],
+  onNavigateToQuestion,
+}: ReviewStepProps) {
   // Calculate Visa Readiness Score
   const totalChecks = (result?.checks?.length || 0) + (result?.flags?.length || 0);
   const passedChecks = result?.checks?.filter((c) => c.passed).length || 0;
@@ -97,32 +107,81 @@ export function ReviewStep({ result, loading, onReview, onAcknowledge }: ReviewS
                 Action Required / Advisory Flags ({result.flags.length})
               </h4>
               <div className="grid gap-2.5">
-                {result.flags.map((flag, i) => (
-                  <div
-                    key={i}
-                    className="rounded-xl border border-[var(--color-danger)]/30 bg-[var(--color-danger)]/5 p-4 space-y-1.5 transition-all"
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex items-start gap-2">
-                        <AlertTriangle className="mt-0.5 size-4 shrink-0 text-[var(--color-danger)]" />
-                        <div>
-                          <p className="text-xs font-bold text-foreground uppercase tracking-wide">
-                            {flag.code.replace(/_/g, " ")}
-                          </p>
-                          <p className="mt-0.5 text-xs text-foreground/90 leading-relaxed">{flag.message}</p>
-                          {flag.fields && flag.fields.length > 0 && (
-                            <p className="mt-1 text-[11px] text-muted-foreground font-mono">
-                              Associated Field(s): {flag.fields.join(", ")}
+                {result.flags.map((flag, i) => {
+                  const hasFields = flag.fields && flag.fields.length > 0;
+                  const firstTargetKey = hasFields ? resolveFieldInfo(flag.fields![0], questions).targetKey : null;
+                  const isMissingFieldsFlag = flag.code === "missing_form_fields";
+
+                  return (
+                    <div
+                      key={i}
+                      className="rounded-xl border border-[var(--color-danger)]/30 bg-[var(--color-danger)]/5 p-4 space-y-2 transition-all"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-start gap-2.5 flex-1 min-w-0">
+                          <AlertTriangle className="mt-0.5 size-4 shrink-0 text-[var(--color-danger)]" />
+                          <div className="space-y-1.5 flex-1 min-w-0">
+                            <p className="text-xs font-bold text-foreground uppercase tracking-wide">
+                              {flag.code.replace(/_/g, " ")}
                             </p>
-                          )}
+                            <p className="text-xs text-foreground/90 leading-relaxed">
+                              {isMissingFieldsFlag
+                                ? "Required fields in official application forms are incomplete. Answer the corresponding intake questions below:"
+                                : flag.message}
+                            </p>
+                            {hasFields && (
+                              <div className="pt-1 flex flex-wrap items-center gap-1.5">
+                                <span className="text-[11px] font-semibold text-muted-foreground mr-1">
+                                  {isMissingFieldsFlag ? "Required Question(s):" : "Associated Field(s):"}
+                                </span>
+                                {flag.fields!.map((field) => {
+                                  const info = resolveFieldInfo(field, questions);
+                                  return (
+                                    <button
+                                      key={field}
+                                      type="button"
+                                      onClick={() => onNavigateToQuestion?.(info.targetKey)}
+                                      title={
+                                        info.prompt
+                                          ? `Go directly to: "${info.prompt}"`
+                                          : `Go directly to ${info.displayName} in Intake`
+                                      }
+                                      className="group inline-flex items-center gap-1.5 rounded-lg border border-rose-500/30 bg-background/90 hover:bg-rose-500/10 hover:border-rose-500/60 px-2.5 py-1 text-xs font-medium text-foreground transition-all shadow-2xs hover:shadow-xs cursor-pointer"
+                                    >
+                                      <span className="text-rose-600 dark:text-rose-400 font-semibold">
+                                        {info.displayName}
+                                      </span>
+                                      <span className="text-[10px] text-muted-foreground font-mono">
+                                        ({info.exactFieldName})
+                                      </span>
+                                      <ArrowRight className="size-3 text-muted-foreground group-hover:text-rose-600 dark:group-hover:text-rose-400 transition-transform group-hover:translate-x-0.5" />
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
                         </div>
+
+                        {onNavigateToQuestion && firstTargetKey ? (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => onNavigateToQuestion(firstTargetKey)}
+                            className="h-7 text-[11px] gap-1 shrink-0 border-rose-500/40 text-rose-700 dark:text-rose-300 hover:bg-rose-500/10 hover:border-rose-500 font-semibold shadow-2xs cursor-pointer"
+                          >
+                            <span>Fix in Intake</span>
+                            <ArrowRight className="size-3" />
+                          </Button>
+                        ) : (
+                          <Badge tone="danger" className="text-[10px] shrink-0">
+                            Check Required
+                          </Badge>
+                        )}
                       </div>
-                      <Badge tone="danger" className="text-[10px] shrink-0">
-                        Check Required
-                      </Badge>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
