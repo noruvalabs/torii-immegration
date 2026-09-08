@@ -173,6 +173,7 @@ class CaseProgressIn(BaseModel):
     intake_answers: dict[str, Any] | None = None
     intake_step: str | None = Field(default=None, max_length=128)
     notes: str | None = None
+    is_archived: bool | None = None
 
 
 class CaseOut(BaseModel):
@@ -203,6 +204,9 @@ class CaseOut(BaseModel):
     origin_country: str | None = None
     residence_country: str | None = None
     research_id: int | None = None
+    is_archived: bool = False
+    is_entitled: bool = False
+    packet_snapshot: dict[str, Any] | None = None
 
 
 class IntakeAnswerIn(BaseModel):
@@ -1364,6 +1368,36 @@ async def save_case_progress(
         case.intake_step = data["intake_step"]
     if "notes" in data:
         case.notes = data["notes"]
+    if "is_archived" in data and data["is_archived"] is not None:
+        case.is_archived = data["is_archived"]
+    await session.flush()
+    await session.refresh(case)
+    return await _enrich_case(session, case)
+
+
+@router.post("/{case_id}/archive", response_model=CaseOut)
+async def archive_case(
+    case_id: int,
+    session: SessionDep,
+    user: CurrentUserDep,
+) -> CaseOut:
+    """Archive a case so it is hidden from the active view without deleting records."""
+    case = await _owned_case(session, case_id, user)
+    case.is_archived = True
+    await session.flush()
+    await session.refresh(case)
+    return await _enrich_case(session, case)
+
+
+@router.post("/{case_id}/unarchive", response_model=CaseOut)
+async def unarchive_case(
+    case_id: int,
+    session: SessionDep,
+    user: CurrentUserDep,
+) -> CaseOut:
+    """Restore an archived case to the active cases view."""
+    case = await _owned_case(session, case_id, user)
+    case.is_archived = False
     await session.flush()
     await session.refresh(case)
     return await _enrich_case(session, case)

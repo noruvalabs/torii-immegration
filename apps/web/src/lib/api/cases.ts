@@ -81,6 +81,7 @@ export type Case = {
   residence_country?: string | null;
   research_id?: number | null;
   is_entitled?: boolean;
+  is_archived?: boolean;
   packet_snapshot?: Record<string, unknown> | null;
   eligibility_snapshot?: Record<string, unknown> | null;
 };
@@ -247,6 +248,14 @@ export function getCase(token: string, caseId: number) {
 
 export function deleteCase(token: string, caseId: number) {
   return req<void>(`/cases/${caseId}`, token, { method: "DELETE" });
+}
+
+export function archiveCase(token: string, caseId: number) {
+  return req<Case>(`/cases/${caseId}/archive`, token, { method: "POST" });
+}
+
+export function unarchiveCase(token: string, caseId: number) {
+  return req<Case>(`/cases/${caseId}/unarchive`, token, { method: "POST" });
 }
 
 export function scopeCase(token: string, data: {

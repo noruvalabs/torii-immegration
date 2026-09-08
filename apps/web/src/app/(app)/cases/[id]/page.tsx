@@ -13,13 +13,25 @@ import { toast } from "sonner";
 import { useAuth } from "@/lib/auth-context";
 import { getProfile, type User } from "@/lib/api/auth";
 import {
-  getCase, getCaseGuidance, getIntake, answerIntake, evaluateEligibility, getEligibility,
-  refreshChecklist, getChecklist, patchChecklistItem,
-  generateForms, getForms, reviewCase, acknowledgeReview,
-  buildPacket, getPacket, recordCaseFiled,
-  type Case, type CaseGuidance, type IntakeState, type EligibilityResult,
-  type ChecklistItem, type GeneratedForm, type ReviewResult,
+  reviewCase, acknowledgeReview, buildPacket, recordCaseFiled,
+  type ReviewResult,
 } from "@/lib/api/cases";
+import {
+  useCaseQuery,
+  useCaseGuidanceQuery,
+  useIntakeQuery,
+  useEligibilityQuery,
+  useChecklistQuery,
+  useFormsQuery,
+  usePacketQuery,
+  useAnswerIntakeMutation,
+  useEvaluateEligibilityMutation,
+  usePatchChecklistItemMutation,
+  useRefreshChecklistMutation,
+  useGenerateFormsMutation,
+  caseKeys,
+} from "@/lib/queries/cases";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   IntakeStep, EligibilityStep, ChecklistStep, FormsStep, ReviewStep, PacketStep, ResearchStep,
   DeadlinesCard,
@@ -27,127 +39,75 @@ import {
   type Step,
 } from "@/components/applicant/steps";
 
-
 export default function CaseDetailPage() {
   const params = useParams();
   const caseId = Number(params.id);
   const { token, user } = useAuth();
+  const queryClient = useQueryClient();
 
-  const [caseData, setCaseData] = useState<Case | null>(null);
-  const [guidance, setGuidance] = useState<CaseGuidance | null>(null);
   const [activeStep, setActiveStep] = useState<Step>("intake");
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  const [intake, setIntake] = useState<IntakeState | null>(null);
-  const [eligibility, setEligibility] = useState<EligibilityResult | null>(null);
-  const [checklist, setChecklist] = useState<ChecklistItem[]>([]);
-  const [forms, setForms] = useState<GeneratedForm[]>([]);
-  const [review, setReview] = useState<ReviewResult | null>(null);
-  const [packet, setPacket] = useState<Record<string, unknown> | null>(null);
   const [stepError, setStepError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
+  const [review, setReview] = useState<ReviewResult | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [profile, setProfile] = useState<User | null>(user);
   const [intakeTargetKey, setIntakeTargetKey] = useState<string | null>(null);
+  const [intakeTargetTimestamp, setIntakeTargetTimestamp] = useState<number>(0);
   const stepInitializedRef = useRef(false);
 
-  const loadCase = useCallback(async () => {
-    if (!token || !caseId) return;
-    setLoading(true);
-    try {
-      const [c, g] = await Promise.all([
-        getCase(token, caseId),
-        getCaseGuidance(token, caseId),
-      ]);
-      setCaseData(c);
-      setGuidance(g);
-      if (c.packet_snapshot) {
-        setPacket(c.packet_snapshot as Record<string, unknown>);
-      }
-      // Only jump to guidance phase on first load — never auto-advance mid-session.
-      if (!stepInitializedRef.current) {
-        setActiveStep(phaseToStep(g.phase));
-        stepInitializedRef.current = true;
-      }
-      getProfile(token).then(setProfile).catch(() => {});
-    } catch {
-      setError("Could not load case.");
-    } finally {
-      setLoading(false);
-    }
-  }, [token, caseId]);
+  // Cached React Query data
+  const { data: caseData, isLoading: caseLoading, isError: caseError } = useCaseQuery(token, caseId);
+  const { data: guidance, isLoading: guidanceLoading } = useCaseGuidanceQuery(token, caseId);
 
-  useEffect(() => { void loadCase(); }, [loadCase]);
+  const { data: intake = null } = useIntakeQuery(token, caseId);
+  const { data: eligibility = null } = useEligibilityQuery(token, caseId);
+  const { data: checklist = [] } = useChecklistQuery(token, caseId);
+  const { data: forms = [] } = useFormsQuery(token, caseId);
+  const { data: packetFromQuery } = usePacketQuery(token, caseId);
 
-  const refreshGuidance = useCallback(async () => {
-    if (!token) return;
-    try {
-      const g = await getCaseGuidance(token, caseId);
-      setGuidance(g);
-      const c = await getCase(token, caseId);
-      setCaseData(c);
-      return g;
-    } catch {
-      return null;
+  const packet = packetFromQuery || (caseData?.packet_snapshot as Record<string, unknown> | null) || null;
+
+  // Mutations
+  const answerMutation = useAnswerIntakeMutation(token, caseId);
+  const evaluateMutation = useEvaluateEligibilityMutation(token, caseId);
+  const patchChecklistMutation = usePatchChecklistItemMutation(token, caseId);
+  const refreshChecklistMutation = useRefreshChecklistMutation(token, caseId);
+  const generateFormsMutation = useGenerateFormsMutation(token, caseId);
+
+  const submitting =
+    isSubmitting ||
+    answerMutation.isPending ||
+    evaluateMutation.isPending ||
+    patchChecklistMutation.isPending ||
+    refreshChecklistMutation.isPending ||
+    generateFormsMutation.isPending;
+
+  // Jump to guidance phase only on initial load
+  useEffect(() => {
+    if (guidance && !stepInitializedRef.current) {
+      setActiveStep(phaseToStep(guidance.phase));
+      stepInitializedRef.current = true;
     }
-  }, [token, caseId]);
+  }, [guidance]);
 
   useEffect(() => {
-    if (!token || !caseId || loading) return;
-    setStepError(null);
-    if (activeStep === "research") {
-      // ResearchStep polls the guidance endpoint itself.
-    } else if (activeStep === "intake") {
-      getIntake(token, caseId).then(setIntake).catch(() => setStepError("Intake questionnaire is not available for this case scope."));
-    } else if (activeStep === "eligibility") {
-      getEligibility(token, caseId)
-        .then((res) => {
-          setEligibility(res);
-          // If cached snapshot is out_of_scope (missing answers), auto-re-evaluate with fresh answers
-          if (res && res.result === "out_of_scope") {
-            void evaluateEligibility(token, caseId)
-              .then((fresh) => {
-                setEligibility(fresh);
-                void refreshGuidance();
-              })
-              .catch(() => {});
-          }
-        })
-        .catch(() => {
-          // If not evaluated yet, auto-evaluate
-          setSubmitting(true);
-          evaluateEligibility(token, caseId)
-            .then((fresh) => {
-              setEligibility(fresh);
-              void refreshGuidance();
-            })
-            .catch(() => {
-              setEligibility(null);
-            })
-            .finally(() => setSubmitting(false));
-        });
-    } else if (activeStep === "checklist") {
-      getChecklist(token, caseId).then(setChecklist).catch(() => setStepError("Checklist is not available for this case scope."));
-    } else if (activeStep === "forms") {
-      getForms(token, caseId).then(setForms).catch(() => setStepError("Forms are not available for this case scope."));
-    } else if (activeStep === "review") {
-      setReview(null);
-    } else if (activeStep === "packet") {
-      getPacket(token, caseId)
-        .then(setPacket)
-        .catch(() => {
-          if (caseData?.packet_snapshot) {
-            setPacket(caseData.packet_snapshot as Record<string, unknown>);
-          }
-        });
+    if (token) {
+      getProfile(token).then(setProfile).catch(() => {});
     }
-  }, [token, caseId, activeStep, loading, caseData?.packet_snapshot, refreshGuidance]);
+  }, [token]);
+
+  // Auto-evaluate if eligibility step opened and no result yet
+  useEffect(() => {
+    if (activeStep === "eligibility" && token && caseId && eligibility === null && !evaluateMutation.isPending) {
+      void evaluateMutation.mutateAsync().catch(() => {});
+    }
+  }, [activeStep, token, caseId, eligibility, evaluateMutation]);
 
   const handleResearchPhaseChange = useCallback((phase: string) => {
-    // Research completion is the one automatic handoff — user lands on intake to start.
     setActiveStep(phaseToStep(phase));
-    void refreshGuidance();
-  }, [refreshGuidance]);
+    void queryClient.invalidateQueries({ queryKey: caseKeys.guidance(caseId) });
+    void queryClient.invalidateQueries({ queryKey: caseKeys.detail(caseId) });
+  }, [caseId, queryClient]);
 
   function trySetStep(step: Step) {
     if (guidance?.phase === "research" && step !== "research") {
@@ -157,6 +117,7 @@ export default function CaseDetailPage() {
       return;
     }
     setError(null);
+    setStepError(null);
     setActiveStep(step);
     if (step === "eligibility" && !eligibility) {
       void handleEvaluateEligibility();
@@ -169,17 +130,22 @@ export default function CaseDetailPage() {
     setActiveStep(phaseToStep(guidance.phase));
   }
 
+  const handleNavigateToIntakeQuestion = useCallback((targetKey?: string | null) => {
+    setError(null);
+    setStepError(null);
+    setIntakeTargetKey(targetKey || null);
+    setIntakeTargetTimestamp(Date.now());
+    setActiveStep("intake");
+  }, []);
+
   async function handleAnswer(key: string, value: unknown) {
     if (!token) return;
     setError(null);
     try {
-      const state = await answerIntake(token, caseId, key, value);
-      setIntake(state);
+      const state = await answerMutation.mutateAsync({ key, value });
       if (state.progress.complete) {
         toast.dismiss("incomplete-intake-warning");
       }
-      await refreshGuidance();
-      // Do not auto-advance when intake completes — user clicks next.
     } catch (e) {
       throw e;
     }
@@ -187,47 +153,30 @@ export default function CaseDetailPage() {
 
   async function handleEvaluateEligibility() {
     if (!token) return;
-    setSubmitting(true);
     setError(null);
     try {
-      const result = await evaluateEligibility(token, caseId);
-      setEligibility(result);
-      await refreshGuidance();
-      // Stay on eligibility until user continues.
+      await evaluateMutation.mutateAsync();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Evaluation failed");
-    } finally {
-      setSubmitting(false);
     }
   }
 
   async function handleRefreshChecklist() {
     if (!token) return;
-    setSubmitting(true);
     setError(null);
     try {
-      const [items, c, prof] = await Promise.all([
-        refreshChecklist(token, caseId),
-        getCase(token, caseId),
-        getProfile(token).catch(() => null),
-      ]);
-      setChecklist(items);
-      setCaseData(c);
+      await refreshChecklistMutation.mutateAsync();
+      const prof = await getProfile(token).catch(() => null);
       if (prof) setProfile(prof);
-      await refreshGuidance();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to refresh checklist");
-    } finally {
-      setSubmitting(false);
     }
   }
 
   async function handleChecklistStatus(itemId: number, status: string) {
     if (!token) return;
     try {
-      await patchChecklistItem(token, caseId, itemId, status);
-      setChecklist((prev) => prev.map((i) => (i.id === itemId ? { ...i, status } : i)));
-      await refreshGuidance();
+      await patchChecklistMutation.mutateAsync({ itemId, status });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Update failed");
     }
@@ -235,32 +184,26 @@ export default function CaseDetailPage() {
 
   async function handleGenerateForms() {
     if (!token) return;
-    setSubmitting(true);
     setError(null);
     try {
-      const generated = await generateForms(token, caseId);
-      setForms(generated);
-      await refreshGuidance();
-      // Stay on forms until user continues.
+      await generateFormsMutation.mutateAsync();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Form generation failed");
-    } finally {
-      setSubmitting(false);
     }
   }
 
   async function handleReview() {
     if (!token) return;
-    setSubmitting(true);
+    setIsSubmitting(true);
     setError(null);
     try {
       const result = await reviewCase(token, caseId);
       setReview(result);
-      await refreshGuidance();
+      void queryClient.invalidateQueries({ queryKey: caseKeys.guidance(caseId) });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Review failed");
     } finally {
-      setSubmitting(false);
+      setIsSubmitting(false);
     }
   }
 
@@ -268,11 +211,11 @@ export default function CaseDetailPage() {
     if (!token) return;
     try {
       await acknowledgeReview(token, caseId);
-      await refreshGuidance();
+      void queryClient.invalidateQueries({ queryKey: caseKeys.guidance(caseId) });
       setActiveStep("packet");
       try {
         const built = await buildPacket(token, caseId);
-        setPacket(built);
+        queryClient.setQueryData(caseKeys.packet(caseId), built);
       } catch {
         // Fallback: PacketStep UI renders manual build button
       }
@@ -283,31 +226,33 @@ export default function CaseDetailPage() {
 
   async function handleBuildPacket() {
     if (!token) return;
-    setSubmitting(true);
+    setIsSubmitting(true);
     setError(null);
     try {
       const built = await buildPacket(token, caseId);
-      setPacket(built);
-      await refreshGuidance();
+      queryClient.setQueryData(caseKeys.packet(caseId), built);
+      void queryClient.invalidateQueries({ queryKey: caseKeys.guidance(caseId) });
+      void queryClient.invalidateQueries({ queryKey: caseKeys.detail(caseId) });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Packet build failed");
     } finally {
-      setSubmitting(false);
+      setIsSubmitting(false);
     }
   }
 
   /** The applicant telling us they have filed it — not a request for Torii to file it. */
   async function handleSubmit() {
     if (!token) return;
-    setSubmitting(true);
+    setIsSubmitting(true);
     setError(null);
     try {
       await recordCaseFiled(token, caseId);
-      await loadCase();
+      void queryClient.invalidateQueries({ queryKey: caseKeys.detail(caseId) });
+      void queryClient.invalidateQueries({ queryKey: caseKeys.guidance(caseId) });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not record the application as filed");
     } finally {
-      setSubmitting(false);
+      setIsSubmitting(false);
     }
   }
 
@@ -330,7 +275,8 @@ export default function CaseDetailPage() {
     setActiveStep(phaseStep);
   }
 
-  if (loading) {
+  const initialLoading = (caseLoading || guidanceLoading) && !caseData;
+  if (initialLoading) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center">
         <Loader2 className="size-6 animate-spin text-muted-foreground" />
@@ -338,7 +284,7 @@ export default function CaseDetailPage() {
     );
   }
 
-  if (!caseData) {
+  if (caseError || !caseData) {
     return (
       <div className="mx-auto max-w-2xl py-12 text-center">
         <p className="text-muted-foreground">Case not found.</p>
@@ -434,7 +380,7 @@ export default function CaseDetailPage() {
         })}
       </div>
 
-      {intake && !intake.progress.complete && activeStep !== "intake" && activeStep !== "research" && (
+      {intake && !intake.progress.complete && activeStep !== "intake" && activeStep !== "research" && caseData?.status !== "submitted" && (
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3.5 text-xs text-amber-900 dark:text-amber-200 shadow-xs">
           <div className="flex items-start sm:items-center gap-2.5 min-w-0">
             <AlertTriangle className="size-4 shrink-0 text-amber-600 dark:text-amber-400 mt-0.5 sm:mt-0" />
@@ -482,6 +428,7 @@ export default function CaseDetailPage() {
               profile={profile || user}
               onAnswer={handleAnswer}
               targetKey={intakeTargetKey}
+              targetTimestamp={intakeTargetTimestamp}
               onProceedToEligibility={() => {
                 setError(null);
                 setActiveStep("eligibility");
@@ -505,11 +452,7 @@ export default function CaseDetailPage() {
               jurisdictionCode={caseData?.reference ? caseData.reference.split("-")[0] : "JP"}
               jurisdictionName={caseData?.scope_label ? caseData.scope_label.split("·")[0]?.trim() : undefined}
               visaCategoryName={caseData?.scope_label || caseData?.visa_category_code || ""}
-              onReturnToIntake={(targetKey) => {
-                setError(null);
-                setIntakeTargetKey(targetKey || null);
-                setActiveStep("intake");
-              }}
+              onReturnToIntake={handleNavigateToIntakeQuestion}
             />
           )}
           {!stepError && activeStep === "checklist" && (
@@ -537,6 +480,8 @@ export default function CaseDetailPage() {
               loading={submitting}
               onReview={handleReview}
               onAcknowledge={handleAcknowledgeReview}
+              questions={intake?.questions}
+              onNavigateToQuestion={handleNavigateToIntakeQuestion}
             />
           )}
           {!stepError && activeStep === "packet" && (

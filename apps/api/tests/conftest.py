@@ -21,6 +21,12 @@ from torii_api.db.engine import create_session_factory
 from torii_api.main import create_app
 
 
+@pytest.fixture(autouse=True)
+def _prevent_real_emails_in_tests(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Ensure no tests ever attempt real SMTP delivery to external servers."""
+    monkeypatch.setattr("torii_api.auth.email.send_email", lambda **kwargs: True)
+
+
 @pytest_asyncio.fixture
 async def engine() -> AsyncIterator[AsyncEngine]:
     eng = create_async_engine(

@@ -3,46 +3,48 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { Mail, Lock, User, ArrowRight } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { register } from "@/lib/api/auth";
+import { register as registerApi } from "@/lib/api/auth";
 import { initiateGoogleLogin } from "@/lib/auth/google";
 import { useAuth } from "@/lib/auth-context";
 import { useI18n } from "@/lib/i18n";
 import { GoogleLogo } from "../login/page";
 import { ToriiLogo } from "@/components/brand/ToriiLogo";
+import { registerSchema, type RegisterFormData } from "@/lib/schemas/auth";
 
 export default function RegisterPage() {
-  const [email, setEmail] = useState("");
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirm, setConfirm] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
   const [googleSubmitting, setGoogleSubmitting] = useState(false);
   const { setAuth } = useAuth();
   const { lang, t } = useI18n();
   const router = useRouter();
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+  } = useForm<RegisterFormData>({
+    resolver: zodResolver(registerSchema),
+    defaultValues: {
+      email: "",
+      username: "",
+      password: "",
+      confirm: "",
+    },
+  });
+
+  async function onSubmit(data: RegisterFormData) {
     setError(null);
-
-    if (password !== confirm) {
-      setError(lang === "ja" ? "パスワードが一致しません" : "Passwords do not match");
-      return;
-    }
-
-    setSubmitting(true);
     try {
-      const res = await register(email, password, username || undefined);
+      const res = await registerApi(data.email, data.password, data.username || undefined);
       setAuth(res.access_token, res.user);
       router.push(res.user.role === "applicant" ? "/dashboard" : "/admin");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Registration failed");
-    } finally {
-      setSubmitting(false);
     }
   }
 
@@ -83,7 +85,7 @@ export default function RegisterPage() {
             type="button"
             variant="outline"
             onClick={handleGoogleLogin}
-            disabled={googleSubmitting || submitting}
+            disabled={googleSubmitting || isSubmitting}
             className="w-full justify-center gap-2 h-10 border bg-background hover:bg-muted font-medium text-xs shadow-xs rounded-md"
           >
             <GoogleLogo />
@@ -98,20 +100,27 @@ export default function RegisterPage() {
             <div className="border-t flex-1 border-border" />
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-3">
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-3">
             <label className="flex flex-col gap-1 text-xs font-semibold">
               <span className="text-muted-foreground">Email</span>
               <div className="relative">
                 <Mail className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
                 <input
                   type="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  {...register("email")}
                   placeholder="you@example.com"
-                  className="h-9 w-full rounded-md border bg-background pl-9 pr-3 text-xs outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  className={`h-9 w-full rounded-md border bg-background pl-9 pr-3 text-xs outline-none focus-visible:ring-1 focus-visible:ring-ring ${
+                    errors.email
+                      ? "border-[var(--color-danger)] focus-visible:ring-[var(--color-danger)]"
+                      : ""
+                  }`}
                 />
               </div>
+              {errors.email && (
+                <span className="text-[11px] font-normal text-[var(--color-danger)]">
+                  {errors.email.message}
+                </span>
+              )}
             </label>
 
             <label className="flex flex-col gap-1 text-xs font-semibold">
@@ -122,14 +131,20 @@ export default function RegisterPage() {
                 <User className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
                 <input
                   type="text"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
+                  {...register("username")}
                   placeholder="johndoe"
-                  minLength={3}
-                  maxLength={64}
-                  className="h-9 w-full rounded-md border bg-background pl-9 pr-3 text-xs outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  className={`h-9 w-full rounded-md border bg-background pl-9 pr-3 text-xs outline-none focus-visible:ring-1 focus-visible:ring-ring ${
+                    errors.username
+                      ? "border-[var(--color-danger)] focus-visible:ring-[var(--color-danger)]"
+                      : ""
+                  }`}
                 />
               </div>
+              {errors.username && (
+                <span className="text-[11px] font-normal text-[var(--color-danger)]">
+                  {errors.username.message}
+                </span>
+              )}
             </label>
 
             <label className="flex flex-col gap-1 text-xs font-semibold">
@@ -138,14 +153,20 @@ export default function RegisterPage() {
                 <Lock className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
                 <input
                   type="password"
-                  required
-                  minLength={8}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  {...register("password")}
                   placeholder="••••••••"
-                  className="h-9 w-full rounded-md border bg-background pl-9 pr-3 text-xs outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  className={`h-9 w-full rounded-md border bg-background pl-9 pr-3 text-xs outline-none focus-visible:ring-1 focus-visible:ring-ring ${
+                    errors.password
+                      ? "border-[var(--color-danger)] focus-visible:ring-[var(--color-danger)]"
+                      : ""
+                  }`}
                 />
               </div>
+              {errors.password && (
+                <span className="text-[11px] font-normal text-[var(--color-danger)]">
+                  {errors.password.message}
+                </span>
+              )}
             </label>
 
             <label className="flex flex-col gap-1 text-xs font-semibold">
@@ -156,14 +177,20 @@ export default function RegisterPage() {
                 <Lock className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
                 <input
                   type="password"
-                  required
-                  minLength={8}
-                  value={confirm}
-                  onChange={(e) => setConfirm(e.target.value)}
+                  {...register("confirm")}
                   placeholder="••••••••"
-                  className="h-9 w-full rounded-md border bg-background pl-9 pr-3 text-xs outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  className={`h-9 w-full rounded-md border bg-background pl-9 pr-3 text-xs outline-none focus-visible:ring-1 focus-visible:ring-ring ${
+                    errors.confirm
+                      ? "border-[var(--color-danger)] focus-visible:ring-[var(--color-danger)]"
+                      : ""
+                  }`}
                 />
               </div>
+              {errors.confirm && (
+                <span className="text-[11px] font-normal text-[var(--color-danger)]">
+                  {errors.confirm.message}
+                </span>
+              )}
             </label>
 
             {error && (
@@ -172,8 +199,8 @@ export default function RegisterPage() {
               </p>
             )}
 
-            <Button type="submit" disabled={submitting || googleSubmitting} className="w-full text-xs font-semibold h-9 shadow-xs rounded-md">
-              {submitting ? t("loading", "Creating account…") : t("auth_create_one", "Create account")}
+            <Button type="submit" disabled={isSubmitting || googleSubmitting} className="w-full text-xs font-semibold h-9 shadow-xs rounded-md">
+              {isSubmitting ? t("loading", "Creating account…") : t("auth_create_one", "Create account")}
               <ArrowRight className="ml-1.5 size-3.5" />
             </Button>
 

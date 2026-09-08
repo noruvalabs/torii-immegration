@@ -12,7 +12,9 @@ from sqlalchemy.exc import IntegrityError
 from torii_api.auth.deps import CurrentUserDep, SessionDep, SettingsDep
 from torii_api.auth.email import (
     build_password_reset_email_body,
+    build_password_reset_email_text,
     build_verification_email_body,
+    build_verification_email_text,
     send_email,
 )
 from torii_api.auth.security import (
@@ -179,6 +181,10 @@ async def register(payload: RegisterIn, session: SessionDep, settings: SettingsD
             username=payload.username,
             verification_url=verification_url,
             base_url=settings.app_base_url,
+        ),
+        text_body=build_verification_email_text(
+            username=payload.username,
+            verification_url=verification_url,
         ),
         settings=settings,
     )
@@ -463,6 +469,10 @@ async def resend_verification(
                 verification_url=verification_url,
                 base_url=settings.app_base_url,
             ),
+            text_body=build_verification_email_text(
+                username=user.username,
+                verification_url=verification_url,
+            ),
             settings=settings,
         )
 
@@ -496,6 +506,10 @@ async def forgot_password(
                 username=user.username,
                 reset_url=reset_url,
                 base_url=settings.app_base_url,
+            ),
+            text_body=build_password_reset_email_text(
+                username=user.username,
+                reset_url=reset_url,
             ),
             settings=settings,
         )

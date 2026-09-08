@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Check,
   Download,
@@ -337,12 +337,20 @@ export function PacketStep({ packet, caseData, loading, onBuild, onSubmit }: Pac
   const [exportFormat, setExportFormat] = useState<ExportFormat>("pdf");
   const [exporting, setExporting] = useState<string | null>(null);
   const [isUnlocking, setIsUnlocking] = useState(false);
-  const [unlocked, setUnlocked] = useState(Boolean(caseData.is_entitled));
+  const [unlocked, setUnlocked] = useState(
+    Boolean(caseData.is_entitled || caseData.status === "submitted"),
+  );
   const [aiDrafts, setAiDrafts] = useState<Partial<Record<DocType, string>>>({});
   const [aiDrafting, setAiDrafting] = useState<DocType | null>(null);
   const [customInstructions, setCustomInstructions] = useState("");
   const [showPromptInput, setShowPromptInput] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (caseData.is_entitled || caseData.status === "submitted") {
+      setUnlocked(true);
+    }
+  }, [caseData.is_entitled, caseData.status]);
 
   async function handleGenerateAIDraft(targetDoc?: DocType) {
     const doc = targetDoc || activeDoc;
@@ -394,7 +402,7 @@ export function PacketStep({ packet, caseData, loading, onBuild, onSubmit }: Pac
     const activeToken = token || (typeof window !== "undefined" ? localStorage.getItem("torii_token") : null);
     if (!activeToken) return;
 
-    if (endpoint === "dossier-packet" && !unlocked) {
+    if (endpoint === "dossier-packet" && !unlocked && caseData.status !== "submitted") {
       setIsUnlocking(true);
       const res = await unlockCase(caseData.id);
       setIsUnlocking(false);
@@ -539,7 +547,9 @@ export function PacketStep({ packet, caseData, loading, onBuild, onSubmit }: Pac
   const effectivePacket =
     packet ||
     (caseData.packet_snapshot as Record<string, unknown> | null) ||
-    (caseData.status === "packet_ready" ? { reference: caseData.reference } : null);
+    (["packet_ready", "submitted"].includes(caseData.status)
+      ? { reference: caseData.reference, checklist: [], forms: [], dossier_order: [] }
+      : null);
 
   function getDocText(doc: DocType): {
     title: string;

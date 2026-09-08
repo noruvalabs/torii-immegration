@@ -409,6 +409,8 @@ class Case(TimestampMixin, Base):
     prior_application: Mapped[dict[str, Any] | None] = mapped_column(SAJSON, nullable=True)
     # True when the case has been unlocked via credits or payment for official packet export.
     is_entitled: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    # True when the applicant has archived/hidden the case from active view without deleting records.
+    is_archived: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
 
     jurisdiction: Mapped[Jurisdiction] = relationship(back_populates="cases")
     visa_category: Mapped[VisaCategory | None] = relationship(back_populates="cases")

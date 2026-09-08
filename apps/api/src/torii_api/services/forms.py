@@ -24,10 +24,45 @@ class FilledForm(BaseModel):
 
 FORM_ANSWER_KEY_ALIASES: dict[str, list[str]] = {
     "visitor_full_name": ["full_name", "applicant_name", "visitor_name", "beneficiary_name"],
-    "visitor_nationality": ["nationality", "country_of_citizenship", "primary_citizenship"],
+    "visitor_nationality": [
+        "nationality",
+        "country_of_citizenship",
+        "primary_citizenship",
+        "citizenship",
+        "country_of_nationality",
+    ],
     "visitor_passport_number": ["passport_number", "passport_no"],
     "full_name": ["applicant_name", "visitor_full_name", "visitor_name", "beneficiary_name"],
-    "nationality": ["visitor_nationality", "country_of_citizenship", "primary_citizenship"],
+    "nationality": [
+        "visitor_nationality",
+        "country_of_citizenship",
+        "primary_citizenship",
+        "citizenship",
+        "country_of_nationality",
+    ],
+    "citizenship": [
+        "nationality",
+        "visitor_nationality",
+        "country_of_citizenship",
+        "primary_citizenship",
+        "country_of_nationality",
+    ],
+    "country_of_nationality": [
+        "nationality",
+        "citizenship",
+        "country_of_citizenship",
+        "visitor_nationality",
+    ],
+    "country_of_citizenship": [
+        "nationality",
+        "citizenship",
+        "country_of_nationality",
+        "visitor_nationality",
+    ],
+    "home_town_city": ["home_city", "hometown", "city_in_home_country"],
+    "home_city": ["home_town_city", "hometown", "city_in_home_country"],
+    "hometown": ["home_town_city", "home_city", "city_in_home_country"],
+    "city_in_home_country": ["home_town_city", "home_city", "hometown"],
     "passport_number": ["passport_no", "visitor_passport_number"],
     "passport_expiry": ["passport_expiry_date", "expiry_date"],
     "passport_expiry_date": ["passport_expiry", "expiry_date"],
@@ -103,20 +138,35 @@ FORM_ANSWER_KEY_ALIASES: dict[str, list[str]] = {
         "sponsor_relationship",
         "relationship_to_applicant",
     ],
+    "current_country": [
+        "current_residence_country",
+        "residence_country",
+        "current_location_country",
+        "country_of_residence",
+    ],
     "current_residence_country": [
+        "current_country",
         "residence_country",
         "current_location_country",
         "country_of_residence",
     ],
     "current_location_country": [
+        "current_country",
         "current_residence_country",
         "residence_country",
         "country_of_residence",
     ],
     "residence_country": [
+        "current_country",
         "current_residence_country",
         "current_location_country",
         "country_of_residence",
+    ],
+    "country_of_residence": [
+        "current_country",
+        "current_residence_country",
+        "residence_country",
+        "current_location_country",
     ],
     "residence_card_number": ["japan_residence_card", "zairyu_card_number"],
     "residence_card_expiry": ["japan_residence_expiry", "zairyu_card_expiry"],
@@ -131,22 +181,32 @@ FORM_ANSWER_KEY_ALIASES: dict[str, list[str]] = {
     "school_attendance_rate": ["attendance_rate", "school.attendance_rate"],
     "school.enrollment_status": [
         "school_completed",
+        "current_status",
         "enrollment_status",
         "school_enrollment_status",
     ],
     "school_completed": [
+        "current_status",
         "school.enrollment_status",
         "enrollment_status",
         "school_enrollment_status",
     ],
+    "current_status": [
+        "school_completed",
+        "current_visa_status",
+        "school.enrollment_status",
+        "enrollment_status",
+    ],
     "enrollment_status": [
         "school.enrollment_status",
         "school_completed",
+        "current_status",
         "school_enrollment_status",
     ],
     "school_enrollment_status": [
         "school.enrollment_status",
         "school_completed",
+        "current_status",
         "enrollment_status",
     ],
 }
@@ -251,13 +311,41 @@ def fill_form(field_mappings: list[dict[str, Any]], answers: dict[str, Any]) -> 
         "prior_deportation": "Prior Deportation / Entry Ban History",
     }
 
-    # Auto-fill all populated intake answers with clean, official form labels
+    # Auto-fill all populated intake answers with clean, official form labels.
+    # Deduplicate alias variants so synonyms (e.g. nationality vs citizenship vs country_of_citizenship)
+    # do not create multiple redundant entries with the same value.
+    seen_canonical_aliases: set[str] = set()
+
     for key, val in normalized_answers.items():
         if val is None or val == "":
             continue
+
+        clean_key = key.split(".")[-1].lower()
+        aliases = FORM_ANSWER_KEY_ALIASES.get(key, []) + FORM_ANSWER_KEY_ALIASES.get(clean_key, [])
+        canonical = (aliases[0] if aliases else clean_key).lower()
+
+        already_filled = (
+            key in filled
+            or clean_key in filled
+            or any(alias in filled for alias in aliases)
+            or any(
+                standard_label_map.get(a) in filled
+                for a in [key, clean_key, *aliases]
+                if standard_label_map.get(a)
+            )
+            or any(a.replace("_", " ").title() in filled for a in [key, clean_key, *aliases])
+            or canonical in seen_canonical_aliases
+            or clean_key in seen_canonical_aliases
+        )
+
         label = standard_label_map.get(key, key.replace("_", " ").title())
-        if label not in filled and key not in filled:
+        if not already_filled and label not in filled and key not in filled:
             filled[label] = val
+            seen_canonical_aliases.add(canonical)
+            seen_canonical_aliases.add(clean_key)
+            seen_canonical_aliases.add(key.lower())
+            for alias in aliases:
+                seen_canonical_aliases.add(alias.lower())
 
     return FilledForm(filled_fields=filled, missing_required_fields=missing)
 
