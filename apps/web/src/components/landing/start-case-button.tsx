@@ -33,7 +33,7 @@ export function StartCaseButton({
   signedOutLabel,
   showArrow = true,
 }: Props) {
-  const { user, loading } = useAuth();
+  const { user } = useAuth();
   const { lang } = useLang();
   const t = dictionary[lang];
 
@@ -43,9 +43,6 @@ export function StartCaseButton({
   return (
     <Link
       href={href}
-      // Until the session resolves the destination is unknown; dimming it briefly is
-      // better than sending someone to the wrong side of the auth wall.
-      aria-busy={loading || undefined}
       className={cn(
         "group relative isolate inline-flex items-center justify-center font-medium tracking-tight rounded-md transition-all duration-200 active:scale-[0.98]",
         size === "sm"
@@ -54,7 +51,6 @@ export function StartCaseButton({
         variant === "solid"
           ? "bg-primary text-primary-foreground hover:bg-primary/90"
           : "border border-border/80 bg-background/80 hover:bg-accent hover:border-foreground/20 text-foreground",
-        loading && "opacity-70 pointer-events-none",
         className,
       )}
     >
