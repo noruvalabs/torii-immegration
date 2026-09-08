@@ -12,11 +12,9 @@ type Props = {
 };
 
 export function LandingAuthLink({ className }: Props) {
-  const { user, loading } = useAuth();
+  const { user } = useAuth();
   const { lang } = useLang();
   const t = dictionary[lang];
-
-  if (loading) return null;
 
   if (user) {
     const dashboardHref = ["admin", "ops", "employer"].includes(user.role) ? "/admin" : "/dashboard";

@@ -12,7 +12,7 @@ import { dictionary } from "./dictionary";
 export function Hero() {
   const { lang } = useLang();
   const t = dictionary[lang];
-  const { user, loading } = useAuth();
+  const { user } = useAuth();
 
   return (
     <section className="relative overflow-hidden">
@@ -76,7 +76,7 @@ export function Hero() {
             </ul>
           </Reveal>
 
-          {!user && !loading && (
+          {!user && (
             <Reveal delay={320}>
               <p className="mt-5 text-sm text-muted-foreground">
                 {t.cta.returningBefore}

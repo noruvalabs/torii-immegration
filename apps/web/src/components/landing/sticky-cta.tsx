@@ -16,7 +16,7 @@ import { cn } from "@/lib/utils";
  * hero and leaves the desktop layout, which never had the problem, untouched.
  */
 export function StickyCta() {
-  const { user, loading } = useAuth();
+  const { user } = useAuth();
   const { lang } = useLang();
   const t = dictionary[lang];
   const [visible, setVisible] = useState(false);
@@ -27,8 +27,6 @@ export function StickyCta() {
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
-
-  if (loading) return null;
 
   return (
     <div
