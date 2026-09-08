@@ -192,9 +192,7 @@ async def register(
         existing_user.password_hash = hash_password(payload.password)
         if payload.username:
             conflict_username = await session.scalar(
-                select(User).where(
-                    User.username == payload.username, User.id != existing_user.id
-                )
+                select(User).where(User.username == payload.username, User.id != existing_user.id)
             )
             if conflict_username is not None:
                 raise HTTPException(
@@ -239,9 +237,7 @@ async def register(
 
     # Check username uniqueness if provided
     if payload.username:
-        u_conflict = await session.scalar(
-            select(User).where(User.username == payload.username)
-        )
+        u_conflict = await session.scalar(select(User).where(User.username == payload.username))
         if u_conflict is not None:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
@@ -331,7 +327,11 @@ async def login(payload: LoginIn, session: SessionDep, settings: SettingsDep) ->
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Account is disabled",
         )
-    if settings.require_email_verification and not user.email_verified and user.role == UserRole.APPLICANT:
+    if (
+        settings.require_email_verification
+        and not user.email_verified
+        and user.role == UserRole.APPLICANT
+    ):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Please verify your email address before signing in. Check your inbox for the verification link.",
@@ -627,7 +627,9 @@ async def resend_verification(
             settings=settings,
         )
 
-    return MessageOut(detail="If that email is registered and unverified, a verification link has been sent")
+    return MessageOut(
+        detail="If that email is registered and unverified, a verification link has been sent"
+    )
 
 
 # ── Forgot / reset password ──────────────────────────────────────────────────
