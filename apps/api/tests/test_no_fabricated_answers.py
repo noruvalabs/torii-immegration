@@ -355,3 +355,60 @@ def test_both_form_paths_agree_on_which_face_can_draw_a_value() -> None:
 
     for value in ("Md Hojayfa Rahman", "田中 由紀", "Aurora Systems 株式会社"):
         assert consular_font(value) == residence_font(value)
+
+
+def test_fill_form_deduplicates_synonym_aliases() -> None:
+    """Auto-fill must not duplicate synonym alias fields (e.g. nationality vs citizenship)."""
+    answers = {
+        "nationality": "Bangladesh",
+        "citizenship": "Bangladesh",
+        "country_of_citizenship": "Bangladesh",
+        "country_of_nationality": "Bangladesh",
+        "current_country": "Bangladesh",
+        "current_residence_country": "Bangladesh",
+        "residence_country": "Bangladesh",
+        "home_town_city": "Dhaka",
+        "home_city": "Dhaka",
+        "hometown": "Dhaka",
+    }
+    filled = fill_form([], answers)
+    # Ensure nationality is present under one clean label and synonyms are not duplicated
+    assert "Nationality / Citizenship" in filled.filled_fields
+    assert "Citizenship" not in filled.filled_fields
+    assert "Country Of Nationality" not in filled.filled_fields
+    assert "Country Of Citizenship" not in filled.filled_fields
+
+    # Current country alias deduplication
+    assert "Current Country" in filled.filled_fields
+    assert "Country of Current Residence" not in filled.filled_fields
+    assert "Country of Residence" not in filled.filled_fields
+
+    # Hometown alias deduplication
+    assert "Home Town City" in filled.filled_fields
+    assert "Home City" not in filled.filled_fields
+    assert "Hometown" not in filled.filled_fields
+
+
+def test_apply_extracted_fields_normalizes_statutory_and_japanese_keys() -> None:
+    """Document extraction keys like '6.国籍' or '生年月日' must normalize to canonical keys."""
+    from unittest.mock import MagicMock
+    from torii_api.api.case_workflow import _apply_extracted_fields_to_case_and_user
+
+    mock_case = MagicMock()
+    mock_case.intake_answers = {}
+    mock_user = MagicMock()
+
+    extracted = {
+        "6.国籍": "Bangladesh",
+        "生年月日": "2003-10-23",
+        "氏名": "Hasib Rahman",
+    }
+    _apply_extracted_fields_to_case_and_user(mock_case, mock_user, extracted)
+
+    assert "6.国籍" not in mock_case.intake_answers
+    assert mock_case.intake_answers["nationality"] == "Bangladesh"
+    assert mock_case.intake_answers["date_of_birth"] == "2003-10-23"
+    assert mock_case.intake_answers["full_name"] == "Hasib Rahman"
+    assert mock_user.nationality == "Bangladesh"
+    assert mock_user.full_name == "Hasib Rahman"
+
