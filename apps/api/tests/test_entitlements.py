@@ -85,3 +85,63 @@ async def test_get_packet_requires_payment(
     assert unlocked.json()["case_reference"] == "JP-PAY-1"
 
     get_settings.cache_clear()
+
+
+@pytest.mark.asyncio
+async def test_submitted_case_packet_accessible_without_payment(
+    client: AsyncClient, engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("TORII_REQUIRE_PACKET_ENTITLEMENT", "true")
+    get_settings.cache_clear()
+
+    async with engine.begin() as conn:
+        await conn.execute(
+            text(
+                "INSERT INTO users"
+                " (email, username, password_hash, role, is_active, email_verified)"
+                " VALUES ('submittest@example.com', 'submittest', 'x', 'applicant', 1, 1)"
+            )
+        )
+        uid = (
+            await conn.execute(text("SELECT id FROM users WHERE email = 'submittest@example.com'"))
+        ).scalar_one()
+        await conn.execute(
+            text("INSERT INTO jurisdictions (code, name, is_live) VALUES ('JP', 'Japan', 1)")
+        )
+        jid = (
+            await conn.execute(text("SELECT id FROM jurisdictions WHERE code = 'JP'"))
+        ).scalar_one()
+        await conn.execute(
+            text(
+                "INSERT INTO cases (reference, jurisdiction_id, user_id, status, locale, "
+                "host_locale, review_flags_acknowledged, packet_snapshot, intake_answers)"
+                " VALUES ('JP-SUB-1', :jid, :uid, 'submitted', 'en', 'ja', 1, :pkt, :ans)"
+            ),
+            {
+                "jid": jid,
+                "uid": uid,
+                "pkt": json.dumps({"case_reference": "JP-SUB-1", "forms": [], "checklist": []}),
+                "ans": json.dumps({}),
+            },
+        )
+        case_id = (
+            await conn.execute(text("SELECT id FROM cases WHERE reference = 'JP-SUB-1'"))
+        ).scalar_one()
+
+    settings = get_settings()
+    token = create_access_token(user_id=int(uid), role="applicant", settings=settings)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # Submitted case packet should be directly accessible
+    res = await client.get(f"/v1/cases/{case_id}/packet", headers=headers)
+    assert res.status_code == 200
+    assert res.json()["case_reference"] == "JP-SUB-1"
+
+    # CaseOut should include packet_snapshot
+    case_res = await client.get(f"/v1/cases/{case_id}", headers=headers)
+    assert case_res.status_code == 200
+    assert case_res.json()["packet_snapshot"] is not None
+    assert case_res.json()["packet_snapshot"]["case_reference"] == "JP-SUB-1"
+
+    get_settings.cache_clear()
+

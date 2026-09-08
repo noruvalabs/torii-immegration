@@ -570,6 +570,29 @@ async def patch_checklist_item(
     return item
 
 
+def _normalize_extracted_key(key: str) -> str:
+    import re
+    cleaned = re.sub(r"^[\d\.\s\-_]+", "", key.strip())
+    jp_map = {
+        "国籍": "nationality",
+        "氏名": "full_name",
+        "名前": "full_name",
+        "生年月日": "date_of_birth",
+        "性別": "sex",
+        "住居地": "current_japan_address",
+        "住所": "current_japan_address",
+        "在留カード番号": "residence_card_number",
+        "在留期間の満了の日": "current_status_expiry_date",
+        "在留資格": "current_status_of_residence",
+        "旅券番号": "passport_number",
+        "有効期限": "passport_expiry",
+    }
+    for jp_label, mapped in jp_map.items():
+        if jp_label in cleaned:
+            return mapped
+    return cleaned.lower().replace(" ", "_").replace("-", "_")
+
+
 def _apply_extracted_fields_to_case_and_user(
     case: Case, user: User, extracted_fields: dict[str, Any]
 ) -> None:
@@ -584,8 +607,9 @@ def _apply_extracted_fields_to_case_and_user(
         if not val_str:
             continue
 
-        answers[key] = val_str
-        norm_key = key.lower().strip()
+        canonical_key = _normalize_extracted_key(key)
+        answers[canonical_key] = val_str
+        norm_key = canonical_key.lower().strip()
 
         # Update User global profile and intake aliases
         if norm_key in (
@@ -598,7 +622,7 @@ def _apply_extracted_fields_to_case_and_user(
         ):
             user.full_name = val_str
             answers["full_name"] = val_str
-        elif norm_key in ("nationality", "citizenship", "country_of_citizenship"):
+        elif norm_key in ("nationality", "citizenship", "country_of_citizenship", "country_of_nationality"):
             user.nationality = val_str
             answers["nationality"] = val_str
         elif norm_key in ("passport_number", "passport_no", "passport_num"):
@@ -813,7 +837,8 @@ async def build_packet(case_id: int, session: SessionDep, user: CurrentUserDep) 
         action=a_code,
     )
     case.packet_snapshot = snapshot
-    case.status = "packet_ready"
+    if case.status != "submitted":
+        case.status = "packet_ready"
     await session.flush()
     return snapshot
 
@@ -822,7 +847,11 @@ async def build_packet(case_id: int, session: SessionDep, user: CurrentUserDep) 
 async def get_packet(case_id: int, session: SessionDep, user: CurrentUserDep) -> dict[str, Any]:
     case = await _owned_case(session, case_id, user)
     if get_settings().require_packet_entitlement:
-        entitled = await case_has_packet_entitlement(session, case.id, user.id)
+        entitled = (
+            case.is_entitled
+            or case.status == "submitted"
+            or await case_has_packet_entitlement(session, case.id, user.id)
+        )
         if not entitled:
             raise HTTPException(
                 status_code=status.HTTP_402_PAYMENT_REQUIRED,
@@ -849,7 +878,8 @@ async def get_packet(case_id: int, session: SessionDep, user: CurrentUserDep) ->
             action=a_code,
         )
         case.packet_snapshot = snapshot
-        case.status = "packet_ready"
+        if case.status != "submitted":
+            case.status = "packet_ready"
         await session.flush()
     return case.packet_snapshot
 
