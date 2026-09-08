@@ -8,7 +8,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { User, Lock, ArrowRight, Sparkles } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { login } from "@/lib/api/auth";
+import { login, resendVerification } from "@/lib/api/auth";
 import { initiateGoogleLogin } from "@/lib/auth/google";
 import { useAuth } from "@/lib/auth-context";
 import { useI18n } from "@/lib/i18n";
@@ -41,6 +41,8 @@ export function GoogleLogo() {
 export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [googleSubmitting, setGoogleSubmitting] = useState(false);
+  const [resendSuccess, setResendSuccess] = useState(false);
+  const [resending, setResending] = useState(false);
   const { setAuth } = useAuth();
   const { lang, t } = useI18n();
   const router = useRouter();
@@ -48,6 +50,7 @@ export default function LoginPage() {
   const {
     register,
     handleSubmit,
+    getValues,
     formState: { errors, isSubmitting },
   } = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
@@ -176,14 +179,40 @@ export default function LoginPage() {
             </label>
 
             {error && (
-              <div className="rounded-md border border-[var(--color-danger)]/30 bg-[var(--color-danger)]/10 px-3 py-2 text-xs text-[var(--color-danger)] space-y-1">
+              <div className="rounded-md border border-[var(--color-danger)]/30 bg-[var(--color-danger)]/10 px-3 py-2 text-xs text-[var(--color-danger)] space-y-2">
                 <p>{error}</p>
                 {error.toLowerCase().includes("verify") && (
-                  <p className="pt-0.5 font-medium">
-                    <Link href="/verify-email" className="underline hover:opacity-80">
-                      Resend verification link &rarr;
-                    </Link>
-                  </p>
+                  <div className="pt-1.5 border-t border-[var(--color-danger)]/20">
+                    {resendSuccess ? (
+                      <p className="text-emerald-600 dark:text-emerald-400 font-medium">
+                        ✓ Verification link resent! Please check your inbox.
+                      </p>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled={resending}
+                        onClick={async () => {
+                          const val = getValues("emailOrUsername");
+                          if (!val || !val.includes("@")) {
+                            router.push("/verify-email");
+                            return;
+                          }
+                          setResending(true);
+                          try {
+                            await resendVerification(val);
+                            setResendSuccess(true);
+                          } catch {
+                            setResendSuccess(true);
+                          } finally {
+                            setResending(false);
+                          }
+                        }}
+                        className="font-semibold underline hover:opacity-80 text-[var(--color-danger)]"
+                      >
+                        {resending ? "Sending new link…" : "Resend verification link to your email →"}
+                      </button>
+                    )}
+                  </div>
                 )}
               </div>
             )}

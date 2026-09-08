@@ -89,8 +89,14 @@ export function getMe(token: string) {
   });
 }
 
+export type VerifyEmailResponse = {
+  detail: string;
+  access_token?: string | null;
+  user?: User | null;
+};
+
 export function verifyEmail(token: string) {
-  return request<MessageResponse>(`/verify-email?token=${encodeURIComponent(token)}`, {
+  return request<VerifyEmailResponse>(`/verify-email?token=${encodeURIComponent(token)}`, {
     method: "GET",
   });
 }
@@ -113,6 +119,14 @@ export function resetPassword(token: string, password: string) {
   return request<MessageResponse>("/reset-password", {
     method: "POST",
     body: JSON.stringify({ token, password }),
+  });
+}
+
+export function changePassword(token: string, currentPassword: string, newPassword: string) {
+  return request<MessageResponse>("/change-password", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
   });
 }
 

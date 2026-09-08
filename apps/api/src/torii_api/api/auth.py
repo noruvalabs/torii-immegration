@@ -98,6 +98,17 @@ class MessageOut(BaseModel):
     detail: str
 
 
+class VerifyEmailOut(BaseModel):
+    detail: str
+    access_token: str | None = None
+    user: UserOut | None = None
+
+
+class ChangePasswordIn(BaseModel):
+    current_password: str = Field(min_length=1, max_length=128)
+    new_password: str = Field(min_length=8, max_length=128)
+
+
 class ProfileUpdateIn(BaseModel):
     full_name: str | None = Field(default=None, max_length=200)
     nationality: str | None = Field(default=None, max_length=100)
@@ -164,12 +175,85 @@ async def register(
     settings: SettingsDep,
     request: Request,
 ) -> TokenOut:
-    """Create an applicant account, send a verification email, return a bearer token."""
+    """Create an applicant account or re-send verification for an unverified account."""
     email = _normalize_email(payload.email)
 
-    # Generate verification token (raw in email, hashed in DB)
+    # Check for an existing account
+    existing_user = await session.scalar(select(User).where(User.email == email))
+    if existing_user is not None:
+        if existing_user.email_verified:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="An account with this email already exists. Please sign in or reset your password.",
+            )
+
+        # Existing account is unverified (user re-signed up because token expired or lost)
+        # Update credentials with new password, refresh verification token and expiration
+        existing_user.password_hash = hash_password(payload.password)
+        if payload.username:
+            conflict_username = await session.scalar(
+                select(User).where(
+                    User.username == payload.username, User.id != existing_user.id
+                )
+            )
+            if conflict_username is not None:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="This username is already taken",
+                )
+            existing_user.username = payload.username
+
+        raw_verification_token = generate_token()
+        existing_user.email_verification_token = hash_token(raw_verification_token)
+        existing_user.email_verification_expires = datetime.now(UTC) + timedelta(
+            minutes=settings.email_verification_token_expire_minutes
+        )
+        await session.flush()
+        await session.refresh(existing_user)
+
+        base_url = _resolve_app_base_url(request, settings)
+        verification_url = f"{base_url}/verify-email?token={raw_verification_token}"
+        send_email(
+            to_email=email,
+            subject="Verify your Torii email address",
+            html_body=build_verification_email_body(
+                username=existing_user.username,
+                verification_url=verification_url,
+                base_url=base_url,
+            ),
+            text_body=build_verification_email_text(
+                username=existing_user.username,
+                verification_url=verification_url,
+            ),
+            settings=settings,
+        )
+
+        token = (
+            ""
+            if settings.require_email_verification
+            else create_access_token(
+                user_id=existing_user.id, role=existing_user.role, settings=settings
+            )
+        )
+        return TokenOut(access_token=token, user=UserOut.model_validate(existing_user))
+
+    # Check username uniqueness if provided
+    if payload.username:
+        u_conflict = await session.scalar(
+            select(User).where(User.username == payload.username)
+        )
+        if u_conflict is not None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="This username is already taken",
+            )
+
+    # Generate verification token and expiration
     raw_verification_token = generate_token()
     verification_token_hash = hash_token(raw_verification_token)
+    verification_expires = datetime.now(UTC) + timedelta(
+        minutes=settings.email_verification_token_expire_minutes
+    )
 
     user = User(
         email=email,
@@ -178,6 +262,7 @@ async def register(
         role=UserRole.APPLICANT,
         email_verified=False,
         email_verification_token=verification_token_hash,
+        email_verification_expires=verification_expires,
     )
     session.add(user)
     try:
@@ -221,7 +306,11 @@ async def register(
         settings=settings,
     )
 
-    token = create_access_token(user_id=user.id, role=user.role, settings=settings)
+    token = (
+        ""
+        if settings.require_email_verification
+        else create_access_token(user_id=user.id, role=user.role, settings=settings)
+    )
     return TokenOut(access_token=token, user=UserOut.model_validate(user))
 
 
@@ -242,7 +331,7 @@ async def login(payload: LoginIn, session: SessionDep, settings: SettingsDep) ->
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Account is disabled",
         )
-    if settings.require_email_verification and not user.email_verified:
+    if settings.require_email_verification and not user.email_verified and user.role == UserRole.APPLICANT:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Please verify your email address before signing in. Check your inbox for the verification link.",
@@ -465,23 +554,41 @@ async def upload_avatar(
 # ── Email verification ────────────────────────────────────────────────────────
 
 
-@router.get("/verify-email", response_model=MessageOut)
-async def verify_email(session: SessionDep, token: str = Query(...)) -> MessageOut:
+@router.get("/verify-email", response_model=VerifyEmailOut)
+async def verify_email(
+    session: SessionDep,
+    settings: SettingsDep,
+    token: str = Query(...),
+) -> VerifyEmailOut:
     """Verify an email address via the token sent to the user's inbox."""
     token_hash = hash_token(token)
     user = await session.scalar(select(User).where(User.email_verification_token == token_hash))
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid or expired verification token",
+            detail="Invalid or expired verification link. If you already verified, please sign in. Otherwise, request a new link.",
         )
-    if user.email_verified:
-        return MessageOut(detail="Email is already verified")
+
+    if (
+        user.email_verification_expires is not None
+        and user.email_verification_expires < datetime.now(UTC)
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Verification link has expired. Please request a new verification email.",
+        )
 
     user.email_verified = True
     user.email_verification_token = None
+    user.email_verification_expires = None
     await session.flush()
-    return MessageOut(detail="Email verified successfully")
+
+    token = create_access_token(user_id=user.id, role=user.role, settings=settings)
+    return VerifyEmailOut(
+        detail="Email verified successfully",
+        access_token=token,
+        user=UserOut.model_validate(user),
+    )
 
 
 @router.post("/resend-verification", response_model=MessageOut)
@@ -498,6 +605,9 @@ async def resend_verification(
     if user is not None and not user.email_verified:
         raw_token = generate_token()
         user.email_verification_token = hash_token(raw_token)
+        user.email_verification_expires = datetime.now(UTC) + timedelta(
+            minutes=settings.email_verification_token_expire_minutes
+        )
         await session.flush()
 
         base_url = _resolve_app_base_url(request, settings)
@@ -517,7 +627,7 @@ async def resend_verification(
             settings=settings,
         )
 
-    return MessageOut(detail="If that email is registered and unverified, a link has been sent")
+    return MessageOut(detail="If that email is registered and unverified, a verification link has been sent")
 
 
 # ── Forgot / reset password ──────────────────────────────────────────────────
@@ -587,3 +697,28 @@ async def reset_password(
     user.password_reset_expires = None
     await session.flush()
     return MessageOut(detail="Password has been reset successfully")
+
+
+# ── Password change (authenticated) ──────────────────────────────────────────
+
+
+@router.post("/change-password", response_model=MessageOut)
+async def change_password(
+    payload: ChangePasswordIn,
+    user: CurrentUserDep,
+    session: SessionDep,
+) -> MessageOut:
+    """Change the current signed-in user's password."""
+    if not verify_password(payload.current_password, user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Current password is incorrect",
+        )
+    if payload.current_password == payload.new_password:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="New password must be different from your current password",
+        )
+    user.password_hash = hash_password(payload.new_password)
+    await session.flush()
+    return MessageOut(detail="Password changed successfully")

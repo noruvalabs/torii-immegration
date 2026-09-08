@@ -50,6 +50,11 @@ async def get_current_user(
             detail="Invalid or expired token",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    if settings.require_email_verification and not user.email_verified and user.role == "applicant":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Please verify your email address before continuing.",
+        )
     return user
 
 

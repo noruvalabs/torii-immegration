@@ -1,14 +1,53 @@
 "use client";
 
 import { useState } from "react";
-import { Settings, Save, Bell, Shield, Globe, CreditCard } from "lucide-react";
+import { Settings, Save, Bell, Shield, Globe, CreditCard, Lock } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/lib/i18n";
+import { useAuth } from "@/lib/auth-context";
+import { changePassword } from "@/lib/api/auth";
 
 export default function SettingsPage() {
   const { lang, setLang, t } = useI18n();
+  const { token } = useAuth();
   const [saved, setSaved] = useState(false);
+
+  const [currentPw, setCurrentPw] = useState("");
+  const [newPw, setNewPw] = useState("");
+  const [confirmPw, setConfirmPw] = useState("");
+  const [pwError, setPwError] = useState<string | null>(null);
+  const [pwSuccess, setPwSuccess] = useState<string | null>(null);
+  const [pwSubmitting, setPwSubmitting] = useState(false);
+
+  async function handlePasswordChange(e: React.FormEvent) {
+    e.preventDefault();
+    setPwError(null);
+    setPwSuccess(null);
+
+    if (!token) return;
+    if (newPw.length < 8) {
+      setPwError("New password must be at least 8 characters long");
+      return;
+    }
+    if (newPw !== confirmPw) {
+      setPwError("New passwords do not match");
+      return;
+    }
+
+    setPwSubmitting(true);
+    try {
+      const res = await changePassword(token, currentPw, newPw);
+      setPwSuccess(res.detail || "Password changed successfully");
+      setCurrentPw("");
+      setNewPw("");
+      setConfirmPw("");
+    } catch (err) {
+      setPwError(err instanceof Error ? err.message : "Failed to change password");
+    } finally {
+      setPwSubmitting(false);
+    }
+  }
 
   function handleSave(e: React.FormEvent) {
     e.preventDefault();
@@ -180,6 +219,67 @@ export default function SettingsPage() {
                 className="h-9 w-32 rounded-[var(--radius)] border bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
               />
             </label>
+          </CardContent>
+        </Card>
+
+        {/* Security & Password */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Lock className="size-4" /> Security & Password
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4 max-w-md">
+            {pwSuccess && (
+              <p className="rounded-md border border-emerald-500/30 bg-emerald-500/10 p-2.5 text-xs text-emerald-700 dark:text-emerald-400 font-medium">
+                ✓ {pwSuccess}
+              </p>
+            )}
+            {pwError && (
+              <p className="rounded-md border border-[var(--color-danger)]/30 bg-[var(--color-danger)]/10 p-2.5 text-xs text-[var(--color-danger)]">
+                {pwError}
+              </p>
+            )}
+            <div className="space-y-3">
+              <label className="flex flex-col gap-1 text-xs font-semibold">
+                <span className="text-muted-foreground">Current password</span>
+                <input
+                  type="password"
+                  value={currentPw}
+                  onChange={(e) => setCurrentPw(e.target.value)}
+                  placeholder="••••••••"
+                  className="h-9 w-full rounded-md border bg-background px-3 text-xs outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                />
+              </label>
+              <label className="flex flex-col gap-1 text-xs font-semibold">
+                <span className="text-muted-foreground">New password (min. 8 characters)</span>
+                <input
+                  type="password"
+                  value={newPw}
+                  onChange={(e) => setNewPw(e.target.value)}
+                  placeholder="••••••••"
+                  className="h-9 w-full rounded-md border bg-background px-3 text-xs outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                />
+              </label>
+              <label className="flex flex-col gap-1 text-xs font-semibold">
+                <span className="text-muted-foreground">Confirm new password</span>
+                <input
+                  type="password"
+                  value={confirmPw}
+                  onChange={(e) => setConfirmPw(e.target.value)}
+                  placeholder="••••••••"
+                  className="h-9 w-full rounded-md border bg-background px-3 text-xs outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                />
+              </label>
+              <Button
+                type="button"
+                onClick={handlePasswordChange}
+                disabled={pwSubmitting || !currentPw || !newPw || !confirmPw}
+                className="text-xs font-semibold h-9 rounded-md"
+              >
+                {pwSubmitting ? "Updating password…" : "Update Password"}
+              </Button>
+            </div>
           </CardContent>
         </Card>
 
