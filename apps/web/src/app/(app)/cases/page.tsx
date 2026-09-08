@@ -10,6 +10,8 @@ import {
   Search,
   LayoutList,
   Table as TableIcon,
+  Archive,
+  ArchiveRestore,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -23,7 +25,13 @@ import {
 } from "@/components/ui/table";
 import { PaginationBar } from "@/components/ui/pagination";
 import { useAuth } from "@/lib/auth-context";
-import { listCases, deleteCase, type Case } from "@/lib/api/cases";
+import type { Case } from "@/lib/api/cases";
+import {
+  useCasesListQuery,
+  useDeleteCaseMutation,
+  useArchiveCaseMutation,
+  useUnarchiveCaseMutation,
+} from "@/lib/queries/cases";
 
 const statusConfig: Record<string, { label: string; tone: "default" | "success" | "warning" | "danger" | "muted" }> = {
   draft: { label: "Draft", tone: "muted" },
@@ -36,30 +44,19 @@ const statusConfig: Record<string, { label: string; tone: "default" | "success" 
 
 export default function CasesListPage() {
   const { token } = useAuth();
-  const [cases, setCases] = useState<Case[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data: cases = [], isLoading } = useCasesListQuery(token);
+  const deleteMutation = useDeleteCaseMutation(token);
+  const archiveMutation = useArchiveCaseMutation(token);
+  const unarchiveMutation = useUnarchiveCaseMutation(token);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [actionInProgressId, setActionInProgressId] = useState<number | null>(null);
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
   const [viewMode, setViewMode] = useState<"table" | "cards">("table");
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
-  const load = useCallback(async () => {
-    if (!token) return;
-    setLoading(true);
-    try {
-      setCases(await listCases(token));
-    } catch {
-      /* ignore */
-    } finally {
-      setLoading(false);
-    }
-  }, [token]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const loading = isLoading && cases.length === 0;
 
   // Reset pagination on search/filter changes
   useEffect(() => {
@@ -73,20 +70,58 @@ export default function CasesListPage() {
       if (!ok) return;
       setDeletingId(caseId);
       try {
-        await deleteCase(token, caseId);
-        await load();
+        await deleteMutation.mutateAsync(caseId);
       } catch {
         // Ignore; keep UX simple for now.
       } finally {
         setDeletingId(null);
       }
     },
-    [token, load],
+    [token, deleteMutation],
+  );
+
+  const handleArchive = useCallback(
+    async (caseId: number) => {
+      if (!token) return;
+      const ok = window.confirm(
+        "Archive this case? It will be hidden from your active view, but can be restored anytime under the 'Archived' filter.",
+      );
+      if (!ok) return;
+      setActionInProgressId(caseId);
+      try {
+        await archiveMutation.mutateAsync(caseId);
+      } catch {
+        // Ignore; keep UX simple for now.
+      } finally {
+        setActionInProgressId(null);
+      }
+    },
+    [token, archiveMutation],
+  );
+
+  const handleUnarchive = useCallback(
+    async (caseId: number) => {
+      if (!token) return;
+      setActionInProgressId(caseId);
+      try {
+        await unarchiveMutation.mutateAsync(caseId);
+      } catch {
+        // Ignore; keep UX simple for now.
+      } finally {
+        setActionInProgressId(null);
+      }
+    },
+    [token, unarchiveMutation],
   );
 
   const filteredCases = useMemo(() => {
     return cases.filter((c) => {
-      if (filterStatus && c.status !== filterStatus) return false;
+      if (filterStatus === "archived") {
+        if (!c.is_archived) return false;
+      } else {
+        if (c.is_archived) return false;
+        if (filterStatus && c.status !== filterStatus) return false;
+      }
       if (search) {
         const q = search.toLowerCase();
         const refMatch = c.reference?.toLowerCase().includes(q);
@@ -140,13 +175,14 @@ export default function CasesListPage() {
             onChange={(e) => setFilterStatus(e.target.value)}
             className="h-9 rounded-[var(--radius)] border bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            <option value="">All statuses</option>
+            <option value="">All active cases</option>
             <option value="draft">Draft</option>
             <option value="intake_complete">Intake complete</option>
             <option value="checklist_ready">Checklist ready</option>
             <option value="forms_generated">Forms generated</option>
             <option value="packet_ready">Packet ready</option>
             <option value="submitted">Submitted</option>
+            <option value="archived">Archived</option>
           </select>
         </div>
 
@@ -234,9 +270,16 @@ export default function CasesListPage() {
                             )}
                           </TableCell>
                           <TableCell className="px-5">
-                            <Badge tone={sc.tone} className="text-[10px] sm:text-xs">
-                              {sc.label}
-                            </Badge>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <Badge tone={sc.tone} className="text-[10px] sm:text-xs">
+                                {sc.label}
+                              </Badge>
+                              {c.is_archived && (
+                                <Badge tone="muted" className="text-[10px] sm:text-xs">
+                                  Archived
+                                </Badge>
+                              )}
+                            </div>
                           </TableCell>
                           <TableCell className="px-5 text-xs text-muted-foreground">
                             {c.created_at
@@ -245,7 +288,31 @@ export default function CasesListPage() {
                           </TableCell>
                           <TableCell className="px-5 text-right">
                             <div className="flex items-center justify-end gap-2">
-                              {c.status !== "submitted" && (
+                              {c.is_archived ? (
+                                <button
+                                  type="button"
+                                  onClick={() => void handleUnarchive(c.id)}
+                                  disabled={actionInProgressId === c.id}
+                                  className="inline-flex items-center gap-1 rounded-[var(--radius)] border border-border px-2 py-1 text-xs font-medium text-foreground hover:bg-accent disabled:opacity-50"
+                                  title="Restore case to active list"
+                                  aria-label={`Restore case ${c.reference}`}
+                                >
+                                  <ArchiveRestore className="size-3.5" />
+                                  <span className="hidden sm:inline">Restore</span>
+                                </button>
+                              ) : c.status === "submitted" ? (
+                                <button
+                                  type="button"
+                                  onClick={() => void handleArchive(c.id)}
+                                  disabled={actionInProgressId === c.id}
+                                  className="inline-flex items-center gap-1 rounded-[var(--radius)] border border-muted-foreground/30 px-2 py-1 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
+                                  title="Archive case (removes from active list)"
+                                  aria-label={`Archive case ${c.reference}`}
+                                >
+                                  <Archive className="size-3.5" />
+                                  <span className="hidden sm:inline">Archive</span>
+                                </button>
+                              ) : (
                                 <button
                                   type="button"
                                   onClick={() => void handleDelete(c.id)}
@@ -297,30 +364,63 @@ export default function CasesListPage() {
                         </p>
                       </Link>
 
-                      <Badge tone={sc.tone} className="shrink-0 text-[10px] sm:text-xs">
-                        {sc.label}
-                      </Badge>
+                      <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
+                        <Badge tone={sc.tone} className="shrink-0 text-[10px] sm:text-xs">
+                          {sc.label}
+                        </Badge>
+                        {c.is_archived && (
+                          <Badge tone="muted" className="shrink-0 text-[10px] sm:text-xs">
+                            Archived
+                          </Badge>
+                        )}
+                      </div>
 
-                      {c.status !== "submitted" && (
-                        <button
-                          type="button"
-                          onClick={() => void handleDelete(c.id)}
-                          disabled={deletingId === c.id}
-                          className="inline-flex items-center gap-1 rounded-[var(--radius)] border border-[var(--color-danger)]/30 px-2 py-1 text-xs font-medium text-[var(--color-danger)] hover:bg-[var(--color-danger)]/10 disabled:opacity-50 shrink-0"
-                          aria-label={`Delete case ${c.reference}`}
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {c.is_archived ? (
+                          <button
+                            type="button"
+                            onClick={() => void handleUnarchive(c.id)}
+                            disabled={actionInProgressId === c.id}
+                            className="inline-flex items-center gap-1 rounded-[var(--radius)] border border-border px-2 py-1 text-xs font-medium text-foreground hover:bg-accent disabled:opacity-50"
+                            title="Restore case to active list"
+                            aria-label={`Restore case ${c.reference}`}
+                          >
+                            <ArchiveRestore className="size-3.5" />
+                            <span className="hidden sm:inline">Restore</span>
+                          </button>
+                        ) : c.status === "submitted" ? (
+                          <button
+                            type="button"
+                            onClick={() => void handleArchive(c.id)}
+                            disabled={actionInProgressId === c.id}
+                            className="inline-flex items-center gap-1 rounded-[var(--radius)] border border-muted-foreground/30 px-2 py-1 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
+                            title="Archive case (removes from active list)"
+                            aria-label={`Archive case ${c.reference}`}
+                          >
+                            <Archive className="size-3.5" />
+                            <span className="hidden sm:inline">Archive</span>
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => void handleDelete(c.id)}
+                            disabled={deletingId === c.id}
+                            className="inline-flex items-center gap-1 rounded-[var(--radius)] border border-[var(--color-danger)]/30 px-2 py-1 text-xs font-medium text-[var(--color-danger)] hover:bg-[var(--color-danger)]/10 disabled:opacity-50 shrink-0"
+                            aria-label={`Delete case ${c.reference}`}
+                          >
+                            <Trash2 className="size-3.5" />
+                            <span className="hidden sm:inline">Delete</span>
+                          </button>
+                        )}
+
+                        <Link
+                          href={`/cases/${c.id}`}
+                          aria-label={`Open case ${c.reference}`}
+                          className="shrink-0 p-1"
                         >
-                          <Trash2 className="size-3.5" />
-                          <span className="hidden sm:inline">Delete</span>
-                        </button>
-                      )}
-
-                      <Link
-                        href={`/cases/${c.id}`}
-                        aria-label={`Open case ${c.reference}`}
-                        className="shrink-0"
-                      >
-                        <ArrowRight className="size-4 text-muted-foreground" />
-                      </Link>
+                          <ArrowRight className="size-4 text-muted-foreground" />
+                        </Link>
+                      </div>
                     </CardContent>
                   </Card>
                 );

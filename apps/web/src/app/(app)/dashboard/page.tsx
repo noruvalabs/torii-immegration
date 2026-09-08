@@ -16,13 +16,10 @@ import {
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/lib/auth-context";
-import { listCases, type Case } from "@/lib/api/cases";
-import {
-  getWallet,
-  getWalletSummary,
-  type WalletDocument,
-  type WalletSummary,
-} from "@/lib/api/wallet";
+import type { Case } from "@/lib/api/cases";
+import type { WalletDocument, WalletSummary } from "@/lib/api/wallet";
+import { useCasesListQuery } from "@/lib/queries/cases";
+import { useWalletQuery, useWalletSummaryQuery } from "@/lib/queries/wallet";
 
 const statusConfig: Record<
   string,
@@ -38,49 +35,15 @@ const statusConfig: Record<
 
 export default function DashboardPage() {
   const { token, user } = useAuth();
-  const [cases, setCases] = useState<Case[]>([]);
-  const [walletDocs, setWalletDocs] = useState<WalletDocument[]>([]);
-  const [walletSummary, setWalletSummary] = useState<WalletSummary | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { data: cases = [], isLoading: casesLoading } = useCasesListQuery(token);
+  const { data: walletDocs = [], isLoading: walletLoading } = useWalletQuery(token);
+  const { data: walletSummary = null, isLoading: summaryLoading } = useWalletSummaryQuery(token);
   const [error, setError] = useState<string | null>(null);
 
-  const loadData = useCallback(async () => {
-    if (!token) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const [casesRes, docsRes, summaryRes] = await Promise.allSettled([
-        listCases(token),
-        getWallet(token),
-        getWalletSummary(token),
-      ]);
-
-      if (casesRes.status === "fulfilled") {
-        setCases(casesRes.value);
-      } else {
-        setError("Could not load your cases.");
-      }
-
-      if (docsRes.status === "fulfilled") {
-        setWalletDocs(docsRes.value || []);
-      }
-
-      if (summaryRes.status === "fulfilled") {
-        setWalletSummary(summaryRes.value);
-      }
-    } catch {
-      setError("Failed to load dashboard overview.");
-    } finally {
-      setLoading(false);
-    }
-  }, [token]);
-
-  useEffect(() => {
-    void loadData();
-  }, [loadData]);
+  const loading = (casesLoading || walletLoading || summaryLoading) && cases.length === 0;
 
   const activeCases = useMemo(() => {
-    return cases.filter((c) => !["submitted", "packet_ready"].includes(c.status));
+    return cases.filter((c) => !c.is_archived && !["submitted", "packet_ready"].includes(c.status));
   }, [cases]);
 
   const activeDocsCount = walletDocs.filter((d) => d.status === "active").length;
@@ -209,7 +172,7 @@ export default function DashboardPage() {
               href="/cases"
               className="text-xs font-semibold text-primary hover:underline inline-flex items-center gap-1"
             >
-              View all ({cases.length}) <ArrowRight className="size-3" />
+              View all ({cases.filter((c) => !c.is_archived).length}) <ArrowRight className="size-3" />
             </Link>
           )}
         </div>
