@@ -32,20 +32,16 @@ export default function CreditsPage() {
   const [purchasing, setPurchasing] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
-  async function handlePurchase(packId: "starter" | "standard" | "family") {
-    setPurchasing(true);
-    try {
-      await purchasePack(packId, currency);
-      toast.success(
-        lang === "ja"
-          ? "クレジットの購入が完了しました！即時反映されました。"
-          : "Application Passes successfully added to your balance!",
-      );
-    } catch {
-      toast.error(lang === "ja" ? "購入に失敗しました。" : "Failed to purchase credits.");
-    } finally {
-      setPurchasing(false);
-    }
+  function handlePurchase(packId: "starter" | "standard" | "family") {
+    toast.error(
+      lang === "ja" ? "現在お支払いはご利用いただけません" : "Payment Currently Unavailable",
+      {
+        description:
+          lang === "ja"
+            ? "オンライン決済システムは現在メンテナンス中です。しばらく経ってから再度お試しいただくか、サポートまでお問い合わせください。"
+            : "Online payment processing is currently unavailable. Please try again later or contact support.",
+      },
+    );
   }
 
   async function handleRefresh() {

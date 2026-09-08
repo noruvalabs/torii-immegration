@@ -20,6 +20,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ALL_COUNTRIES, matchCountry, searchCountries, type Country } from "@/lib/countries";
 import type { IntakeState, IntakeQuestion, User } from "./types";
+import { findQuestionByKey } from "./types";
 
 type IntakeStepProps = {
   state: IntakeState;
@@ -27,6 +28,7 @@ type IntakeStepProps = {
   onAnswer: (key: string, value: unknown) => void;
   onProceedToEligibility?: () => void;
   targetKey?: string | null;
+  targetTimestamp?: number;
 };
 
 /** Map profile country names to common ISO codes used in intake enums. */
@@ -223,7 +225,14 @@ function SectionSourceBanner({ questions }: { questions: IntakeState["questions"
   );
 }
 
-export function IntakeStep({ state, profile, onAnswer, onProceedToEligibility, targetKey }: IntakeStepProps) {
+export function IntakeStep({
+  state,
+  profile,
+  onAnswer,
+  onProceedToEligibility,
+  targetKey,
+  targetTimestamp,
+}: IntakeStepProps) {
   const [drafts, setDrafts] = useState<Record<string, unknown>>({});
   const [fieldErrors, setFieldErrors] = useState<Record<string, string | null>>({});
   const [activeSection, setActiveSection] = useState<string | null>(null);
@@ -335,16 +344,40 @@ export function IntakeStep({ state, profile, onAnswer, onProceedToEligibility, t
     return sectionKeys[0] ?? null;
   }, [sectionKeys, sectionsMap, state.answers]);
 
-  // Switch to targetKey section if requested
+  // Switch to targetKey section, smoothly scroll to question, and highlight
   useEffect(() => {
     if (targetKey) {
-      const q = state.questions.find((item) => item.key === targetKey);
-      if (q && q.section && sectionKeys.includes(q.section)) {
-        setActiveSection(q.section);
-        setHighlightedKey(targetKey);
+      const q = findQuestionByKey(state.questions, targetKey);
+      if (q) {
+        if (q.section && sectionKeys.includes(q.section)) {
+          setActiveSection(q.section);
+        }
+        setHighlightedKey(q.key);
+
+        const scrollTimer = setTimeout(() => {
+          const el = document.getElementById(`question-${q.key}`);
+          if (el) {
+            el.scrollIntoView({ behavior: "smooth", block: "center" });
+            const input = el.querySelector<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>(
+              "input, select, textarea"
+            );
+            if (input) {
+              input.focus({ preventScroll: true });
+            }
+          }
+        }, 150);
+
+        const fadeTimer = setTimeout(() => {
+          setHighlightedKey((prev) => (prev === q.key ? null : prev));
+        }, 6000);
+
+        return () => {
+          clearTimeout(scrollTimer);
+          clearTimeout(fadeTimer);
+        };
       }
     }
-  }, [targetKey, state.questions, sectionKeys]);
+  }, [targetKey, targetTimestamp, state.questions, sectionKeys]);
 
   const currentSectionKey = useMemo(() => {
     if (activeSection && sectionKeys.includes(activeSection)) {
@@ -511,6 +544,11 @@ export function IntakeStep({ state, profile, onAnswer, onProceedToEligibility, t
                 {q.prompt}
                 {!isOptional && <span className="ml-1 text-[var(--color-danger)] font-bold">*</span>}
               </label>
+              {isHighlighted && (
+                <span className="text-[10px] font-semibold text-blue-600 dark:text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded border border-blue-500/30 animate-pulse">
+                  Target Field
+                </span>
+              )}
               {isOptional && !q.hint && (
                 <span className="text-[10px] font-medium text-muted-foreground bg-muted/80 px-1.5 py-0.5 rounded border border-border/50">
                   Optional

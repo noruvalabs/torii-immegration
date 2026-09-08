@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Sparkles, Check, Loader2, X, Coins, ShieldCheck, Zap } from "lucide-react";
+import { toast } from "sonner";
 import { useCredits } from "@/lib/credits-context";
 import { useI18n } from "@/lib/i18n";
 import { Badge } from "@/components/ui/badge";
@@ -17,25 +18,16 @@ export function TopUpModal() {
 
   if (!isTopUpOpen) return null;
 
-  async function handlePurchase() {
-    setPurchasing(true);
-    setSuccessMsg(null);
-    try {
-      await purchasePack(selectedPackId, currency);
-      setSuccessMsg(
-        lang === "ja"
-          ? "クレジットの購入が完了しました！即時反映されました。"
-          : "Credits successfully added to your account!",
-      );
-      setTimeout(() => {
-        setIsTopUpOpen(false);
-        setSuccessMsg(null);
-      }, 1800);
-    } catch {
-      // Handled in context
-    } finally {
-      setPurchasing(false);
-    }
+  function handlePurchase() {
+    toast.error(
+      lang === "ja" ? "現在お支払いはご利用いただけません" : "Payment Currently Unavailable",
+      {
+        description:
+          lang === "ja"
+            ? "オンライン決済システムは現在メンテナンス中です。しばらく経ってから再度お試しいただくか、サポートまでお問い合わせください。"
+            : "Online payment processing is currently unavailable. Please try again later or contact support.",
+      },
+    );
   }
 
   return (

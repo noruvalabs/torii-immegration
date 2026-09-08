@@ -16,14 +16,19 @@ import { useAuth } from "@/lib/auth-context";
 import {
   answerIntake,
   evaluateEligibility,
-  getEligibility,
-  getCase,
-  getChecklist,
   type Case,
   type EligibilityResult,
   type ChecklistItem,
 } from "@/lib/api/cases";
-import { getProfile, type User } from "@/lib/api/auth";
+import type { User } from "@/lib/api/auth";
+import {
+  useCaseQuery,
+  useEligibilityQuery,
+  useChecklistQuery,
+  caseKeys,
+} from "@/lib/queries/cases";
+import { useProfileQuery } from "@/lib/queries/profile";
+import { useQueryClient } from "@tanstack/react-query";
 
 type ChatRole = "user" | "assistant";
 type ChatMessage = { role: ChatRole; text: string };
@@ -204,22 +209,37 @@ function clampPosition(x: number, y: number, width: number, height: number): { x
 
 export function FloatingAssistant() {
   const pathname = usePathname();
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const [position, setPosition] = useState<{ x: number; y: number } | null>(null);
 
   const [isDragging, setIsDragging] = useState(false);
   const dragStartRef = useRef<{ startX: number; startY: number; startPosX: number; startPosY: number } | null>(null);
 
+  const queryClient = useQueryClient();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [applyingAction, setApplyingAction] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [activeCase, setActiveCase] = useState<Case | null>(null);
-  const [activeEligibility, setActiveEligibility] = useState<EligibilityResult | null>(null);
-  const [activeChecklist, setActiveChecklist] = useState<ChecklistItem[]>([]);
-  const [activeProfile, setActiveProfile] = useState<User | null>(null);
+
+  // Extract case ID if currently on a case page
+  const caseMatch = pathname?.match(/\/cases\/(\d+)/);
+  const caseId = caseMatch ? Number(caseMatch[1]) : null;
+
+  // Read directly from cached queries - ZERO network burst on open!
+  const { data: activeCase = null } = useCaseQuery(token, caseId ?? 0);
+  const { data: activeEligibility = null } = useEligibilityQuery(
+    token,
+    caseId ?? 0,
+    Boolean(token && caseId && isOpen),
+  );
+  const { data: activeChecklist = [] } = useChecklistQuery(
+    token,
+    caseId ?? 0,
+    Boolean(token && caseId && isOpen),
+  );
+  const { data: activeProfile = null } = useProfileQuery(token, user);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Initialize and load saved positions
@@ -247,39 +267,6 @@ export function FloatingAssistant() {
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
-
-  // Extract case ID if currently on a case page
-  const caseMatch = pathname?.match(/\/cases\/(\d+)/);
-  const caseId = caseMatch ? Number(caseMatch[1]) : null;
-
-  // Fetch complete real-time case context (Case, Eligibility findings, Checklist, Profile)
-  // Only fetch when the assistant drawer is open to prevent redundant query bursts on page load
-  useEffect(() => {
-    if (!token || !caseId || !isOpen) {
-      if (!isOpen) return;
-      setActiveCase(null);
-      setActiveEligibility(null);
-      setActiveChecklist([]);
-      setActiveProfile(null);
-      return;
-    }
-    void (async () => {
-      try {
-        const [c, elig, chk, prof] = await Promise.all([
-          getCase(token, caseId),
-          getEligibility(token, caseId).catch(() => null),
-          getChecklist(token, caseId).catch(() => []),
-          getProfile(token).catch(() => null),
-        ]);
-        setActiveCase(c);
-        if (elig) setActiveEligibility(elig);
-        if (chk) setActiveChecklist(chk);
-        if (prof) setActiveProfile(prof);
-      } catch {
-        // Fallback gracefully
-      }
-    })();
-  }, [token, caseId, isOpen]);
 
   const visaCategory = (activeCase?.visa_category_code || "").toLowerCase();
   const jurisdictionCode = activeCase?.jurisdiction_code || "JP";
@@ -419,18 +406,15 @@ export function FloatingAssistant() {
       }
 
       await evaluateEligibility(token, caseId);
+      void queryClient.invalidateQueries({ queryKey: caseKeys.all });
 
       setMessages((prev) => [
         ...prev,
         {
           role: "assistant",
-          text: `✅ Updated **${action.key.replace(/_/g, " ")}** to **"${action.value}"** and re-evaluated eligibility! Refreshing page to update status...`,
+          text: `✅ Updated **${action.key.replace(/_/g, " ")}** to **"${action.value}"** and re-evaluated eligibility!`,
         },
       ]);
-
-      setTimeout(() => {
-        window.location.reload();
-      }, 1200);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to apply fix to intake");
     } finally {

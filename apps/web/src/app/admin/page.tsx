@@ -27,60 +27,31 @@ import { ToriiLogo } from "@/components/brand/ToriiLogo";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth-context";
 import { useI18n } from "@/lib/i18n";
-import { adminListCases, adminCountCases } from "@/lib/api/admin";
-
-const API = "/backend/v1";
-
-interface CaseItem {
-  id: number;
-  reference: string | null;
-  status: string;
-  created_at: string | null;
-  applicant_email?: string | null;
-  origin_country?: string | null;
-  residence_country?: string | null;
-}
+import {
+  useAdminCasesQuery,
+  useAdminCaseCountsQuery,
+  useAdminJurisdictionsQuery,
+  adminKeys,
+} from "@/lib/queries/admin";
+import { useQueryClient } from "@tanstack/react-query";
 
 export default function DashboardPage() {
   const { token, user } = useAuth();
   const { lang, t } = useI18n();
-  const [caseCount, setCaseCount] = useState<Record<string, number>>({});
-  const [jurisdictionCount, setJurisdictionCount] = useState<number | null>(null);
-  const [jurisdictionsList, setJurisdictionsList] = useState<{ id: number; code: string; name: string; is_live: boolean }[]>([]);
-  const [recentCases, setRecentCases] = useState<CaseItem[]>([]);
+  const queryClient = useQueryClient();
+  const { data: caseCount = {}, isLoading: countsLoading } = useAdminCaseCountsQuery(token);
+  const { data: recentCases = [], isLoading: casesLoading } = useAdminCasesQuery(token, { limit: 12 });
+  const { data: jurisdictionsList = [], isLoading: jurisdictionsLoading } = useAdminJurisdictionsQuery(token);
+  const jurisdictionCount = jurisdictionsList.length;
+
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [loading, setLoading] = useState(true);
 
-  const load = useCallback(async () => {
-    if (!token) return;
-    setLoading(true);
-    try {
-      const [cc, cases, jRes] = await Promise.allSettled([
-        adminCountCases(token),
-        adminListCases(token, { limit: 12 }),
-        fetch(`${API}/jurisdictions`, {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
-      ]);
+  const loading = (countsLoading || casesLoading || jurisdictionsLoading) && recentCases.length === 0;
 
-      if (cc.status === "fulfilled") setCaseCount(cc.value);
-      if (cases.status === "fulfilled") setRecentCases(cases.value as CaseItem[]);
-      if (jRes.status === "fulfilled" && jRes.value.ok) {
-        const data = await jRes.value.json();
-        setJurisdictionCount(data.length);
-        setJurisdictionsList(data);
-      }
-    } catch {
-      // silently handle
-    } finally {
-      setLoading(false);
-    }
-  }, [token]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+  function handleRefresh() {
+    void queryClient.invalidateQueries({ queryKey: adminKeys.all });
+  }
 
   const totalCases = Object.values(caseCount).reduce((a, b) => a + b, 0);
   const draftCases = caseCount["draft"] ?? 0;
@@ -184,7 +155,7 @@ export default function DashboardPage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2 shrink-0">
-            <Button variant="outline" size="sm" onClick={() => void load()} disabled={loading} className="text-xs">
+            <Button variant="outline" size="sm" onClick={handleRefresh} disabled={loading} className="text-xs">
               <RefreshCw className={`mr-1.5 size-3.5 ${loading ? "animate-spin" : ""}`} />
               {t("refresh", "Refresh")}
             </Button>
