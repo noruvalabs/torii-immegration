@@ -329,7 +329,7 @@ async def scope_case(
     payload: ScopeIn,
     session: SessionDep,
     user: CurrentUserDep,
-) -> Case:
+) -> CaseOut:
     """Create a new case scoped to a jurisdiction + visa category + action (US-01).
 
     A scope is selectable when the admin has it switched on (``is_enabled`` on the country,
@@ -395,12 +395,14 @@ async def scope_case(
     seq = 1
     if last_case and last_case.reference:
         parts = last_case.reference.split("-")
-        if len(parts) == 3:
+        if parts:
             try:
-                seq = int(parts[2]) + 1
+                seq = int(parts[-1]) + 1
             except ValueError:
                 pass
-    reference = f"{jurisdiction.code}-{year}-{seq:06d}"
+    v_slug = visa_category.code.upper().replace("_", "")
+    a_slug = case_action.code.upper().replace("_", "")
+    reference = f"{jurisdiction.code}-{v_slug}-{a_slug}-{year}-{seq:06d}"
 
     case = Case(
         reference=reference,
@@ -425,7 +427,17 @@ async def scope_case(
     # Link (and queue when needed) a live-research snapshot for a scope without a live pack.
     await _enqueue_research_if_needed(session, case, jurisdiction, visa_category, case_action)
     await session.refresh(case)
-    return case
+
+    _, _, _, label = await _scope_label(session, case)
+    base = CaseOut.model_validate(case)
+    return base.model_copy(
+        update={
+            "jurisdiction_code": jurisdiction.code,
+            "visa_category_code": visa_category.code,
+            "case_action_code": case_action.code,
+            "scope_label": label,
+        }
+    )
 
 
 # ── Shared helpers ────────────────────────────────────────────────────────────
@@ -677,6 +689,20 @@ def _sync_prior_application(case: Case) -> None:
     case.prior_application = {**dict(case.prior_application or {}), **facts}
 
 
+def _clean_scope_part(text: str | None) -> str | None:
+    """Shorten verbose route/procedure names to concise, meaningful labels."""
+    if not text:
+        return None
+    import re
+
+    # Remove parenthetical details: (Engineer / Specialist...) or (Study at...)
+    cleaned = re.sub(r"\s*\([^)]*\)", "", text).strip()
+    # Remove secondary glosses after " - "
+    if " - " in cleaned:
+        cleaned = cleaned.split(" - ")[0].strip()
+    return cleaned or text
+
+
 async def _scope_label(
     session: AsyncSession, case: Case
 ) -> tuple[str | None, str | None, str | None, str | None]:
@@ -697,9 +723,9 @@ async def _scope_label(
     parts = [
         p
         for p in (
-            jurisdiction.name if jurisdiction else None,
-            visa.name if visa else None,
-            action.name if action else None,
+            _clean_scope_part(jurisdiction.name if jurisdiction else None),
+            _clean_scope_part(visa.name if visa else None),
+            _clean_scope_part(action.name if action else None),
         )
         if p
     ]
@@ -976,9 +1002,9 @@ async def list_cases(
         parts = [
             p
             for p in (
-                j.name if j else None,
-                v.name if v else None,
-                a.name if a else None,
+                _clean_scope_part(j.name if j else None),
+                _clean_scope_part(v.name if v else None),
+                _clean_scope_part(a.name if a else None),
             )
             if p
         ]
