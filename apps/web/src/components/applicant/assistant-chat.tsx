@@ -19,6 +19,7 @@ import {
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Markdown } from "@/components/ui/markdown";
 import { useAuth } from "@/lib/auth-context";
 import { answerIntake } from "@/lib/api/cases";
 import { toast } from "@/components/ui/sonner";
@@ -434,13 +435,15 @@ export function AssistantChat({
             <div
               className={`max-w-[85%] rounded-xl px-3.5 py-2.5 text-xs shadow-2xs ${
                 message.role === "user"
-                  ? "bg-primary text-primary-foreground font-medium rounded-tr-xs"
+                  ? "bg-primary text-primary-foreground font-medium rounded-tr-xs whitespace-pre-wrap leading-relaxed"
                   : "bg-card border text-foreground rounded-tl-xs space-y-2"
               }`}
             >
-              <div className="whitespace-pre-wrap leading-relaxed">
-                {message.text}
-              </div>
+              {message.role === "user" ? (
+                message.text
+              ) : (
+                <Markdown content={message.text} />
+              )}
 
               {message.actions && message.actions.length > 0 && (
                 <div className="pt-2 border-t border-border/50 space-y-1.5">

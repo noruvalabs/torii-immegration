@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Markdown } from "@/components/ui/markdown";
 import { useAuth } from "@/lib/auth-context";
 import {
   answerIntake,
@@ -674,11 +675,11 @@ export function FloatingAssistant() {
                         <div
                           className={`max-w-[88%] rounded-xl px-3 py-2 leading-relaxed ${
                             m.role === "user"
-                              ? "bg-primary text-primary-foreground font-medium rounded-tr-none text-xs"
-                              : "bg-muted/70 text-foreground border rounded-tl-none whitespace-pre-wrap text-xs"
+                              ? "bg-primary text-primary-foreground font-medium rounded-tr-none text-xs whitespace-pre-wrap"
+                              : "bg-muted/70 text-foreground border rounded-tl-none text-xs"
                           }`}
                         >
-                          {cleanText}
+                          {m.role === "user" ? cleanText : <Markdown content={cleanText} />}
                         </div>
                       </div>
 
