@@ -28,6 +28,8 @@ import {
   FileCheck2,
   ExternalLink,
   Download,
+  ChevronRight,
+  Info,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -210,6 +212,11 @@ export default function DocumentVaultPage() {
   const [isSyncingProfileId, setIsSyncingProfileId] = useState<number | null>(null);
   const [isSeeding, setIsSeeding] = useState(false);
   const [viewTab, setViewTab] = useState<"preview" | "details">("preview");
+  const [hoveredMeta, setHoveredMeta] = useState<{
+    doc: WalletDocument;
+    top: number;
+    left: number;
+  } | null>(null);
 
   const uploadForm = useForm<DocumentUploadFormData>({
     resolver: zodResolver(documentUploadSchema),
@@ -255,9 +262,9 @@ export default function DocumentVaultPage() {
   }
 
   // Open View Modal & fetch version history
-  async function handleOpenView(doc: WalletDocument) {
+  async function handleOpenView(doc: WalletDocument, initialTab: "preview" | "details" = "preview") {
     setViewingDoc(doc);
-    setViewTab("preview");
+    setViewTab(initialTab);
     setLoadingVersions(true);
     try {
       const versions = await getDocumentVersions(doc.id, token);
@@ -620,23 +627,23 @@ export default function DocumentVaultPage() {
                     return (
                       <TableRow key={doc.id} className="hover:bg-muted/30">
                         {/* 1. Type / Category */}
-                        <TableCell className="px-5 align-top py-4">
-                          <div className="flex items-start gap-3">
-                            <div className="flex size-9 items-center justify-center rounded-lg bg-primary/10 text-primary shrink-0 mt-0.5">
+                        <TableCell className="px-5 align-middle py-3.5">
+                          <div className="flex items-center gap-3">
+                            <div className="flex size-9 items-center justify-center rounded-lg bg-primary/10 text-primary shrink-0">
                               {isImage ? <ImageIcon className="size-4" /> : <FileText className="size-4" />}
                             </div>
-                            <div className="min-w-0 space-y-1">
-                              <p className="font-semibold text-sm text-foreground truncate" title={doc.name}>
-                                {doc.name}
-                              </p>
-                              <div className="flex flex-wrap items-center gap-1.5 text-xs">
-                                <span className="font-semibold text-primary bg-primary/10 px-1.5 py-0.5 rounded text-[11px]">
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2">
+                                <p className="font-semibold text-sm text-foreground truncate" title={doc.name}>
+                                  {doc.name}
+                                </p>
+                                <span className="font-semibold text-primary bg-primary/10 px-1.5 py-0.2 rounded text-[10px]">
                                   v{doc.version}
                                 </span>
-                                <span className="font-mono text-muted-foreground text-xs">{doc.doc_type}</span>
                               </div>
-                              <div className="pt-0.5">
-                                <Badge tone="muted" className="text-[10px] capitalize">
+                              <div className="flex items-center gap-2 mt-0.5 text-xs">
+                                <span className="font-mono text-muted-foreground text-[11px]">{doc.doc_type}</span>
+                                <Badge tone="muted" className="text-[10px] capitalize py-0 px-1.5">
                                   {category}
                                 </Badge>
                               </div>
@@ -645,47 +652,54 @@ export default function DocumentVaultPage() {
                         </TableCell>
 
                         {/* 2. Extracted Metadata */}
-                        <TableCell className="px-5 align-top py-4">
+                        <TableCell className="px-5 align-middle py-3.5">
                           {extractedEntries.length > 0 ? (
-                            <div className="space-y-2 max-w-sm">
-                              {extractedEntries.map(([key, val]) => (
-                                <div key={key} className="text-xs">
-                                  <span className="text-muted-foreground block text-[11px] font-medium leading-tight">
-                                    {formatFieldKey(key)}:
-                                  </span>
-                                  <span className="font-semibold text-foreground block leading-snug">
-                                    {getFieldValue(val)}
-                                  </span>
-                                </div>
-                              ))}
-                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleOpenView(doc, "details")}
+                              onMouseEnter={(e) => {
+                                const rect = e.currentTarget.getBoundingClientRect();
+                                setHoveredMeta({
+                                  doc,
+                                  top: rect.bottom + 6,
+                                  left: Math.min(rect.left, window.innerWidth - 340),
+                                });
+                              }}
+                              onMouseLeave={() => setHoveredMeta(null)}
+                              className="group inline-flex items-center gap-1.5 rounded-full border border-primary/25 bg-primary/10 hover:bg-primary/20 px-2.5 py-1 text-xs font-medium text-primary transition-all cursor-pointer shadow-2xs"
+                              title="Hover to preview fields, click for full details modal"
+                            >
+                              <Sparkles className="size-3 text-primary shrink-0" />
+                              <span>
+                                {extractedEntries.length} {extractedEntries.length === 1 ? "field" : "fields"}
+                              </span>
+                              <ChevronRight className="size-3 text-primary/70 group-hover:translate-x-0.5 transition-transform" />
+                            </button>
                           ) : (
-                            <span className="text-xs text-muted-foreground italic">Standard document record</span>
+                            <span className="text-xs text-muted-foreground/40 font-mono">—</span>
                           )}
                         </TableCell>
 
                         {/* 3. File & Expiry */}
-                        <TableCell className="px-5 align-top py-4 text-xs">
+                        <TableCell className="px-5 align-middle py-3.5 text-xs">
                           <p className="font-mono font-medium text-foreground truncate max-w-[170px]" title={doc.filename}>
                             {doc.filename}
                           </p>
-                          <p className="text-muted-foreground text-[11px] mt-1">
+                          <p className="text-muted-foreground text-[11px] mt-0.5">
                             {formatBytes(doc.file_size)}
+                            {doc.expiry_date && (
+                              <span className="ml-1.5 font-medium text-foreground">· Exp: {doc.expiry_date}</span>
+                            )}
                           </p>
-                          {doc.expiry_date && (
-                            <p className="text-muted-foreground text-[11px] mt-1">
-                              Exp: <span className="font-medium text-foreground">{doc.expiry_date}</span>
-                            </p>
-                          )}
                         </TableCell>
 
                         {/* 4. Actions */}
-                        <TableCell className="px-5 align-top py-4 text-right">
+                        <TableCell className="px-5 align-middle py-3.5 text-right">
                           <div className="flex items-center justify-end gap-1.5">
                             <Button
                               variant="outline"
                               size="sm"
-                              onClick={() => handleOpenView(doc)}
+                              onClick={() => handleOpenView(doc, "preview")}
                               className="h-8 text-xs gap-1.5 px-3 font-medium shadow-2xs"
                               title="View document"
                             >
@@ -1542,6 +1556,44 @@ export default function DocumentVaultPage() {
                 </Button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── FLOATING TOOLTIP FOR EXTRACTED METADATA ────────────────────────── */}
+      {hoveredMeta && (
+        <div
+          style={{
+            position: "fixed",
+            top: `${hoveredMeta.top}px`,
+            left: `${hoveredMeta.left}px`,
+          }}
+          className="z-50 w-80 rounded-xl border bg-card/95 backdrop-blur-md p-4 shadow-2xl text-card-foreground animate-in fade-in-0 zoom-in-95 pointer-events-none"
+        >
+          <div className="flex items-center justify-between border-b pb-2 mb-2.5">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <Sparkles className="size-3.5 text-primary shrink-0" />
+              <span className="text-xs font-bold text-foreground truncate">{hoveredMeta.doc.name}</span>
+            </div>
+            <Badge tone="muted" className="text-[10px] py-0 px-1.5 shrink-0">
+              {Object.keys(hoveredMeta.doc.extracted_fields || {}).length} fields
+            </Badge>
+          </div>
+          <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+            {Object.entries(hoveredMeta.doc.extracted_fields || {}).map(([key, val]) => (
+              <div key={key} className="text-xs">
+                <span className="text-muted-foreground block text-[10px] font-medium uppercase tracking-wider">
+                  {formatFieldKey(key)}
+                </span>
+                <span className="font-semibold text-foreground block text-xs mt-0.5 break-words">
+                  {getFieldValue(val)}
+                </span>
+              </div>
+            ))}
+          </div>
+          <div className="border-t pt-2 mt-2.5 flex items-center justify-between text-[10px] text-muted-foreground">
+            <span>Click badge to open full details modal</span>
+            <ExternalLink className="size-3 text-primary" />
           </div>
         </div>
       )}
