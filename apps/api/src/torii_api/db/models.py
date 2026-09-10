@@ -647,3 +647,51 @@ class CreditTransaction(TimestampMixin, Base):
 
     user: Mapped[User] = relationship(back_populates="credit_transactions")
     case: Mapped[Case | None] = relationship()
+
+
+class SystemSetting(TimestampMixin, Base):
+    """Global configuration key-value store editable at runtime by administrators."""
+
+    __tablename__ = "system_settings"
+
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    value_json: Mapped[Any] = mapped_column(SAJSON, nullable=False)
+    description: Mapped[str | None] = mapped_column(String(256), nullable=True)
+
+
+class PaymentCheckout(TimestampMixin, Base):
+    """Checkout session recorded for payment provider transactions."""
+
+    __tablename__ = "payment_checkouts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    public_id: Mapped[str] = mapped_column(String(36), unique=True, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    pack_id: Mapped[str] = mapped_column(String(32), index=True)
+    credits: Mapped[int] = mapped_column(Integer)
+    amount: Mapped[float] = mapped_column(Float)
+    currency: Mapped[str] = mapped_column(String(8), default="USD")
+    provider: Mapped[str] = mapped_column(String(32), default="paddle", index=True)
+    provider_session_id: Mapped[str | None] = mapped_column(
+        String(255), unique=True, nullable=True, index=True
+    )
+    provider_customer_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    status: Mapped[str] = mapped_column(String(32), default="requires_payment", index=True)
+    checkout_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+    metadata_json: Mapped[dict[str, Any] | None] = mapped_column(SAJSON, nullable=True)
+
+    user: Mapped[User] = relationship()
+
+
+class PaymentWebhookEvent(TimestampMixin, Base):
+    """Processed provider event recorded for atomic webhook deduplication."""
+
+    __tablename__ = "payment_webhook_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    provider: Mapped[str] = mapped_column(String(32), index=True)
+    event_id: Mapped[str] = mapped_column(String(255), unique=True, index=True)
+    event_type: Mapped[str] = mapped_column(String(100))
+    occurred_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+

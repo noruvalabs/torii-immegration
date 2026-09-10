@@ -20,6 +20,8 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   env: {
     NEXT_PUBLIC_GOOGLE_CLIENT_ID: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID,
+    NEXT_PUBLIC_PADDLE_CLIENT_TOKEN: process.env.NEXT_PUBLIC_PADDLE_CLIENT_TOKEN,
+    NEXT_PUBLIC_PADDLE_ENV: process.env.NEXT_PUBLIC_PADDLE_ENV,
   },
   async rewrites() {
     // Browser calls to /api/* are proxied to the FastAPI system of record. In dev this

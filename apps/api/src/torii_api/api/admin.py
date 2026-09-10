@@ -274,3 +274,66 @@ async def admin_update_escalation(
 class EscalationUpdate(BaseModel):
     status: str = Field(..., pattern="^(resolved|dismissed)$")
     outcome: str | None = None
+
+
+# ── Payment & Billing Settings ───────────────────────────────────────────────
+
+
+class AdminPaymentSettingsOut(BaseModel):
+    payments_enabled: bool
+    provider: str = "paddle"
+    environment: str
+    client_token_configured: bool
+    api_key_configured: bool
+    webhook_secret_configured: bool
+    default_checkout_url: str
+
+
+class AdminPaymentSettingsUpdate(BaseModel):
+    payments_enabled: bool
+
+
+@router.get("/settings/payment", response_model=AdminPaymentSettingsOut)
+async def get_admin_payment_settings(
+    session: SessionDep,
+    _admin: AdminDep,
+) -> AdminPaymentSettingsOut:
+    """Get payment settings and status (admin only)."""
+    from torii_api.config import get_settings
+    from torii_api.services.system_settings import is_payments_enabled
+
+    settings = get_settings()
+    enabled = await is_payments_enabled(session)
+    return AdminPaymentSettingsOut(
+        payments_enabled=enabled,
+        provider="paddle",
+        environment=settings.paddle_env,
+        client_token_configured=bool(settings.paddle_client_token),
+        api_key_configured=bool(settings.paddle_api_key),
+        webhook_secret_configured=bool(settings.paddle_webhook_secret),
+        default_checkout_url=settings.paddle_default_checkout_url,
+    )
+
+
+@router.patch("/settings/payment", response_model=AdminPaymentSettingsOut)
+async def update_admin_payment_settings(
+    payload: AdminPaymentSettingsUpdate,
+    session: SessionDep,
+    _admin: AdminDep,
+) -> AdminPaymentSettingsOut:
+    """Enable or disable payments platform-wide (admin only)."""
+    from torii_api.config import get_settings
+    from torii_api.services.system_settings import set_payments_enabled
+
+    settings = get_settings()
+    await set_payments_enabled(session, payload.payments_enabled)
+    return AdminPaymentSettingsOut(
+        payments_enabled=payload.payments_enabled,
+        provider="paddle",
+        environment=settings.paddle_env,
+        client_token_configured=bool(settings.paddle_client_token),
+        api_key_configured=bool(settings.paddle_api_key),
+        webhook_secret_configured=bool(settings.paddle_webhook_secret),
+        default_checkout_url=settings.paddle_default_checkout_url,
+    )
+

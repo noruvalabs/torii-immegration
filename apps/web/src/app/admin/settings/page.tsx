@@ -1,17 +1,75 @@
 "use client";
 
-import { useState } from "react";
-import { Settings, Save, Bell, Shield, Globe, CreditCard, Lock } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Settings, Save, Bell, Shield, Globe, CreditCard, Lock, AlertCircle, CheckCircle2, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/lib/i18n";
 import { useAuth } from "@/lib/auth-context";
 import { changePassword } from "@/lib/api/auth";
+import {
+  adminGetPaymentSettings,
+  adminUpdatePaymentSettings,
+  type AdminPaymentSettingsResponse,
+} from "@/lib/api/payments";
 
 export default function SettingsPage() {
   const { lang, setLang, t } = useI18n();
   const { token } = useAuth();
   const [saved, setSaved] = useState(false);
+
+  const [paymentSettings, setPaymentSettings] = useState<AdminPaymentSettingsResponse | null>(null);
+  const [loadingPayments, setLoadingPayments] = useState(false);
+  const [togglingPayments, setTogglingPayments] = useState(false);
+
+  useEffect(() => {
+    if (!token) return;
+    setLoadingPayments(true);
+    adminGetPaymentSettings(token)
+      .then(setPaymentSettings)
+      .catch(() => {
+        // Fallback default
+        setPaymentSettings({
+          payments_enabled: true,
+          provider: "paddle",
+          environment: "sandbox",
+          client_token_configured: false,
+          api_key_configured: false,
+          webhook_secret_configured: false,
+          default_checkout_url: "",
+        });
+      })
+      .finally(() => setLoadingPayments(false));
+  }, [token]);
+
+  async function handleTogglePayments(enabled: boolean) {
+    if (!token || togglingPayments) return;
+    setTogglingPayments(true);
+    try {
+      const updated = await adminUpdatePaymentSettings(token, enabled);
+      setPaymentSettings(updated);
+      toast.success(
+        enabled
+          ? (lang === "ja" ? "オンライン決済を有効化しました" : "Online payments enabled")
+          : (lang === "ja" ? "オンライン決済を無効化しました" : "Online payments disabled"),
+        {
+          description: enabled
+            ? (lang === "ja" ? "申請者はクレジットパスの購入が可能です。" : "Applicants can now purchase credit passes.")
+            : (lang === "ja" ? "申請者によるクレジット新規購入は一時停止されます。" : "New credit purchases by applicants are now blocked."),
+        },
+      );
+    } catch (err) {
+      toast.error(
+        lang === "ja" ? "設定の更新に失敗しました" : "Failed to update payment setting",
+        {
+          description: err instanceof Error ? err.message : "Error updating payment toggle",
+        },
+      );
+    } finally {
+      setTogglingPayments(false);
+    }
+  }
 
   const [currentPw, setCurrentPw] = useState("");
   const [newPw, setNewPw] = useState("");
@@ -184,41 +242,122 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
 
-        {/* Pricing */}
-        <Card>
+        {/* Payment Gateway & Billing Controls */}
+        <Card className="border-primary/20 shadow-xs">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <CreditCard className="size-4" /> Pricing & packaging
-            </CardTitle>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <CardTitle className="flex items-center gap-2">
+                <CreditCard className="size-4 text-primary" />
+                {lang === "ja" ? "オンライン決済・課金管理 (Paddle)" : "Online Payments & Billing (Paddle)"}
+              </CardTitle>
+              {paymentSettings && (
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                      paymentSettings.payments_enabled
+                        ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30"
+                        : "bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/30"
+                    }`}
+                  >
+                    {paymentSettings.payments_enabled ? (
+                      <>
+                        <CheckCircle2 className="size-3" />
+                        {lang === "ja" ? "決済受付中" : "Accepting Payments"}
+                      </>
+                    ) : (
+                      <>
+                        <AlertCircle className="size-3" />
+                        {lang === "ja" ? "決済停止中 (メンテナンス)" : "Payments Disabled"}
+                      </>
+                    )}
+                  </span>
+                  <span className="rounded-md bg-muted px-2 py-0.5 text-[11px] font-mono text-muted-foreground uppercase">
+                    {paymentSettings.environment}
+                  </span>
+                </div>
+              )}
+            </div>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <label className="flex flex-col gap-1 text-sm">
-              <span className="text-muted-foreground">Per-application price</span>
-              <input
-                type="number"
-                step="0.01"
-                defaultValue={49.0}
-                className="h-9 w-32 rounded-[var(--radius)] border bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              />
-            </label>
-            <label className="flex flex-col gap-1 text-sm">
-              <span className="text-muted-foreground">Monthly subscription price</span>
-              <input
-                type="number"
-                step="0.01"
-                defaultValue={19.0}
-                className="h-9 w-32 rounded-[var(--radius)] border bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              />
-            </label>
-            <label className="flex flex-col gap-1 text-sm">
-              <span className="text-muted-foreground">Employer license (per seat/month)</span>
-              <input
-                type="number"
-                step="0.01"
-                defaultValue={29.0}
-                className="h-9 w-32 rounded-[var(--radius)] border bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              />
-            </label>
+          <CardContent className="space-y-5">
+            {/* Primary Toggle Switch */}
+            <div className="flex items-start justify-between rounded-xl border border-border/70 bg-muted/20 p-4 gap-4">
+              <div className="space-y-1">
+                <label
+                  htmlFor="toggle-payments"
+                  className="text-sm font-bold text-foreground flex items-center gap-2 cursor-pointer"
+                >
+                  <span>{lang === "ja" ? "Paddle オンライン決済を有効にする" : "Enable Paddle Online Payments"}</span>
+                  {togglingPayments && <Loader2 className="size-3.5 animate-spin text-primary" />}
+                </label>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  {lang === "ja"
+                    ? "無効化すると、申請者による新規クレジット・申請パスの購入が即座に停止されます（メンテナンス表示）。すでに保有しているクレジットは引き続き利用可能です。"
+                    : "When turned off, applicants cannot purchase credit passes (shows a maintenance notice). Existing user credit balances remain safe and usable."}
+                </p>
+              </div>
+
+              <div className="pt-0.5 shrink-0">
+                <input
+                  id="toggle-payments"
+                  type="checkbox"
+                  checked={paymentSettings?.payments_enabled ?? true}
+                  disabled={togglingPayments || loadingPayments}
+                  onChange={(e) => handleTogglePayments(e.target.checked)}
+                  className="size-5 cursor-pointer accent-primary rounded"
+                />
+              </div>
+            </div>
+
+            {/* Provider Configuration Status Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+              <div className="rounded-lg border p-3 space-y-1">
+                <span className="text-muted-foreground">{lang === "ja" ? "プロバイダー" : "Provider"}</span>
+                <p className="font-semibold text-foreground">Paddle Billing (v2)</p>
+              </div>
+
+              <div className="rounded-lg border p-3 space-y-1">
+                <span className="text-muted-foreground">{lang === "ja" ? "クライアントトークン" : "Client Token"}</span>
+                <p className="font-semibold text-foreground">
+                  {paymentSettings?.client_token_configured ? (
+                    <span className="text-emerald-600">✓ {lang === "ja" ? "設定済み" : "Configured"}</span>
+                  ) : (
+                    <span className="text-amber-600">⚠ {lang === "ja" ? "未設定 (.env)" : "Not Set"}</span>
+                  )}
+                </p>
+              </div>
+
+              <div className="rounded-lg border p-3 space-y-1">
+                <span className="text-muted-foreground">{lang === "ja" ? "Webhook 署名シークレット" : "Webhook Secret"}</span>
+                <p className="font-semibold text-foreground">
+                  {paymentSettings?.webhook_secret_configured ? (
+                    <span className="text-emerald-600">✓ {lang === "ja" ? "設定済み" : "Configured"}</span>
+                  ) : (
+                    <span className="text-amber-600">⚠ {lang === "ja" ? "未設定 (.env)" : "Not Set"}</span>
+                  )}
+                </p>
+              </div>
+            </div>
+
+            {/* Credit Packs Reference */}
+            <div className="border-t pt-4 space-y-2">
+              <span className="text-xs font-semibold text-muted-foreground">
+                {lang === "ja" ? "提供中の申請パス料金" : "Active Credit Pack Prices"}
+              </span>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs">
+                <div className="rounded-lg bg-card border p-2.5">
+                  <div className="font-bold text-foreground">Starter (1 Pass)</div>
+                  <div className="text-muted-foreground">$19.00 / ¥2,800</div>
+                </div>
+                <div className="rounded-lg bg-card border p-2.5">
+                  <div className="font-bold text-foreground">Standard (3 Passes)</div>
+                  <div className="text-muted-foreground">$39.00 / ¥5,800</div>
+                </div>
+                <div className="rounded-lg bg-card border p-2.5">
+                  <div className="font-bold text-foreground">Agency / Family (5 Passes)</div>
+                  <div className="text-muted-foreground">$59.00 / ¥8,900</div>
+                </div>
+              </div>
+            </div>
           </CardContent>
         </Card>
 

@@ -139,6 +139,63 @@ class Settings(BaseSettings):
     # entitlement (US-22.2). Off in unit tests unless explicitly enabled.
     require_packet_entitlement: bool = True
 
+    # --- Payment provider (Paddle Billing) -------------------------------------
+    payments_enabled_default: bool = Field(
+        default=True,
+        validation_alias=AliasChoices(
+            "TORII_PAYMENTS_ENABLED",
+            "PAYMENTS_ENABLED",
+        ),
+    )
+    paddle_env: str = Field(
+        default="sandbox",
+        validation_alias=AliasChoices(
+            "TORII_PADDLE_ENV",
+            "PADDLE_ENV",
+            "APP_V1_PADDLE_ENV",
+        ),
+    )
+    paddle_api_key: str = Field(
+        default="",
+        validation_alias=AliasChoices(
+            "TORII_PADDLE_API_KEY",
+            "PADDLE_API_KEY",
+            "APP_V1_PADDLE_API_KEY",
+        ),
+    )
+    paddle_client_token: str = Field(
+        default="",
+        validation_alias=AliasChoices(
+            "TORII_PADDLE_CLIENT_TOKEN",
+            "PADDLE_CLIENT_TOKEN",
+            "NEXT_PUBLIC_PADDLE_CLIENT_TOKEN",
+            "APP_V1_PADDLE_CLIENT_TOKEN",
+        ),
+    )
+    paddle_webhook_secret: str = Field(
+        default="",
+        validation_alias=AliasChoices(
+            "TORII_PADDLE_WEBHOOK_SECRET",
+            "PADDLE_WEBHOOK_SECRET",
+            "APP_V1_PADDLE_WEBHOOK_SECRET",
+        ),
+    )
+    paddle_price_ids: str = Field(
+        default="{}",
+        validation_alias=AliasChoices(
+            "TORII_PADDLE_PRICE_IDS",
+            "PADDLE_PRICE_IDS",
+            "APP_V1_PADDLE_PRICE_IDS",
+        ),
+    )
+    paddle_default_checkout_url: str = Field(
+        default="",
+        validation_alias=AliasChoices(
+            "TORII_PADDLE_DEFAULT_CHECKOUT_URL",
+            "PADDLE_DEFAULT_CHECKOUT_URL",
+        ),
+    )
+
     @property
     def is_sqlite(self) -> bool:
         return self.database_url.startswith("sqlite")

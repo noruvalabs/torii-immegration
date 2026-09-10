@@ -1,43 +1,141 @@
 "use client";
 
-import { useState } from "react";
-import { Sparkles, Check, Loader2, X, Coins, ShieldCheck, Zap } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Sparkles, Check, Loader2, X, Coins, ShieldCheck, Zap, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { useCredits } from "@/lib/credits-context";
+import { useAuth } from "@/lib/auth-context";
 import { useI18n } from "@/lib/i18n";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { fetchPaymentConfig, createCheckoutSession, type PaymentConfigResponse } from "@/lib/api/payments";
+import { openPaddleCheckout } from "@/lib/paddle";
 
 export function TopUpModal() {
-  const { isTopUpOpen, setIsTopUpOpen, packs, purchasePack, balance } = useCredits();
-  const { lang, t } = useI18n();
+  const { isTopUpOpen, setIsTopUpOpen, packs, refreshBalance, balance } = useCredits();
+  const { token } = useAuth();
+  const { lang } = useI18n();
   const [selectedPackId, setSelectedPackId] = useState<"starter" | "standard" | "family">("standard");
   const [currency, setCurrency] = useState<"usd" | "jpy">("usd");
   const [purchasing, setPurchasing] = useState(false);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [paymentConfig, setPaymentConfig] = useState<PaymentConfigResponse | null>(null);
+  const [loadingConfig, setLoadingConfig] = useState(false);
+
+  useEffect(() => {
+    if (!isTopUpOpen) return;
+    let mounted = true;
+    setLoadingConfig(true);
+    fetchPaymentConfig(token ?? undefined)
+      .then((cfg) => {
+        if (mounted) setPaymentConfig(cfg);
+      })
+      .catch(() => {
+        if (mounted) {
+          setPaymentConfig({
+            payments_enabled: true,
+            provider: "paddle",
+            environment: "sandbox",
+            client_token: "",
+            default_checkout_url: "",
+          });
+        }
+      })
+      .finally(() => {
+        if (mounted) setLoadingConfig(false);
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, [isTopUpOpen, token]);
 
   if (!isTopUpOpen) return null;
 
-  function handlePurchase() {
-    toast.error(
-      lang === "ja" ? "現在お支払いはご利用いただけません" : "Payment Currently Unavailable",
-      {
-        description:
-          lang === "ja"
-            ? "オンライン決済システムは現在メンテナンス中です。しばらく経ってから再度お試しいただくか、サポートまでお問い合わせください。"
-            : "Online payment processing is currently unavailable. Please try again later or contact support.",
-      },
-    );
+  const paymentsDisabled = paymentConfig !== null && !paymentConfig.payments_enabled;
+
+  async function handlePurchase() {
+    if (paymentsDisabled) {
+      toast.error(
+        lang === "ja" ? "現在お支払いはご利用いただけません" : "Payments Temporarily Disabled",
+        {
+          description:
+            lang === "ja"
+              ? "管理者によりオンライン決済が一時的に無効化されています。しばらく経ってから再度お試しください。"
+              : "Online payments are currently paused by the administrator for maintenance. Please try again later.",
+        },
+      );
+      return;
+    }
+
+    if (!token) {
+      toast.error(
+        lang === "ja" ? "ログインが必要です" : "Authentication Required",
+        {
+          description:
+            lang === "ja"
+              ? "クレジットを購入するにはログインしてください。"
+              : "Please sign in to your account to purchase credit passes.",
+        },
+      );
+      return;
+    }
+
+    setPurchasing(true);
+    setSuccessMsg(null);
+
+    try {
+      const checkout = await createCheckoutSession(token, selectedPackId, currency);
+
+      if (checkout.provider_session_id) {
+        const clientToken = paymentConfig?.client_token || process.env.NEXT_PUBLIC_PADDLE_CLIENT_TOKEN;
+        const env = paymentConfig?.environment || process.env.NEXT_PUBLIC_PADDLE_ENV || "sandbox";
+
+        if (clientToken) {
+          const { completed } = await openPaddleCheckout(checkout.provider_session_id, clientToken, env);
+          if (completed) {
+            await refreshBalance();
+            setSuccessMsg(
+              lang === "ja"
+                ? "お支払いが完了しました！クレジットが付与されました。"
+                : "Payment completed successfully! Credits added to your account.",
+            );
+            toast.success(
+              lang === "ja" ? "決済完了" : "Payment Succeeded",
+              {
+                description:
+                  lang === "ja"
+                    ? `${checkout.credits} 件分の申請パスが追加されました。`
+                    : `${checkout.credits} Application Pass(es) credited.`,
+              },
+            );
+          }
+        } else if (checkout.checkout_url) {
+          window.location.href = checkout.checkout_url;
+        }
+      } else if (checkout.checkout_url) {
+        window.location.href = checkout.checkout_url;
+      }
+    } catch (err) {
+      toast.error(
+        lang === "ja" ? "決済エラー" : "Checkout Failed",
+        {
+          description: err instanceof Error ? err.message : "Failed to initiate checkout.",
+        },
+      );
+    } finally {
+      setPurchasing(false);
+    }
   }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-150">
-      <div className="relative w-full max-w-2xl rounded-2xl border bg-card p-6 shadow-2xl space-y-6 animate-in zoom-in-95 duration-150">
+      <div className="relative w-full max-w-2xl rounded-2xl border bg-card p-6 shadow-2xl space-y-6 animate-in zoom-in-95 duration-150 max-h-[90vh] overflow-y-auto">
         {/* Close Button */}
         <button
           type="button"
           onClick={() => setIsTopUpOpen(false)}
-          className="absolute top-4 right-4 p-1.5 rounded-lg text-muted-foreground hover:bg-muted transition-colors"
+          className="absolute top-4 right-4 p-1.5 rounded-lg text-muted-foreground hover:bg-muted transition-colors cursor-pointer"
         >
           <X className="size-5" />
         </button>
@@ -62,6 +160,25 @@ export function TopUpModal() {
           </p>
         </div>
 
+        {/* Payments Disabled Notice */}
+        {paymentsDisabled && (
+          <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-xs space-y-1 animate-in fade-in">
+            <div className="flex items-center gap-2 font-bold text-amber-700 dark:text-amber-400">
+              <AlertCircle className="size-4 shrink-0" />
+              <span>
+                {lang === "ja"
+                  ? "オンライン決済は現在メンテナンス中です"
+                  : "Online Payments Temporarily Disabled"}
+              </span>
+            </div>
+            <p className="text-muted-foreground leading-relaxed pl-6">
+              {lang === "ja"
+                ? "管理者によりオンライン決済およびクレジットの新規購入が一時停止されています。既存の残高および保有クレジットは引き続き通常通りご利用いただけます。"
+                : "Credit purchases are currently paused by the system administrator for scheduled maintenance. You can continue using all features with your existing balance."}
+            </p>
+          </div>
+        )}
+
         {/* Currency Switcher */}
         <div className="flex items-center justify-between border-b pb-4">
           <span className="text-xs font-semibold text-foreground">
@@ -71,7 +188,7 @@ export function TopUpModal() {
             <button
               type="button"
               onClick={() => setCurrency("usd")}
-              className={`px-3 py-1 rounded-md transition-all ${
+              className={`px-3 py-1 rounded-md transition-all cursor-pointer ${
                 currency === "usd"
                   ? "bg-background text-foreground shadow-xs font-bold"
                   : "text-muted-foreground hover:text-foreground"
@@ -82,7 +199,7 @@ export function TopUpModal() {
             <button
               type="button"
               onClick={() => setCurrency("jpy")}
-              className={`px-3 py-1 rounded-md transition-all ${
+              className={`px-3 py-1 rounded-md transition-all cursor-pointer ${
                 currency === "jpy"
                   ? "bg-background text-foreground shadow-xs font-bold"
                   : "text-muted-foreground hover:text-foreground"
@@ -96,7 +213,7 @@ export function TopUpModal() {
         {/* Success Alert */}
         {successMsg && (
           <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs text-emerald-600 font-semibold flex items-center gap-2">
-            <Check className="size-4" />
+            <Check className="size-4 shrink-0" />
             <span>{successMsg}</span>
           </div>
         )}
@@ -168,7 +285,11 @@ export function TopUpModal() {
         <div className="rounded-xl border bg-muted/20 p-3 text-[11px] space-y-1.5">
           <div className="flex items-center gap-1.5 font-bold text-foreground">
             <ShieldCheck className="size-3.5 text-primary" />
-            <span>{lang === "ja" ? "申請パスに含まれるすべての機能（追加料金なし）" : "100% All-Inclusive Per Application Pass"}</span>
+            <span>
+              {lang === "ja"
+                ? "申請パスに含まれるすべての機能（追加料金なし）"
+                : "100% All-Inclusive Per Application Pass"}
+            </span>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-muted-foreground">
             <div>📄 <strong>OCR 読み取り</strong>: 無制限</div>
@@ -192,13 +313,18 @@ export function TopUpModal() {
           <Button
             type="button"
             onClick={handlePurchase}
-            disabled={purchasing}
-            className="min-w-40 h-10 font-bold gap-2 shadow-md"
+            disabled={purchasing || loadingConfig || paymentsDisabled}
+            className="min-w-44 h-10 font-bold gap-2 shadow-md"
           >
             {purchasing ? (
               <>
                 <Loader2 className="size-4 animate-spin" />
-                {lang === "ja" ? "処理中…" : "Processing…"}
+                {lang === "ja" ? "決済画面を準備中…" : "Opening Checkout…"}
+              </>
+            ) : paymentsDisabled ? (
+              <>
+                <AlertCircle className="size-4" />
+                {lang === "ja" ? "現在購入停止中" : "Purchases Disabled"}
               </>
             ) : (
               <>
