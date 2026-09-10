@@ -59,9 +59,7 @@ export function Reveal({
           observer.disconnect();
         }
       },
-      // Fires a little before the element is fully in frame, so the motion is finishing
-      // as the reader arrives rather than starting under their eyes.
-      { threshold: 0.1, rootMargin: "0px 0px -12% 0px" },
+      { threshold: 0.05, rootMargin: "50px 0px 50px 0px" },
     );
     observer.observe(node);
     return () => observer.disconnect();

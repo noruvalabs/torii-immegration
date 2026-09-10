@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Menu, X } from "lucide-react";
 import { LandingAuthLink } from "@/components/landing-auth-link";
@@ -8,19 +9,26 @@ import { ThemeToggle } from "@/components/admin/theme-toggle";
 import { LanguageToggle } from "./language-toggle";
 import { StartCaseButton } from "./start-case-button";
 import { useActiveSection } from "./use-active-section";
-import { SECTION_IDS, useSectionNav } from "./nav";
+import { SECTION_IDS, useHeaderNav, type NavLink } from "./nav";
 import { useLang } from "./i18n";
 import { dictionary } from "./dictionary";
 import { cn } from "@/lib/utils";
 import { ToriiLogo } from "@/components/brand/ToriiLogo";
 
 export function SiteHeader() {
+  const pathname = usePathname();
   const { lang } = useLang();
   const t = dictionary[lang];
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const active = useActiveSection(SECTION_IDS);
-  const navLinks = useSectionNav();
+  const navLinks = useHeaderNav();
+
+  const isLinkActive = (link: NavLink) => {
+    if (link.href === pathname) return true;
+    if (pathname === "/" && link.href === `/#${active}`) return true;
+    return false;
+  };
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 8);
@@ -68,28 +76,31 @@ export function SiteHeader() {
         </Link>
 
         <nav className="ml-6 hidden items-center lg:flex">
-          {navLinks.map((link) => (
-            <a
-              key={link.id}
-              href={link.href}
-              aria-current={active === link.id ? "true" : undefined}
-              className={cn(
-                "relative rounded-full px-3 py-2 text-sm font-medium transition-colors duration-200",
-                active === link.id ? "text-foreground" : "text-muted-foreground hover:text-foreground",
-              )}
-            >
-              {/* The highlight is a sibling rather than a background so it can fade
-                  between links instead of snapping. */}
-              <span
-                aria-hidden
+          {navLinks.map((link) => {
+            const activeMatch = isLinkActive(link);
+            return (
+              <Link
+                key={link.id}
+                href={link.href}
+                aria-current={activeMatch ? "true" : undefined}
                 className={cn(
-                  "absolute inset-0 rounded-full bg-accent transition-opacity duration-300",
-                  active === link.id ? "opacity-100" : "opacity-0",
+                  "relative rounded-full px-3 py-2 text-sm font-medium transition-colors duration-200",
+                  activeMatch ? "text-foreground" : "text-muted-foreground hover:text-foreground",
                 )}
-              />
-              <span className="relative">{link.label}</span>
-            </a>
-          ))}
+              >
+                {/* The highlight is a sibling rather than a background so it can fade
+                    between links instead of snapping. */}
+                <span
+                  aria-hidden
+                  className={cn(
+                    "absolute inset-0 rounded-full bg-accent transition-opacity duration-300",
+                    activeMatch ? "opacity-100" : "opacity-0",
+                  )}
+                />
+                <span className="relative">{link.label}</span>
+              </Link>
+            );
+          })}
         </nav>
 
         <div className="ml-auto flex items-center gap-2 sm:gap-3">
@@ -128,21 +139,24 @@ export function SiteHeader() {
         inert={!menuOpen}
       >
         <nav className="flex flex-col p-3">
-          {navLinks.map((link, i) => (
-            <a
-              key={link.id}
-              href={link.href}
-              onClick={() => setMenuOpen(false)}
-              style={{ transitionDelay: menuOpen ? `${60 + i * 40}ms` : "0ms" }}
-              className={cn(
-                "rounded-2xl px-4 py-3 text-sm font-medium transition-all duration-300 ease-out-expo",
-                menuOpen ? "translate-y-0 opacity-100" : "translate-y-1 opacity-0",
-                active === link.id ? "bg-accent text-foreground" : "text-muted-foreground hover:bg-accent/60",
-              )}
-            >
-              {link.label}
-            </a>
-          ))}
+          {navLinks.map((link, i) => {
+            const activeMatch = isLinkActive(link);
+            return (
+              <Link
+                key={link.id}
+                href={link.href}
+                onClick={() => setMenuOpen(false)}
+                style={{ transitionDelay: menuOpen ? `${60 + i * 40}ms` : "0ms" }}
+                className={cn(
+                  "rounded-2xl px-4 py-3 text-sm font-medium transition-all duration-300 ease-out-expo",
+                  menuOpen ? "translate-y-0 opacity-100" : "translate-y-1 opacity-0",
+                  activeMatch ? "bg-accent text-foreground" : "text-muted-foreground hover:bg-accent/60",
+                )}
+              >
+                {link.label}
+              </Link>
+            );
+          })}
         </nav>
 
         <div className="flex items-center justify-between gap-3 border-t border-border/60 p-3">
