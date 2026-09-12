@@ -86,7 +86,8 @@ async function request<T>(path: string, options: RequestInit, token?: string | n
 
   if (!res.ok) {
     const body = (await res.json().catch(() => null)) as { detail?: unknown } | null;
-    throw new Error(formatApiDetail(body?.detail) || `Request failed (${res.status})`);
+    const errorMsg = body?.detail ? formatApiDetail(body.detail) : `Request failed (${res.status})`;
+    throw new Error(errorMsg);
   }
 
   return res.json() as Promise<T>;
@@ -133,7 +134,8 @@ export function uploadDocument(
   }).then(async (res) => {
     if (!res.ok) {
       const body = (await res.json().catch(() => null)) as { detail?: unknown } | null;
-      throw new Error(formatApiDetail(body?.detail) || `Upload failed (${res.status})`);
+      const errorMsg = body?.detail ? formatApiDetail(body.detail) : `Upload failed (${res.status})`;
+      throw new Error(errorMsg);
     }
     return res.json() as Promise<WalletUploadResponse>;
   });
