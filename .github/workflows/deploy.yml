@@ -216,6 +216,20 @@ jobs:
           fi
           chmod 600 ~/.ssh/known_hosts
 
+      - name: Reclaim host disk space
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/torii_deploy -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" \
+            "docker container prune -f >/dev/null 2>&1 || true; \
+             docker builder prune -f >/dev/null 2>&1 || true; \
+             docker image prune -a -f --filter 'until=24h' >/dev/null 2>&1 || true; \
+             free_mb=\$(df -m /var/lib/docker 2>/dev/null | awk 'NR==2 {print \$4}' || df -m / 2>/dev/null | awk 'NR==2 {print \$4}' || echo 0); \
+             if [ \"\${free_mb:-0}\" -lt 2000 ] 2>/dev/null; then \
+               docker image prune -a -f >/dev/null 2>&1 || true; \
+             fi; \
+             echo '==> Host disk status:'; \
+             df -h /var/lib/docker 2>/dev/null || df -h / 2>/dev/null || true"
+
       - name: Upload the deploy assets
         run: |
           set -euo pipefail

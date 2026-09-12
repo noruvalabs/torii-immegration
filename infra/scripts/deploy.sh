@@ -42,6 +42,26 @@ compose() {
   docker compose --project-directory "$COMPOSE_DIR" -f "$COMPOSE_FILE" "$@"
 }
 
+cleanup_disk() {
+  log "Ensuring host disk space"
+  docker container prune -f >/dev/null 2>&1 || true
+  docker builder prune -f >/dev/null 2>&1 || true
+
+  local free_mb
+  free_mb="$(df -m "$APP_ROOT" 2>/dev/null | awk 'NR==2 {print $4}' || true)"
+  if [[ -n "$free_mb" && "$free_mb" =~ ^[0-9]+$ && "$free_mb" -lt 5000 ]]; then
+    log "Disk space is low (${free_mb}MB free) — pruning images older than 24h"
+    docker image prune -a -f --filter "until=24h" >/dev/null 2>&1 || true
+  fi
+
+  local free_mb_after
+  free_mb_after="$(df -m "$APP_ROOT" 2>/dev/null | awk 'NR==2 {print $4}' || true)"
+  if [[ -n "$free_mb_after" && "$free_mb_after" =~ ^[0-9]+$ && "$free_mb_after" -lt 2000 ]]; then
+    log "Disk space critically low (${free_mb_after}MB free) — pruning all unused images"
+    docker image prune -a -f >/dev/null 2>&1 || true
+  fi
+}
+
 write_env_file() {
   log "Writing $ENV_FILE"
   umask 077
@@ -123,6 +143,8 @@ main() {
   mkdir -p "$COMPOSE_DIR" "$STATE_DIR"
   chmod 700 "$APP_ROOT"
 
+  cleanup_disk
+
   if [[ ! -f "$COMPOSE_FILE" ]]; then
     echo "Missing $COMPOSE_FILE — the workflow uploads it before running this script." >&2
     exit 1
@@ -146,11 +168,12 @@ main() {
   printf '%s\n' "$TAG" >"$KNOWN_GOOD_TAG_FILE"
   trap - ERR
 
-  # Keep the previous release's images so a rollback is a local retag, not a re-pull; only
-  # dangling layers and stopped containers go.
-  log "Pruning dangling images"
+  # Keep recent release images for rollback; prune images older than 48h, stopped containers, and build cache.
+  log "Pruning old images and build cache"
   docker container prune -f >/dev/null 2>&1 || true
+  docker builder prune -f >/dev/null 2>&1 || true
   docker image prune -f >/dev/null 2>&1 || true
+  docker image prune -a -f --filter "until=48h" >/dev/null 2>&1 || true
 
   log "Deployed $TAG"
   compose ps
