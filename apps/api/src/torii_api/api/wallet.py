@@ -529,7 +529,7 @@ async def get_wallet_document_file(
 
 def _render_pdf_page(content: bytes, page_number: int = 1, dpi: int = 150) -> tuple[bytes, int]:
     """Render a PDF page to PNG bytes and return (png_bytes, total_pages)."""
-    import pymupdf
+    import pymupdf  # type: ignore
 
     doc = pymupdf.open(stream=content, filetype="pdf")
     total_pages = len(doc)
@@ -654,7 +654,7 @@ async def get_wallet_document_html_view(
     total_pages = 1
     if not is_image:
         try:
-            import pymupdf
+            import pymupdf  # type: ignore
 
             mupdf_doc = pymupdf.open(stream=content, filetype="pdf")
             total_pages = max(1, len(mupdf_doc))
