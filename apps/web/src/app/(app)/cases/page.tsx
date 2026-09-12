@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/table";
 import { PaginationBar } from "@/components/ui/pagination";
 import { useAuth } from "@/lib/auth-context";
+import { formatScopeLabel } from "@/lib/utils";
 import type { Case } from "@/lib/api/cases";
 import {
   useCasesListQuery,
@@ -236,8 +237,8 @@ export default function CasesListPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="px-5">Reference</TableHead>
-                      <TableHead className="px-5">Route / Details</TableHead>
+                      <TableHead className="px-5">Application / Reference</TableHead>
+                      <TableHead className="px-5">Next Step</TableHead>
                       <TableHead className="px-5">Status</TableHead>
                       <TableHead className="px-5">Created</TableHead>
                       <TableHead className="px-5 text-right">Actions</TableHead>
@@ -251,21 +252,25 @@ export default function CasesListPage() {
                       };
                       return (
                         <TableRow key={c.id}>
-                          <TableCell className="px-5 font-mono text-sm font-semibold">
+                          <TableCell className="px-5">
                             <Link
                               href={`/cases/${c.id}`}
-                              className="hover:underline text-foreground"
+                              className="font-semibold text-sm hover:underline text-foreground block truncate"
                             >
-                              {c.reference}
+                              {formatScopeLabel(c.scope_label) || c.reference}
                             </Link>
+                            <span className="font-mono text-xs text-muted-foreground">
+                              {c.reference}
+                            </span>
                           </TableCell>
                           <TableCell className="px-5">
-                            <p className="font-medium text-foreground text-xs sm:text-sm">
-                              {c.scope_label ?? c.locale.toUpperCase()}
-                            </p>
-                            {c.next_title && (
+                            {c.next_title ? (
                               <p className="text-xs text-muted-foreground">
                                 Next: {c.next_title}
+                              </p>
+                            ) : (
+                              <p className="text-xs text-muted-foreground">
+                                {c.locale.toUpperCase()}
                               </p>
                             )}
                           </TableCell>
@@ -357,9 +362,11 @@ export default function CasesListPage() {
                       </div>
 
                       <Link href={`/cases/${c.id}`} className="min-w-0 flex-1">
-                        <p className="font-mono text-sm font-semibold truncate">{c.reference}</p>
+                        <p className="text-sm font-semibold truncate text-foreground">
+                          {formatScopeLabel(c.scope_label) || c.reference}
+                        </p>
                         <p className="mt-0.5 text-xs text-muted-foreground truncate">
-                          {c.scope_label ?? c.locale.toUpperCase()}
+                          <span className="font-mono font-medium">{c.reference}</span>
                           {c.next_title ? ` · Next: ${c.next_title}` : ""}
                         </p>
                       </Link>

@@ -224,7 +224,7 @@ export function CountrySelector({
 
   /* Combobox / Dropdown mode (used in standard forms like profile) */
   return (
-    <div ref={containerRef} className={cn("relative w-full", className)}>
+    <div ref={containerRef} className={cn("relative w-full", isOpen && "z-30", className)}>
       <button
         id={id}
         type="button"

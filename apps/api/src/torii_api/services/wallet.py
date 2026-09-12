@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 import structlog
@@ -23,14 +24,17 @@ DOCUMENT_TYPES: dict[str, dict[str, str]] = {
     "national_id": {"name": "National ID Card", "category": "identity"},
     "photo": {"name": "Photograph", "category": "identity"},
     "bank_statement": {"name": "Bank Statement", "category": "financial"},
+    "proof_of_funds": {"name": "Proof of Funds", "category": "financial"},
     "tax_return": {"name": "Tax Return", "category": "financial"},
     "employment_letter": {"name": "Employment Letter", "category": "employment"},
+    "employment_contract": {"name": "Employment Contract", "category": "employment"},
     "pay_slips": {"name": "Pay Slips", "category": "employment"},
     "business_registration": {"name": "Business Registration", "category": "employment"},
     "academic_certificate": {"name": "Academic Certificate", "category": "education"},
     "enrollment_letter": {"name": "Enrollment Letter", "category": "education"},
     "transcript": {"name": "Transcript", "category": "education"},
     "flight_itinerary": {"name": "Flight Itinerary", "category": "travel"},
+    "travel_itinerary": {"name": "Travel Itinerary", "category": "travel"},
     "hotel_booking": {"name": "Hotel Booking", "category": "travel"},
     "travel_insurance": {"name": "Travel Insurance", "category": "travel"},
     "invitation_letter": {"name": "Invitation Letter", "category": "support"},
@@ -42,9 +46,6 @@ DOCUMENT_TYPES: dict[str, dict[str, str]] = {
 
 DOC_TYPE_ALIASES: dict[str, str] = {
     "passport_photo": "photo",
-    "proof_of_funds": "bank_statement",
-    "travel_itinerary": "flight_itinerary",
-    "employment_contract": "employment_letter",
 }
 
 
@@ -70,6 +71,26 @@ def generate_storage_key(user_id: int, doc_type: str, filename: str) -> str:
     """Generate a unique storage key for a document."""
     unique_id = uuid.uuid4().hex[:16]
     return f"wallets/{user_id}/{doc_type}/{unique_id}/{filename}"
+
+
+_STORAGE_DIR = Path("data/wallet_storage")
+_STORAGE_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def save_document_content(storage_key: str, content: bytes) -> Path:
+    """Save raw document bytes to disk storage."""
+    target = _STORAGE_DIR / storage_key
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(content)
+    return target
+
+
+def get_document_content(storage_key: str) -> bytes | None:
+    """Retrieve raw document bytes from disk storage."""
+    target = _STORAGE_DIR / storage_key
+    if target.is_file():
+        return target.read_bytes()
+    return None
 
 
 async def upload_document(

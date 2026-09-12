@@ -32,6 +32,15 @@ const nextConfig: NextConfig = {
       { source: "/assistant/:path*", destination: `${aiBase}/:path*` },
     ];
   },
+  async redirects() {
+    return [
+      { source: "/privacy-policy", destination: "/privacy", permanent: true },
+      { source: "/terms-of-service", destination: "/terms", permanent: true },
+      { source: "/refund-policy", destination: "/refund", permanent: true },
+      { source: "/refunds", destination: "/refund", permanent: true },
+      { source: "/cookie-policy", destination: "/cookies", permanent: true },
+    ];
+  },
 };
 
 export default nextConfig;

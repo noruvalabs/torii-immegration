@@ -632,6 +632,7 @@ export function FormsStep({
   const [expandedFormKeys, setExpandedFormKeys] = useState<Record<string, boolean>>({});
   const [fieldSearchQueries, setFieldSearchQueries] = useState<Record<string, string>>({});
   const [missingFieldFilter, setMissingFieldFilter] = useState<Record<string, "all" | "required" | "optional">>({});
+  const [showOptionalFields, setShowOptionalFields] = useState<Record<string, boolean>>({});
 
   const portalPack: PortalPack | undefined =
     filing?.filing_mode === "online_portal" ? filing.portal_pack : undefined;
@@ -1078,79 +1079,158 @@ export function FormsStep({
                   </p>
                 )}
 
-                {form.missingFields.length > 0 && (() => {
-                  const filter = missingFieldFilter[form.key] ?? "all";
-                  const displayedFields = form.missingFields.filter((f) => {
-                    const isReq = form.requiredMissing.includes(f) || isFieldRequired(f);
-                    if (filter === "required") return isReq;
-                    if (filter === "optional") return !isReq;
-                    return true;
-                  });
+                {form.requiredMissing.length === 0 && (
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-3.5 text-xs text-emerald-900 dark:text-emerald-200">
+                    <div className="flex items-start sm:items-center gap-2.5">
+                      <CheckCircle2 className="size-4 shrink-0 text-emerald-600 dark:text-emerald-400 mt-0.5 sm:mt-0" />
+                      <div>
+                        <p className="font-semibold text-foreground">All required statutory questions completed</p>
+                        <p className="text-[11px] text-muted-foreground mt-0.5">
+                          Your intake responses are validated and mapped onto your official application sheet. Your form is ready to download.
+                        </p>
+                      </div>
+                    </div>
+                    {form.optionalMissing.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setShowOptionalFields((prev) => ({
+                            ...prev,
+                            [form.key]: !prev[form.key],
+                          }))
+                        }
+                        className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground cursor-pointer underline-offset-4 hover:underline shrink-0"
+                      >
+                        <span>
+                          {showOptionalFields[form.key]
+                            ? "Hide optional disclosures"
+                            : `Optional disclosures (${form.optionalMissing.length})`}
+                        </span>
+                        {showOptionalFields[form.key] ? (
+                          <ChevronUp className="size-3.5" />
+                        ) : (
+                          <ChevronDown className="size-3.5" />
+                        )}
+                      </button>
+                    )}
+                  </div>
+                )}
 
-                  return (
-                    <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-4 space-y-3 text-xs">
-                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 border-b border-amber-500/20 pb-2.5">
-                        <div className="flex items-center gap-2 text-amber-900 dark:text-amber-200 font-semibold">
-                          <AlertCircle className="size-4 shrink-0 text-amber-600 dark:text-amber-400" />
-                          <span>
-                            {form.requiredMissing.length > 0 ? (
-                              <>Official Form Fields ({form.requiredMissing.length} Required · {form.optionalMissing.length} Optional):</>
+                {form.missingFields.length > 0 &&
+                  (form.requiredMissing.length > 0 || showOptionalFields[form.key]) &&
+                  (() => {
+                    const isOptionalOnly = form.requiredMissing.length === 0;
+                    const filter =
+                      missingFieldFilter[form.key] ?? (isOptionalOnly ? "optional" : "required");
+                    const displayedFields = form.missingFields.filter((f) => {
+                      const isReq = form.requiredMissing.includes(f) || isFieldRequired(f);
+                      if (filter === "required") return isReq;
+                      if (filter === "optional") return !isReq;
+                      return true;
+                    });
+
+                    return (
+                      <div
+                        className={`rounded-lg border p-4 space-y-3 text-xs ${
+                          isOptionalOnly
+                            ? "border-border/70 bg-muted/20"
+                            : "border-amber-500/30 bg-amber-500/5"
+                        }`}
+                      >
+                        <div
+                          className={`flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 border-b pb-2.5 ${
+                            isOptionalOnly ? "border-border/50" : "border-amber-500/20"
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 font-semibold">
+                            {isOptionalOnly ? (
+                              <FileText className="size-4 shrink-0 text-muted-foreground" />
                             ) : (
-                              <>Optional Form Disclosures ({form.optionalMissing.length} items):</>
+                              <AlertCircle className="size-4 shrink-0 text-amber-600 dark:text-amber-400" />
                             )}
+                            <span
+                              className={
+                                isOptionalOnly
+                                  ? "text-foreground"
+                                  : "text-amber-900 dark:text-amber-200"
+                              }
+                            >
+                              {form.requiredMissing.length > 0 ? (
+                                <>
+                                  Official Form Fields ({form.requiredMissing.length} Required ·{" "}
+                                  {form.optionalMissing.length} Optional):
+                                </>
+                              ) : (
+                                <>
+                                  Optional Form Disclosures ({form.optionalMissing.length} items — leave
+                                  blank if not applicable):
+                                </>
+                              )}
+                            </span>
+                          </div>
+
+                          {/* Filter Tabs */}
+                          <div className="flex items-center gap-1 bg-background/80 p-0.5 rounded-md border text-[11px] self-start sm:self-auto">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setMissingFieldFilter((prev) => ({ ...prev, [form.key]: "all" }))
+                              }
+                              className={`px-2 py-0.5 rounded font-medium transition-colors cursor-pointer ${
+                                filter === "all"
+                                  ? "bg-primary text-primary-foreground shadow-xs"
+                                  : "text-muted-foreground hover:text-foreground"
+                              }`}
+                            >
+                              All ({form.missingFields.length})
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setMissingFieldFilter((prev) => ({
+                                  ...prev,
+                                  [form.key]: "required",
+                                }))
+                              }
+                              className={`px-2 py-0.5 rounded font-medium transition-colors cursor-pointer ${
+                                filter === "required"
+                                  ? "bg-amber-600 text-white shadow-xs"
+                                  : "text-muted-foreground hover:text-foreground"
+                              }`}
+                            >
+                              Required ({form.requiredMissing.length})
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setMissingFieldFilter((prev) => ({
+                                  ...prev,
+                                  [form.key]: "optional",
+                                }))
+                              }
+                              className={`px-2 py-0.5 rounded font-medium transition-colors cursor-pointer ${
+                                filter === "optional"
+                                  ? "bg-slate-600 text-white shadow-xs"
+                                  : "text-muted-foreground hover:text-foreground"
+                              }`}
+                            >
+                              Optional ({form.optionalMissing.length})
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+                          <span>
+                            {filter === "required"
+                              ? "Mandatory statutory fields needed to legally issue this official application:"
+                              : filter === "optional"
+                              ? "Optional background disclosures — only complete if applicable to your situation (e.g. Japanese high school, cash carried, legal guardian in Japan). Most applicants leave these blank:"
+                              : "Fields required by immigration are marked Required; secondary questions are marked Optional:"}
+                          </span>
+                          <span className="hidden sm:inline text-[10px] text-muted-foreground/80 italic">
+                            Values auto-save on paste, select, &amp; blur
                           </span>
                         </div>
-
-                        {/* Filter Tabs */}
-                        <div className="flex items-center gap-1 bg-background/80 p-0.5 rounded-md border text-[11px] self-start sm:self-auto">
-                          <button
-                            type="button"
-                            onClick={() => setMissingFieldFilter((prev) => ({ ...prev, [form.key]: "all" }))}
-                            className={`px-2 py-0.5 rounded font-medium transition-colors cursor-pointer ${
-                              filter === "all"
-                                ? "bg-primary text-primary-foreground shadow-xs"
-                                : "text-muted-foreground hover:text-foreground"
-                            }`}
-                          >
-                            All ({form.missingFields.length})
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setMissingFieldFilter((prev) => ({ ...prev, [form.key]: "required" }))}
-                            className={`px-2 py-0.5 rounded font-medium transition-colors cursor-pointer ${
-                              filter === "required"
-                                ? "bg-amber-600 text-white shadow-xs"
-                                : "text-muted-foreground hover:text-foreground"
-                            }`}
-                          >
-                            Required ({form.requiredMissing.length})
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setMissingFieldFilter((prev) => ({ ...prev, [form.key]: "optional" }))}
-                            className={`px-2 py-0.5 rounded font-medium transition-colors cursor-pointer ${
-                              filter === "optional"
-                                ? "bg-slate-600 text-white shadow-xs"
-                                : "text-muted-foreground hover:text-foreground"
-                            }`}
-                          >
-                            Optional ({form.optionalMissing.length})
-                          </button>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-                        <span>
-                          {filter === "required"
-                            ? "Mandatory statutory fields needed to legally issue this official application:"
-                            : filter === "optional"
-                            ? "Optional background disclosures — only complete if applicable to your situation:"
-                            : "Fields required by immigration are marked Required; secondary questions are marked Optional:"}
-                        </span>
-                        <span className="hidden sm:inline text-[10px] text-muted-foreground/80 italic">
-                          Values auto-save on paste, select, &amp; blur
-                        </span>
-                      </div>
 
                       {displayedFields.length === 0 ? (
                         <div className="py-6 text-center text-muted-foreground text-xs italic">
