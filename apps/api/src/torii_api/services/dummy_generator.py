@@ -10,14 +10,20 @@ def _draw_header_badge(page: pymupdf.Page, title: str, subtitle: str, category_t
     page.draw_rect(rect, color=(0.15, 0.25, 0.45), fill=(0.95, 0.97, 1.0), width=1.5)
     page.insert_text((55, 62), title, fontsize=16, fontname="helv", color=(0.1, 0.18, 0.35))
     page.insert_text((55, 82), subtitle, fontsize=9, fontname="helv", color=(0.35, 0.4, 0.5))
-    page.draw_rect(pymupdf.Rect(460, 50, 540, 72), color=(0.2, 0.5, 0.3), fill=(0.9, 0.96, 0.9), width=1)
+    page.draw_rect(
+        pymupdf.Rect(460, 50, 540, 72), color=(0.2, 0.5, 0.3), fill=(0.9, 0.96, 0.9), width=1
+    )
     page.insert_text((472, 65), category_tag, fontsize=9, fontname="helv", color=(0.15, 0.45, 0.2))
 
 
-def _draw_field_box(page: pymupdf.Page, x: float, y: float, w: float, h: float, label: str, value: str):
+def _draw_field_box(
+    page: pymupdf.Page, x: float, y: float, w: float, h: float, label: str, value: str
+):
     rect = pymupdf.Rect(x, y, x + w, y + h)
     page.draw_rect(rect, color=(0.8, 0.82, 0.86), fill=(0.98, 0.98, 0.99), width=0.8)
-    page.insert_text((x + 8, y + 14), label.upper(), fontsize=7, fontname="helv", color=(0.45, 0.5, 0.55))
+    page.insert_text(
+        (x + 8, y + 14), label.upper(), fontsize=7, fontname="helv", color=(0.45, 0.5, 0.55)
+    )
     page.insert_text((x + 8, y + 32), value, fontsize=11, fontname="helv", color=(0.08, 0.12, 0.18))
 
 
@@ -31,7 +37,7 @@ def generate_passport_pdf(
 ) -> bytes:
     doc = pymupdf.open()
     page = doc.new_page(width=595, height=420)  # Landscape passport spread
-    
+
     _draw_header_badge(
         page,
         "JAPAN PASSPORT / PASSEPORT DU JAPON",
@@ -42,7 +48,13 @@ def generate_passport_pdf(
     # Photo box placeholder
     photo_rect = pymupdf.Rect(55, 115, 175, 275)
     page.draw_rect(photo_rect, color=(0.7, 0.75, 0.8), fill=(0.92, 0.94, 0.97), width=1)
-    page.insert_text((85, 195), "[ PHOTOGRAPH ]\n   35mm x 45mm\n  ICAO 9303 SPEC", fontsize=8, fontname="helv", color=(0.4, 0.45, 0.55))
+    page.insert_text(
+        (85, 195),
+        "[ PHOTOGRAPH ]\n   35mm x 45mm\n  ICAO 9303 SPEC",
+        fontsize=8,
+        fontname="helv",
+        color=(0.4, 0.45, 0.55),
+    )
 
     # Details grid
     _draw_field_box(page, 190, 115, 170, 42, "Type / Country", "P / JPN")
@@ -88,13 +100,29 @@ def generate_bank_statement_pdf(
     _draw_field_box(page, 305, 115, 245, 45, "Account Number", f"Account: {account_no}")
     _draw_field_box(page, 45, 170, 245, 45, "Bank / Institution", f"Bank: {bank_name}")
     _draw_field_box(page, 305, 170, 245, 45, "Statement Date", f"Statement Date: {statement_date}")
-    _draw_field_box(page, 45, 225, 505, 55, "Available Balance / Total Solvency", f"Available Balance: {balance}")
+    _draw_field_box(
+        page,
+        45,
+        225,
+        505,
+        55,
+        "Available Balance / Total Solvency",
+        f"Available Balance: {balance}",
+    )
 
     # Transaction summary table
     table_rect = pymupdf.Rect(45, 300, 550, 520)
     page.draw_rect(table_rect, color=(0.8, 0.82, 0.86), fill=(1.0, 1.0, 1.0), width=1)
-    page.draw_rect(pymupdf.Rect(45, 300, 550, 328), color=(0.2, 0.3, 0.45), fill=(0.2, 0.3, 0.45), width=1)
-    page.insert_text((55, 318), "Date          Description                       Deposit           Withdrawal      Balance", fontsize=9, fontname="courier", color=(1.0, 1.0, 1.0))
+    page.draw_rect(
+        pymupdf.Rect(45, 300, 550, 328), color=(0.2, 0.3, 0.45), fill=(0.2, 0.3, 0.45), width=1
+    )
+    page.insert_text(
+        (55, 318),
+        "Date          Description                       Deposit           Withdrawal      Balance",
+        fontsize=9,
+        fontname="courier",
+        color=(1.0, 1.0, 1.0),
+    )
 
     txs = [
         ("2026-02-25", "Salary Deposit - Tech Corp", "+ JPY 480,000", "—", "JPY 3,450,000"),
@@ -107,13 +135,24 @@ def generate_bank_statement_pdf(
     for dt, desc, dep, wdr, bal in txs:
         line = f"{dt:<13} {desc:<30} {dep:<17} {wdr:<15} {bal}"
         page.insert_text((55, y_tx), line, fontsize=8, fontname="courier", color=(0.15, 0.15, 0.2))
-        page.draw_line(pymupdf.Point(45, y_tx + 8), pymupdf.Point(550, y_tx + 8), color=(0.9, 0.9, 0.9), width=0.5)
+        page.draw_line(
+            pymupdf.Point(45, y_tx + 8),
+            pymupdf.Point(550, y_tx + 8),
+            color=(0.9, 0.9, 0.9),
+            width=0.5,
+        )
         y_tx += 28
 
     # Official Seal
     seal_rect = pymupdf.Rect(380, 550, 520, 650)
     page.draw_rect(seal_rect, color=(0.7, 0.2, 0.2), width=1.5)
-    page.insert_text((400, 585), "OFFICIAL BANK SEAL\n   SMBC TOKYO\n  AUTHORIZED OFFICER\n    [VERIFIED]", fontsize=9, fontname="helv", color=(0.7, 0.2, 0.2))
+    page.insert_text(
+        (400, 585),
+        "OFFICIAL BANK SEAL\n   SMBC TOKYO\n  AUTHORIZED OFFICER\n    [VERIFIED]",
+        fontsize=9,
+        fontname="helv",
+        color=(0.7, 0.2, 0.2),
+    )
 
     pdf_bytes = doc.tobytes()
     doc.close()
@@ -139,22 +178,48 @@ def generate_residence_card_pdf(
 
     photo_rect = pymupdf.Rect(55, 115, 165, 275)
     page.draw_rect(photo_rect, color=(0.7, 0.75, 0.8), fill=(0.92, 0.94, 0.97), width=1)
-    page.insert_text((75, 195), "[ PHOTO / 写真 ]\n   30mm x 40mm\n Official Card Holder", fontsize=8, fontname="helv", color=(0.4, 0.45, 0.55))
+    page.insert_text(
+        (75, 195),
+        "[ PHOTO / 写真 ]\n   30mm x 40mm\n Official Card Holder",
+        fontsize=8,
+        fontname="helv",
+        color=(0.4, 0.45, 0.55),
+    )
 
     _draw_field_box(page, 180, 115, 360, 42, "Full Name", f"Full Name: {full_name}")
     _draw_field_box(page, 180, 165, 175, 42, "Card Number", f"Card No: {card_number}")
     _draw_field_box(page, 365, 165, 175, 42, "Date of Birth", f"Date of Birth: {dob}")
-    _draw_field_box(page, 180, 215, 360, 42, "Status of Residence", f"Status of Residence: {status_of_residence}")
+    _draw_field_box(
+        page,
+        180,
+        215,
+        360,
+        42,
+        "Status of Residence",
+        f"Status of Residence: {status_of_residence}",
+    )
     _draw_field_box(page, 180, 265, 175, 42, "Period of Stay (Expiry)", f"Expiry Date: {expiry}")
     _draw_field_box(page, 365, 265, 175, 42, "Permission", "Permission to Work: Allowed")
 
     # IC chip and hologram indicator
     ic_rect = pymupdf.Rect(55, 290, 165, 360)
     page.draw_rect(ic_rect, color=(0.75, 0.6, 0.2), fill=(0.98, 0.95, 0.85), width=1)
-    page.insert_text((70, 328), "[ EMBEDDED IC CHIP ]\n  Ministry of Justice", fontsize=8, fontname="helv", color=(0.5, 0.4, 0.1))
+    page.insert_text(
+        (70, 328),
+        "[ EMBEDDED IC CHIP ]\n  Ministry of Justice",
+        fontsize=8,
+        fontname="helv",
+        color=(0.5, 0.4, 0.1),
+    )
 
     # Anti-counterfeit text
-    page.insert_text((180, 340), "THIS IS AN OFFICIAL RESIDENCE CERTIFICATE UNDER THE IMMIGRATION CONTROL ACT", fontsize=7, fontname="helv", color=(0.5, 0.5, 0.5))
+    page.insert_text(
+        (180, 340),
+        "THIS IS AN OFFICIAL RESIDENCE CERTIFICATE UNDER THE IMMIGRATION CONTROL ACT",
+        fontsize=7,
+        fontname="helv",
+        color=(0.5, 0.5, 0.5),
+    )
 
     pdf_bytes = doc.tobytes()
     doc.close()
@@ -178,7 +243,13 @@ def generate_employment_letter_pdf(
         "EMPLOYMENT",
     )
 
-    page.insert_text((45, 125), "To: Immigration Services Agency of Japan", fontsize=10, fontname="helv", color=(0.2, 0.2, 0.3))
+    page.insert_text(
+        (45, 125),
+        "To: Immigration Services Agency of Japan",
+        fontsize=10,
+        fontname="helv",
+        color=(0.2, 0.2, 0.3),
+    )
     page.insert_text(
         (45, 150),
         "This is to certify that the individual named below is currently employed in good standing\n"
@@ -192,12 +263,20 @@ def generate_employment_letter_pdf(
     _draw_field_box(page, 305, 185, 245, 45, "Employer / Sponsor", f"Employer: {employer_name}")
     _draw_field_box(page, 45, 240, 245, 45, "Job Title / Position", f"Position: {position}")
     _draw_field_box(page, 305, 240, 245, 45, "Employment Start Date", f"Start Date: {start_date}")
-    _draw_field_box(page, 45, 295, 505, 45, "Monthly Remuneration / Salary", f"Monthly Salary: {monthly_salary}")
+    _draw_field_box(
+        page, 45, 295, 505, 45, "Monthly Remuneration / Salary", f"Monthly Salary: {monthly_salary}"
+    )
 
     # Duties statement
     duties_rect = pymupdf.Rect(45, 355, 550, 480)
     page.draw_rect(duties_rect, color=(0.85, 0.87, 0.9), fill=(0.98, 0.98, 0.99), width=1)
-    page.insert_text((55, 375), "SUMMARY OF RESPONSIBILITIES & QUALIFICATIONS:", fontsize=9, fontname="helv", color=(0.3, 0.3, 0.4))
+    page.insert_text(
+        (55, 375),
+        "SUMMARY OF RESPONSIBILITIES & QUALIFICATIONS:",
+        fontsize=9,
+        fontname="helv",
+        color=(0.3, 0.3, 0.4),
+    )
     page.insert_text(
         (55, 395),
         "1. Leads high-availability microservice development for core commerce services.\n"
@@ -210,11 +289,23 @@ def generate_employment_letter_pdf(
     )
 
     # Corporate Seal & Signature
-    page.insert_text((45, 530), f"Issued by: Human Resources Department\nCompany: {employer_name}\nAddress: 1-14-1 Tamagawa, Setagaya-ku, Tokyo, Japan", fontsize=9, fontname="helv", color=(0.3, 0.3, 0.35))
-    
+    page.insert_text(
+        (45, 530),
+        f"Issued by: Human Resources Department\nCompany: {employer_name}\nAddress: 1-14-1 Tamagawa, Setagaya-ku, Tokyo, Japan",
+        fontsize=9,
+        fontname="helv",
+        color=(0.3, 0.3, 0.35),
+    )
+
     seal_rect = pymupdf.Rect(380, 520, 520, 620)
     page.draw_rect(seal_rect, color=(0.75, 0.15, 0.15), width=1.5)
-    page.insert_text((400, 555), f"CORPORATE SEAL\n  {employer_name[:16].upper()}\n REPRESENTATIVE DIRECTOR\n   [REGISTERED]", fontsize=8, fontname="helv", color=(0.75, 0.15, 0.15))
+    page.insert_text(
+        (400, 555),
+        f"CORPORATE SEAL\n  {employer_name[:16].upper()}\n REPRESENTATIVE DIRECTOR\n   [REGISTERED]",
+        fontsize=8,
+        fontname="helv",
+        color=(0.75, 0.15, 0.15),
+    )
 
     pdf_bytes = doc.tobytes()
     doc.close()
@@ -240,21 +331,47 @@ def generate_flight_itinerary_pdf(
     )
 
     _draw_field_box(page, 45, 115, 245, 45, "Passenger Name", f"Full Name: {traveler_name}")
-    _draw_field_box(page, 305, 115, 245, 45, "Booking Reference (PNR)", f"Booking Ref: {booking_ref}")
+    _draw_field_box(
+        page, 305, 115, 245, 45, "Booking Reference (PNR)", f"Booking Ref: {booking_ref}"
+    )
     _draw_field_box(page, 45, 170, 245, 45, "Departure Date", f"Departure Date: {dep_date}")
     _draw_field_box(page, 305, 170, 245, 45, "Destination", f"Destination: {destination}")
 
     # Flights card
     f_rect = pymupdf.Rect(45, 235, 550, 420)
     page.draw_rect(f_rect, color=(0.8, 0.85, 0.9), fill=(0.97, 0.98, 1.0), width=1)
-    page.insert_text((60, 260), "OUTBOUND FLIGHT: ANA NH842", fontsize=11, fontname="helv", color=(0.1, 0.2, 0.4))
-    page.insert_text((60, 285), f"Date: {dep_date} | Singapore (SIN) 11:00 -> Tokyo Haneda (HND) 19:00 | Class: Economy (M) | Status: Confirmed", fontsize=8, fontname="helv", color=(0.2, 0.25, 0.35))
-    page.draw_line(pymupdf.Point(60, 310), pymupdf.Point(535, 310), color=(0.85, 0.85, 0.85), width=0.8)
+    page.insert_text(
+        (60, 260), "OUTBOUND FLIGHT: ANA NH842", fontsize=11, fontname="helv", color=(0.1, 0.2, 0.4)
+    )
+    page.insert_text(
+        (60, 285),
+        f"Date: {dep_date} | Singapore (SIN) 11:00 -> Tokyo Haneda (HND) 19:00 | Class: Economy (M) | Status: Confirmed",
+        fontsize=8,
+        fontname="helv",
+        color=(0.2, 0.25, 0.35),
+    )
+    page.draw_line(
+        pymupdf.Point(60, 310), pymupdf.Point(535, 310), color=(0.85, 0.85, 0.85), width=0.8
+    )
 
-    page.insert_text((60, 335), "RETURN FLIGHT: ANA NH841", fontsize=11, fontname="helv", color=(0.1, 0.2, 0.4))
-    page.insert_text((60, 360), f"Date: {ret_date} | Tokyo Haneda (HND) 10:50 -> Singapore (SIN) 17:30 | Class: Economy (M) | Status: Confirmed", fontsize=8, fontname="helv", color=(0.2, 0.25, 0.35))
+    page.insert_text(
+        (60, 335), "RETURN FLIGHT: ANA NH841", fontsize=11, fontname="helv", color=(0.1, 0.2, 0.4)
+    )
+    page.insert_text(
+        (60, 360),
+        f"Date: {ret_date} | Tokyo Haneda (HND) 10:50 -> Singapore (SIN) 17:30 | Class: Economy (M) | Status: Confirmed",
+        fontsize=8,
+        fontname="helv",
+        color=(0.2, 0.25, 0.35),
+    )
 
-    page.insert_text((45, 450), "Baggage Allowance: 2 Pieces (23kg each) | Electronic Ticket Issued | Validated for MOFA Visa Filing", fontsize=8, fontname="helv", color=(0.4, 0.4, 0.45))
+    page.insert_text(
+        (45, 450),
+        "Baggage Allowance: 2 Pieces (23kg each) | Electronic Ticket Issued | Validated for MOFA Visa Filing",
+        fontsize=8,
+        fontname="helv",
+        color=(0.4, 0.4, 0.45),
+    )
 
     pdf_bytes = doc.tobytes()
     doc.close()
@@ -287,7 +404,13 @@ def generate_tax_return_pdf(
     # Legal clause
     box = pymupdf.Rect(45, 290, 550, 420)
     page.draw_rect(box, color=(0.85, 0.85, 0.9), fill=(0.98, 0.98, 0.99), width=1)
-    page.insert_text((55, 315), "DECLARATION OF STATUTORY TAX COMPLIANCE:", fontsize=9, fontname="helv", color=(0.2, 0.2, 0.3))
+    page.insert_text(
+        (55, 315),
+        "DECLARATION OF STATUTORY TAX COMPLIANCE:",
+        fontsize=9,
+        fontname="helv",
+        color=(0.2, 0.2, 0.3),
+    )
     page.insert_text(
         (55, 340),
         "This official certificate confirms that the aforementioned taxpayer has fully declared\n"
@@ -300,7 +423,13 @@ def generate_tax_return_pdf(
 
     seal_rect = pymupdf.Rect(380, 460, 520, 560)
     page.draw_rect(seal_rect, color=(0.7, 0.2, 0.2), width=1.5)
-    page.insert_text((400, 495), "MUNICIPAL TAX SEAL\n  SHIBUYA WARD TAX\n    OFFICIAL STAMP\n   [PAID IN FULL]", fontsize=8, fontname="helv", color=(0.7, 0.2, 0.2))
+    page.insert_text(
+        (400, 495),
+        "MUNICIPAL TAX SEAL\n  SHIBUYA WARD TAX\n    OFFICIAL STAMP\n   [PAID IN FULL]",
+        fontsize=8,
+        fontname="helv",
+        color=(0.7, 0.2, 0.2),
+    )
 
     pdf_bytes = doc.tobytes()
     doc.close()
@@ -313,18 +442,46 @@ def generate_dummy_pdf(doc_type: str, user_name: str = "Kenji Sato") -> tuple[by
     if dt == "passport":
         return generate_passport_pdf(full_name=user_name), "official_passport.pdf", "Valid Passport"
     elif dt in ("bank_statement", "proof_of_funds"):
-        return generate_bank_statement_pdf(account_holder=user_name), "bank_statement.pdf", "Bank Statement / Solvency Certificate"
+        return (
+            generate_bank_statement_pdf(account_holder=user_name),
+            "bank_statement.pdf",
+            "Bank Statement / Solvency Certificate",
+        )
     elif dt == "residence_card":
-        return generate_residence_card_pdf(full_name=user_name), "residence_card.pdf", "Residence Card (Zairyu Card)"
+        return (
+            generate_residence_card_pdf(full_name=user_name),
+            "residence_card.pdf",
+            "Residence Card (Zairyu Card)",
+        )
     elif dt in ("employment_letter", "employment_contract"):
-        return generate_employment_letter_pdf(employee_name=user_name), "employment_letter.pdf", "Employment Letter & Contract"
+        return (
+            generate_employment_letter_pdf(employee_name=user_name),
+            "employment_letter.pdf",
+            "Employment Letter & Contract",
+        )
     elif dt in ("flight_itinerary", "travel_itinerary"):
-        return generate_flight_itinerary_pdf(traveler_name=user_name), "flight_itinerary.pdf", "Flight Itinerary & Booking"
+        return (
+            generate_flight_itinerary_pdf(traveler_name=user_name),
+            "flight_itinerary.pdf",
+            "Flight Itinerary & Booking",
+        )
     elif dt == "tax_return":
-        return generate_tax_return_pdf(full_name=user_name), "tax_certificate.pdf", "Tax Certificate / Declaration"
+        return (
+            generate_tax_return_pdf(full_name=user_name),
+            "tax_certificate.pdf",
+            "Tax Certificate / Declaration",
+        )
     elif dt == "photo":
         # Generate official ID photo card format
-        return generate_passport_pdf(full_name=user_name), "passport_photograph.pdf", "Official Photograph"
+        return (
+            generate_passport_pdf(full_name=user_name),
+            "passport_photograph.pdf",
+            "Official Photograph",
+        )
     else:
         # Generic supporting document
-        return generate_passport_pdf(full_name=user_name), "supporting_document.pdf", "Supporting Immigration Document"
+        return (
+            generate_passport_pdf(full_name=user_name),
+            "supporting_document.pdf",
+            "Supporting Immigration Document",
+        )

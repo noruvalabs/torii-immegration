@@ -93,7 +93,6 @@ def get_document_content(storage_key: str) -> bytes | None:
     return None
 
 
-
 async def upload_document(
     db: AsyncSession,
     user_id: int,

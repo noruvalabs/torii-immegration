@@ -144,6 +144,7 @@ async def upload_wallet_document(
 
     # Run PyMuPDF / OCR structured extraction
     from torii_api.services.ocr_extractor import extract_document_metadata
+
     extracted_fields, confidence = await extract_document_metadata(
         file_bytes=content,
         doc_type=doc_type,
@@ -510,7 +511,9 @@ async def get_wallet_document_file(
         content, _, _ = generate_dummy_pdf(doc.doc_type, user.full_name or "Kenji Sato")
         save_document_content(doc.storage_key, content)
 
-    media_type = doc.content_type if doc.content_type and "pdf" in doc.content_type else "application/pdf"
+    media_type = (
+        doc.content_type if doc.content_type and "pdf" in doc.content_type else "application/pdf"
+    )
     if doc.filename.lower().endswith((".png", ".jpg", ".jpeg", ".webp")):
         media_type = doc.content_type or "image/jpeg"
 
@@ -884,13 +887,15 @@ async def seed_dummy_documents_endpoint(
             notes=f"Auto-generated sample dummy document for {default_label}",
         )
         save_document_content(doc.storage_key, pdf_bytes)
-        seeded_docs.append({
-            "id": doc.id,
-            "doc_type": doc.doc_type,
-            "name": doc.name,
-            "filename": doc.filename,
-            "fields_count": len(extracted_fields),
-        })
+        seeded_docs.append(
+            {
+                "id": doc.id,
+                "doc_type": doc.doc_type,
+                "name": doc.name,
+                "filename": doc.filename,
+                "fields_count": len(extracted_fields),
+            }
+        )
 
     await session.flush()
     return {

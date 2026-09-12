@@ -45,7 +45,9 @@ def parse_structured_fields_from_text(
     for pat in name_patterns:
         if m := re.search(pat, combined_text, re.IGNORECASE):
             raw_name = m.group(1).replace("<", " ").strip()
-            if len(raw_name) >= 3 and not re.match(r"^(passport|republic|state|document)", raw_name, re.I):
+            if len(raw_name) >= 3 and not re.match(
+                r"^(passport|republic|state|document)", raw_name, re.I
+            ):
                 fields["full_name"] = {"value": raw_name.title(), "confidence": 0.9}
                 break
 
@@ -99,7 +101,11 @@ def parse_structured_fields_from_text(
                     fields["passport_number"] = {"value": val, "confidence": 0.95}
                     break
 
-        if m := re.search(r"(?:issuing[ _]?country|issuing[ _]?authority|authority)\s*[:=]\s*([A-Za-z\s]+)", combined_text, re.I):
+        if m := re.search(
+            r"(?:issuing[ _]?country|issuing[ _]?authority|authority)\s*[:=]\s*([A-Za-z\s]+)",
+            combined_text,
+            re.I,
+        ):
             fields["issuing_country"] = {"value": m.group(1).strip().title(), "confidence": 0.85}
 
     elif doc_type_clean in ("residence_card", "national_id"):
@@ -113,8 +119,15 @@ def parse_structured_fields_from_text(
                 fields["residence_card_number"] = {"value": m.group(1).upper(), "confidence": 0.92}
                 break
 
-        if m := re.search(r"(?:status[ _]?of[ _]?residence|residence[ _]?status|visa[ _]?status)\s*[:=]\s*([A-Za-z \(\)]+?)(?:[\r\n,;]|$)", combined_text, re.I):
-            fields["status_of_residence"] = {"value": m.group(1).strip().title(), "confidence": 0.88}
+        if m := re.search(
+            r"(?:status[ _]?of[ _]?residence|residence[ _]?status|visa[ _]?status)\s*[:=]\s*([A-Za-z \(\)]+?)(?:[\r\n,;]|$)",
+            combined_text,
+            re.I,
+        ):
+            fields["status_of_residence"] = {
+                "value": m.group(1).strip().title(),
+                "confidence": 0.88,
+            }
 
     elif doc_type_clean in ("bank_statement", "proof_of_funds", "tax_return"):
         bal_pats = [
@@ -126,29 +139,61 @@ def parse_structured_fields_from_text(
                 fields["balance"] = {"value": m.group(1).strip(), "confidence": 0.88}
                 break
 
-        if m := re.search(r"(?:bank[ _]?name|institution|bank)\s*[:=]\s*([A-Za-z0-9 \.,]+?)(?:[\r\n,]|$)", combined_text, re.I):
+        if m := re.search(
+            r"(?:bank[ _]?name|institution|bank)\s*[:=]\s*([A-Za-z0-9 \.,]+?)(?:[\r\n,]|$)",
+            combined_text,
+            re.I,
+        ):
             fields["bank_name"] = {"value": m.group(1).strip().title(), "confidence": 0.85}
         elif "bank" in combined_text.lower():
-            if m := re.search(r"([A-Za-z ]+Bank(?:ing)?|MUFG|SMBC|Mizuho|JPMorgan|Chase|HSBC|Wells Fargo|Citibank)", combined_text, re.I):
+            if m := re.search(
+                r"([A-Za-z ]+Bank(?:ing)?|MUFG|SMBC|Mizuho|JPMorgan|Chase|HSBC|Wells Fargo|Citibank)",
+                combined_text,
+                re.I,
+            ):
                 fields["bank_name"] = {"value": m.group(1).strip(), "confidence": 0.82}
 
-        if m := re.search(r"(?:account[ _]?holder|account[ _]?name|customer[ _]?name)\s*[:=]\s*([A-Za-z \-'\.]+?)(?:[\r\n,;]|$)", combined_text, re.I):
+        if m := re.search(
+            r"(?:account[ _]?holder|account[ _]?name|customer[ _]?name)\s*[:=]\s*([A-Za-z \-'\.]+?)(?:[\r\n,;]|$)",
+            combined_text,
+            re.I,
+        ):
             fields["account_holder"] = {"value": m.group(1).strip().title(), "confidence": 0.88}
 
     elif doc_type_clean in ("employment_letter", "employment_contract", "pay_slips"):
-        if m := re.search(r"(?:employer(?:'s)?[ _]?name|company(?:'s)?[ _]?name|organization|sponsor)\s*[:=]\s*([A-Za-z0-9 \.,&]+?)(?:[\r\n,]|$)", combined_text, re.I):
+        if m := re.search(
+            r"(?:employer(?:'s)?[ _]?name|company(?:'s)?[ _]?name|organization|sponsor)\s*[:=]\s*([A-Za-z0-9 \.,&]+?)(?:[\r\n,]|$)",
+            combined_text,
+            re.I,
+        ):
             fields["employer_name"] = {"value": m.group(1).strip(), "confidence": 0.9}
-        
-        if m := re.search(r"(?:monthly[ _]?salary|remuneration|salary|gross[ _]?pay|basic[ _]?pay)\s*[:=]?\s*([$¥€£A-Z]{0,3}\s*[0-9,]+(?:\.[0-9]{2})?)", combined_text, re.I):
+
+        if m := re.search(
+            r"(?:monthly[ _]?salary|remuneration|salary|gross[ _]?pay|basic[ _]?pay)\s*[:=]?\s*([$¥€£A-Z]{0,3}\s*[0-9,]+(?:\.[0-9]{2})?)",
+            combined_text,
+            re.I,
+        ):
             fields["monthly_salary"] = {"value": m.group(1).strip(), "confidence": 0.86}
 
-        if m := re.search(r"(?:position|designation|job[ _]?title|role)\s*[:=]\s*([A-Za-z \-]+?)(?:[\r\n,]|$)", combined_text, re.I):
+        if m := re.search(
+            r"(?:position|designation|job[ _]?title|role)\s*[:=]\s*([A-Za-z \-]+?)(?:[\r\n,]|$)",
+            combined_text,
+            re.I,
+        ):
             fields["position"] = {"value": m.group(1).strip().title(), "confidence": 0.86}
 
     elif doc_type_clean in ("flight_itinerary", "travel_itinerary", "hotel_booking"):
-        if m := re.search(r"(?:departure(?:[ _]?date)?|departing)\s*[:=]?\s*(\d{4}[-/]\d{1,2}[-/]\d{1,2})", combined_text, re.I):
+        if m := re.search(
+            r"(?:departure(?:[ _]?date)?|departing)\s*[:=]?\s*(\d{4}[-/]\d{1,2}[-/]\d{1,2})",
+            combined_text,
+            re.I,
+        ):
             fields["departure_date"] = {"value": m.group(1).replace("/", "-"), "confidence": 0.85}
-        if m := re.search(r"(?:destination|arrival|flying to|destination city)\s*[:=]\s*([A-Za-z ,]+?)(?:[\r\n]|$)", combined_text, re.I):
+        if m := re.search(
+            r"(?:destination|arrival|flying to|destination city)\s*[:=]\s*([A-Za-z ,]+?)(?:[\r\n]|$)",
+            combined_text,
+            re.I,
+        ):
             fields["destination"] = {"value": m.group(1).strip().title(), "confidence": 0.85}
 
     confidence = 0.9 if len(fields) >= 3 else (0.8 if len(fields) >= 1 else 0.5)
@@ -167,7 +212,11 @@ async def extract_document_metadata(
     2. Try AI service (torii_ai /ai/ocr/extract-file) if available.
     3. Apply robust regex & semantic heuristics to generate structured metadata.
     """
-    is_pdf = content_type == "application/pdf" or filename.lower().endswith(".pdf") or file_bytes[:4] == b"%PDF"
+    is_pdf = (
+        content_type == "application/pdf"
+        or filename.lower().endswith(".pdf")
+        or file_bytes[:4] == b"%PDF"
+    )
     extracted_text = ""
 
     if is_pdf:
@@ -178,13 +227,19 @@ async def extract_document_metadata(
     ai_confidence = 0.0
 
     # Try torii_ai OCR service if configured
-    ai_url = getattr(settings, "ai_service_url", "http://localhost:8001") if settings else "http://localhost:8001"
+    ai_url = (
+        getattr(settings, "ai_service_url", "http://localhost:8001")
+        if settings
+        else "http://localhost:8001"
+    )
     if ai_url:
         try:
             async with httpx.AsyncClient(timeout=4.0) as client:
                 files = {"file": (filename, file_bytes, content_type or "application/octet-stream")}
                 data = {"doc_type": doc_type}
-                resp = await client.post(f"{ai_url.rstrip('/')}/ai/ocr/extract-file", files=files, data=data)
+                resp = await client.post(
+                    f"{ai_url.rstrip('/')}/ai/ocr/extract-file", files=files, data=data
+                )
                 if resp.status_code == 200:
                     ai_data = resp.json()
                     raw_fields = ai_data.get("fields", {})
