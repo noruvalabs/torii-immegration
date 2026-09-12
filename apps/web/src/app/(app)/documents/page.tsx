@@ -22,7 +22,6 @@ import {
   Table as TableIcon,
   Sparkles,
   Zap,
-  Check,
   ArrowRight,
   UserCheck,
   FileCheck2,
@@ -31,6 +30,7 @@ import {
   ChevronRight,
   Info,
 } from "lucide-react";
+import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -183,8 +183,6 @@ export default function DocumentVaultPage() {
   const patchMutation = usePatchDocumentMutation(token);
 
   const loading = (docsLoading || summaryLoading) && documents.length === 0;
-  const [error, setError] = useState<string | null>(null);
-  const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   // Dialog & Active filter state
   const [isUploadOpen, setIsUploadOpen] = useState(false);
@@ -249,13 +247,14 @@ export default function DocumentVaultPage() {
 
   async function handleSeedDummyDocuments() {
     setIsSeeding(true);
-    setError(null);
     try {
       const res = await seedDummyDocuments(token);
       await queryClient.invalidateQueries({ queryKey: walletKeys.all });
-      setSuccessMsg(`Generated and processed ${res.documents?.length || 10} sample dummy documents with PyMuPDF & OCR.`);
+      toast.success(
+        `Generated and processed ${res.documents?.length || 10} sample dummy documents with PyMuPDF & OCR.`
+      );
     } catch (err) {
-      setError(formatErrorMessage(err));
+      toast.error(formatErrorMessage(err));
     } finally {
       setIsSeeding(false);
     }
@@ -311,18 +310,17 @@ export default function DocumentVaultPage() {
   async function handleApplyToCase() {
     if (!applyingDoc || !selectedCaseId) return;
     setIsApplying(true);
-    setError(null);
     try {
       const res = await applyDocumentToCase(applyingDoc.id, selectedCaseId, token);
       const targetCase = userCases.find((c) => c.id === selectedCaseId);
       const caseLabel = targetCase?.scope_label || targetCase?.reference || `Case #${selectedCaseId}`;
-      setSuccessMsg(
+      toast.success(
         `Success! Applied ${res.fields_applied?.length || "all"} extracted metadata fields to application "${caseLabel}".`
       );
       queryClient.invalidateQueries({ queryKey: caseKeys.all });
       setApplyingDoc(null);
     } catch (err) {
-      setError(formatErrorMessage(err));
+      toast.error(formatErrorMessage(err));
     } finally {
       setIsApplying(false);
     }
@@ -330,12 +328,11 @@ export default function DocumentVaultPage() {
 
   async function handleSyncProfile(doc: WalletDocument) {
     setIsSyncingProfileId(doc.id);
-    setError(null);
     try {
       await applyDocumentToProfile(doc.id, token);
-      setSuccessMsg(`User profile updated with extracted fields from "${doc.name}".`);
+      toast.success(`User profile updated with extracted fields from "${doc.name}".`);
     } catch (err) {
-      setError(formatErrorMessage(err));
+      toast.error(formatErrorMessage(err));
     } finally {
       setIsSyncingProfileId(null);
     }
@@ -343,13 +340,12 @@ export default function DocumentVaultPage() {
 
   async function handleReextract(docId: number) {
     setIsExtractingId(docId);
-    setError(null);
     try {
       await reextractDocument(docId, token);
       await queryClient.invalidateQueries({ queryKey: walletKeys.all });
-      setSuccessMsg("Document re-analyzed with PyMuPDF & OCR.");
+      toast.success("Document re-analyzed with PyMuPDF & OCR.");
     } catch (err) {
-      setError(formatErrorMessage(err));
+      toast.error(formatErrorMessage(err));
     } finally {
       setIsExtractingId(null);
     }
@@ -357,11 +353,9 @@ export default function DocumentVaultPage() {
 
   async function onUploadSubmit(data: DocumentUploadFormData) {
     if (!file) {
-      setError("Please select a file to upload.");
+      toast.error("Please select a file to upload.");
       return;
     }
-    setError(null);
-    setSuccessMsg(null);
 
     try {
       const matchedType = docTypes.find((t) => t.code === data.selectedType);
@@ -373,7 +367,7 @@ export default function DocumentVaultPage() {
         issuedDate: data.issuedDate || undefined,
         expiryDate: data.expiryDate || undefined,
       });
-      setSuccessMsg(`"${nameToUse}" uploaded and processed with PyMuPDF/OCR successfully.`);
+      toast.success(`"${nameToUse}" uploaded and processed with PyMuPDF/OCR successfully.`);
       setFile(null);
       uploadForm.reset({
         selectedType: "passport",
@@ -383,18 +377,16 @@ export default function DocumentVaultPage() {
       });
       setIsUploadOpen(false);
     } catch (err) {
-      setError(formatErrorMessage(err));
+      toast.error(formatErrorMessage(err));
     }
   }
 
   async function onSaveNewVersion(data: DocumentVersionFormData) {
     if (!updatingDoc) return;
     if (!updateFile) {
-      setError("Please select a replacement file to upload as a new version.");
+      toast.error("Please select a replacement file to upload as a new version.");
       return;
     }
-    setError(null);
-    setSuccessMsg(null);
 
     try {
       const nameToUse = data.name?.trim() || updatingDoc.name;
@@ -406,17 +398,15 @@ export default function DocumentVaultPage() {
         expiryDate: data.expiryDate || undefined,
         notes: data.notes || undefined,
       });
-      setSuccessMsg(`New version for "${nameToUse}" saved (v${updatingDoc.version + 1}) and re-analyzed.`);
+      toast.success(`New version for "${nameToUse}" saved (v${updatingDoc.version + 1}) and re-analyzed.`);
       setUpdatingDoc(null);
     } catch (err) {
-      setError(formatErrorMessage(err));
+      toast.error(formatErrorMessage(err));
     }
   }
 
   async function onSaveMetadata(data: DocumentMetadataFormData) {
     if (!editingDoc) return;
-    setError(null);
-    setSuccessMsg(null);
 
     try {
       await patchMutation.mutateAsync({
@@ -427,21 +417,20 @@ export default function DocumentVaultPage() {
           expiry_date: data.expiry_date || undefined,
         },
       });
-      setSuccessMsg(`Document details updated for "${data.name}".`);
+      toast.success(`Document details updated for "${data.name}".`);
       setEditingDoc(null);
     } catch (err) {
-      setError(formatErrorMessage(err));
+      toast.error(formatErrorMessage(err));
     }
   }
 
   async function handleDelete(docId: number, name: string) {
     if (!confirm(`Remove "${name}" from your Document Vault?`)) return;
-    setError(null);
     try {
       await deleteMutation.mutateAsync(docId);
-      setSuccessMsg(`Document "${name}" removed.`);
+      toast.success(`Document "${name}" removed.`);
     } catch (err) {
-      setError(formatErrorMessage(err));
+      toast.error(formatErrorMessage(err));
     }
   }
 
@@ -498,37 +487,13 @@ export default function DocumentVaultPage() {
           </div>
 
           <Button
-            onClick={() => {
-              setError(null);
-              setIsUploadOpen(true);
-            }}
+            onClick={() => setIsUploadOpen(true)}
             className="gap-1.5 shadow-sm"
           >
             <Plus className="size-4" /> Upload Document
           </Button>
         </div>
       </div>
-
-      {/* Alerts */}
-      {error && (
-        <div className="rounded-[var(--radius)] border border-[var(--color-danger)]/30 bg-[var(--color-danger)]/10 px-4 py-3 text-sm text-[var(--color-danger)] flex items-center justify-between">
-          <span>{error}</span>
-          <button onClick={() => setError(null)} className="text-xs font-semibold hover:underline">
-            Dismiss
-          </button>
-        </div>
-      )}
-
-      {successMsg && (
-        <div className="rounded-[var(--radius)] border border-[var(--color-success)]/30 bg-[var(--color-success)]/10 px-4 py-3 text-sm text-[var(--color-success)] flex items-center justify-between">
-          <span className="flex items-center gap-1.5 font-medium">
-            <Check className="size-4" /> {successMsg}
-          </span>
-          <button onClick={() => setSuccessMsg(null)} className="text-xs font-semibold hover:underline">
-            Dismiss
-          </button>
-        </div>
-      )}
 
       {/* ── TOOLBAR: CATEGORIES & VIEW SWITCHER ─────────────────────────────── */}
       <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
