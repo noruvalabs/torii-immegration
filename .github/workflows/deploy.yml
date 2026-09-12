@@ -220,15 +220,11 @@ jobs:
         run: |
           set -euo pipefail
           ssh -i ~/.ssh/torii_deploy -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" \
-            "docker container prune -f >/dev/null 2>&1 || true; \
-             docker builder prune -f >/dev/null 2>&1 || true; \
-             docker image prune -a -f --filter 'until=24h' >/dev/null 2>&1 || true; \
-             free_mb=\$(df -m /var/lib/docker 2>/dev/null | awk 'NR==2 {print \$4}' || df -m / 2>/dev/null | awk 'NR==2 {print \$4}' || echo 0); \
-             if [ \"\${free_mb:-0}\" -lt 2000 ] 2>/dev/null; then \
-               docker image prune -a -f >/dev/null 2>&1 || true; \
-             fi; \
+            "sudo journalctl --vacuum-size=50M >/dev/null 2>&1 || true; \
+             sudo apt-get clean >/dev/null 2>&1 || true; \
+             docker system prune -af >/dev/null 2>&1 || true; \
              echo '==> Host disk status:'; \
-             df -h /var/lib/docker 2>/dev/null || df -h / 2>/dev/null || true"
+             df -h /"
 
       - name: Upload the deploy assets
         run: |

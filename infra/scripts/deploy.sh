@@ -43,23 +43,10 @@ compose() {
 }
 
 cleanup_disk() {
-  log "Ensuring host disk space"
-  docker container prune -f >/dev/null 2>&1 || true
-  docker builder prune -f >/dev/null 2>&1 || true
-
-  local free_mb
-  free_mb="$(df -m "$APP_ROOT" 2>/dev/null | awk 'NR==2 {print $4}' || true)"
-  if [[ -n "$free_mb" && "$free_mb" =~ ^[0-9]+$ && "$free_mb" -lt 5000 ]]; then
-    log "Disk space is low (${free_mb}MB free) — pruning images older than 24h"
-    docker image prune -a -f --filter "until=24h" >/dev/null 2>&1 || true
-  fi
-
-  local free_mb_after
-  free_mb_after="$(df -m "$APP_ROOT" 2>/dev/null | awk 'NR==2 {print $4}' || true)"
-  if [[ -n "$free_mb_after" && "$free_mb_after" =~ ^[0-9]+$ && "$free_mb_after" -lt 2000 ]]; then
-    log "Disk space critically low (${free_mb_after}MB free) — pruning all unused images"
-    docker image prune -a -f >/dev/null 2>&1 || true
-  fi
+  log "Ensuring host disk space before rollout"
+  sudo journalctl --vacuum-size=50M >/dev/null 2>&1 || true
+  sudo apt-get clean >/dev/null 2>&1 || true
+  docker system prune -af >/dev/null 2>&1 || true
 }
 
 write_env_file() {
@@ -168,12 +155,9 @@ main() {
   printf '%s\n' "$TAG" >"$KNOWN_GOOD_TAG_FILE"
   trap - ERR
 
-  # Keep recent release images for rollback; prune images older than 48h, stopped containers, and build cache.
-  log "Pruning old images and build cache"
-  docker container prune -f >/dev/null 2>&1 || true
-  docker builder prune -f >/dev/null 2>&1 || true
-  docker image prune -f >/dev/null 2>&1 || true
-  docker image prune -a -f --filter "until=48h" >/dev/null 2>&1 || true
+  # Immediately purge unused images and containers from the previous release
+  log "Purging unused images and containers from previous release"
+  docker system prune -af >/dev/null 2>&1 || true
 
   log "Deployed $TAG"
   compose ps
