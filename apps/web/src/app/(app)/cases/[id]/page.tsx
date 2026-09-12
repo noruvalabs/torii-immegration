@@ -10,6 +10,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { formatScopeLabel } from "@/lib/utils";
 import { useAuth } from "@/lib/auth-context";
 import { getProfile, type User } from "@/lib/api/auth";
 import {
@@ -312,14 +313,20 @@ export default function CaseDetailPage() {
         </Link>
         <div className="flex-1">
           <div className="flex flex-wrap items-center gap-3">
-            <h1 className="text-xl font-semibold tracking-tight">{caseData.reference}</h1>
+            <h1 className="text-xl font-semibold tracking-tight">
+              {formatScopeLabel(caseData.scope_label) || caseData.reference}
+            </h1>
             <Badge tone={caseData.status === "submitted" ? "success" : "default"}>
               {caseData.status}
             </Badge>
           </div>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {caseData.scope_label ?? "Scoped case"} · {caseData.locale.toUpperCase()}
-          </p>
+          <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+            <span className="font-mono text-xs bg-muted px-2 py-0.5 rounded font-medium text-foreground">
+              {caseData.reference}
+            </span>
+            <span>·</span>
+            <span>{caseData.locale.toUpperCase()}</span>
+          </div>
         </div>
       </div>
 

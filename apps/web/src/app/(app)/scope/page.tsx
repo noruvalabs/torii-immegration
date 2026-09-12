@@ -20,12 +20,14 @@ import { caseKeys } from "@/lib/queries/cases";
 import { useQueryClient } from "@tanstack/react-query";
 import { updateProfile } from "@/lib/api/auth";
 import {
+  type Case,
   scopeCase,
 } from "@/lib/api/cases";
 import { CountrySelector } from "@/components/ui/country-selector";
 import { matchCountry } from "@/lib/countries";
+import { formatScopeLabel } from "@/lib/utils";
 
-type CaseResult = { id: number; reference: string; status: string };
+type CaseResult = Case;
 
 /** Combined residence + nationality, then destination → visa → app → review */
 type Step = "identity" | "destination" | "visa_type" | "app_type" | "review";
@@ -62,8 +64,8 @@ export default function ScopePage() {
   const [error, setError] = useState<string | null>(null);
   const [savingIdentity, setSavingIdentity] = useState(false);
 
-  const [residenceCountry, setResidenceCountry] = useState<string>("BD");
-  const [nationality, setNationality] = useState<string>("BD");
+  const [residenceCountry, setResidenceCountry] = useState<string>("");
+  const [nationality, setNationality] = useState<string>("");
   const [selectedDestination, setSelectedDestination] = useState<Destination | null>(null);
   const [selectedVisaType, setSelectedVisaType] = useState<VisaType | null>(null);
   const [selectedAppType, setSelectedAppType] = useState<ApplicationType | null>(null);
@@ -83,20 +85,27 @@ export default function ScopePage() {
 
   const loading = geoLoading && !geoData;
 
-  // Seed residence/nationality once from profile — never re-run after Continue saves profile.
+  // Auto-select from profile if saved in profile.
+  // If not saved in profile, leave empty (do not default to BD or any other country).
   const seededFromProfileRef = useRef(false);
-  const userRef = useRef(user);
-  userRef.current = user;
 
   useEffect(() => {
-    if (geoData && !seededFromProfileRef.current) {
-      const profile = userRef.current;
-      const fallback = geoData.detected_country.country_code;
-      setResidenceCountry(matchCountry(profile?.current_country, fallback).code);
-      setNationality(matchCountry(profile?.nationality, fallback).code);
+    if (!seededFromProfileRef.current && user) {
+      if (user.current_country && user.current_country.trim()) {
+        const matched = matchCountry(user.current_country);
+        if (matched?.code) {
+          setResidenceCountry(matched.code);
+        }
+      }
+      if (user.nationality && user.nationality.trim()) {
+        const matched = matchCountry(user.nationality);
+        if (matched?.code) {
+          setNationality(matched.code);
+        }
+      }
       seededFromProfileRef.current = true;
     }
-  }, [geoData]);
+  }, [user]);
 
   function goBack() {
     const i = STEP_ORDER.indexOf(step);
@@ -178,6 +187,13 @@ export default function ScopePage() {
     }
   }
 
+  const destinationFlag =
+    selectedDestination
+      ? selectedDestination.flag || matchCountry(selectedDestination.code).flag || "🌐"
+      : "";
+  const residenceLabel = residenceCountry ? matchCountry(residenceCountry).name : "";
+  const nationalityLabel = nationality ? matchCountry(nationality).name : "";
+
   if (loading) {
     return (
       <div className="mx-auto max-w-lg space-y-6 py-12 text-center">
@@ -188,37 +204,120 @@ export default function ScopePage() {
   }
 
   if (createdCase) {
+    const appTitle =
+      formatScopeLabel(
+        createdCase.scope_label ||
+        [selectedDestination?.name, selectedVisaType?.name, selectedAppType?.name]
+          .filter(Boolean)
+          .join(" · ")
+      ) || "New Visa Application";
+
+    const destName = selectedDestination?.name || createdCase.jurisdiction_code || "";
+    const visaName = formatScopeLabel(selectedVisaType?.name || createdCase.visa_category_code || "");
+    const actionName = selectedAppType?.name || createdCase.case_action_code || "";
+
     return (
-      <div className="mx-auto max-w-lg space-y-6 py-12 text-center">
-        <div className="mx-auto flex size-16 items-center justify-center rounded-full bg-[var(--color-success)]/15">
+      <div className="mx-auto max-w-xl space-y-6 py-8 text-center">
+        <div className="mx-auto flex size-16 items-center justify-center rounded-full bg-[var(--color-success)]/15 ring-8 ring-[var(--color-success)]/5">
           <Check className="size-8 text-[var(--color-success)]" />
         </div>
-        <h2 className="text-2xl font-semibold">Case created</h2>
-        <p className="text-muted-foreground">
-          Your case <strong className="font-mono">{createdCase.reference}</strong> is
-          ready. We will walk you through intake, eligibility, documents, forms, and packet.
-        </p>
-        <Card>
-          <CardContent className="flex items-center justify-between pt-5">
-            <div className="text-left">
-              <p className="text-xs text-muted-foreground">Reference</p>
-              <p className="font-mono font-semibold">{createdCase.reference}</p>
+
+        <div className="space-y-2">
+          <Badge tone="success" className="px-3 py-1 text-xs font-semibold uppercase tracking-wider">
+            Application Created
+          </Badge>
+          <h2 className="text-2xl font-bold tracking-tight sm:text-3xl text-foreground">
+            {appTitle}
+          </h2>
+          <p className="text-sm text-muted-foreground max-w-md mx-auto">
+            Your application is ready. We will guide you step-by-step through intake, eligibility, documents, and filing preparation.
+          </p>
+        </div>
+
+        <Card className="text-left border border-border/80 shadow-sm">
+          <CardContent className="space-y-4 pt-5">
+            <div className="flex items-center justify-between pb-3 border-b border-border/60">
+              <div>
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Case Reference</p>
+                <p className="font-mono text-sm sm:text-base font-bold text-foreground mt-0.5">
+                  {createdCase.reference}
+                </p>
+              </div>
+              <Badge tone="success" className="capitalize">
+                {createdCase.status}
+              </Badge>
             </div>
-            <Badge tone="success">{createdCase.status}</Badge>
+
+            <div className="grid grid-cols-2 gap-3 text-xs sm:text-sm">
+              {destName && (
+                <div>
+                  <span className="text-muted-foreground block text-xs">Destination</span>
+                  <span className="font-medium text-foreground">
+                    {destName}
+                  </span>
+                </div>
+              )}
+              {visaName && (
+                <div>
+                  <span className="text-muted-foreground block text-xs">Visa Category</span>
+                  <span className="font-medium text-foreground">{visaName}</span>
+                </div>
+              )}
+              {actionName && (
+                <div>
+                  <span className="text-muted-foreground block text-xs">Application Type</span>
+                  <span className="font-medium text-foreground">{actionName}</span>
+                </div>
+              )}
+              {(residenceLabel || nationalityLabel) && (
+                <div>
+                  <span className="text-muted-foreground block text-xs">Applicant Context</span>
+                  <span className="font-medium text-foreground">
+                    {[
+                      nationalityLabel ? `Citizen of ${nationalityLabel}` : null,
+                      residenceLabel ? `Living in ${residenceLabel}` : null,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ") || "—"}
+                  </span>
+                </div>
+              )}
+            </div>
           </CardContent>
         </Card>
-        <ol className="space-y-2 text-left text-sm text-muted-foreground">
-          <li>1. Answer intake questions</li>
-          <li>2. Check published eligibility rules</li>
-          <li>3. Gather required documents</li>
-          <li>4. Generate forms and build your packet</li>
-        </ol>
-        <Link
-          href={`/cases/${createdCase.id}`}
-          className="inline-flex items-center justify-center gap-2 rounded-[var(--radius)] bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground hover:opacity-90"
-        >
-          Continue to intake <ArrowRight className="size-4" />
-        </Link>
+
+        <div className="rounded-lg border border-border/60 bg-muted/30 p-4 text-left">
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+            Next steps in your application
+          </p>
+          <ol className="space-y-2 text-xs sm:text-sm text-muted-foreground">
+            <li className="flex items-center gap-2">
+              <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-semibold text-primary">1</span>
+              <span>Answer intake questions to capture your background</span>
+            </li>
+            <li className="flex items-center gap-2">
+              <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-semibold text-primary">2</span>
+              <span>Verify your eligibility against official immigration rules</span>
+            </li>
+            <li className="flex items-center gap-2">
+              <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-semibold text-primary">3</span>
+              <span>Upload and confirm required supporting documents</span>
+            </li>
+            <li className="flex items-center gap-2">
+              <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-semibold text-primary">4</span>
+              <span>Generate official visa forms and assemble your submission packet</span>
+            </li>
+          </ol>
+        </div>
+
+        <div>
+          <Link
+            href={`/cases/${createdCase.id}`}
+            className="inline-flex w-full sm:w-auto items-center justify-center gap-2 rounded-[var(--radius)] bg-primary px-6 py-3 text-sm font-semibold text-primary-foreground shadow-sm hover:opacity-90 transition-opacity"
+          >
+            Continue to Intake <ArrowRight className="size-4" />
+          </Link>
+        </div>
       </div>
     );
   }
@@ -240,13 +339,7 @@ export default function ScopePage() {
         `${v.name} ${v.description} ${v.code}`.toLowerCase().includes(visaQuery),
       )
     : visaTypes;
-  const destinationFlag =
-    selectedDestination
-      ? selectedDestination.flag || matchCountry(selectedDestination.code).flag || "🌐"
-      : "";
   const nationalities = geoData?.nationalities ?? [];
-  const residenceLabel = matchCountry(residenceCountry).name;
-  const nationalityLabel = matchCountry(nationality).name;
 
   return (
     <div className="w-full max-w-7xl mx-auto space-y-6 py-6">
@@ -255,7 +348,9 @@ export default function ScopePage() {
           Start a new application
         </h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Apply for a visa from {residenceLabel || geoData?.detected_country?.country_name || "your residence"} to our supported destinations.
+          {residenceLabel
+            ? `Apply for a visa from ${residenceLabel} to our supported destinations.`
+            : "Apply for a visa to our supported destinations worldwide."}
         </p>
       </div>
 
@@ -309,64 +404,58 @@ export default function ScopePage() {
         <div className="space-y-6">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
             {/* Column 1: Country of residence */}
-            <div className="space-y-3 rounded-xl border bg-card p-5 shadow-xs flex flex-col">
-              <div>
-                <h3 className="text-sm font-semibold text-foreground">
-                  Country of Residence
-                </h3>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  Where you currently reside or have legal residency.
-                </p>
+            <div className="space-y-3 rounded-xl border bg-card p-5 shadow-xs flex flex-col relative">
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <h3 className="text-sm font-semibold text-foreground">
+                    Country of Residence
+                  </h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Where you currently reside or have legal residency.
+                  </p>
+                </div>
+                {user?.current_country &&
+                  residenceCountry &&
+                  residenceCountry === matchCountry(user.current_country).code && (
+                    <span className="text-[11px] font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-full shrink-0">
+                      Profile prefilled
+                    </span>
+                  )}
               </div>
 
-              {(user?.current_country || geoData?.detected_country) && (
-                <div className="rounded-[var(--radius)] border border-primary/20 bg-primary/5 px-3 py-2 text-xs flex items-center justify-between">
-                  <span className="font-medium text-foreground">
-                    {user?.current_country ? "Profile / auto-detected:" : "Auto-detected:"}
-                  </span>
-                  <span className="font-semibold text-primary">
-                    {residenceLabel}
-                  </span>
-                </div>
-              )}
-
               <CountrySelector
-                mode="grid"
                 valueType="code"
                 value={residenceCountry}
                 onChange={(code) => setResidenceCountry(code)}
-                gridMaxHeightClass="max-h-72"
-                gridColsClass="grid-cols-1 sm:grid-cols-2"
+                placeholder="Select country of residence..."
               />
             </div>
 
             {/* Column 2: Nationality */}
-            <div className="space-y-3 rounded-xl border bg-card p-5 shadow-xs flex flex-col">
-              <div>
-                <h3 className="text-sm font-semibold text-foreground">
-                  Nationality (Passport Country)
-                </h3>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  Some visas differ by nationality. We use this to tailor official requirements.
-                </p>
-              </div>
-
-              <div className="rounded-[var(--radius)] border border-muted bg-muted/40 px-3 py-2 text-xs flex items-center justify-between">
-                <span className="font-medium text-muted-foreground">
-                  Selected Passport:
-                </span>
-                <span className="font-semibold text-foreground">
-                  {nationalityLabel}
-                </span>
+            <div className="space-y-3 rounded-xl border bg-card p-5 shadow-xs flex flex-col relative">
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <h3 className="text-sm font-semibold text-foreground">
+                    Nationality (Passport Country)
+                  </h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Some visas differ by nationality. We use this to tailor official requirements.
+                  </p>
+                </div>
+                {user?.nationality &&
+                  nationality &&
+                  nationality === matchCountry(user.nationality).code && (
+                    <span className="text-[11px] font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-full shrink-0">
+                      Profile prefilled
+                    </span>
+                  )}
               </div>
 
               <CountrySelector
-                mode="grid"
                 valueType="code"
                 value={nationality}
                 onChange={(code) => setNationality(code)}
-                gridMaxHeightClass="max-h-72"
-                gridColsClass="grid-cols-1 sm:grid-cols-2"
+                placeholder="Select nationality / passport country..."
               />
             </div>
           </div>
@@ -381,9 +470,14 @@ export default function ScopePage() {
               <>
                 <Loader2 className="size-4 animate-spin" /> Continuing…
               </>
-            ) : (
+            ) : residenceCountry && nationality ? (
               <>
                 Continue with {residenceLabel} · {nationalityLabel}
+                <ArrowRight className="size-4" />
+              </>
+            ) : (
+              <>
+                Select residence & nationality to continue
                 <ArrowRight className="size-4" />
               </>
             )}

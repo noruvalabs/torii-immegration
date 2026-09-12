@@ -16,6 +16,7 @@ import {
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/lib/auth-context";
+import { formatScopeLabel } from "@/lib/utils";
 import type { Case } from "@/lib/api/cases";
 import type { WalletDocument, WalletSummary } from "@/lib/api/wallet";
 import { useCasesListQuery } from "@/lib/queries/cases";
@@ -226,14 +227,16 @@ function CaseCard({ caseData }: { caseData: Case }) {
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="font-mono text-xs font-bold text-foreground">{caseData.reference}</span>
-              <Badge tone={sc.tone} className="text-[10px] py-0 px-1.5">
+              <span className="text-sm font-semibold text-foreground truncate">
+                {formatScopeLabel(caseData.scope_label) || caseData.reference}
+              </span>
+              <Badge tone={sc.tone} className="text-[10px] py-0 px-1.5 shrink-0">
                 {sc.label}
               </Badge>
             </div>
             <p className="text-xs text-muted-foreground mt-0.5 truncate">
-              {caseData.scope_label || `Destination: ${countryCode}`}
-              {caseData.next_title ? ` · Next step: ${caseData.next_title}` : ""}
+              <span className="font-mono font-medium">{caseData.reference}</span>
+              {caseData.next_title ? ` · Next: ${caseData.next_title}` : ""}
             </p>
           </div>
           <span className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline shrink-0">

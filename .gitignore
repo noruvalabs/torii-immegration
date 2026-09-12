@@ -60,3 +60,12 @@ apps/api/var/*
 .vscode/
 .DS_Store
 Thumbs.db
+
+# Test dummy documents for user testing
+dummy_documents/
+test_documents/
+
+# Runtime uploaded wallet documents
+apps/api/data/
+
+

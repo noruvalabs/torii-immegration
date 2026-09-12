@@ -18,6 +18,8 @@ export type WalletDocument = {
   file_size: number | null;
   issued_date: string | null;
   expiry_date: string | null;
+  extracted_fields?: Record<string, { value: string; confidence: number } | string> | null;
+  extraction_confidence?: number | null;
   status: string;
   created_at: string | null;
 };
@@ -28,6 +30,8 @@ export type DocumentVersion = {
   filename: string;
   content_type: string;
   file_size: number | null;
+  extracted_fields?: Record<string, { value: string; confidence: number } | string> | null;
+  extraction_confidence?: number | null;
   notes: string | null;
   created_at: string | null;
 };
@@ -54,6 +58,8 @@ export type WalletUploadResponse = {
   version: number;
   filename: string;
   storage_key: string;
+  extracted_fields?: Record<string, { value: string; confidence: number } | string> | null;
+  extraction_confidence?: number | null;
   message: string;
 };
 
@@ -171,4 +177,57 @@ export function patchWalletDocument(
     body: JSON.stringify(data),
   }, token);
 }
+
+export function applyDocumentToCase(
+  documentId: number,
+  caseId: number,
+  token?: string | null
+) {
+  return request<{
+    success: boolean;
+    message: string;
+    intake_answers: Record<string, any>;
+    fields_applied: string[];
+  }>(`/${documentId}/apply-to-case/${caseId}`, { method: "POST" }, token);
+}
+
+export function applyDocumentToProfile(
+  documentId: number,
+  token?: string | null
+) {
+  return request<{
+    success: boolean;
+    message: string;
+    user: Record<string, any>;
+  }>(`/${documentId}/apply-to-profile`, { method: "POST" }, token);
+}
+
+export function reextractDocument(
+  documentId: number,
+  token?: string | null
+) {
+  return request<WalletDocument>(`/${documentId}/re-extract`, { method: "POST" }, token);
+}
+
+export function seedDummyDocuments(token?: string | null) {
+  return request<{
+    success: boolean;
+    message: string;
+    documents: Array<{ id: number; doc_type: string; name: string; filename: string }>;
+  }>("/seed-dummy-documents", { method: "POST" }, token);
+}
+
+export function getDocumentFileUrl(documentId: number, token?: string | null): string {
+  const authToken = resolveToken(token);
+  const query = authToken ? `?token=${encodeURIComponent(authToken)}` : "";
+  return `${API}/${documentId}/file${query}`;
+}
+
+export function getDocumentViewUrl(documentId: number, token?: string | null): string {
+  const authToken = resolveToken(token);
+  const query = authToken ? `?token=${encodeURIComponent(authToken)}` : "";
+  return `${API}/${documentId}/view${query}`;
+}
+
+
 

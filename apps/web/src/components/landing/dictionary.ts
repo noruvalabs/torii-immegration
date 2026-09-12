@@ -5,8 +5,9 @@ export const dictionary = {
       howItWorks: "How it works",
       coverage: "Supported visas",
       features: "Features",
-      pricing: "Pricing",
       blog: "Blog",
+      pricing: "Pricing",
+      about: "About",
       faq: "FAQ",
       signIn: "Sign in",
       dashboard: "Dashboard",
@@ -397,6 +398,46 @@ export const dictionary = {
         },
       },
     },
+    about: {
+      eyebrow: "Our Mission & Story",
+      title: "Making Japanese immigration transparent, accessible, and precise.",
+      subtitle:
+        "Torii was founded to replace bureaucratic opacity, language barriers, and expensive legal retainers with software that directly connects applicants to official statutory standards.",
+      storyHeading: "Why We Built Torii",
+      story: [
+        "Filing a visa or change of status in Japan has long been an intimidating ordeal. Instructions on government websites are scattered across dozens of Japanese PDFs, statutory requirements depend on subtle employer tax categories, and simple clerical omissions can lead to months of administrative delay.",
+        "Traditional immigration law firms and administrative scriveners often charge between ¥100,000 and ¥300,000 for standard filings that individuals are legally entitled to prepare themselves. Meanwhile, foreign professionals and students are left navigating complex Japanese government spreadsheets with zero validation.",
+        "We built Torii to bridge that gap. We believe anyone should be able to prepare their own Japanese immigration paperwork with complete clarity, backed by direct statutory source citations, at a fraction of traditional costs.",
+      ],
+      principlesHeading: "Our Core Principles",
+      principles: [
+        {
+          title: "Sourced to the Authority",
+          body: "Torii never invents requirements. Every document checklist item and eligibility condition traces directly to the Ministry of Justice or Immigration Services Agency official page that mandates it.",
+        },
+        {
+          title: "Zero Model Training on Private Data",
+          body: "Your passport, tax records, and private statements belong solely to you. We strictly protect your files under AES-256 encryption and never use your documents to train public AI models.",
+        },
+        {
+          title: "Statutory Precision",
+          body: "Your data is mapped directly into official government application templates without alteration, leaving blank what has not been answered. Nothing is guessed on a document you sign.",
+        },
+        {
+          title: "Fair, No-Subscription Pricing",
+          body: "No surprise recurring bills or monthly lock-ins. You only pay per complete application filing pass, backed by our 30-day money-back guarantee.",
+        },
+      ],
+      stats: [
+        { value: "100%", label: "Official Source Sourced" },
+        { value: "5+", label: "Supported Visa Categories" },
+        { value: "3", label: "Free Passes for New Users" },
+        { value: "0", label: "Discrepancy Inconsistency Risk" },
+      ],
+      standardsHeading: "Backed by Official Standards",
+      standardsBody: "Our rules engine continuously monitors publications from Japan's key authorities:",
+      cta: "Check your visa eligibility for free",
+    },
     footer: {
       title: "File it yourself. Correctly.",
       cta: "Start free — 3 passes included",
@@ -406,6 +447,13 @@ export const dictionary = {
         product: "Product",
         routes: "Visa routes",
         resources: "Resources",
+        legal: "Legal",
+      },
+      legalLinks: {
+        privacy: "Privacy Policy",
+        terms: "Terms of Service",
+        refund: "Refund Policy",
+        cookies: "Cookie Policy",
       },
       disclaimer:
         "Torii is a working codename. Guided form preparation — not legal advice. Every instruction is sourced to the official government page it came from.",
@@ -419,6 +467,7 @@ export const dictionary = {
       features: "特長",
       pricing: "料金",
       blog: "ブログ",
+      about: "About",
       faq: "よくある質問",
       signIn: "ログイン",
       dashboard: "ダッシュボード",
@@ -804,6 +853,46 @@ export const dictionary = {
         },
       },
     },
+    about: {
+      eyebrow: "ミッションと背景",
+      title: "日本の在留資格手続きを、もっと透明に、正確に、誰もが利用しやすく。",
+      subtitle:
+        "Toriiは、煩雑な行政手続き、言語の壁、高額な士業報酬への依存を解消し、公表されている法令基準と申請者を直接つなぐソフトウェアとして誕生しました。",
+      storyHeading: "Toriiが生まれた理由",
+      story: [
+        "日本でのビザ申請や在留資格変更手続きは、長年にわたり当事者にとって心理的・時間的な大きな負担となってきました。入国在留管理庁のウェブサイトに散在する膨大なPDF、所属機関の区分によって異なる法定提出書類、そしてわずかな記載不備による数ヶ月に及ぶ審査の遅延。",
+        "一般的な申請であっても、行政書士や弁護士に依頼すれば10万円から30万円程度の費用が発生します。一方、自力で申請しようとする外国人材や留学生は、難解な行政書式や日本語の手引きと一人で向き合わざるを得ませんでした。",
+        "Toriiは、その不合理を解決するために作られました。明確な出典と法令根拠に基づき、誰もが自力で正確な申請書類を準備できる世界を目指しています。",
+      ],
+      principlesHeading: "私たちの基本指針",
+      principles: [
+        {
+          title: "根拠ある公表基準への準拠",
+          body: "Toriiは根拠のない独自ルールを課すことはありません。資格確認の基準や必要書類チェックリストはすべて、法務省・出入国在留管理庁が公表している公式ページに直接紐づいています。",
+        },
+        {
+          title: "機密情報・個人データの絶対保護",
+          body: "旅券情報や課税証明書、個人回答内容はユーザー自身に帰属します。AES-256暗号化により保護され、顧客データを公開AIモデルの学習に使用することは一切ありません。",
+        },
+        {
+          title: "法定様式への高精度な自動転記",
+          body: "回答いただいた内容は、公式な申請書様式（PDF/Excel）に正確に転記されます。未回答の項目を勝手に推測して埋めることはありません。",
+        },
+        {
+          title: "透明性の高い買い切り料金",
+          body: "月額自動更新のような不透明な課金体系はありません。1件の申請ごとにクレジットを消費するわかりやすい制度で、30日間の返金保証も備えています。",
+        },
+      ],
+      stats: [
+        { value: "100%", label: "公式政府ページ典拠" },
+        { value: "5+", label: "対応在留資格カテゴリー" },
+        { value: "3件", label: "新規登録時の無料パス" },
+        { value: "0", label: "記載不整合リスク" },
+      ],
+      standardsHeading: "依拠している公的機関基準",
+      standardsBody: "Toriiのルールエンジンは、日本の関係省庁が公表する最新の運用基準に準拠しています：",
+      cta: "無料で適格性をチェックする",
+    },
     footer: {
       title: "自分自身で、正しく申請する。",
       cta: "無料で始める — 3パス付き",
@@ -813,6 +902,13 @@ export const dictionary = {
         product: "プロダクト",
         routes: "対応ビザ",
         resources: "参考情報",
+        legal: "法的情報",
+      },
+      legalLinks: {
+        privacy: "プライバシーポリシー",
+        terms: "利用規約",
+        refund: "返金ポリシー",
+        cookies: "クッキーポリシー",
       },
       disclaimer:
         "Toriiは開発中のプロジェクト名です。申請書類準備のガイドであり、法律相談ではありません。すべての案内には、根拠となる公式の政府ページの出典が付きます。",

@@ -4,7 +4,6 @@ import Link from "next/link";
 import { ArrowRight, Landmark } from "lucide-react";
 import { JP_ROUTE_ORDER, BLOG_POST_ORDER } from "./data";
 import { BLOG_POSTS } from "./blog-posts";
-import { useSectionNav } from "./nav";
 import { useLang } from "./i18n";
 import { dictionary } from "./dictionary";
 import { Reveal } from "./reveal";
@@ -33,24 +32,29 @@ type FooterGroup = {
  * post puts it in the footer with no edit here — and, more to the point, removing one
  * cannot leave a dead link behind.
  *
- * Deliberately absent: privacy, terms, contact, careers. Those pages do not exist yet, and
- * a footer full of links to nothing is worse than a short honest one.
+ * Columns: product anchors, visa routes, resources (blog posts), and legal policies
+ * (Privacy, Terms, Refund, Cookies).
  */
 export function SiteFooter() {
   const { lang } = useLang();
   const t = dictionary[lang];
-  const sectionNav = useSectionNav();
 
   const groups: FooterGroup[] = [
     {
       heading: t.footer.groups.product,
-      links: sectionNav.map((link) => ({ href: link.href, label: link.label })),
+      links: [
+        { href: "/#how-it-works", label: t.nav.howItWorks },
+        { href: "/#coverage", label: t.nav.coverage },
+        { href: "/pricing", label: t.nav.pricing },
+        { href: "/about", label: t.nav.about },
+        { href: "/#faq", label: t.nav.faq },
+      ],
     },
     {
       // The routes the scope picker actually offers, named the way it names them.
       heading: t.footer.groups.routes,
       links: JP_ROUTE_ORDER.map((route) => ({
-        href: "#coverage",
+        href: "/#coverage",
         label: t.coverage.routes[route.id].name,
       })),
     },
@@ -63,6 +67,15 @@ export function SiteFooter() {
           label: BLOG_POSTS[post.slug][lang].title,
         })),
         { href: "/blog", label: t.blog.viewAll },
+      ],
+    },
+    {
+      heading: t.footer.groups.legal,
+      links: [
+        { href: "/privacy", label: t.footer.legalLinks.privacy },
+        { href: "/terms", label: t.footer.legalLinks.terms },
+        { href: "/refund", label: t.footer.legalLinks.refund },
+        { href: "/cookies", label: t.footer.legalLinks.cookies },
       ],
     },
   ];
@@ -113,7 +126,7 @@ export function SiteFooter() {
             </p>
           </Reveal>
 
-          <Reveal delay={120} className="grid grid-cols-2 gap-x-8 gap-y-10 sm:grid-cols-3">
+          <Reveal delay={120} className="grid grid-cols-2 gap-x-8 gap-y-10 sm:grid-cols-2 md:grid-cols-4">
             {groups.map((group) => (
               <nav key={group.heading} aria-label={group.heading}>
                 <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -164,8 +177,26 @@ export function SiteFooter() {
           </ul>
         </div>
 
-        <div className="mt-10 flex flex-col gap-4 border-t border-border/60 pt-8 sm:flex-row sm:items-start sm:justify-between">
-          <p className="shrink-0 text-xs text-muted-foreground">© {new Date().getFullYear()} Torii</p>
+        <div className="mt-10 flex flex-col gap-4 border-t border-border/60 pt-8 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+            <span className="shrink-0">© {new Date().getFullYear()} Torii</span>
+            <span aria-hidden className="text-muted-foreground/40">·</span>
+            <Link href="/privacy" className="transition-colors hover:text-foreground">
+              {t.footer.legalLinks.privacy}
+            </Link>
+            <span aria-hidden className="text-muted-foreground/40">·</span>
+            <Link href="/terms" className="transition-colors hover:text-foreground">
+              {t.footer.legalLinks.terms}
+            </Link>
+            <span aria-hidden className="text-muted-foreground/40">·</span>
+            <Link href="/refund" className="transition-colors hover:text-foreground">
+              {t.footer.legalLinks.refund}
+            </Link>
+            <span aria-hidden className="text-muted-foreground/40">·</span>
+            <Link href="/cookies" className="transition-colors hover:text-foreground">
+              {t.footer.legalLinks.cookies}
+            </Link>
+          </div>
           <p className="max-w-lg text-xs leading-relaxed text-muted-foreground">{t.footer.disclaimer}</p>
         </div>
       </div>

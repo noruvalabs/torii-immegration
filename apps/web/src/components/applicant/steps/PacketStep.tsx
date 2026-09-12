@@ -8,7 +8,6 @@ import {
   Loader2,
   FileText,
   Copy,
-  ShieldCheck,
   Sparkles,
   Layers,
 } from "lucide-react";
@@ -20,6 +19,7 @@ import { useCredits } from "@/lib/credits-context";
 import { draftDocument } from "@/lib/api/ai";
 import { exportCaseDocuments, type ExportFormat } from "@/lib/api/cases";
 import { toast } from "@/components/ui/sonner";
+import { formatScopeLabel } from "@/lib/utils";
 import { JourneyMap } from "./JourneyMap";
 import type { Case } from "./types";
 
@@ -241,87 +241,10 @@ Date: ${new Date().toISOString().split("T")[0]}
 `;
 }
 
-function generateCompleteOfficialForm(
-  caseData: Case,
-  packet: Record<string, unknown> | null,
-): string {
-  const answers = caseData.intake_answers || {};
-  let fieldsStr = "";
-  for (const [key, value] of Object.entries(answers)) {
-    if (value !== null && value !== "") {
-      fieldsStr += `  ${key.replace(/_/g, " ").padEnd(38)}: ${String(value)}\n`;
-    }
-  }
-
-  return `YOUR ANSWERS, AS RECORDED
-(Check these against the official form before you sign it.)
-
-${fieldsStr || "  No answers recorded yet."}
-`;
-}
-
-function generateCompleteFilingKitText(source: Record<string, unknown>, caseData: Case): string {
-  const coverLetter = generateCoverLetter(caseData, source);
-  const schedule = generateScheduleOfStay(caseData, source);
-  const reason = generateReasonForVisit(caseData, source);
-  const financial = generateFinancialGuarantee(caseData, source);
-  const formSheet = generateCompleteOfficialForm(caseData, source);
-
-  return `================================================================================
-TORII IMMIGRATION — COMPLETE OFFICIAL VISA FILING KIT & DOSSIER
-Reference: ${source.reference ?? caseData.reference}
-Scope: ${caseData.scope_label ?? caseData.locale.toUpperCase()}
-Generated: ${new Date().toISOString()}
-================================================================================
-
-================================================================================
-DOCUMENT 1: OFFICIAL EMBASSY COVER LETTER
-================================================================================
-${coverLetter}
-
-================================================================================
-DOCUMENT 2: SCHEDULE OF STAY / DAILY ITINERARY (滞在予定表)
-================================================================================
-${schedule}
-
-================================================================================
-DOCUMENT 3: REASON FOR VISIT / PERSONAL STATEMENT (理由書)
-================================================================================
-${reason}
-
-================================================================================
-DOCUMENT 4: FINANCIAL GUARANTEE & EXPENSE DECLARATION (身元保証書 / 経費支弁書)
-================================================================================
-${financial}
-
-================================================================================
-DOCUMENT 5: OFFICIAL VISA APPLICATION FORM DATA SHEET
-================================================================================
-${formSheet}
-
-================================================================================
-DOCUMENT 6: PHYSICAL DOSSIER ASSEMBLY ORDER & PACKING SLIP
-================================================================================
-Arrange physical paper documents in this exact order:
-1. Official Signed Visa Application Form (with photo)
-2. Day-by-Day Schedule of Stay (Itinerary Table)
-3. Official Embassy Cover Letter
-4. Statement of Reason for Visit (Personal Statement)
-5. Financial Guarantee & Bank Statements
-6. Valid Original Passport & Bio-Data Photocopy
-7. Proof of Employment / Business Registration
-8. Accommodation & Flight Bookings
-
-================================================================================
-End of Complete Filing Kit · Torii Immigration Platform
-================================================================================
-`;
-}
-
-type DocType = "cover" | "schedule" | "reason" | "financial" | "form" | "full";
+type DocType = "cover" | "schedule" | "reason" | "financial";
 
 /** Tab order, and the order documents are written into a "download everything" zip. */
-const DOC_ORDER: DocType[] = ["cover", "schedule", "reason", "financial", "form", "full"];
+const DOC_ORDER: DocType[] = ["cover", "schedule", "reason", "financial"];
 
 const FORMAT_LABELS: Record<ExportFormat, string> = {
   pdf: "PDF",
@@ -362,8 +285,6 @@ export function PacketStep({ packet, caseData, loading, onBuild, onSubmit }: Pac
         reason: "statement_of_reason",
         schedule: "schedule_of_stay",
         financial: "financial_solvency",
-        form: "official_form_data",
-        full: "complete_filing_kit",
       };
       const res = await draftDocument({
         doc_type: docTypeMapping[doc] || doc,
@@ -472,74 +393,60 @@ export function PacketStep({ packet, caseData, loading, onBuild, onSubmit }: Pac
     if (isJapan) {
       if (isWork) {
         return {
-          cover: "📄 Bureau Cover Letter",
-          schedule: "💼 Job Duties Specification (職務内容説明書)",
-          reason: "✍️ Statement of Reason (採用理由書)",
-          financial: "💰 Tax & Income Proof (納税・所得証明)",
-          form: "📋 ISA Form Data Sheet",
-          full: "📦 Complete Dossier Kit",
+          cover: "Bureau Cover Letter",
+          schedule: "Job Duties Specification",
+          reason: "Statement of Reason",
+          financial: "Tax & Income Proof",
         };
       }
       if (isStudent) {
         return {
-          cover: "📄 Embassy Cover Letter",
-          schedule: "🎓 Study & Activity Plan",
-          reason: "✍️ Statement of Purpose (志望理由書)",
-          financial: "💰 Sponsor & Solvency Affidavit",
-          form: "📋 Student Visa Form Data",
-          full: "📦 Complete Student Dossier",
+          cover: "Embassy Cover Letter",
+          schedule: "Study & Activity Plan",
+          reason: "Statement of Purpose",
+          financial: "Sponsor Affidavit",
         };
       }
       return {
-        cover: "📄 Embassy Cover Letter",
-        schedule: "🗓️ Schedule of Stay (滞在予定表)",
-        reason: "✍️ Reason for Visit (招へい理由書)",
-        financial: "💰 Financial Guarantee (身元保証書)",
-        form: "📋 Visa Form Data Sheet",
-        full: "📦 Complete Tourist Pack",
+        cover: "Embassy Cover Letter",
+        schedule: "Schedule of Stay",
+        reason: "Reason for Visit",
+        financial: "Financial Guarantee",
       };
     }
 
     if (isUSA) {
       return {
-        cover: "📄 Consular Cover Letter",
-        schedule: "🗓️ Travel Itinerary & Flight Plan",
-        reason: "✍️ Statement of Purpose",
-        financial: "💰 Financial Solvency Affidavit",
-        form: "📋 DS-160 Filing Summary",
-        full: "📦 Complete US Visa Packet",
+        cover: "Consular Cover Letter",
+        schedule: "Travel Itinerary",
+        reason: "Statement of Purpose",
+        financial: "Financial Solvency Affidavit",
       };
     }
 
     if (isUK) {
       return {
-        cover: "📄 UKVI Cover Letter",
-        schedule: "🗓️ UK Travel & Stay Itinerary",
-        reason: "✍️ Purpose of Visit Statement",
-        financial: "💰 Maintenance & Solvency Proof",
-        form: "📋 UKVI Application Data",
-        full: "📦 Complete UK Visa Kit",
+        cover: "UKVI Cover Letter",
+        schedule: "Travel & Stay Itinerary",
+        reason: "Purpose of Visit",
+        financial: "Maintenance & Solvency",
       };
     }
 
     if (isSchengen) {
       return {
-        cover: "📄 Schengen Cover Letter",
-        schedule: "🗓️ Multi-City Schengen Itinerary",
-        reason: "✍️ Travel Intent Declaration",
-        financial: "💰 Proof of Means of Subsistence",
-        form: "📋 Uniform Schengen Form Data",
-        full: "📦 Complete Schengen Dossier",
+        cover: "Schengen Cover Letter",
+        schedule: "Travel Itinerary",
+        reason: "Travel Intent Declaration",
+        financial: "Proof of Subsistence",
       };
     }
 
     return {
-      cover: "📄 Formal Cover Letter",
-      schedule: "🗓️ Schedule of Stay",
-      reason: "✍️ Statement of Purpose",
-      financial: "💰 Financial Declaration",
-      form: "📋 Application Form Summary",
-      full: "📦 Complete Filing Dossier",
+      cover: "Cover Letter",
+      schedule: "Schedule of Stay",
+      reason: "Statement of Purpose",
+      financial: "Financial Declaration",
     };
   }
 
@@ -561,44 +468,30 @@ export function PacketStep({ packet, caseData, loading, onBuild, onSubmit }: Pac
     switch (doc) {
       case "schedule":
         base = {
-          title: docLabels.schedule.replace(/^[^\w]+/, ""),
-          stem: `${caseData.reference}-schedule-of-stay`,
+          title: docLabels.schedule,
+          stem: `${caseData.reference}-schedule`,
           text: generateScheduleOfStay(caseData, effectivePacket),
         };
         break;
       case "reason":
         base = {
-          title: docLabels.reason.replace(/^[^\w]+/, ""),
-          stem: `${caseData.reference}-reason-for-visit`,
+          title: docLabels.reason,
+          stem: `${caseData.reference}-statement-of-purpose`,
           text: generateReasonForVisit(caseData, effectivePacket),
         };
         break;
       case "financial":
         base = {
-          title: docLabels.financial.replace(/^[^\w]+/, ""),
-          stem: `${caseData.reference}-financial-guarantee`,
+          title: docLabels.financial,
+          stem: `${caseData.reference}-financial-affidavit`,
           text: generateFinancialGuarantee(caseData, effectivePacket),
-        };
-        break;
-      case "form":
-        base = {
-          title: docLabels.form.replace(/^[^\w]+/, ""),
-          stem: `${caseData.reference}-official-form-data`,
-          text: generateCompleteOfficialForm(caseData, effectivePacket),
-        };
-        break;
-      case "full":
-        base = {
-          title: docLabels.full.replace(/^[^\w]+/, ""),
-          stem: `${caseData.reference}-complete-filing-kit`,
-          text: generateCompleteFilingKitText(effectivePacket || {}, caseData),
         };
         break;
       case "cover":
       default:
         base = {
-          title: docLabels.cover.replace(/^[^\w]+/, ""),
-          stem: `${caseData.reference}-embassy-cover-letter`,
+          title: docLabels.cover,
+          stem: `${caseData.reference}-cover-letter`,
           text: generateCoverLetter(caseData, effectivePacket),
         };
         break;
@@ -682,157 +575,103 @@ export function PacketStep({ packet, caseData, loading, onBuild, onSubmit }: Pac
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+      {/* Top Header */}
+      <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between border-b pb-4">
         <div>
-          <h3 className="text-base font-semibold text-foreground">Application Filing Kit &amp; Package</h3>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Everything assembled for your application — Official PDFs, Cover Letter, Form Guide, and Filing Kit.
+          <div className="flex items-center gap-2">
+            <h3 className="text-base font-semibold text-foreground">
+              {formatScopeLabel(caseData.scope_label) || "Application Package"}
+            </h3>
+            <Badge tone="success" className="text-[11px]">
+              {caseData.status === "submitted" ? "Submitted" : "Ready to File"}
+            </Badge>
+          </div>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Ref: <span className="font-mono font-medium text-foreground">{caseData.reference}</span>
           </p>
         </div>
-        <Badge tone="success" className="w-fit">
-          <ShieldCheck className="mr-1 size-3.5" /> Agency-Grade Package Ready
-        </Badge>
       </div>
 
       {!effectivePacket ? (
         <Card>
           <CardContent className="flex flex-col items-center py-10 text-center space-y-3">
-            <Sparkles className="size-10 text-primary/50" />
+            <Sparkles className="size-8 text-primary/60" />
             <div>
-              <p className="text-base font-semibold">Assemble Your Complete Filing Kit</p>
+              <p className="text-sm font-semibold">Assemble Filing Package</p>
               <p className="text-xs text-muted-foreground mt-1 max-w-md mx-auto">
-                Generate your personalized Embassy Cover Letter, Step-by-Step Filing Instructions, and Official PDF Package.
+                Generate your official forms, cover letter, and document package.
               </p>
             </div>
-            <Button onClick={onBuild} disabled={loading} className="mt-2">
-              {loading ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Layers className="mr-2 size-4" />}
-              Assemble Filing Kit
+            <Button onClick={onBuild} disabled={loading} size="sm" className="mt-2 text-xs">
+              {loading ? <Loader2 className="mr-1.5 size-3.5 animate-spin" /> : <Layers className="mr-1.5 size-3.5" />}
+              Assemble Package
             </Button>
           </CardContent>
         </Card>
       ) : (
         <div className="space-y-6">
-          {/* Top Banner: Success & Agency Value */}
-          <Card className="border-[var(--color-success)]/30 bg-[var(--color-success)]/5">
-            <CardContent className="p-5 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-              <div className="flex items-start gap-3">
-                <div className="flex size-10 items-center justify-center rounded-full bg-[var(--color-success)]/20 text-[var(--color-success)] shrink-0">
-                  <Check className="size-5" />
-                </div>
+          {/* Supporting Letters & Statements Editor */}
+          <Card>
+            <CardContent className="p-4 sm:p-5 space-y-4">
+              {/* Toolbar */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b pb-3">
                 <div>
-                  <h4 className="text-base font-bold tracking-tight text-foreground">
-                    Filing Kit Assembled for {caseData.reference}
+                  <h4 className="text-sm font-semibold text-foreground">
+                    Supporting Letters &amp; Statements
                   </h4>
-                  <p className="mt-0.5 text-xs text-muted-foreground">
-                    Scope: <span className="font-semibold text-foreground">{caseData.scope_label ?? caseData.locale.toUpperCase()}</span>
-                  </p>
-                  <p className="mt-1 text-xs text-foreground/80">
-                    Your official forms are filled from your answers and your documents are
-                    listed. Check every entry and sign before you file — Torii prepares the
-                    paperwork, it does not verify your documents or approve your application.
+                  <p className="text-[11px] text-muted-foreground">
+                    Review or customize required statements before signing.
                   </p>
                 </div>
-              </div>
 
-              <div className="flex flex-wrap items-center gap-2 shrink-0">
-                <Button
-                  onClick={() =>
-                    downloadPdf("dossier-packet", `${caseData.reference}-Complete-Dossier.pdf`)
-                  }
-                  disabled={downloadingPdf === "dossier-packet"}
-                  className="px-3.5 py-1.5 text-xs font-semibold shadow"
-                >
-                  {downloadingPdf === "dossier-packet" ? (
-                    <Loader2 className="mr-1.5 size-4 animate-spin" />
-                  ) : (
-                    <Download className="mr-1.5 size-4" />
-                  )}
-                  Download Official Dossier (PDF)
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() =>
-                    downloadPdf("application-form", `${caseData.reference}-Application-Form.pdf`)
-                  }
-                  disabled={downloadingPdf === "application-form"}
-                  className="px-3 py-1.5 text-xs"
-                >
-                  {downloadingPdf === "application-form" ? (
-                    <Loader2 className="mr-1.5 size-4 animate-spin" />
-                  ) : (
-                    <FileText className="mr-1.5 size-4 text-primary" />
-                  )}
-                  Application Form (PDF)
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() =>
-                    downloadPdf("cover-letter", `${caseData.reference}-Cover-Letter.pdf`)
-                  }
-                  disabled={downloadingPdf === "cover-letter"}
-                  className="px-3 py-1.5 text-xs"
-                >
-                  {downloadingPdf === "cover-letter" ? (
-                    <Loader2 className="mr-1.5 size-4 animate-spin" />
-                  ) : (
-                    <FileText className="mr-1.5 size-4" />
-                  )}
-                  Cover Letter (PDF)
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Feature 1: Comprehensive AI Document Suite Generator */}
-          <Card className="border-primary/20">
-            <CardContent className="p-5 space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b pb-4">
-                <div className="flex items-center gap-2.5">
-                  <FileText className="size-5 text-primary" />
-                  <div>
-                    <h4 className="text-sm font-bold tracking-tight">AI Generated Official Document Suite</h4>
-                    <p className="text-[11px] text-muted-foreground">
-                      All required embassy drafts generated automatically from your intake answers and verified criteria.
-                    </p>
-                  </div>
-                </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <Button
+                    variant="outline"
+                    size="sm"
                     onClick={() => handleGenerateAIDraft()}
                     disabled={aiDrafting !== null}
-                    className="px-3 py-1 text-xs font-semibold bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary text-primary-foreground shadow"
+                    className="text-xs h-8"
                   >
                     {aiDrafting === activeDoc ? (
                       <Loader2 className="mr-1.5 size-3.5 animate-spin" />
                     ) : (
-                      <Sparkles className="mr-1.5 size-3.5" />
+                      <Sparkles className="mr-1.5 size-3.5 text-primary" />
                     )}
-                    {getActiveDocText().isAi ? "Regenerate with AI" : "✨ Draft with AI"}
+                    {getActiveDocText().isAi ? "Regenerate" : "Draft with AI"}
                   </Button>
 
                   {getActiveDocText().isAi && (
                     <Button
                       variant="ghost"
+                      size="sm"
                       onClick={handleResetToTemplate}
-                      className="px-2 py-1 text-xs text-muted-foreground hover:text-foreground"
+                      className="text-xs h-8 text-muted-foreground hover:text-foreground"
                     >
-                      Reset to Template
+                      Reset
                     </Button>
                   )}
 
                   <Button
-                    variant="outline"
+                    variant="ghost"
+                    size="sm"
                     onClick={() => setShowPromptInput((prev) => !prev)}
-                    className="px-2.5 py-1 text-xs"
-                    title="Customize AI prompt instructions"
+                    className="text-xs h-8 text-muted-foreground hover:text-foreground"
+                    title="Customize AI instructions"
                   >
-                    Custom Prompt
+                    Instructions
                   </Button>
 
-                  <Button variant="outline" onClick={handleCopyActiveDoc} className="px-2.5 py-1 text-xs">
+                  <div className="h-4 w-px bg-border mx-0.5" />
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleCopyActiveDoc}
+                    className="text-xs h-8"
+                  >
                     {copiedDoc ? (
                       <>
-                        <Check className="mr-1.5 size-3.5 text-[var(--color-success)]" /> Copied!
+                        <Check className="mr-1.5 size-3.5 text-[var(--color-success)]" /> Copied
                       </>
                     ) : (
                       <>
@@ -840,9 +679,9 @@ export function PacketStep({ packet, caseData, loading, onBuild, onSubmit }: Pac
                       </>
                     )}
                   </Button>
-                  {/* Format picker — the same draft as a PDF to file, or a Word file to
-                      finish editing. */}
-                  <div className="inline-flex overflow-hidden rounded-md border">
+
+                  {/* Format Toggle */}
+                  <div className="inline-flex overflow-hidden rounded-md border text-xs">
                     {(["pdf", "docx"] as ExportFormat[]).map((fmt) => (
                       <button
                         key={fmt}
@@ -853,7 +692,6 @@ export function PacketStep({ packet, caseData, loading, onBuild, onSubmit }: Pac
                             ? "bg-primary text-primary-foreground"
                             : "bg-transparent text-muted-foreground hover:bg-accent"
                         }`}
-                        title={`Download as ${FORMAT_LABELS[fmt]}`}
                       >
                         {fmt === "docx" ? "Word" : fmt.toUpperCase()}
                       </button>
@@ -862,9 +700,10 @@ export function PacketStep({ packet, caseData, loading, onBuild, onSubmit }: Pac
 
                   <Button
                     variant="outline"
+                    size="sm"
                     onClick={() => void exportDocuments(exportFormat, "active")}
                     disabled={exporting !== null}
-                    className="px-2.5 py-1 text-xs"
+                    className="text-xs h-8"
                   >
                     {exporting === `active:${exportFormat}` ? (
                       <Loader2 className="mr-1.5 size-3.5 animate-spin" />
@@ -876,45 +715,45 @@ export function PacketStep({ packet, caseData, loading, onBuild, onSubmit }: Pac
 
                   <Button
                     variant="outline"
+                    size="sm"
                     onClick={() => void exportDocuments(exportFormat, "all")}
                     disabled={exporting !== null}
-                    className="px-2.5 py-1 text-xs"
-                    title={`Every document in this suite as ${FORMAT_LABELS[exportFormat]}, in one zip`}
+                    className="text-xs h-8"
+                    title={`Download all ${DOC_ORDER.length} statements in a zip`}
                   >
                     {exporting === `all:${exportFormat}` ? (
                       <Loader2 className="mr-1.5 size-3.5 animate-spin" />
                     ) : (
                       <Layers className="mr-1.5 size-3.5" />
                     )}
-                    All {DOC_ORDER.length} (.zip)
+                    All (.zip)
                   </Button>
                 </div>
               </div>
 
               {/* Optional Custom Instructions Input */}
               {showPromptInput && (
-                <div className="rounded-lg border bg-muted/20 p-3 space-y-2 animate-in fade-in">
+                <div className="rounded-md border bg-muted/20 p-2.5 space-y-2">
                   <div className="flex items-center justify-between">
-                    <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                      <Sparkles className="size-3 text-primary" />
+                    <label className="text-[11px] font-medium text-foreground">
                       Custom AI Drafting Instructions (Optional)
                     </label>
-                    <span className="text-[10px] text-muted-foreground">e.g. emphasize work background, specific salary or itinerary</span>
                   </div>
                   <div className="flex gap-2">
                     <input
                       type="text"
                       value={customInstructions}
                       onChange={(e) => setCustomInstructions(e.target.value)}
-                      placeholder="e.g. Focus on my 5 years in Tokyo as a software engineer and Japanese proficiency..."
+                      placeholder="e.g. Emphasize work history and Japanese proficiency..."
                       className="flex-1 rounded-md border bg-background px-3 py-1.5 text-xs outline-none focus-visible:ring-1 focus-visible:ring-ring"
                     />
                     <Button
+                      size="sm"
                       onClick={() => handleGenerateAIDraft()}
                       disabled={aiDrafting !== null}
-                      className="text-xs px-3 py-1.5 font-medium shrink-0"
+                      className="text-xs shrink-0"
                     >
-                      {aiDrafting === activeDoc ? <Loader2 className="size-3.5 animate-spin" /> : "Generate"}
+                      {aiDrafting === activeDoc ? <Loader2 className="size-3.5 animate-spin" /> : "Apply"}
                     </Button>
                   </div>
                 </div>
@@ -926,82 +765,68 @@ export function PacketStep({ packet, caseData, loading, onBuild, onSubmit }: Pac
                 </div>
               )}
 
-              {/* Document Selector Navigation Tabs */}
-              <div className="flex flex-wrap gap-1.5 border-b pb-3">
+              {/* Clean Tabs */}
+              <div className="flex flex-wrap gap-1 border-b pb-2.5">
                 {[
                   { id: "cover" as DocType, label: docLabels.cover },
                   { id: "schedule" as DocType, label: docLabels.schedule },
                   { id: "reason" as DocType, label: docLabels.reason },
                   { id: "financial" as DocType, label: docLabels.financial },
-                  { id: "form" as DocType, label: docLabels.form },
-                  { id: "full" as DocType, label: docLabels.full },
                 ].map((tab) => (
                   <button
                     key={tab.id}
                     onClick={() => setActiveDoc(tab.id)}
-                    className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
+                    className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-all ${
                       activeDoc === tab.id
-                        ? "bg-primary text-primary-foreground shadow-sm"
-                        : "bg-muted/40 text-muted-foreground hover:bg-muted hover:text-foreground"
+                        ? "bg-muted text-foreground font-semibold shadow-xs"
+                        : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
                     }`}
                   >
                     <span>{tab.label}</span>
                     {aiDrafts[tab.id] && (
-                      <span className="size-1.5 rounded-full bg-emerald-400" />
+                      <span className="size-1.5 rounded-full bg-emerald-500" />
                     )}
                   </button>
                 ))}
               </div>
 
-              {/* Active Document Header & Preview */}
-              <div className="flex items-center justify-between pt-1">
+              {/* Active Document Indicator */}
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
                 <div className="flex items-center gap-2">
-                  <span className="text-xs font-semibold text-foreground">
-                    {getActiveDocText().title}
-                  </span>
+                  <span className="font-medium text-foreground">{getActiveDocText().title}</span>
                   {getActiveDocText().isAi && (
-                    <Badge tone="success">✨ AI Personalized</Badge>
+                    <Badge tone="success" className="text-[10px] py-0 px-1.5">AI Drafted</Badge>
                   )}
                 </div>
-                <span className="text-[10px] text-muted-foreground font-mono">
-                  {getActiveDocText().stem}.{exportFormat}
-                </span>
+                <span className="font-mono text-[11px]">{getActiveDocText().stem}.{exportFormat}</span>
               </div>
 
+              {/* Textarea or Loading */}
               {aiDrafting === activeDoc ? (
-                <div className="rounded-md border bg-muted/20 p-8 flex flex-col items-center justify-center gap-3 text-center">
-                  <Loader2 className="size-6 text-primary animate-spin" />
-                  <div className="space-y-1">
-                    <p className="text-xs font-semibold text-foreground">Drafting official document with AI...</p>
-                    <p className="text-[11px] text-muted-foreground">Synthesizing your verified documents, case scope, and background details</p>
-                  </div>
+                <div className="rounded-md border bg-muted/10 p-8 flex flex-col items-center justify-center gap-2 text-center">
+                  <Loader2 className="size-5 text-primary animate-spin" />
+                  <p className="text-xs font-medium text-foreground">Drafting with AI...</p>
                 </div>
               ) : (
                 <textarea
                   value={getActiveDocText().text}
                   onChange={(e) => handleTextEdit(e.target.value)}
-                  rows={14}
-                  className="w-full rounded-md border bg-muted/30 p-4 font-mono text-xs text-foreground/90 whitespace-pre leading-relaxed shadow-inner outline-none focus-visible:ring-1 focus-visible:ring-ring resize-y"
-                  placeholder="Official document text..."
+                  rows={12}
+                  className="w-full rounded-md border bg-muted/20 p-3.5 font-mono text-xs text-foreground/90 whitespace-pre leading-relaxed outline-none focus-visible:ring-1 focus-visible:ring-ring resize-y"
+                  placeholder="Document text..."
                 />
               )}
             </CardContent>
           </Card>
 
-          {/* The plan for this application, from here to the decision.
-
-              This replaces the old four-card "submission roadmap", and then the sixteen-row
-              timeline that replaced it — both described the procedure rather than advising
-              on this case. Torii now reads the whole case and says what to start today,
-              what follows, and what gets applications like this one handed back. The full
-              step list and the third-party items stay one click away underneath. */}
+          {/* Journey Map */}
           <JourneyMap token={token} caseData={caseData} />
 
-          {/* The paper stack, in the order it is handed over. */}
+          {/* Document Submission Order */}
           <Card>
-            <CardContent className="p-4 space-y-3">
-              <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                Stack your papers in this order
+            <CardContent className="p-4 space-y-2.5">
+              <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Document Submission Order
               </h4>
               {effectivePacket && Array.isArray(effectivePacket.dossier_order) && effectivePacket.dossier_order.length > 0 ? (
                 <ol className="space-y-1.5 text-xs text-foreground">
@@ -1015,44 +840,37 @@ export function PacketStep({ packet, caseData, loading, onBuild, onSubmit }: Pac
               ) : (
                 <ol className="space-y-1.5 text-xs text-foreground">
                   <li className="flex items-center gap-2">
-                    <Badge tone="muted" className="text-[10px]">1</Badge> Signed Official Cover Letter (Generated by Torii above)
+                    <Badge tone="muted" className="text-[10px]">1</Badge> Signed Application Form
                   </li>
                   <li className="flex items-center gap-2">
-                    <Badge tone="muted" className="text-[10px]">2</Badge> Government Application Confirmation / Summary Page
+                    <Badge tone="muted" className="text-[10px]">2</Badge> Cover Letter &amp; Statements
                   </li>
                   <li className="flex items-center gap-2">
-                    <Badge tone="muted" className="text-[10px]">3</Badge> Original Valid Passport &amp; Previous Passports
+                    <Badge tone="muted" className="text-[10px]">3</Badge> Valid Passport &amp; Bio-Data Copy
                   </li>
                   <li className="flex items-center gap-2">
-                    <Badge tone="muted" className="text-[10px]">4</Badge> Official Passport Photographs (Matching specifications)
+                    <Badge tone="muted" className="text-[10px]">4</Badge> Passport Photographs
                   </li>
                   <li className="flex items-center gap-2">
-                    <Badge tone="muted" className="text-[10px]">5</Badge> Proof of Financial Capability (Bank Statements / Salary Slips)
+                    <Badge tone="muted" className="text-[10px]">5</Badge> Proof of Financial Solvency (Bank Statements)
                   </li>
                   <li className="flex items-center gap-2">
-                    <Badge tone="muted" className="text-[10px]">6</Badge> Confirmed Travel Itinerary &amp; Hotel Bookings
+                    <Badge tone="muted" className="text-[10px]">6</Badge> Flight / Travel Bookings &amp; Itinerary
                   </li>
                 </ol>
               )}
             </CardContent>
           </Card>
 
-          {/* Finalising the case.
-
-              This used to be a "Filing Tracker" asking the applicant to tick that they had
-              filled the portal, paid the fee and booked the appointment. They file by hand
-              at an office — those boxes recorded nothing Torii uses and nothing the
-              applicant needed reminding of. One action remains: tell Torii it is filed, so
-              the packet is frozen and the renewal deadline can be tracked. */}
+          {/* Mark as Filed */}
           {caseData.status !== "submitted" ? (
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-[11px] text-muted-foreground">
-                Filed it already? Recording it here freezes this packet and starts the deadline
-                tracking.
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between border-t pt-4">
+              <p className="text-xs text-muted-foreground">
+                Ready to submit? Mark this application as filed to track status and deadlines.
               </p>
               <Button onClick={onSubmit} disabled={loading} className="shrink-0">
                 {loading ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Send className="mr-2 size-4" />}
-                Mark as filed
+                Mark as Filed
               </Button>
             </div>
           ) : (
