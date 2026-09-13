@@ -54,6 +54,21 @@ log "Writing /etc/sysctl.d/99-torii.conf"
 cat >/etc/sysctl.d/99-torii.conf <<'EOF'
 # Torii small-host tuning. See infra/scripts/tune-host.sh for the reasoning.
 
+# MUST COME FIRST, and must never be removed.
+#
+# Docker sets ip_forward=1 when the daemon starts, and it needs it: without
+# forwarding, containers can still reach each other over the bridge but have no route
+# off the host at all. GCE ships /etc/sysctl.d/60-gce-network-security.conf, which sets
+# it back to 0. So any `sysctl --system` -- including the one this script runs to apply
+# the settings below -- silently severs every container's outbound network.
+#
+# The failure is near-invisible: container-to-container traffic is unaffected, so
+# healthchecks pass, nginx routes fine, and the site looks up. What breaks is only the
+# things that leave the host: Google OAuth token verification, the LLM and search
+# providers, and the government-source scraper. This file is 99-, so it sorts after
+# 60-gce-network-security.conf and wins.
+net.ipv4.ip_forward = 1
+
 # Swap only under real pressure, not to grow the page cache.
 vm.swappiness = 10
 # Reclaim dentry/inode caches more readily than the default 100 would.
