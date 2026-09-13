@@ -93,12 +93,26 @@ export async function initiateGoogleLogin(options: GoogleLoginOptions = {}): Pro
     const scope = encodeURIComponent("openid email profile");
     const encodedState = encodeURIComponent(state);
 
-    // Using Google OAuth 2.0 authorization endpoint
+    // Authorization Code flow (`response_type=code`), not the implicit flow
+    // (`response_type=token`) this used to request.
+    //
+    // Google is retiring the implicit grant for web clients, and it was never the right fit
+    // here: this is a registered Web application client with a GOCSPX- secret, and the API
+    // already implements the server-side code exchange (see POST /v1/auth/google, step 1).
+    // Implicit also hands the access token to the browser in the URL fragment, where it
+    // lands in history; the code flow keeps the token exchange server-side.
+    //
+    // The code arrives back as a `?code=` query parameter rather than a `#access_token=`
+    // fragment. The callback page already reads both, so it needs no change -- it just takes
+    // the `authCode` branch and posts { code, redirect_uri } to the API.
+    //
+    // redirect_uri must match an Authorised redirect URI on the OAuth client in Google Cloud
+    // Console exactly, including scheme and trailing path.
     const googleAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${encodeURIComponent(
       clientId,
     )}&redirect_uri=${encodeURIComponent(
       redirectUri,
-    )}&response_type=token&scope=${scope}&state=${encodedState}&prompt=select_account`;
+    )}&response_type=code&scope=${scope}&state=${encodedState}&prompt=select_account`;
 
     window.location.href = googleAuthUrl;
     return true;
