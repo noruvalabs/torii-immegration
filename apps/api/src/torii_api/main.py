@@ -159,6 +159,22 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(admin_router)
     app.include_router(admin_ops_router)
     app.include_router(auth_router)
+
+    # Mount Torii AI routers if torii_ai package is present (unified container deployment)
+    try:
+        from torii_ai.api.agentic import router as ai_agentic_router
+        from torii_ai.api.chat import router as ai_chat_router
+        from torii_ai.api.ocr import router as ai_ocr_router
+        from torii_ai.api.ops import router as ai_ops_router
+
+        app.include_router(ai_chat_router)
+        app.include_router(ai_ocr_router)
+        app.include_router(ai_ops_router)
+        app.include_router(ai_agentic_router)
+        log.info("api.ai_routers_included")
+    except ImportError:
+        pass
+
     return app
 
 

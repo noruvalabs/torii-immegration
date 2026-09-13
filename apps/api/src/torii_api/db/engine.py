@@ -29,16 +29,23 @@ def to_async_url(database_url: str) -> str:
     """Coerce a database URL to its async driver form.
 
     Already-qualified URLs (``sqlite+aiosqlite://``, ``postgresql+asyncpg://``) pass through.
+    Strips ``sslmode`` query parameter which asyncpg rejects in favor of connect_args.
     """
-    if "+" in database_url.split("://", 1)[0]:
-        return database_url
-    if database_url.startswith("sqlite://"):
-        return "sqlite+aiosqlite://" + database_url[len("sqlite://") :]
-    if database_url.startswith("postgresql://"):
-        return "postgresql+asyncpg://" + database_url[len("postgresql://") :]
-    if database_url.startswith("postgres://"):
-        return "postgresql+asyncpg://" + database_url[len("postgres://") :]
-    return database_url
+    clean_url = database_url
+    if "sslmode=" in clean_url:
+        import re
+        clean_url = re.sub(r"[?&]sslmode=[^&]+", "", clean_url)
+        clean_url = clean_url.replace("?&", "?").rstrip("?")
+
+    if "+" in clean_url.split("://", 1)[0]:
+        return clean_url
+    if clean_url.startswith("sqlite://"):
+        return "sqlite+aiosqlite://" + clean_url[len("sqlite://") :]
+    if clean_url.startswith("postgresql://"):
+        return "postgresql+asyncpg://" + clean_url[len("postgresql://") :]
+    if clean_url.startswith("postgres://"):
+        return "postgresql+asyncpg://" + clean_url[len("postgres://") :]
+    return clean_url
 
 
 def create_engine(database_url: str) -> AsyncEngine:
@@ -56,16 +63,20 @@ def create_engine(database_url: str) -> AsyncEngine:
             cursor.close()
 
         return engine
-    # Bounded pool. The deployed Postgres runs with max_connections=40 (see
-    # infra/compose/docker-compose.yml) because each idle backend costs several MB of RSS on
-    # a small host, so the pools have to be sized to fit rather than left at SQLAlchemy's
-    # default 5+10 per process — which, across the api and the worker, can outgrow the server
-    # and turn a traffic spike into "FATAL: sorry, too many clients already".
-    #
-    # 10+5 x {api, worker} = 30 worst case, leaving headroom for migrations, psql, and the
-    # superuser reserve. `pool_recycle` keeps connections under any idle timeout upstream.
+
+    connect_args: dict[str, object] = {}
+    if "asyncpg" in url:
+        # statement_cache_size=0 is required for connection poolers (e.g. Supabase Supavisor)
+        # to prevent prepared statement collisions.
+        connect_args["statement_cache_size"] = int(
+            os.getenv("TORII_DB_STATEMENT_CACHE_SIZE", "0")
+        )
+        if "sslmode=require" in database_url or "ssl=require" in database_url or "supabase.com" in database_url or "supabase.co" in database_url:
+            connect_args["ssl"] = "require"
+
     return create_async_engine(
         url,
+        connect_args=connect_args,
         pool_pre_ping=True,
         pool_size=DEFAULT_POOL_SIZE,
         max_overflow=DEFAULT_MAX_OVERFLOW,
