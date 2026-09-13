@@ -110,7 +110,7 @@ class Settings(BaseSettings):
     require_email_verification: bool = True
 
     # --- AI service (OPS scraper, assistant chat) ------------------------------
-    ai_service_url: str = "http://localhost:8001"
+    ai_service_url: str = "http://localhost:8000"
     # Comma-separated list of jurisdiction codes to scrape daily (US-25, US-26).
     # US is parked (see docs/jurisdictions/us/_jurisdiction.yml), so it is not scraped.
     scrape_jurisdictions: str = "JP"
