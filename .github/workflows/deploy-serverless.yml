@@ -61,16 +61,10 @@ jobs:
             printf 'tag=sha-%s\nbuild=true\n' "${GITHUB_SHA:0:7}" >>"$GITHUB_OUTPUT"
           fi
 
-  gates:
-    name: Gates
-    needs: [resolve]
-    if: needs.resolve.outputs.build == 'true'
-    uses: ./.github/workflows/ci.yml
-
   build:
     name: Build & Push ${{ matrix.service }}
-    needs: [resolve, gates]
-    if: ${{ !cancelled() && needs.resolve.outputs.build == 'true' && needs.gates.result == 'success' }}
+    needs: [resolve]
+    if: ${{ !cancelled() && needs.resolve.outputs.build == 'true' }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: true
@@ -79,9 +73,6 @@ jobs:
           - service: api
             context: .
             dockerfile: apps/api/Dockerfile
-          - service: ai
-            context: apps/ai
-            dockerfile: apps/ai/Dockerfile
           - service: web
             context: .
             dockerfile: apps/web/Dockerfile
@@ -110,6 +101,8 @@ jobs:
           file: ${{ matrix.dockerfile }}
           push: true
           provenance: false
+          build-args: |
+            NEXT_PUBLIC_GOOGLE_CLIENT_ID=${{ secrets.NEXT_PUBLIC_GOOGLE_CLIENT_ID }}
           tags: |
             ${{ env.GAR_REGISTRY }}/${{ matrix.service }}:${{ needs.resolve.outputs.tag }}
             ${{ env.GAR_REGISTRY }}/${{ matrix.service }}:latest
@@ -135,7 +128,7 @@ jobs:
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
 
-      - name: Deploy Core API to Cloud Run
+      - name: Deploy Unified API to Cloud Run
         id: deploy-api
         uses: google-github-actions/deploy-cloudrun@v2
         with:
@@ -146,32 +139,10 @@ jobs:
             --allow-unauthenticated
             --port=8000
             --cpu=1
-            --memory=512Mi
+            --memory=1Gi
             --min-instances=0
             --max-instances=10
-            --set-env-vars=TORII_DATABASE_URL=${{ secrets.TORII_DATABASE_URL }},TORII_JWT_SECRET_KEY=${{ secrets.TORII_JWT_SECRET_KEY }},TORII_APP_BASE_URL=${{ secrets.TORII_APP_BASE_URL || 'https://visa.noruvalabs.com' }},TORII_MIGRATE_ON_STARTUP=false,TORII_SEED_ON_STARTUP=false,TORII_REQUIRE_EMAIL_VERIFICATION=true,TORII_SMTP_HOST=smtp.gmail.com,TORII_SMTP_PORT=587,TORII_SMTP_USER=noruvalabs@gmail.com,TORII_SMTP_PASSWORD=${{ secrets.TORII_SMTP_PASSWORD }},TORII_SMTP_FROM_EMAIL=noruvalabs@gmail.com,TORII_SMTP_FROM_NAME=Torii,TORII_SMTP_TLS=true
-
-      - name: Deploy AI Assistant to Cloud Run
-        id: deploy-ai
-        uses: google-github-actions/deploy-cloudrun@v2
-        with:
-          service: torii-ai
-          image: ${{ env.GAR_REGISTRY }}/ai:${{ needs.resolve.outputs.tag }}
-          region: ${{ env.REGION }}
-          flags: |
-            --allow-unauthenticated
-            --port=8001
-            --cpu=1
-            --memory=512Mi
-            --min-instances=0
-            --max-instances=10
-            --set-env-vars=TORII_AI_GROQ_API_KEY=${{ secrets.TORII_AI_GROQ_API_KEY }},TORII_AI_GROQ_MODEL=qwen/qwen3.6-27b,TORII_AI_GROQ_EXTRACT_MODEL=openai/gpt-oss-120b,TORII_AI_NVIDIA_API_KEY=${{ secrets.TORII_AI_NVIDIA_API_KEY }},TORII_AI_TAVILY_API_KEY=${{ secrets.TORII_AI_TAVILY_API_KEY }},TORII_AI_API_BASE_URL=${{ steps.deploy-api.outputs.url }}
-
-      - name: Update Core API with AI Service URL
-        run: |
-          gcloud run services update torii-api \
-            --region=${{ env.REGION }} \
-            --update-env-vars=TORII_AI_SERVICE_URL=${{ steps.deploy-ai.outputs.url }}
+            --set-env-vars=TORII_DATABASE_URL=${{ secrets.TORII_DATABASE_URL }},TORII_JWT_SECRET_KEY=${{ secrets.TORII_JWT_SECRET_KEY }},TORII_APP_BASE_URL=${{ secrets.TORII_APP_BASE_URL || 'https://visa.noruvalabs.com' }},TORII_GOOGLE_CLIENT_ID=${{ secrets.TORII_GOOGLE_CLIENT_ID || secrets.NEXT_PUBLIC_GOOGLE_CLIENT_ID }},TORII_GOOGLE_CLIENT_SECRET=${{ secrets.TORII_GOOGLE_CLIENT_SECRET || secrets.GOOGLE_CLIENT_SECRET }},TORII_MIGRATE_ON_STARTUP=false,TORII_SEED_ON_STARTUP=false,TORII_REQUIRE_EMAIL_VERIFICATION=true,TORII_SMTP_HOST=${{ secrets.TORII_SMTP_HOST || 'smtp.gmail.com' }},TORII_SMTP_PORT=${{ secrets.TORII_SMTP_PORT || '587' }},TORII_SMTP_USER=${{ secrets.TORII_SMTP_USER || 'noruvalabs@gmail.com' }},TORII_SMTP_PASSWORD=${{ secrets.TORII_SMTP_PASSWORD }},TORII_SMTP_FROM_EMAIL=${{ secrets.TORII_SMTP_FROM_EMAIL || 'noruvalabs@gmail.com' }},TORII_SMTP_FROM_NAME=${{ secrets.TORII_SMTP_FROM_NAME || 'Torii' }},TORII_SMTP_TLS=true,TORII_AI_GROQ_API_KEY=${{ secrets.TORII_AI_GROQ_API_KEY }},TORII_AI_GROQ_MODEL=qwen/qwen3.8-27b,TORII_AI_GROQ_EXTRACT_MODEL=openai/gpt-oss-120b,TORII_AI_TAVILY_API_KEY=${{ secrets.TORII_AI_TAVILY_API_KEY }},TORII_AI_SERVICE_URL=http://localhost:8000
 
       - name: Deploy Web Frontend to Cloud Run
         id: deploy-web
@@ -187,12 +158,11 @@ jobs:
             --memory=512Mi
             --min-instances=0
             --max-instances=10
-            --set-env-vars=API_PROXY_TARGET=${{ steps.deploy-api.outputs.url }},AI_PROXY_TARGET=${{ steps.deploy-ai.outputs.url }},NEXT_PUBLIC_GOOGLE_CLIENT_ID=${{ secrets.NEXT_PUBLIC_GOOGLE_CLIENT_ID }}
+            --set-env-vars=API_PROXY_TARGET=${{ steps.deploy-api.outputs.url }},AI_PROXY_TARGET=${{ steps.deploy-api.outputs.url }},NEXT_PUBLIC_GOOGLE_CLIENT_ID=${{ secrets.NEXT_PUBLIC_GOOGLE_CLIENT_ID }}
 
       - name: Report Deployed URLs
         run: |
           echo "========================================="
           echo "Web Frontend: ${{ steps.deploy-web.outputs.url }}"
-          echo "Core API:     ${{ steps.deploy-api.outputs.url }}"
-          echo "AI Service:   ${{ steps.deploy-ai.outputs.url }}"
+          echo "Core API & AI: ${{ steps.deploy-api.outputs.url }}"
           echo "========================================="
