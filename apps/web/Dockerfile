@@ -41,6 +41,16 @@ COPY --from=build --chown=nextjs:nodejs /app/apps/web/.next/static ./apps/web/.n
 USER nextjs
 EXPOSE 3000
 ENV PORT=3000 HOSTNAME=0.0.0.0
-HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-  CMD node -e "fetch('http://localhost:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+# busybox wget, not `node -e fetch`. Booting a second Node runtime to probe the first costs
+# ~2s of CPU on the deployment host — every 30s, forever — and under load it overran the old
+# 5s timeout and flapped the container to `unhealthy` while it was serving traffic fine. That
+# is not cosmetic: compose `up --wait` and nginx's `depends_on: service_healthy` both gate on
+# this, so a flapping probe can fail a deploy and trigger a rollback of a good release.
+# wget is already in the alpine base and costs ~0s.
+#
+# 127.0.0.1, not `localhost`: the server binds 0.0.0.0 (IPv4 only, per HOSTNAME above) while
+# busybox wget resolves `localhost` to ::1 first and gets connection-refused. Same IPv6 trap
+# as the one called out in infra/nginx/conf.d/torii.conf.
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+  CMD wget -q -O /dev/null http://127.0.0.1:3000/api/health || exit 1
 CMD ["node", "apps/web/server.js"]
