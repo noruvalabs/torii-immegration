@@ -1,0 +1,198 @@
+name: Deploy Serverless (Cloud Run)
+
+on:
+  push:
+    branches: [main, staging]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Where to deploy."
+        required: true
+        default: staging
+        type: choice
+        options: [staging, production]
+      tag:
+        description: "Re-deploy an existing tag (e.g. sha-1a2b3c4). Leave empty to build current ref."
+        required: false
+        type: string
+
+concurrency:
+  group: deploy-cloudrun-${{ inputs.environment || (github.ref_name == 'main' && 'production' || 'staging') }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  PROJECT_ID: tori-507709
+  REGION: us-central1
+  GAR_REGISTRY: us-central1-docker.pkg.dev/tori-507709/torii
+  WIF_PROVIDER: projects/529415836006/locations/global/workloadIdentityPools/github-pool/providers/github-provider
+  WIF_SERVICE_ACCOUNT: github-deployer@tori-507709.iam.gserviceaccount.com
+
+jobs:
+  resolve:
+    name: Resolve release
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.pick.outputs.tag }}
+      build: ${{ steps.pick.outputs.build }}
+      environment: ${{ steps.pick.outputs.environment }}
+    steps:
+      - id: pick
+        env:
+          REQUESTED_TAG: ${{ inputs.tag }}
+          REQUESTED_ENV: ${{ inputs.environment }}
+        run: |
+          set -euo pipefail
+          if [ -n "${REQUESTED_ENV}" ]; then
+            ENVIRONMENT="${REQUESTED_ENV}"
+          elif [ "${GITHUB_REF_NAME}" = "main" ]; then
+            ENVIRONMENT="production"
+          else
+            ENVIRONMENT="staging"
+          fi
+          printf 'environment=%s\n' "$ENVIRONMENT" >>"$GITHUB_OUTPUT"
+
+          if [ -n "${REQUESTED_TAG}" ]; then
+            printf 'tag=%s\nbuild=false\n' "${REQUESTED_TAG}" >>"$GITHUB_OUTPUT"
+          else
+            printf 'tag=sha-%s\nbuild=true\n' "${GITHUB_SHA:0:7}" >>"$GITHUB_OUTPUT"
+          fi
+
+  gates:
+    name: Gates
+    needs: [resolve]
+    if: needs.resolve.outputs.build == 'true'
+    uses: ./.github/workflows/ci.yml
+
+  build:
+    name: Build & Push ${{ matrix.service }}
+    needs: [resolve, gates]
+    if: ${{ !cancelled() && needs.resolve.outputs.build == 'true' && needs.gates.result == 'success' }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - service: api
+            context: .
+            dockerfile: apps/api/Dockerfile
+          - service: ai
+            context: apps/ai
+            dockerfile: apps/ai/Dockerfile
+          - service: web
+            context: .
+            dockerfile: apps/web/Dockerfile
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: auth
+        name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ env.WIF_PROVIDER }}
+          service_account: ${{ env.WIF_SERVICE_ACCOUNT }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build and push container image
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          push: true
+          provenance: false
+          tags: |
+            ${{ env.GAR_REGISTRY }}/${{ matrix.service }}:${{ needs.resolve.outputs.tag }}
+            ${{ env.GAR_REGISTRY }}/${{ matrix.service }}:latest
+          cache-from: type=gha,scope=cr-${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=cr-${{ matrix.service }}
+
+  deploy:
+    name: Deploy to Cloud Run (${{ needs.resolve.outputs.environment }})
+    needs: [resolve, build]
+    if: ${{ !cancelled() && needs.build.result != 'failure' }}
+    runs-on: ubuntu-latest
+    environment: ${{ needs.resolve.outputs.environment }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: auth
+        name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ env.WIF_PROVIDER }}
+          service_account: ${{ env.WIF_SERVICE_ACCOUNT }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Deploy Core API to Cloud Run
+        id: deploy-api
+        uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          service: torii-api
+          image: ${{ env.GAR_REGISTRY }}/api:${{ needs.resolve.outputs.tag }}
+          region: ${{ env.REGION }}
+          flags: |
+            --allow-unauthenticated
+            --port=8000
+            --cpu=1
+            --memory=512Mi
+            --min-instances=0
+            --max-instances=10
+            --set-env-vars=TORII_DATABASE_URL=${{ secrets.TORII_DATABASE_URL }},TORII_JWT_SECRET_KEY=${{ secrets.TORII_JWT_SECRET_KEY }},TORII_APP_BASE_URL=${{ secrets.TORII_APP_BASE_URL || 'https://visa.noruvalabs.com' }},TORII_MIGRATE_ON_STARTUP=false,TORII_SEED_ON_STARTUP=false,TORII_REQUIRE_EMAIL_VERIFICATION=true,TORII_SMTP_HOST=smtp.gmail.com,TORII_SMTP_PORT=587,TORII_SMTP_USER=noruvalabs@gmail.com,TORII_SMTP_PASSWORD=${{ secrets.TORII_SMTP_PASSWORD }},TORII_SMTP_FROM_EMAIL=noruvalabs@gmail.com,TORII_SMTP_FROM_NAME=Torii,TORII_SMTP_TLS=true
+
+      - name: Deploy AI Assistant to Cloud Run
+        id: deploy-ai
+        uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          service: torii-ai
+          image: ${{ env.GAR_REGISTRY }}/ai:${{ needs.resolve.outputs.tag }}
+          region: ${{ env.REGION }}
+          flags: |
+            --allow-unauthenticated
+            --port=8001
+            --cpu=1
+            --memory=512Mi
+            --min-instances=0
+            --max-instances=10
+            --set-env-vars=TORII_AI_GROQ_API_KEY=${{ secrets.TORII_AI_GROQ_API_KEY }},TORII_AI_GROQ_MODEL=qwen/qwen3.6-27b,TORII_AI_GROQ_EXTRACT_MODEL=openai/gpt-oss-120b,TORII_AI_NVIDIA_API_KEY=${{ secrets.TORII_AI_NVIDIA_API_KEY }},TORII_AI_TAVILY_API_KEY=${{ secrets.TORII_AI_TAVILY_API_KEY }},TORII_AI_API_BASE_URL=${{ steps.deploy-api.outputs.url }}
+
+      - name: Update Core API with AI Service URL
+        run: |
+          gcloud run services update torii-api \
+            --region=${{ env.REGION }} \
+            --update-env-vars=TORII_AI_SERVICE_URL=${{ steps.deploy-ai.outputs.url }}
+
+      - name: Deploy Web Frontend to Cloud Run
+        id: deploy-web
+        uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          service: torii-web
+          image: ${{ env.GAR_REGISTRY }}/web:${{ needs.resolve.outputs.tag }}
+          region: ${{ env.REGION }}
+          flags: |
+            --allow-unauthenticated
+            --port=3000
+            --cpu=1
+            --memory=512Mi
+            --min-instances=0
+            --max-instances=10
+            --set-env-vars=API_PROXY_TARGET=${{ steps.deploy-api.outputs.url }},AI_PROXY_TARGET=${{ steps.deploy-ai.outputs.url }},NEXT_PUBLIC_GOOGLE_CLIENT_ID=${{ secrets.NEXT_PUBLIC_GOOGLE_CLIENT_ID }}
+
+      - name: Report Deployed URLs
+        run: |
+          echo "========================================="
+          echo "Web Frontend: ${{ steps.deploy-web.outputs.url }}"
+          echo "Core API:     ${{ steps.deploy-api.outputs.url }}"
+          echo "AI Service:   ${{ steps.deploy-ai.outputs.url }}"
+          echo "========================================="
