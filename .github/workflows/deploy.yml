@@ -11,8 +11,8 @@ name: Deploy
 # nothing here needs STAGING_/PROD_ prefixes. Configure each under
 # Settings → Environments → {staging, production}.
 on:
-  push:
-    branches: [main, staging]
+  # push:
+  #   branches: [main, staging] # Decommissioned: stack migrated to serverless Cloud Run (see deploy-serverless.yml)
   workflow_dispatch:
     inputs:
       environment:
