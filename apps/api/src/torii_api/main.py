@@ -42,6 +42,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     configure_logging(settings.log_level)
     log = structlog.get_logger()
 
+    # Before anything else, and deliberately outside the lifespan: a wrong database is not a
+    # startup warning, it is a refusal. Raising here means the process exits non-zero instead
+    # of serving requests against the SQLite development default.
+    settings.assert_database_is_permitted()
+
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         log.info(

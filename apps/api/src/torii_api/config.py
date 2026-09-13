@@ -139,9 +139,37 @@ class Settings(BaseSettings):
     # entitlement (US-22.2). Off in unit tests unless explicitly enabled.
     require_packet_entitlement: bool = True
 
+    # --- Deployment guard -----------------------------------------------------
+    # `database_url` defaults to SQLite so the API runs with zero infrastructure locally.
+    # That default is a liability anywhere real: if the environment goes missing, the service
+    # does not fail — it quietly starts on an empty SQLite file and stops reading Postgres,
+    # which looks like "all the data disappeared" and, worse, accepts writes that land
+    # nowhere anyone is looking. This exact scenario was one malformed deploy secret away on
+    # 2026-09-12 (see infra/scripts/deploy.sh).
+    #
+    # Set TORII_REQUIRE_POSTGRES=true everywhere the database is real. It is declared in the
+    # compose `environment:` block rather than the env file precisely so that it survives an
+    # empty or missing .env — the failure it guards against.
+    require_postgres: bool = False
+
     @property
     def is_sqlite(self) -> bool:
         return self.database_url.startswith("sqlite")
+
+    def assert_database_is_permitted(self) -> None:
+        """Refuse to run on SQLite when the deployment demands Postgres.
+
+        Called at process start by both the API and the worker, so a misconfigured container
+        exits non-zero and is caught by the healthcheck and the deploy smoke test, rather
+        than coming up healthy against the wrong database.
+        """
+        if self.require_postgres and self.is_sqlite:
+            raise RuntimeError(
+                "TORII_REQUIRE_POSTGRES is set but TORII_DATABASE_URL is "
+                f"{self.database_url.split('://', 1)[0]!r} (SQLite). Refusing to start on the "
+                "zero-config development default. This almost always means the environment "
+                "file was empty or not loaded — check /opt/torii/compose/.env."
+            )
 
 
 @lru_cache
