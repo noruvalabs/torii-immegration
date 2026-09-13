@@ -6,6 +6,7 @@
 infra
 apps/web
 apps/ai
+!apps/ai/src/torii_ai
 docs/decisions
 docs/plan
 docs/specs

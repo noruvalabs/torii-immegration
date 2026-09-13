@@ -1,7 +1,8 @@
 name: Deploy Serverless (Cloud Run)
 
 on:
-  # Manual trigger only (does not auto-run on git push)
+  push:
+    branches: [main, staging]
   workflow_dispatch:
     inputs:
       environment:
