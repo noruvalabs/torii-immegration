@@ -216,6 +216,16 @@ jobs:
           fi
           chmod 600 ~/.ssh/known_hosts
 
+      - name: Reclaim host disk space
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/torii_deploy -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" \
+            "sudo journalctl --vacuum-size=50M >/dev/null 2>&1 || true; \
+             sudo apt-get clean >/dev/null 2>&1 || true; \
+             docker system prune -af >/dev/null 2>&1 || true; \
+             echo '==> Host disk status:'; \
+             df -h /"
+
       - name: Upload the deploy assets
         run: |
           set -euo pipefail

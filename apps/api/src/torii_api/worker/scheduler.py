@@ -553,6 +553,10 @@ async def monitor_official_sources(ctx: dict[str, Any]) -> None:
 async def startup(ctx: dict[str, Any]) -> None:
     settings = get_settings()
     configure_logging(settings.log_level)
+    # Same refusal as the API's (see config.assert_database_is_permitted). The worker matters
+    # as much: it drains the outbox and writes reminders, so a worker silently pointed at an
+    # empty SQLite file loses background work with no error anywhere.
+    settings.assert_database_is_permitted()
     ctx["engine"] = create_engine(settings.database_url)
     ctx["session_factory"] = create_session_factory(ctx["engine"])
     log.info(
