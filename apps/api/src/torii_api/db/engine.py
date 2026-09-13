@@ -7,6 +7,8 @@ the worker, or Alembic — needs to know which database is in play.
 
 from __future__ import annotations
 
+import os
+
 from sqlalchemy import event
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
@@ -14,6 +16,13 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
     create_async_engine,
 )
+
+# Postgres pool defaults, sized for the 1 GB deployment host. Override per-process via the
+# environment if this ever runs somewhere with room to spare.
+DEFAULT_POOL_SIZE = int(os.getenv("TORII_DB_POOL_SIZE", "10"))
+DEFAULT_MAX_OVERFLOW = int(os.getenv("TORII_DB_MAX_OVERFLOW", "5"))
+DEFAULT_POOL_TIMEOUT_SECONDS = float(os.getenv("TORII_DB_POOL_TIMEOUT", "30"))
+DEFAULT_POOL_RECYCLE_SECONDS = int(os.getenv("TORII_DB_POOL_RECYCLE", "1800"))
 
 
 def to_async_url(database_url: str) -> str:
@@ -47,7 +56,23 @@ def create_engine(database_url: str) -> AsyncEngine:
             cursor.close()
 
         return engine
-    return create_async_engine(url, pool_pre_ping=True)
+    # Bounded pool. The deployed Postgres runs with max_connections=40 (see
+    # infra/compose/docker-compose.yml) because each idle backend costs several MB of RSS on
+    # a small host, so the pools have to be sized to fit rather than left at SQLAlchemy's
+    # default 5+10 per process — which, across the api and the worker, can outgrow the server
+    # and turn a traffic spike into "FATAL: sorry, too many clients already".
+    #
+    # 10+5 x {api, worker} = 30 worst case, leaving headroom for migrations, psql, and the
+    # superuser reserve. `pool_recycle` keeps connections under any idle timeout upstream.
+    return create_async_engine(
+        url,
+        pool_pre_ping=True,
+        pool_size=DEFAULT_POOL_SIZE,
+        max_overflow=DEFAULT_MAX_OVERFLOW,
+        # Fail the request rather than pile up waiters behind an exhausted pool.
+        pool_timeout=DEFAULT_POOL_TIMEOUT_SECONDS,
+        pool_recycle=DEFAULT_POOL_RECYCLE_SECONDS,
+    )
 
 
 def create_session_factory(engine: AsyncEngine) -> async_sessionmaker[AsyncSession]:

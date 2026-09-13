@@ -21,8 +21,9 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 ENV PATH="/app/.venv/bin:$PATH"
 EXPOSE 8001
 
-# Liveness for compose/uptime probes.
-HEALTHCHECK --interval=15s --timeout=15s --start-period=45s --retries=5 \
-    CMD python -c "import httpx,sys; sys.exit(0 if httpx.get('http://localhost:8001/health').status_code==200 else 1)"
+# Liveness for compose/uptime probes. stdlib urllib rather than httpx, at half the old
+# frequency — see the note in apps/api/Dockerfile for the measurements behind this.
+HEALTHCHECK --interval=30s --timeout=10s --start-period=45s --retries=5 \
+    CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8001/health', timeout=5).status==200 else 1)"
 
 CMD ["uvicorn", "torii_ai.main:app", "--host", "0.0.0.0", "--port", "8001"]

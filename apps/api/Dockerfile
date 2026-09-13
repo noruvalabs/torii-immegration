@@ -34,7 +34,14 @@ ENV PATH="/app/.venv/bin:$PATH"
 EXPOSE 8000
 
 # Liveness for compose/uptime probes.
-HEALTHCHECK --interval=15s --timeout=15s --start-period=60s --retries=5 \
-    CMD python -c "import httpx,sys; sys.exit(0 if httpx.get('http://localhost:8000/health').status_code==200 else 1)"
+#
+# stdlib urllib, not httpx, and every 30s rather than 15s. Measured in this image on the
+# deployment host: `import httpx` + one GET costs ~3.5s, urllib + the same GET ~1.2s (bare
+# interpreter startup is ~0.5s of that). At the old 15s interval the api's own liveness probe
+# was burning ~23% of a CPU in a continuous loop — on a host whose sustained baseline is a
+# quarter of one core, and with the ai service paying the identical tax. This is ~6x cheaper
+# and tests exactly the same thing.
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=5 \
+    CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health', timeout=5).status==200 else 1)"
 
 CMD ["uvicorn", "torii_api.main:app", "--host", "0.0.0.0", "--port", "8000"]

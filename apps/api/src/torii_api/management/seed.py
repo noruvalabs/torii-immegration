@@ -456,7 +456,17 @@ async def seed(
     packs = load_all_packs()
     pack_jurisdictions = list_jurisdiction_metas()
 
-    if engine is not None:
+    # SQLite only, and deliberately so. `create_all` builds tables straight from the models,
+    # which is exactly what the zero-setup local path wants (no migration step to run first)
+    # and exactly what a real database must never have: it bypasses Alembic, so a table the
+    # models know about but no migration creates would be conjured into existence here with
+    # no alembic_version row to say it happened. The schema then differs from a
+    # freshly-migrated one, and the migration that eventually adds that table fails on this
+    # database while passing everywhere else.
+    #
+    # On Postgres, Alembic is the only thing allowed to change the schema — the API already
+    # runs it at startup via `migrate_on_startup`, before this function is ever called.
+    if engine is not None and settings.is_sqlite:
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
 

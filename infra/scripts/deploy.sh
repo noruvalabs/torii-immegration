@@ -42,15 +42,67 @@ compose() {
   docker compose --project-directory "$COMPOSE_DIR" -f "$COMPOSE_FILE" "$@"
 }
 
+cleanup_disk() {
+  log "Ensuring host disk space before rollout"
+  sudo journalctl --vacuum-size=50M >/dev/null 2>&1 || true
+  sudo apt-get clean >/dev/null 2>&1 || true
+  docker system prune -af >/dev/null 2>&1 || true
+}
+
+# Decode to a scratch file, prove it is sane, and only then swap it into place.
+#
+# The previous version redirected straight into $ENV_FILE. Redirection truncates before the
+# command on the left runs, so a malformed TORII_ENV_FILE_B64 left a ZERO-BYTE .env and then
+# exited — and because `trap rollback ERR` is not armed until after this function, the deploy
+# died quietly with no rollback and no alert. The running containers kept serving (they hold
+# their environment from when they started), so nothing looked wrong until the next
+# `docker compose up`, which would have recreated them with no configuration at all: no
+# TORII_DATABASE_URL (the api falls back to its `sqlite:///./torii.db` default and silently
+# stops reading Postgres), no TORII_JWT_SECRET_KEY (falls back to the dev placeholder), no
+# provider keys. This happened on the staging host on 2026-09-12.
+#
+# `require_env` cannot catch it: the secret was present, just not decodable.
 write_env_file() {
   log "Writing $ENV_FILE"
   umask 077
-  printf '%s' "$TORII_ENV_FILE_B64" | base64 -d >"$ENV_FILE"
-  chmod 600 "$ENV_FILE"
+  local staged="$ENV_FILE.staged.$$"
+  # shellcheck disable=SC2064  # $staged is intentionally expanded now, not at trap time.
+  trap "rm -f '$staged'" RETURN
+
+  if ! printf '%s' "$TORII_ENV_FILE_B64" | base64 -d >"$staged" 2>/dev/null; then
+    echo "TORII_ENV_FILE_B64 is not valid base64 — refusing to touch $ENV_FILE." >&2
+    echo "Re-generate it with: base64 -w0 < your.env" >&2
+    exit 1
+  fi
+
+  if [[ ! -s "$staged" ]]; then
+    echo "TORII_ENV_FILE_B64 decoded to an empty file — refusing to touch $ENV_FILE." >&2
+    exit 1
+  fi
+
+  # A decodable but wrong payload is just as fatal as an undecodable one, and far harder to
+  # spot after the fact. These are the keys whose absence silently changes behaviour rather
+  # than producing an error.
+  local key missing=()
+  for key in TORII_DATABASE_URL TORII_JWT_SECRET_KEY POSTGRES_USER POSTGRES_PASSWORD POSTGRES_DB; do
+    grep -qE "^${key}=." "$staged" || missing+=("$key")
+  done
+  if [[ ${#missing[@]} -gt 0 ]]; then
+    echo "Decoded env file is missing required keys: ${missing[*]}" >&2
+    echo "Refusing to deploy with a partial environment." >&2
+    exit 1
+  fi
+
   # IMAGE_OWNER/TAG are exported above, which wins over anything stale in the file — but the
   # file is also what a human sees when they run `docker compose ps` by hand later.
-  sed -i -e '/^IMAGE_OWNER=/d' -e '/^TAG=/d' -e '/^DEPLOY_SSH_/d' "$ENV_FILE"
-  printf 'IMAGE_OWNER=%s\nTAG=%s\n' "$IMAGE_OWNER" "$TAG" >>"$ENV_FILE"
+  sed -i -e '/^IMAGE_OWNER=/d' -e '/^TAG=/d' -e '/^DEPLOY_SSH_/d' "$staged"
+  printf 'IMAGE_OWNER=%s\nTAG=%s\n' "$IMAGE_OWNER" "$TAG" >>"$staged"
+
+  # Atomic swap: $ENV_FILE is either the old content or the fully-validated new content, and
+  # never the empty string in between.
+  chmod 600 "$staged"
+  mv -f "$staged" "$ENV_FILE"
+  echo "Wrote $(grep -cE '^[A-Za-z_][A-Za-z0-9_]*=' "$ENV_FILE") keys to $ENV_FILE."
 }
 
 registry_login() {
@@ -96,6 +148,18 @@ smoke_test() {
   return 1
 }
 
+# nginx caches prerendered HTML and RSC payloads (see infra/nginx/conf.d/torii.conf), and it
+# honours Next.js's year-long `s-maxage` on them. That is only safe because a release is
+# precisely when those bodies stop being current, so the new release must start with an empty
+# HTML zone. The `_static` zone is deliberately left alone: its keys are content-hashed build
+# output, so a new build cannot collide with an old entry, and keeping it warm across deploys
+# is the whole point.
+purge_html_cache() {
+  log "Purging the nginx HTML cache"
+  compose exec -T nginx sh -c 'rm -rf /var/cache/nginx/torii_html/*' >/dev/null 2>&1 || true
+  compose exec -T nginx nginx -s reload >/dev/null 2>&1 || true
+}
+
 rollback() {
   # Disarm the trap so a failing rollback can't recurse.
   trap - ERR
@@ -110,6 +174,9 @@ rollback() {
   printf 'TAG=%s\n' "$TAG" >>"$ENV_FILE"
   compose pull --quiet
   compose up -d --wait --wait-timeout 300 --no-build --remove-orphans
+  # A rollback swaps the served content just as a roll-forward does; the HTML zone is stale
+  # either way.
+  purge_html_cache
   printf '%s\n' "$TAG" >"$CURRENT_TAG_FILE"
   echo "Rolled back to $PREVIOUS_TAG." >&2
   exit 1
@@ -122,6 +189,8 @@ main() {
 
   mkdir -p "$COMPOSE_DIR" "$STATE_DIR"
   chmod 700 "$APP_ROOT"
+
+  cleanup_disk
 
   if [[ ! -f "$COMPOSE_FILE" ]]; then
     echo "Missing $COMPOSE_FILE — the workflow uploads it before running this script." >&2
@@ -146,11 +215,11 @@ main() {
   printf '%s\n' "$TAG" >"$KNOWN_GOOD_TAG_FILE"
   trap - ERR
 
-  # Keep the previous release's images so a rollback is a local retag, not a re-pull; only
-  # dangling layers and stopped containers go.
-  log "Pruning dangling images"
-  docker container prune -f >/dev/null 2>&1 || true
-  docker image prune -f >/dev/null 2>&1 || true
+  purge_html_cache
+
+  # Immediately purge unused images and containers from the previous release
+  log "Purging unused images and containers from previous release"
+  docker system prune -af >/dev/null 2>&1 || true
 
   log "Deployed $TAG"
   compose ps

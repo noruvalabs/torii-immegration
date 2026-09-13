@@ -76,6 +76,76 @@ Then add the deploy key to `/home/deploy/.ssh/authorized_keys`, and terminate TL
 the published nginx port (`NGINX_HTTP_PORT`, default `8080`) with caddy, certbot, or a load
 balancer. The compose stack deliberately does not own certificates.
 
+## Host sizing
+
+The staging host is a GCE **e2-micro**: 964 MB of RAM and — the number that actually bites — a
+**0.25 vCPU sustained baseline** that only bursts to 2. Several values in
+`compose/docker-compose.yml` are tuned to that box specifically. **Read this before resizing
+the VM**, or the stack will keep behaving as if it still has 1 GB.
+
+Measured on 2026-09-12, this host saturates at roughly **8–10 concurrent requests**. That is
+not 8–10 users: with normal think-time, 50 people using the app generate about 3–8 concurrent
+requests, and most of those are now served from the nginx cache without waking Node.
+
+### What does NOT change with host size
+
+These are correctness fixes rather than tuning, and they get *more* valuable under load, not
+less. Leave them alone:
+
+- The healthcheck probes. `import httpx` + one GET cost **3.5 s** per probe in the api image;
+  at the old 15 s interval the api and ai liveness checks together burned ~46% of a core in a
+  continuous loop. They use stdlib `urllib` at 30 s instead. The web probe uses busybox `wget`
+  against `127.0.0.1` rather than booting a second Node runtime (~2 s, and it overran its own
+  5 s timeout under load, flapping the container to `unhealthy` while it served traffic fine).
+- nginx static-asset caching, HTML/RSC caching, gzip on API responses, upstream keepalive.
+  Next.js already compresses its own output, so the gzip win is confined to the FastAPI
+  responses — `openapi.json` drops from 149 KB to 19 KB.
+- Log rotation, and the HTML cache purge in `deploy.sh`.
+
+### What DOES change with host size
+
+| Setting | e2-micro (1 GB, now) | e2-small (2 GB) | e2-medium (4 GB) |
+| --- | --- | --- | --- |
+| `shared_buffers` | 96MB | 256MB | 512MB |
+| `effective_cache_size` | 256MB | 768MB | 2GB |
+| `max_connections` | 40 | 60 | 100 |
+| `work_mem` | 4MB | 8MB | 16MB |
+| `max_parallel_workers_per_gather` | 0 | 0 | 2 |
+| postgres `mem_limit` | 256m | 512m | 1g |
+| api / ai / web `mem_limit` | 224m / 256m / 224m | 384m each | 768m each |
+| `NODE_OPTIONS` heap (`WEB_NODE_OPTIONS`) | 160 | 320 | 640 |
+| uvicorn `--workers` (api, ai) | 1 | 1 | 2 |
+
+Also re-enable the Google Cloud Ops agents once there is RAM to spare —
+`scripts/tune-host.sh --trim-agents` stops them to reclaim ~115 MB, which is 13% of an
+e2-micro but noise on anything larger. Reverse with
+`systemctl enable --now google-cloud-ops-agent`.
+
+**`--workers` is the only one of these that raises the user ceiling.** The rest stop the box
+falling over; workers add throughput. Set it to the sustained vCPU count, and raise
+`max_connections` alongside it — each worker carries its own pool of 10 + 5 (see
+`apps/api/src/torii_api/db/engine.py`, overridable via `TORII_DB_POOL_SIZE`).
+
+### One assumption the HTML cache depends on
+
+nginx caches prerendered HTML and RSC payloads. That is safe **only** because the web app
+authenticates from `localStorage` with no Next.js middleware, so the server cannot tell who is
+asking and returns a byte-identical shell to everyone; per-user data arrives afterwards over
+`/backend/`, which is never cached.
+
+**If the app ever gains cookie-based auth, a `middleware.ts`, or server-rendered per-user
+content, the `torii_html` zone in `nginx/conf.d/torii.conf` must be removed** — otherwise one
+user's page can be served to another. Every other change here is a performance trade; this one
+is a correctness boundary.
+
+### When vertical scaling runs out
+
+Resizing carries this shape to roughly 150–300 active users. Past that the binding constraint
+is Postgres sharing a host with everything else, and the fix is architectural rather than a
+tuning value: move the database to Cloud SQL, then run multiple api containers behind nginx.
+The compose file does not need rewriting for that — `TORII_DATABASE_URL` simply points
+elsewhere and the `data` network loses its postgres service.
+
 ## Repository secrets
 
 Set these under **Settings → Secrets and variables → Actions**. The `deploy` job also targets
@@ -96,6 +166,16 @@ approval gate before anything reaches the host.
 `DEPLOY_ENV_FILE_B64` holds every runtime secret (database password, JWT key, SMTP, LLM and
 search provider keys). Nothing in it is ever decoded on the runner — it is passed through the
 SSH session and written to `/opt/torii/compose/.env` at `0600`.
+
+Generate it with **`base64 -w0`** — unwrapped, single line. `deploy.sh` decodes it to a scratch
+file, checks that it is valid base64, non-empty, and actually contains `TORII_DATABASE_URL`,
+`TORII_JWT_SECRET_KEY` and the `POSTGRES_*` keys, and only then swaps it into place. A bad
+secret now fails the deploy loudly and leaves the existing `.env` untouched. Before that guard
+existed, a malformed value truncated `.env` to zero bytes and exited before the rollback trap
+was armed: the running containers carried on serving from the environment they already held,
+so nothing looked broken until the next `docker compose up` recreated them with no
+configuration — at which point the api would have fallen back to its `sqlite:///./torii.db`
+default and stopped reading Postgres entirely.
 
 ## Run the whole stack locally
 

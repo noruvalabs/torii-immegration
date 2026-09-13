@@ -7,8 +7,30 @@
 # `data` network; the api/ai/web sit on `edge` behind nginx. Images are built in CI and
 # pulled by tag; the `build:` sections exist only for local iteration (`--build`), never for
 # the production host, which only ever pulls.
+#
+# SIZING — this stack is deployed on a 1 GB shared-core host (GCE e2-micro). Two consequences
+# run through every service below:
+#
+#   1. `mem_limit` on every service. These are runaway *caps*, not reservations: measured
+#      steady-state RSS is ~30-40 MB per service, so the caps sum well past physical RAM on
+#      purpose. Their job is to make a leaking container die alone instead of inviting the
+#      kernel OOM killer to pick a victim — and the victim it picks unaided is usually
+#      Postgres, because Postgres has the largest RSS. `oom_score_adj` encodes the order we
+#      actually want things sacrificed in: worker first, Postgres last.
+#   2. Bounded logging. The default json-file driver grows without limit, and this host has
+#      already hit disk exhaustion once (see the deploy script's cleanup_disk).
+#
+# Raising the host to 2 GB (e2-small) or 4 GB (e2-medium) does not invalidate any of this;
+# the caps simply stop being the binding constraint.
 
 name: torii
+
+# Shared log policy — 10 MB x 3 files per service, ~210 MB worst case for the whole stack.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
 
 services:
   # --- PostgreSQL 17 + pgvector (system of record) ----------------------------
@@ -16,6 +38,58 @@ services:
     image: pgvector/pgvector:pg17
     restart: unless-stopped
     env_file: .env
+    # Tuned for a 1 GB host, not for the 8 GB+ box the stock postgresql.conf assumes.
+    # The stock defaults are wrong here in two directions at once: shared_buffers is too
+    # small to hold the working set, while max_connections (100) x work_mem reserves far
+    # more than the host physically has.
+    command:
+      - postgres
+      # ~10% of host RAM. Higher would just fight the page cache for the same pages.
+      - -c
+      - shared_buffers=96MB
+      # 40, not 100. The api and worker pools below cannot reach 40 between them, and each
+      # idle backend still costs ~5-8 MB of RSS.
+      - -c
+      - max_connections=40
+      # Per sort/hash node, not per connection — 40 conns x a few nodes each has to fit.
+      - -c
+      - work_mem=4MB
+      - -c
+      - maintenance_work_mem=32MB
+      # What the planner believes the OS page cache holds. Not an allocation.
+      - -c
+      - effective_cache_size=256MB
+      - -c
+      - wal_buffers=4MB
+      # Bound WAL on disk — this host has ~2 GB free and has run out once already.
+      - -c
+      - max_wal_size=512MB
+      - -c
+      - min_wal_size=80MB
+      # Spread checkpoint writes out; a burst of dirty-page flushes on a small persistent
+      # disk is exactly what drove the 49% iowait we measured.
+      - -c
+      - checkpoint_completion_target=0.9
+      # SSD-backed (pd-balanced), so a random page costs nearly what a sequential one does.
+      - -c
+      - random_page_cost=1.1
+      - -c
+      - effective_io_concurrency=200
+      # JIT compilation costs more CPU than it saves on queries this size, and CPU is the
+      # scarcest resource on a 0.25 vCPU baseline. Especially true for pgvector scans.
+      - -c
+      - jit=off
+      # Parallel query is counterproductive below ~2 dedicated cores: the workers contend
+      # for the same fraction of a CPU the leader already had.
+      - -c
+      - max_parallel_workers_per_gather=0
+      - -c
+      - max_parallel_workers=2
+      - -c
+      - max_worker_processes=4
+      # Log anything slower than a second so there is evidence next time it drags.
+      - -c
+      - log_min_duration_statement=1000
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -24,6 +98,12 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
+    mem_limit: 256m
+    memswap_limit: 512m
+    # Most negative in the stack: the system of record is the last thing to sacrifice.
+    oom_score_adj: -900
+    shm_size: 64m
+    logging: *default-logging
     networks:
       - data
 
@@ -31,7 +111,21 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
-    command: ["redis-server", "--save", "60", "1", "--loglevel", "warning"]
+    command:
+      - redis-server
+      # Relaxed from `--save 60 1`: an RDB snapshot forks the process, and fork on a
+      # memory-tight host is the one moment Redis can briefly double its RSS.
+      - --save
+      - "300"
+      - "10"
+      - --loglevel
+      - warning
+      - --maxmemory
+      - 48mb
+      # NOT an LRU policy. This Redis is arq's job queue — evicting a key here silently
+      # drops queued background work rather than freeing harmless cache.
+      - --maxmemory-policy
+      - noeviction
     volumes:
       - redisdata:/data
     healthcheck:
@@ -39,6 +133,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    mem_limit: 64m
+    logging: *default-logging
     networks:
       - data
 
@@ -51,18 +147,50 @@ services:
       dockerfile: apps/api/Dockerfile
     restart: unless-stopped
     env_file: .env
+    environment:
+      # Deliberately HERE and not in .env. This is the guard against the api silently
+      # starting on its `sqlite:///./torii.db` development default when the environment file
+      # is empty or unreadable — so it must come from the one source that an empty .env
+      # cannot take away. With this set the container exits non-zero instead, the healthcheck
+      # never passes, and `compose up --wait` fails the deploy loudly.
+      TORII_REQUIRE_POSTGRES: "true"
+    # Overrides the image CMD to add two small-host flags. One worker is correct here:
+    # a second uvicorn worker would double the Python heap and the DB pool to contend for
+    # the same quarter-core.
+    command:
+      - uvicorn
+      - torii_api.main:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+      - --workers
+      - "1"
+      # nginx already writes an access log for every one of these requests; a second copy
+      # costs CPU to format and disk to store.
+      - --no-access-log
+      # Must exceed nginx's upstream keepalive_timeout (60s) or nginx will reuse a
+      # connection uvicorn has already closed.
+      - --timeout-keep-alive
+      - "75"
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
     # Image bakes a HEALTHCHECK (httpx /health). No host `ports:` — nginx reaches it on `edge`.
+    # Mirrors the image's own HEALTHCHECK — stdlib urllib at 30s. The httpx-based probe this
+    # replaces cost ~3.5s of CPU every 15s (~23% of a core, continuously) for a liveness
+    # check. See apps/api/Dockerfile for the measurements.
     healthcheck:
-      test: ["CMD", "python", "-c", "import httpx,sys; sys.exit(0 if httpx.get('http://localhost:8000/health').status_code==200 else 1)"]
-      interval: 15s
-      timeout: 15s
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health', timeout=5).status==200 else 1)"]
+      interval: 30s
+      timeout: 10s
       start_period: 60s
       retries: 5
+    mem_limit: 224m
+    oom_score_adj: -400
+    logging: *default-logging
     networks:
       - edge
       - data
@@ -78,17 +206,28 @@ services:
     command: ["arq", "torii_api.worker.scheduler.WorkerSettings"]
     restart: unless-stopped
     env_file: .env
+    environment:
+      # Same guard as the api's, for the same reason — see the note there. A worker pointed
+      # at an empty SQLite file would drain the outbox into nowhere, silently.
+      TORII_REQUIRE_POSTGRES: "true"
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+    # Cheap as probes go (~0.5s of interpreter startup, no imports beyond os), but it still
+    # runs forever, so 30s rather than 15s for the same reason as the api's.
     healthcheck:
       test: ["CMD", "python", "-c", "import os; os.kill(1, 0)"]
-      interval: 15s
+      interval: 30s
       timeout: 5s
       start_period: 20s
       retries: 3
+    mem_limit: 192m
+    # Least negative in the stack: background work is the one thing that can be killed and
+    # retried without a user noticing, so it is the kernel's preferred victim.
+    oom_score_adj: 200
+    logging: *default-logging
     networks:
       # `edge` too, not just `data`: the cron jobs (scraper, stage research) call the ai
       # service over HTTP, and it only sits on `edge`.
@@ -106,15 +245,34 @@ services:
     env_file: .env
     environment:
       TORII_AI_API_BASE_URL: ${TORII_AI_API_BASE_URL:-http://api:8000}
+    # Same rationale as the api. This service is mostly awaiting remote LLM calls, so its
+    # concurrency comes from the event loop, not from extra worker processes.
+    command:
+      - uvicorn
+      - torii_ai.main:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8001"
+      - --workers
+      - "1"
+      - --no-access-log
+      - --timeout-keep-alive
+      - "75"
     depends_on:
       api:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "python", "-c", "import httpx,sys; sys.exit(0 if httpx.get('http://localhost:8001/health').status_code==200 else 1)"]
-      interval: 15s
-      timeout: 15s
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8001/health', timeout=5).status==200 else 1)"]
+      interval: 30s
+      timeout: 10s
       start_period: 45s
       retries: 5
+    # Higher than the api's: OCR (pymupdf) renders page bitmaps, which is the one genuinely
+    # memory-hungry thing this stack does.
+    mem_limit: 256m
+    oom_score_adj: 100
+    logging: *default-logging
     networks:
       - edge
 
@@ -133,12 +291,29 @@ services:
       API_INTERNAL_BASE_URL: ${API_INTERNAL_BASE_URL:-http://api:8000}
       NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${NEXT_PUBLIC_GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-${TORII_GOOGLE_CLIENT_ID:-}}
+      # V8 needs to be told the budget; left alone it sizes its heap against the host's
+      # total RAM, ignores `mem_limit`, and only discovers the cap by being OOM-killed.
+      NODE_OPTIONS: ${WEB_NODE_OPTIONS:---max-old-space-size=160}
     depends_on:
       api:
         condition: service_healthy
       ai:
         condition: service_healthy
-    # Image bakes a HEALTHCHECK (fetch /api/health). No host `ports:`.
+    # Overrides the baked-in HEALTHCHECK so the fix lands on the next `compose up` rather
+    # than waiting for an image rebuild. The image's version is the same probe (see
+    # apps/web/Dockerfile): busybox wget against 127.0.0.1, because booting a second Node
+    # runtime to check the first cost ~2s and flapped this container to `unhealthy` while it
+    # was serving traffic normally — and `nginx.depends_on.web.condition: service_healthy`
+    # means a flapping probe here can fail an otherwise good deploy.
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3000/api/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      start_period: 40s
+      retries: 3
+    mem_limit: 224m
+    oom_score_adj: -200
+    logging: *default-logging
     networks:
       - edge
 
@@ -157,18 +332,26 @@ services:
       - "${NGINX_HTTP_PORT:-8080}:80"
     volumes:
       - ../nginx/conf.d/torii.conf:/etc/nginx/conf.d/default.conf:ro
+      # Named rather than in the container layer: the proxy cache is up to 100 MB of churn
+      # and the container's writable layer is the last place that should absorb it.
+      - nginxcache:/var/cache/nginx
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/healthz || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 10s
+    mem_limit: 64m
+    # Second only to Postgres: if nginx dies the whole site is down, cache and all.
+    oom_score_adj: -800
+    logging: *default-logging
     networks:
       - edge
 
 volumes:
   pgdata:
   redisdata:
+  nginxcache:
 
 networks:
   # Public-facing hop: nginx ⇄ web/api/ai. nginx is NOT on `data`, so it cannot reach Postgres.
