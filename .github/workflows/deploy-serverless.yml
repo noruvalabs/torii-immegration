@@ -192,21 +192,10 @@ jobs:
             AI_PROXY_TARGET=${{ steps.deploy-api.outputs.url }}
             NEXT_PUBLIC_GOOGLE_CLIENT_ID=${{ secrets.NEXT_PUBLIC_GOOGLE_CLIENT_ID }}
 
-      - name: Configure Custom Domain Mapping (visa.noruvalabs.com)
-        continue-on-error: true
-        run: |
-          gcloud components install beta --quiet
-          echo "Creating custom domain mapping for visa.noruvalabs.com..."
-          gcloud beta run domain-mappings create --service torii-web --domain visa.noruvalabs.com --region ${{ env.REGION }} --quiet || true
-          echo "========================================="
-          echo "Domain Mapping Status & Required DNS Records:"
-          gcloud beta run domain-mappings describe --domain visa.noruvalabs.com --region ${{ env.REGION }} || true
-          echo "========================================="
-
       - name: Report Deployed URLs
         run: |
           echo "========================================="
-          echo "Custom Domain: https://visa.noruvalabs.com"
           echo "Web Frontend:  ${{ steps.deploy-web.outputs.url }}"
           echo "Core API & AI: ${{ steps.deploy-api.outputs.url }}"
+          echo "Custom Domain: https://visa.noruvalabs.com (once mapped)"
           echo "========================================="
