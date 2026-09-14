@@ -195,10 +195,13 @@ jobs:
       - name: Configure Custom Domain Mapping (visa.noruvalabs.com)
         continue-on-error: true
         run: |
-          echo "Checking/creating custom domain mapping for visa.noruvalabs.com..."
+          gcloud components install beta --quiet
+          echo "Creating custom domain mapping for visa.noruvalabs.com..."
           gcloud beta run domain-mappings create --service torii-web --domain visa.noruvalabs.com --region ${{ env.REGION }} --quiet || true
-          echo "Domain Mapping Details:"
+          echo "========================================="
+          echo "Domain Mapping Status & Required DNS Records:"
           gcloud beta run domain-mappings describe --domain visa.noruvalabs.com --region ${{ env.REGION }} || true
+          echo "========================================="
 
       - name: Report Deployed URLs
         run: |
