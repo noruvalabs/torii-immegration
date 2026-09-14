@@ -116,7 +116,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                         break
                     except Exception as exc:  # noqa: BLE001
                         log.warning("outbox.in_process_drain_error", error=str(exc))
-                    await asyncio.sleep(2)
+                    await asyncio.sleep(settings.outbox_poll_interval_seconds)
 
             drainer_task = asyncio.create_task(_in_process_outbox_drainer())
             log.info("api.in_process_outbox_drainer_started")
