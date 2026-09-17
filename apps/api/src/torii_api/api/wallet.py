@@ -176,6 +176,29 @@ async def upload_wallet_document(
     )
     save_document_content(document.storage_key, content)
 
+    # Auto-apply extracted metadata to user profile and active cases
+    if extracted_fields:
+        from sqlalchemy import select
+
+        from torii_api.api.case_workflow import _apply_extracted_fields_to_case_and_user
+        from torii_api.db.models import Case
+
+        # Always update User global profile attributes
+        _apply_extracted_fields_to_case_and_user(None, current_user, extracted_fields)
+
+        # Update all active cases for current_user
+        cases_res = await session.execute(
+            select(Case).where(
+                Case.user_id == current_user.id,
+                Case.status.not_in(["approved", "rejected", "withdrawn"]),
+            )
+        )
+        active_cases = cases_res.scalars().all()
+        for c in active_cases:
+            _apply_extracted_fields_to_case_and_user(c, current_user, extracted_fields)
+
+        await session.flush()
+
     return WalletUploadOut(
         id=document.id,
         doc_type=document.doc_type,
@@ -897,9 +920,82 @@ async def seed_dummy_documents_endpoint(
             }
         )
 
+    # Auto-apply seeded documents metadata to user profile and active cases
+    from sqlalchemy import select
+
+    from torii_api.api.case_workflow import _apply_extracted_fields_to_case_and_user
+    from torii_api.db.models import Case
+
+    cases_res = await session.execute(
+        select(Case).where(
+            Case.user_id == current_user.id,
+            Case.status.not_in(["approved", "rejected", "withdrawn"]),
+        )
+    )
+    active_cases = cases_res.scalars().all()
+
+    for doc_item in await get_user_wallet(db=session, user_id=current_user.id):
+        if doc_item.extracted_fields:
+            _apply_extracted_fields_to_case_and_user(None, current_user, doc_item.extracted_fields)
+            for c in active_cases:
+                _apply_extracted_fields_to_case_and_user(c, current_user, doc_item.extracted_fields)
+
     await session.flush()
     return {
         "success": True,
         "message": f"Generated and processed {len(seeded_docs)} sample dummy documents with PyMuPDF",
         "documents": seeded_docs,
+    }
+
+
+@router.post("/sync-profile", response_model=dict[str, Any])
+async def sync_wallet_to_profile(
+    current_user: CurrentUserDep,
+    session: SessionDep,
+) -> dict[str, Any]:
+    """Sync extracted fields from all active wallet documents into user profile and active cases."""
+    from sqlalchemy import select
+
+    from torii_api.api.case_workflow import _apply_extracted_fields_to_case_and_user
+    from torii_api.db.models import Case, DocumentWalletItem
+
+    docs_res = await session.execute(
+        select(DocumentWalletItem).where(
+            DocumentWalletItem.user_id == current_user.id,
+            DocumentWalletItem.status == "active",
+        )
+    )
+    docs = docs_res.scalars().all()
+
+    cases_res = await session.execute(
+        select(Case).where(
+            Case.user_id == current_user.id,
+            Case.status.not_in(["approved", "rejected", "withdrawn"]),
+        )
+    )
+    active_cases = cases_res.scalars().all()
+
+    synced_fields: dict[str, Any] = {}
+    for doc in docs:
+        if doc.extracted_fields:
+            for k, v in doc.extracted_fields.items():
+                synced_fields[k] = v
+            _apply_extracted_fields_to_case_and_user(None, current_user, doc.extracted_fields)
+            for c in active_cases:
+                _apply_extracted_fields_to_case_and_user(c, current_user, doc.extracted_fields)
+
+    await session.flush()
+    return {
+        "success": True,
+        "message": f"Synced metadata from {len(docs)} wallet documents ({len(synced_fields)} unique fields) to profile and {len(active_cases)} active case(s)",
+        "fields_synced": list(synced_fields.keys()),
+        "user_profile": {
+            "full_name": current_user.full_name,
+            "nationality": current_user.nationality,
+            "passport_number": current_user.passport_number,
+            "passport_expiry": current_user.passport_expiry,
+            "date_of_birth": current_user.date_of_birth,
+            "current_country": current_user.current_country,
+            "profile_complete": current_user.profile_complete,
+        },
     }

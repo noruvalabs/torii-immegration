@@ -14,11 +14,14 @@ import {
   AlertCircle,
   AlertTriangle,
   ShieldCheck,
+  Sparkles,
+  RefreshCw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ALL_COUNTRIES, matchCountry, searchCountries, type Country } from "@/lib/countries";
+import { getWallet, syncProfileFromWallet, type WalletDocument } from "@/lib/api/wallet";
 import type { IntakeState, IntakeQuestion, User } from "./types";
 import { findQuestionByKey } from "./types";
 
@@ -29,6 +32,9 @@ type IntakeStepProps = {
   onProceedToEligibility?: () => void;
   targetKey?: string | null;
   targetTimestamp?: number;
+  token?: string;
+  caseId?: number;
+  onRefresh?: () => void;
 };
 
 /** Map profile country names to common ISO codes used in intake enums. */
@@ -166,6 +172,234 @@ function getProfileValueForQuestion(key: string, prompt: string, profile: User):
   return null;
 }
 
+export type AutofillMatch = {
+  value: string;
+  source: string;
+};
+
+function getExtractedVal(raw: unknown): string | null {
+  if (raw === null || raw === undefined) return null;
+  if (typeof raw === "object" && "value" in (raw as Record<string, unknown>)) {
+    const v = (raw as Record<string, unknown>).value;
+    if (v !== null && v !== undefined && String(v).trim()) return String(v).trim();
+  }
+  if (typeof raw === "string" && raw.trim()) return raw.trim();
+  if (typeof raw === "number") return String(raw);
+  return null;
+}
+
+function getAutofillValueForQuestion(
+  key: string,
+  prompt: string,
+  profile?: User | null,
+  walletDocs: WalletDocument[] = [],
+): AutofillMatch | null {
+  const normKey = key.toLowerCase().replace(/[\s\-]/g, "_");
+  const normPrompt = prompt.toLowerCase();
+
+  // 1. Check profile first
+  if (profile) {
+    const pVal = getProfileValueForQuestion(normKey, normPrompt, profile);
+    if (pVal) {
+      return { value: pVal, source: "Profile" };
+    }
+  }
+
+  // 2. Search wallet documents extracted fields
+  for (const doc of walletDocs) {
+    if (!doc.extracted_fields || typeof doc.extracted_fields !== "object") continue;
+    const docLabel = doc.name || doc.doc_type.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+    const fields = doc.extracted_fields as Record<string, unknown>;
+
+    for (const [fKey, fRaw] of Object.entries(fields)) {
+      const normFKey = fKey.toLowerCase().replace(/[\s\-]/g, "_");
+      const fVal = getExtractedVal(fRaw);
+      if (!fVal) continue;
+
+      if (normKey === normFKey) {
+        return { value: fVal, source: docLabel };
+      }
+
+      // Passport number
+      if (
+        (normKey.includes("passport") && (normKey.includes("number") || normKey.includes("no") || normKey.includes("num"))) ||
+        normKey === "passport_number" ||
+        (normPrompt.includes("passport number") || normPrompt.includes("passport no"))
+      ) {
+        if (normFKey.includes("passport") && (normFKey.includes("number") || normFKey.includes("no") || normFKey.includes("num"))) {
+          return { value: fVal, source: docLabel };
+        }
+      }
+
+      // Passport expiry
+      if (
+        (normKey.includes("passport") && (normKey.includes("expiry") || normKey.includes("expiration"))) ||
+        (normPrompt.includes("passport") && (normPrompt.includes("expiry") || normPrompt.includes("expiration")))
+      ) {
+        if (normFKey.includes("expiry") || normFKey.includes("expiration")) {
+          return { value: fVal, source: docLabel };
+        }
+      }
+
+      // Residence Card number
+      if (
+        normKey.includes("residence_card") ||
+        normKey.includes("zairyu") ||
+        normPrompt.includes("residence card") ||
+        normPrompt.includes("zairyu")
+      ) {
+        if (normFKey.includes("residence_card") || normFKey === "card_number") {
+          return { value: fVal, source: docLabel };
+        }
+      }
+
+      // Status of Residence / Current visa
+      if (
+        normKey.includes("status_of_residence") ||
+        normKey.includes("current_status") ||
+        normKey.includes("visa_status") ||
+        normPrompt.includes("status of residence") ||
+        normPrompt.includes("current visa")
+      ) {
+        if (normFKey.includes("status_of_residence") || normFKey.includes("residence_status") || normFKey.includes("visa_status")) {
+          return { value: fVal, source: docLabel };
+        }
+      }
+
+      // Japan address
+      if (
+        normKey.includes("japan_address") ||
+        normKey.includes("current_japan_address") ||
+        (normPrompt.includes("address in japan") || normPrompt.includes("current address in japan"))
+      ) {
+        if (normFKey.includes("current_japan_address") || normFKey === "address") {
+          return { value: fVal, source: docLabel };
+        }
+      }
+
+      // Bank name
+      if (
+        normKey.includes("bank_name") ||
+        normKey.includes("financial_institution") ||
+        normPrompt.includes("bank name") ||
+        normPrompt.includes("name of your bank")
+      ) {
+        if (normFKey === "bank_name" || normFKey === "institution") {
+          return { value: fVal, source: docLabel };
+        }
+      }
+
+      // Bank account number
+      if (
+        normKey.includes("account_number") ||
+        normPrompt.includes("bank account number") ||
+        normPrompt.includes("account number")
+      ) {
+        if (normFKey === "account_number") {
+          return { value: fVal, source: docLabel };
+        }
+      }
+
+      // Balance / Funds
+      if (
+        normKey.includes("balance") ||
+        normKey.includes("proof_of_funds") ||
+        normKey.includes("funds_amount") ||
+        normPrompt.includes("bank balance") ||
+        normPrompt.includes("proof of funds") ||
+        normPrompt.includes("available funds")
+      ) {
+        if (normFKey === "balance" || normFKey === "proof_of_funds" || normFKey === "funds") {
+          return { value: fVal, source: docLabel };
+        }
+      }
+
+      // Employer / Company name
+      if (
+        normKey.includes("employer") ||
+        normKey.includes("company_name") ||
+        normKey.includes("sponsor_name") ||
+        normPrompt.includes("employer name") ||
+        normPrompt.includes("company name") ||
+        normPrompt.includes("sponsoring organization")
+      ) {
+        if (normFKey === "employer_name" || normFKey === "company_name" || normFKey === "sponsor_name") {
+          return { value: fVal, source: docLabel };
+        }
+      }
+
+      // Salary / Remuneration
+      if (
+        normKey.includes("salary") ||
+        normKey.includes("remuneration") ||
+        normPrompt.includes("monthly salary") ||
+        normPrompt.includes("remuneration")
+      ) {
+        if (normFKey === "monthly_salary" || normFKey === "salary" || normFKey === "remuneration") {
+          return { value: fVal, source: docLabel };
+        }
+      }
+
+      // Tax Year / Income
+      if (
+        normKey.includes("tax_year") ||
+        normPrompt.includes("tax year") ||
+        normPrompt.includes("assessment year")
+      ) {
+        if (normFKey === "tax_year") {
+          return { value: fVal, source: docLabel };
+        }
+      }
+
+      if (
+        normKey.includes("annual_income") ||
+        normKey.includes("gross_income") ||
+        normPrompt.includes("annual income") ||
+        normPrompt.includes("total income")
+      ) {
+        if (normFKey === "annual_income" || normFKey === "gross_income") {
+          return { value: fVal, source: docLabel };
+        }
+      }
+
+      if (
+        normKey.includes("tax_paid") ||
+        normPrompt.includes("tax paid") ||
+        normPrompt.includes("total tax paid")
+      ) {
+        if (normFKey === "tax_paid" || normFKey === "paid_tax") {
+          return { value: fVal, source: docLabel };
+        }
+      }
+
+      // Position / Job Title
+      if (
+        normKey.includes("position") ||
+        normKey.includes("job_title") ||
+        normPrompt.includes("job title") ||
+        normPrompt.includes("position in company")
+      ) {
+        if (normFKey === "position" || normFKey === "job_title") {
+          return { value: fVal, source: docLabel };
+        }
+      }
+
+      // Departure Date
+      if (
+        normKey.includes("departure_date") ||
+        normPrompt.includes("date of departure") ||
+        normPrompt.includes("arrival date")
+      ) {
+        if (normFKey === "departure_date") {
+          return { value: fVal, source: docLabel };
+        }
+      }
+    }
+  }
+
+  return null;
+}
+
 function SectionSourceBanner({ questions }: { questions: IntakeState["questions"] }) {
   const sources = useMemo(() => {
     const map = new Map<string, { authority: string; title: string; url: string }>();
@@ -232,6 +466,9 @@ export function IntakeStep({
   onProceedToEligibility,
   targetKey,
   targetTimestamp,
+  token,
+  caseId,
+  onRefresh,
 }: IntakeStepProps) {
   const [drafts, setDrafts] = useState<Record<string, unknown>>({});
   const [fieldErrors, setFieldErrors] = useState<Record<string, string | null>>({});
@@ -240,10 +477,21 @@ export function IntakeStep({
   const [openSelectorKey, setOpenSelectorKey] = useState<string | null>(null);
   const [viewAll, setViewAll] = useState<boolean>(false);
   const [highlightedKey, setHighlightedKey] = useState<string | null>(null);
+  const [walletDocs, setWalletDocs] = useState<WalletDocument[]>([]);
+  const [autofilledSources, setAutofilledSources] = useState<Record<string, string>>({});
+  const [syncingWallet, setSyncingWallet] = useState<boolean>(false);
+  const [syncMessage, setSyncMessage] = useState<string | null>(null);
 
   const onAnswerRef = useRef(onAnswer);
   onAnswerRef.current = onAnswer;
   const autoSubmittedRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (!token) return;
+    getWallet(token).then((docs) => {
+      setWalletDocs(docs);
+    }).catch(() => {});
+  }, [token]);
 
   function validateField(q: (typeof state.questions)[number], value: unknown): string | null {
     const isOptional = q.required === false;
@@ -299,19 +547,29 @@ export function IntakeStep({
     return null;
   }
 
+  // Auto-fill unanswered fields from profile and verified document wallet items
   useEffect(() => {
-    if (!profile) return;
     const toAutoFill: Record<string, unknown> = {};
+    const newSources: Record<string, string> = {};
+
     for (const q of state.questions) {
       if (state.answers[q.key] !== undefined || autoSubmittedRef.current.has(q.key)) continue;
-      let val = getProfileValueForQuestion(q.key, q.prompt, profile);
-      if (val && q.type === "enum" && q.options?.length) {
-        val = matchEnumOption(val, q.options);
+      const match = getAutofillValueForQuestion(q.key, q.prompt, profile, walletDocs);
+      if (match) {
+        let val: string | null = match.value;
+        if (q.type === "enum" && q.options?.length) {
+          val = matchEnumOption(val, q.options);
+        }
+        if (val) {
+          toAutoFill[q.key] = val;
+          newSources[q.key] = match.source;
+        }
       }
-      if (val) toAutoFill[q.key] = val;
     }
+
     if (Object.keys(toAutoFill).length > 0) {
       setDrafts((prev) => ({ ...prev, ...toAutoFill }));
+      setAutofilledSources((prev) => ({ ...prev, ...newSources }));
       for (const [key, val] of Object.entries(toAutoFill)) {
         if (val !== undefined) {
           autoSubmittedRef.current.add(key);
@@ -319,7 +577,44 @@ export function IntakeStep({
         }
       }
     }
-  }, [profile, state.questions, state.answers]);
+  }, [profile, walletDocs, state.questions, state.answers]);
+
+  // Identify sources for fields that were already filled from DB intake answers
+  useEffect(() => {
+    if (walletDocs.length === 0 && !profile) return;
+    const traced: Record<string, string> = {};
+    for (const q of state.questions) {
+      if (state.answers[q.key] !== undefined && !autofilledSources[q.key]) {
+        const match = getAutofillValueForQuestion(q.key, q.prompt, profile, walletDocs);
+        if (match && String(state.answers[q.key]).trim().toLowerCase() === match.value.toLowerCase()) {
+          traced[q.key] = match.source;
+        }
+      }
+    }
+    if (Object.keys(traced).length > 0) {
+      setAutofilledSources((prev) => ({ ...prev, ...traced }));
+    }
+  }, [walletDocs, profile, state.questions, state.answers, autofilledSources]);
+
+  async function handleManualSync() {
+    if (!token) return;
+    setSyncingWallet(true);
+    setSyncMessage(null);
+    try {
+      const res = await syncProfileFromWallet(token);
+      const refreshedDocs = await getWallet(token);
+      setWalletDocs(refreshedDocs);
+      if (onRefresh) onRefresh();
+
+      setSyncMessage(res.message || `Synced ${res.fields_synced?.length || 0} fields from verified documents.`);
+      setTimeout(() => setSyncMessage(null), 8000);
+    } catch (err) {
+      setSyncMessage(err instanceof Error ? err.message : "Sync failed");
+      setTimeout(() => setSyncMessage(null), 8000);
+    } finally {
+      setSyncingWallet(false);
+    }
+  }
 
   // Group questions by section if present, or assign defaults
   const sectionsMap = useMemo(() => {
@@ -557,6 +852,12 @@ export function IntakeStep({
               {q.hint && (
                 <span className="text-[10px] font-medium text-primary bg-primary/10 px-1.5 py-0.5 rounded border border-primary/20">
                   On your form
+                </span>
+              )}
+              {autofilledSources[q.key] && (
+                <span className="text-[10px] font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/30 inline-flex items-center gap-1">
+                  <Sparkles className="size-2.5" />
+                  Auto-filled from {autofilledSources[q.key]}
                 </span>
               )}
             </div>
@@ -880,6 +1181,43 @@ export function IntakeStep({
           <div className="h-full bg-primary transition-all duration-300" style={{ width: `${pct}%` }} />
         </div>
       </div>
+
+      {/* Document Autofill Active Banner */}
+      {Object.keys(autofilledSources).length > 0 && (
+        <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-3 text-xs shadow-2xs flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-2">
+            <Sparkles className="size-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+            <div>
+              <span className="font-semibold text-foreground">
+                Document Auto-fill Active
+              </span>
+              <span className="text-muted-foreground ml-1.5">
+                {Object.keys(autofilledSources).length} question{Object.keys(autofilledSources).length === 1 ? "" : "s"} auto-filled from your verified documents (
+                {Array.from(new Set(Object.values(autofilledSources))).join(", ")}). You may review or modify any response.
+              </span>
+            </div>
+          </div>
+          {token && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleManualSync}
+              disabled={syncingWallet}
+              className="h-7 text-xs gap-1.5 shrink-0 border-emerald-500/30 hover:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+            >
+              <RefreshCw className={`size-3 ${syncingWallet ? "animate-spin" : ""}`} />
+              {syncingWallet ? "Syncing..." : "Re-sync Documents"}
+            </Button>
+          )}
+        </div>
+      )}
+
+      {syncMessage && (
+        <div className="rounded-md border border-primary/20 bg-primary/5 p-2.5 text-xs text-primary flex items-center gap-2">
+          <CheckCircle2 className="size-4 shrink-0 text-primary" />
+          <span>{syncMessage}</span>
+        </div>
+      )}
 
       {/* Section Navigation Tabs (Tabbed Mode) */}
       {!viewAll && sectionKeys.length > 1 && (

@@ -120,7 +120,7 @@ def parse_structured_fields_from_text(
                 break
 
         if m := re.search(
-            r"(?:status[ _]?of[ _]?residence|residence[ _]?status|visa[ _]?status)\s*[:=]\s*([A-Za-z \(\)]+?)(?:[\r\n,;]|$)",
+            r"(?:status[ _]?of[ _]?residence|residence[ _]?status|visa[ _]?status)\s*[:=]\s*([A-Za-z0-9 \(\)\/\-]+?)(?:[\r\n,;]|$)",
             combined_text,
             re.I,
         ):
@@ -129,7 +129,14 @@ def parse_structured_fields_from_text(
                 "confidence": 0.88,
             }
 
-    elif doc_type_clean in ("bank_statement", "proof_of_funds", "tax_return"):
+        if m := re.search(
+            r"(?:address|current[ _]?address|japan[ _]?address)\s*[:=]\s*([A-Za-z0-9 \-,]+?)(?:[\r\n;]|$)",
+            combined_text,
+            re.I,
+        ):
+            fields["current_japan_address"] = {"value": m.group(1).strip(), "confidence": 0.85}
+
+    elif doc_type_clean in ("bank_statement", "proof_of_funds"):
         bal_pats = [
             r"(?:closing[ _]?balance|ending[ _]?balance|available[ _]?balance|total[ _]?balance|balance|amount|funds)\s*[:=]?\s*([$¥€£A-Z]{0,3}\s*[0-9,]+(?:\.[0-9]{2})?)",
             r"([$¥€£]\s*[0-9,]+(?:\.[0-9]{2})?)",
@@ -160,6 +167,43 @@ def parse_structured_fields_from_text(
         ):
             fields["account_holder"] = {"value": m.group(1).strip().title(), "confidence": 0.88}
 
+        if m := re.search(
+            r"(?:account[ _]?(?:number|no|num))\s*[:=]?\s*([0-9A-Z\-]{6,20})",
+            combined_text,
+            re.I,
+        ):
+            fields["account_number"] = {"value": m.group(1).strip(), "confidence": 0.88}
+
+    elif doc_type_clean == "tax_return":
+        if m := re.search(
+            r"(?:tax[ _]?year|assessment[ _]?year|fiscal[ _]?year)\s*[:=]?\s*(\d{4})",
+            combined_text,
+            re.I,
+        ):
+            fields["tax_year"] = {"value": m.group(1).strip(), "confidence": 0.9}
+
+        if m := re.search(
+            r"(?:gross[ _]?salary|gross[ _]?remuneration|gross[ _]?income|annual[ _]?income|total[ _]?income)\s*[:=]?\s*([$¥€£A-Z]{0,3}\s*[0-9,]+(?:\.[0-9]{2})?)",
+            combined_text,
+            re.I,
+        ):
+            fields["annual_income"] = {"value": m.group(1).strip(), "confidence": 0.88}
+            fields["gross_income"] = {"value": m.group(1).strip(), "confidence": 0.88}
+
+        if m := re.search(
+            r"(?:taxable[ _]?amount|taxable[ _]?income)\s*[:=]?\s*([$¥€£A-Z]{0,3}\s*[0-9,]+(?:\.[0-9]{2})?)",
+            combined_text,
+            re.I,
+        ):
+            fields["taxable_income"] = {"value": m.group(1).strip(), "confidence": 0.86}
+
+        if m := re.search(
+            r"(?:total[ _]?income[ _]?tax[ _]?paid|balance|tax[ _]?paid|paid[ _]?tax)\s*[:=]?\s*([$¥€£A-Z]{0,3}\s*[0-9,]+(?:\.[0-9]{2})?)",
+            combined_text,
+            re.I,
+        ):
+            fields["tax_paid"] = {"value": m.group(1).strip(), "confidence": 0.86}
+
     elif doc_type_clean in ("employment_letter", "employment_contract", "pay_slips"):
         if m := re.search(
             r"(?:employer(?:'s)?[ _]?name|company(?:'s)?[ _]?name|organization|sponsor)\s*[:=]\s*([A-Za-z0-9 \.,&]+?)(?:[\r\n,]|$)",
@@ -181,6 +225,13 @@ def parse_structured_fields_from_text(
             re.I,
         ):
             fields["position"] = {"value": m.group(1).strip().title(), "confidence": 0.86}
+
+        if m := re.search(
+            r"(?:start[ _]?date|employment[ _]?start[ _]?date)\s*[:=]?\s*(\d{4}[-/]\d{1,2}[-/]\d{1,2})",
+            combined_text,
+            re.I,
+        ):
+            fields["start_date"] = {"value": m.group(1).replace("/", "-"), "confidence": 0.85}
 
     elif doc_type_clean in ("flight_itinerary", "travel_itinerary", "hotel_booking"):
         if m := re.search(

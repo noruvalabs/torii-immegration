@@ -436,6 +436,12 @@ export default function CaseDetailPage() {
               onAnswer={handleAnswer}
               targetKey={intakeTargetKey}
               targetTimestamp={intakeTargetTimestamp}
+              token={token || undefined}
+              caseId={caseId}
+              onRefresh={() => {
+                void queryClient.invalidateQueries({ queryKey: caseKeys.intake(caseId) });
+                void queryClient.invalidateQueries({ queryKey: caseKeys.detail(caseId) });
+              }}
               onProceedToEligibility={() => {
                 setError(null);
                 setActiveStep("eligibility");

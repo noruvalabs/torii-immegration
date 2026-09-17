@@ -595,11 +595,11 @@ def _normalize_extracted_key(key: str) -> str:
 
 
 def _apply_extracted_fields_to_case_and_user(
-    case: Case, user: User, extracted_fields: dict[str, Any]
+    case: Case | None, user: User, extracted_fields: dict[str, Any]
 ) -> None:
     if not extracted_fields:
         return
-    answers = dict(case.intake_answers or {})
+    answers = dict(case.intake_answers or {}) if case is not None else {}
     for key, raw_val in extracted_fields.items():
         val = raw_val.get("value") if isinstance(raw_val, dict) else raw_val
         if val is None:
@@ -623,6 +623,7 @@ def _apply_extracted_fields_to_case_and_user(
         ):
             user.full_name = val_str
             answers["full_name"] = val_str
+            answers["applicant_name"] = val_str
         elif norm_key in (
             "nationality",
             "citizenship",
@@ -631,6 +632,7 @@ def _apply_extracted_fields_to_case_and_user(
         ):
             user.nationality = val_str
             answers["nationality"] = val_str
+            answers["citizenship"] = val_str
         elif norm_key in ("passport_number", "passport_no", "passport_num"):
             user.passport_number = val_str
             answers["passport_number"] = val_str
@@ -654,11 +656,57 @@ def _apply_extracted_fields_to_case_and_user(
             answers["sponsor_name"] = val_str
         elif norm_key in ("monthly_salary", "remuneration", "salary"):
             answers["monthly_salary"] = val_str
-        elif norm_key in ("residence_card_number", "card_number"):
+        elif norm_key in ("residence_card_number", "card_number", "zairyu_card_number"):
             answers["residence_card_number"] = val_str
+        elif norm_key in (
+            "status_of_residence",
+            "current_status_of_residence",
+            "visa_status",
+            "residence_status",
+        ):
+            answers["status_of_residence"] = val_str
+            answers["current_status_of_residence"] = val_str
+        elif norm_key in ("current_status_expiry_date", "residence_expiry_date"):
+            answers["current_status_expiry_date"] = val_str
+        elif norm_key in ("current_japan_address", "japan_address", "address", "residence_address"):
+            answers["current_japan_address"] = val_str
+            answers["address"] = val_str
+        elif norm_key in ("bank_name", "financial_institution", "bank"):
+            answers["bank_name"] = val_str
+        elif norm_key in ("account_number", "bank_account_number"):
+            answers["account_number"] = val_str
+        elif norm_key in (
+            "balance",
+            "current_balance",
+            "available_balance",
+            "proof_of_funds",
+            "funds_amount",
+        ):
+            answers["balance"] = val_str
+            answers["proof_of_funds"] = val_str
+        elif norm_key in ("account_holder", "account_name"):
+            answers["account_holder"] = val_str
+        elif norm_key in ("annual_income", "gross_income", "gross_salary", "total_income"):
+            answers["annual_income"] = val_str
+            answers["gross_income"] = val_str
+        elif norm_key in ("taxable_income", "taxable_amount"):
+            answers["taxable_income"] = val_str
+        elif norm_key in ("tax_paid", "paid_tax", "income_tax_paid"):
+            answers["tax_paid"] = val_str
+        elif norm_key in ("tax_year", "assessment_year"):
+            answers["tax_year"] = val_str
+        elif norm_key in ("position", "job_title", "designation"):
+            answers["position"] = val_str
+            answers["job_title"] = val_str
+        elif norm_key in ("departure_date",):
+            answers["departure_date"] = val_str
+        elif norm_key in ("issuing_country", "passport_issuing_country"):
+            answers["issuing_country"] = val_str
 
-    case.intake_answers = answers
-    case.review_flags_acknowledged = False
+    if case is not None:
+        case.intake_answers = answers
+        case.review_flags_acknowledged = False
+
     user.profile_complete = bool(
         user.full_name and user.nationality and user.passport_number and user.current_country
     )
