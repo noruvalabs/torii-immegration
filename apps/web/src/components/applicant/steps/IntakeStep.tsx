@@ -109,6 +109,26 @@ const PROFILE_ALIASES: Record<string, keyof User> = {
   country_of_residence: "current_country",
 };
 
+const INVALID_PASSPORT_VALUES = new Set([
+  "PASSPORT", "PASSEPORT", "DOCUMENT", "NULL", "NONE", "UNDEFINED", "JAPAN", "UNKNOWN"
+]);
+
+function isValidPassportNumber(val: string): boolean {
+  const clean = val.trim().toUpperCase();
+  if (clean.length < 6 || INVALID_PASSPORT_VALUES.has(clean)) return false;
+  return /\d/.test(clean);
+}
+
+const INVALID_RC_VALUES = new Set([
+  "RESIDENCE", "RESIDENT", "ENGINEER", "MINISTRY", "NULL", "NONE", "UNDEFINED", "UNKNOWN"
+]);
+
+function isValidResidenceCardNumber(val: string): boolean {
+  const clean = val.trim().toUpperCase();
+  if (clean.length < 8 || INVALID_RC_VALUES.has(clean)) return false;
+  return /\d/.test(clean);
+}
+
 function getProfileValueForQuestion(key: string, prompt: string, profile: User): string | null {
   const normKey = key.toLowerCase();
   const normPrompt = prompt.toLowerCase();
@@ -140,9 +160,13 @@ function getProfileValueForQuestion(key: string, prompt: string, profile: User):
   if (
     (normKey.includes("passport") && (normKey.includes("number") || normKey.includes("no") || normKey.includes("num"))) ||
     normKey === "passport_number" ||
-    (normPrompt.includes("passport number") || normPrompt.includes("passport no"))
+    normKey === "passport_no" ||
+    normKey === "passport" ||
+    (normPrompt.includes("passport") && (normPrompt.includes("number") || normPrompt.includes("no")))
   ) {
-    if (profile.passport_number?.trim()) return profile.passport_number.trim();
+    if (profile.passport_number?.trim() && isValidPassportNumber(profile.passport_number)) {
+      return profile.passport_number.trim();
+    }
   }
 
   if (
@@ -217,17 +241,31 @@ function getAutofillValueForQuestion(
       if (!fVal) continue;
 
       if (normKey === normFKey) {
-        return { value: fVal, source: docLabel };
+        if (normKey.includes("passport") && (normKey.includes("number") || normKey.includes("no"))) {
+          if (isValidPassportNumber(fVal)) return { value: fVal, source: docLabel };
+        } else if (normKey.includes("residence_card") || normKey.includes("card_number")) {
+          if (isValidResidenceCardNumber(fVal)) return { value: fVal, source: docLabel };
+        } else {
+          return { value: fVal, source: docLabel };
+        }
       }
 
       // Passport number
       if (
         (normKey.includes("passport") && (normKey.includes("number") || normKey.includes("no") || normKey.includes("num"))) ||
         normKey === "passport_number" ||
-        (normPrompt.includes("passport number") || normPrompt.includes("passport no"))
+        normKey === "passport_no" ||
+        normKey === "passport" ||
+        (normPrompt.includes("passport") && (normPrompt.includes("number") || normPrompt.includes("no")))
       ) {
-        if (normFKey.includes("passport") && (normFKey.includes("number") || normFKey.includes("no") || normFKey.includes("num"))) {
-          return { value: fVal, source: docLabel };
+        if (
+          (normFKey.includes("passport") && (normFKey.includes("number") || normFKey.includes("no") || normFKey.includes("num"))) ||
+          normFKey === "passport_number" ||
+          normFKey === "passport_no"
+        ) {
+          if (isValidPassportNumber(fVal)) {
+            return { value: fVal, source: docLabel };
+          }
         }
       }
 
@@ -249,7 +287,9 @@ function getAutofillValueForQuestion(
         normPrompt.includes("zairyu")
       ) {
         if (normFKey.includes("residence_card") || normFKey === "card_number") {
-          return { value: fVal, source: docLabel };
+          if (isValidResidenceCardNumber(fVal)) {
+            return { value: fVal, source: docLabel };
+          }
         }
       }
 

@@ -634,8 +634,14 @@ def _apply_extracted_fields_to_case_and_user(
             answers["nationality"] = val_str
             answers["citizenship"] = val_str
         elif norm_key in ("passport_number", "passport_no", "passport_num"):
-            user.passport_number = val_str
-            answers["passport_number"] = val_str
+            clean_p = val_str.upper()
+            if (
+                clean_p not in {"PASSPORT", "PASSEPORT", "DOCUMENT", "NULL", "NONE", "JAPAN"}
+                and any(c.isdigit() for c in clean_p)
+                and len(clean_p) >= 6
+            ):
+                user.passport_number = val_str
+                answers["passport_number"] = val_str
         elif norm_key in (
             "passport_expiry",
             "passport_expiry_date",
@@ -657,7 +663,13 @@ def _apply_extracted_fields_to_case_and_user(
         elif norm_key in ("monthly_salary", "remuneration", "salary"):
             answers["monthly_salary"] = val_str
         elif norm_key in ("residence_card_number", "card_number", "zairyu_card_number"):
-            answers["residence_card_number"] = val_str
+            clean_rc = val_str.upper()
+            if (
+                clean_rc not in {"RESIDENCE", "ENGINEER", "MINISTRY", "NULL", "NONE"}
+                and any(c.isdigit() for c in clean_rc)
+                and len(clean_rc) >= 8
+            ):
+                answers["residence_card_number"] = val_str
         elif norm_key in (
             "status_of_residence",
             "current_status_of_residence",

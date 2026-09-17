@@ -441,6 +441,7 @@ export default function CaseDetailPage() {
               onRefresh={() => {
                 void queryClient.invalidateQueries({ queryKey: caseKeys.intake(caseId) });
                 void queryClient.invalidateQueries({ queryKey: caseKeys.detail(caseId) });
+                if (token) getProfile(token).then(setProfile).catch(() => {});
               }}
               onProceedToEligibility={() => {
                 setError(null);

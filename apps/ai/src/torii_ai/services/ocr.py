@@ -196,24 +196,55 @@ def _fallback_extract(doc_type: DocumentType, filename: str, hint_text: str | No
     ):
         fields["nationality"] = ExtractedValue(value=nat_match.group(1).strip(), confidence=0.88)
 
+    INVALID_PASSPORT_WORDS = {
+        "PASSPORT", "PASSEPORT", "DOCUMENT", "REPUBLIC", "TRAVEL",
+        "NATIONAL", "GOVERNMENT", "JAPAN", "MINISTRY", "UNITED",
+        "STATES", "OFFICIAL", "SPECIMEN", "AUTHORITY",
+    }
+    INVALID_RC_WORDS = {
+        "RESIDENCE", "RESIDENT", "ENGINEER", "MINISTRY", "JUSTICE",
+        "GOVERNMENT", "PERMISSION", "SPECIMEN", "HUMANITIES",
+    }
+
     if doc_type == "passport":
-        if match := re.search(
-            r"(?:passport(?:\s*(?:number|no))?\s*[:=#]?\s*)([A-Z0-9]{5,12})",
-            text,
-            re.IGNORECASE,
-        ):
-            fields["passport_number"] = ExtractedValue(
-                value=match.group(1).upper(), confidence=0.92
-            )
+        if mrz := re.search(r"(?:^|\n)([A-Z0-9]{6,10})<*[0-9][A-Z]{3}[0-9]{6}", text):
+            mrz_val = mrz.group(1).upper()
+            if mrz_val not in INVALID_PASSPORT_WORDS and any(c.isdigit() for c in mrz_val) and len(mrz_val) >= 6:
+                fields["passport_number"] = ExtractedValue(value=mrz_val, confidence=0.98)
+
+        if "passport_number" not in fields:
+            passport_pats = [
+                r"(?:passport\s*(?:number|no|num|\#)|doc(?:ument)?\s*(?:number|no|\#))\s*[:=#\-]\s*([A-Z0-9]{6,12})",
+                r"(?:passport\s*(?:number|no|num))\s+([A-Z0-9]{6,12})",
+                r"\b([A-Z]{1,2}[0-9]{7,9})\b",
+            ]
+            for pat in passport_pats:
+                if match := re.search(pat, text, re.IGNORECASE):
+                    val = match.group(1).upper()
+                    if (
+                        val not in INVALID_PASSPORT_WORDS
+                        and any(c.isdigit() for c in val)
+                        and len(val) >= 6
+                    ):
+                        fields["passport_number"] = ExtractedValue(value=val, confidence=0.95)
+                        break
+
     elif doc_type == "residence_card":
-        if match := re.search(
-            r"(?:residence(?:\s*card)?(?:\s*(?:number|no))?\s*[:=#]?\s*)([A-Z0-9]{6,16})",
-            text,
-            re.IGNORECASE,
-        ):
-            fields["residence_card_number"] = ExtractedValue(
-                value=match.group(1).upper(), confidence=0.9
-            )
+        rc_pats = [
+            r"(?:card\s*(?:number|no|num|\#)|residence\s*card\s*(?:number|no|num|\#))\s*[:=#\-]\s*([A-Z0-9]{8,14})",
+            r"\b([A-Z]{2}[0-9]{8}[A-Z]{2})\b",
+            r"(?:card\s*(?:number|no))\s+([A-Z0-9]{8,14})",
+        ]
+        for pat in rc_pats:
+            if match := re.search(pat, text, re.IGNORECASE):
+                val = match.group(1).upper()
+                if (
+                    val not in INVALID_RC_WORDS
+                    and any(c.isdigit() for c in val)
+                    and len(val) >= 8
+                ):
+                    fields["residence_card_number"] = ExtractedValue(value=val, confidence=0.95)
+                    break
     elif doc_type == "proof_of_funds":
         if bal_match := re.search(
             r"(?:balance|amount|funds)\s*[:=]?\s*([$¥€£A-Z0-9,.]+)", text, re.IGNORECASE

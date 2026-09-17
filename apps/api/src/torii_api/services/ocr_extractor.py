@@ -88,18 +88,40 @@ def parse_structured_fields_from_text(
     # Document-specific extraction
     doc_type_clean = (doc_type or "").lower().strip()
 
+    INVALID_PASSPORT_WORDS = {
+        "PASSPORT", "PASSEPORT", "DOCUMENT", "REPUBLIC", "TRAVEL",
+        "NATIONAL", "GOVERNMENT", "JAPAN", "MINISTRY", "UNITED",
+        "STATES", "OFFICIAL", "SPECIMEN", "AUTHORITY",
+    }
+    INVALID_RC_WORDS = {
+        "RESIDENCE", "RESIDENT", "ENGINEER", "MINISTRY", "JUSTICE",
+        "GOVERNMENT", "PERMISSION", "SPECIMEN", "HUMANITIES",
+    }
+
     if doc_type_clean in ("passport", "identity"):
-        passport_pats = [
-            r"(?:passport(?:\s*(?:number|no|num))?\s*[:=#]?\s*)([A-Z0-9]{6,12})",
-            r"(?:doc(?:ument)?[ _]?no\.?\s*[:=#]?\s*)([A-Z0-9]{6,12})",
-            r"\b([A-Z]{1,2}[0-9]{7,9})\b",
-        ]
-        for pat in passport_pats:
-            if m := re.search(pat, combined_text, re.IGNORECASE):
-                val = m.group(1).upper()
-                if not val.startswith("HTTP") and len(val) >= 6:
-                    fields["passport_number"] = {"value": val, "confidence": 0.95}
-                    break
+        # 1. MRZ line 2 (ICAO 9303 passports)
+        if mrz := re.search(r"(?:^|\n)([A-Z0-9]{6,10})<*[0-9][A-Z]{3}[0-9]{6}", combined_text):
+            mrz_val = mrz.group(1).upper()
+            if mrz_val not in INVALID_PASSPORT_WORDS and any(c.isdigit() for c in mrz_val) and len(mrz_val) >= 6:
+                fields["passport_number"] = {"value": mrz_val, "confidence": 0.98}
+
+        if "passport_number" not in fields:
+            passport_pats = [
+                r"(?:passport\s*(?:number|no|num|\#)|doc(?:ument)?\s*(?:number|no|\#))\s*[:=#\-]\s*([A-Z0-9]{6,12})",
+                r"(?:passport\s*(?:number|no|num))\s+([A-Z0-9]{6,12})",
+                r"\b([A-Z]{1,2}[0-9]{7,9})\b",
+            ]
+            for pat in passport_pats:
+                if m := re.search(pat, combined_text, re.IGNORECASE):
+                    val = m.group(1).upper()
+                    if (
+                        val not in INVALID_PASSPORT_WORDS
+                        and not val.startswith("HTTP")
+                        and any(c.isdigit() for c in val)
+                        and len(val) >= 6
+                    ):
+                        fields["passport_number"] = {"value": val, "confidence": 0.95}
+                        break
 
         if m := re.search(
             r"(?:issuing[ _]?country|issuing[ _]?authority|authority)\s*[:=]\s*([A-Za-z\s]+)",
@@ -110,14 +132,20 @@ def parse_structured_fields_from_text(
 
     elif doc_type_clean in ("residence_card", "national_id"):
         rc_pats = [
-            r"(?:residence(?:\s*card)?(?:\s*(?:number|no))?\s*[:=#]?\s*)([A-Z0-9]{8,14})",
-            r"(?:card(?:\s*(?:number|no))?\s*[:=#]?\s*)([A-Z0-9]{8,14})",
+            r"(?:card\s*(?:number|no|num|\#)|residence\s*card\s*(?:number|no|num|\#))\s*[:=#\-]\s*([A-Z0-9]{8,14})",
             r"\b([A-Z]{2}[0-9]{8}[A-Z]{2})\b",
+            r"(?:card\s*(?:number|no))\s+([A-Z0-9]{8,14})",
         ]
         for pat in rc_pats:
             if m := re.search(pat, combined_text, re.IGNORECASE):
-                fields["residence_card_number"] = {"value": m.group(1).upper(), "confidence": 0.92}
-                break
+                val = m.group(1).upper()
+                if (
+                    val not in INVALID_RC_WORDS
+                    and any(c.isdigit() for c in val)
+                    and len(val) >= 8
+                ):
+                    fields["residence_card_number"] = {"value": val, "confidence": 0.95}
+                    break
 
         if m := re.search(
             r"(?:status[ _]?of[ _]?residence|residence[ _]?status|visa[ _]?status)\s*[:=]\s*([A-Za-z0-9 \(\)\/\-]+?)(?:[\r\n,;]|$)",

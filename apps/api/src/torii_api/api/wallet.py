@@ -977,6 +977,32 @@ async def sync_wallet_to_profile(
 
     synced_fields: dict[str, Any] = {}
     for doc in docs:
+        # Check if re-extraction is needed due to prior extractor bugs
+        p_raw = (doc.extracted_fields or {}).get("passport_number")
+        p_val = str(p_raw.get("value") if isinstance(p_raw, dict) else (p_raw or "")).strip()
+        rc_raw = (doc.extracted_fields or {}).get("residence_card_number")
+        rc_val = str(rc_raw.get("value") if isinstance(rc_raw, dict) else (rc_raw or "")).strip()
+
+        needs_reextract = (
+            (doc.doc_type == "passport" and (not p_val or p_val.upper() in {"PASSPORT", "PASSEPORT", "DOCUMENT"} or not any(c.isdigit() for c in p_val)))
+            or (doc.doc_type == "residence_card" and (not rc_val or rc_val.upper() in {"RESIDENCE", "ENGINEER", "MINISTRY"} or not any(c.isdigit() for c in rc_val)))
+        )
+        if needs_reextract:
+            from torii_api.services.ocr_extractor import extract_document_metadata
+            from torii_api.services.wallet import get_document_content
+
+            content = get_document_content(doc.storage_key)
+            if content:
+                new_fields, conf = await extract_document_metadata(
+                    file_bytes=content,
+                    doc_type=doc.doc_type,
+                    filename=doc.filename,
+                    content_type=doc.content_type,
+                )
+                if new_fields:
+                    doc.extracted_fields = {**(doc.extracted_fields or {}), **new_fields}
+                    doc.extraction_confidence = conf
+
         if doc.extracted_fields:
             for k, v in doc.extracted_fields.items():
                 synced_fields[k] = v
