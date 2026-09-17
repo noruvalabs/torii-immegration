@@ -14,6 +14,7 @@ def _enable_verification(monkeypatch: pytest.MonkeyPatch) -> None:
 
 async def _get_latest_email_token(client: AsyncClient) -> str:
     app = getattr(client._transport, "app", None)
+    assert app is not None
     session_factory = app.state.session_factory
     async with session_factory() as session:
         event = await session.scalar(
@@ -350,6 +351,7 @@ async def test_register_respects_request_origin(client: AsyncClient) -> None:
     assert resp.status_code == 201
 
     app = getattr(client._transport, "app", None)
+    assert app is not None
     session_factory = app.state.session_factory
     async with session_factory() as session:
         event = await session.scalar(
@@ -494,6 +496,7 @@ async def test_outbox_email_drain(client: AsyncClient, monkeypatch) -> None:
     assert resp.status_code == 201
 
     app = getattr(client._transport, "app", None)
+    assert app is not None
     ctx = {"session_factory": app.state.session_factory}
     from torii_api.worker.scheduler import poll_outbox
 

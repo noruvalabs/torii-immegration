@@ -34,6 +34,7 @@ def to_async_url(database_url: str) -> str:
     clean_url = database_url
     if "sslmode=" in clean_url:
         import re
+
         clean_url = re.sub(r"[?&]sslmode=[^&]+", "", clean_url)
         clean_url = clean_url.replace("?&", "?").rstrip("?")
 
@@ -68,10 +69,13 @@ def create_engine(database_url: str) -> AsyncEngine:
     if "asyncpg" in url:
         # statement_cache_size=0 is required for connection poolers (e.g. Supabase Supavisor)
         # to prevent prepared statement collisions.
-        connect_args["statement_cache_size"] = int(
-            os.getenv("TORII_DB_STATEMENT_CACHE_SIZE", "0")
-        )
-        if "sslmode=require" in database_url or "ssl=require" in database_url or "supabase.com" in database_url or "supabase.co" in database_url:
+        connect_args["statement_cache_size"] = int(os.getenv("TORII_DB_STATEMENT_CACHE_SIZE", "0"))
+        if (
+            "sslmode=require" in database_url
+            or "ssl=require" in database_url
+            or "supabase.com" in database_url
+            or "supabase.co" in database_url
+        ):
             connect_args["ssl"] = "require"
 
     return create_async_engine(
