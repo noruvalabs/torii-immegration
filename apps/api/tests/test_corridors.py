@@ -70,9 +70,9 @@ async def test_check_corridor_reuses_completed_result_across_applicants(
             },
         )
 
+    headers2 = await _register(client, "corridor2b@example.com")
     outbox_before = len(await _outbox_topics(engine))
 
-    headers2 = await _register(client, "corridor2b@example.com")
     second = await client.post("/v1/corridors/check", headers=headers2, json=BD_JP_TOURIST)
     assert second.status_code == 200
     body = second.json()
