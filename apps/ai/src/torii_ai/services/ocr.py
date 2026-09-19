@@ -163,18 +163,51 @@ def _fallback_extract(doc_type: DocumentType, filename: str, hint_text: str | No
     fields: dict[str, ExtractedValue] = {}
 
     MONTHS_MAP = {
-        "january": 1, "jan": 1, "february": 2, "feb": 2, "march": 3, "mar": 3,
-        "april": 4, "apr": 4, "may": 5, "june": 6, "jun": 6, "july": 7, "jul": 7,
-        "august": 8, "aug": 8, "september": 9, "sep": 9, "sept": 9, "october": 10, "oct": 10,
-        "november": 11, "nov": 11, "december": 12, "dec": 12,
+        "january": 1,
+        "jan": 1,
+        "february": 2,
+        "feb": 2,
+        "march": 3,
+        "mar": 3,
+        "april": 4,
+        "apr": 4,
+        "may": 5,
+        "june": 6,
+        "jun": 6,
+        "july": 7,
+        "jul": 7,
+        "august": 8,
+        "aug": 8,
+        "september": 9,
+        "sep": 9,
+        "sept": 9,
+        "october": 10,
+        "oct": 10,
+        "november": 11,
+        "nov": 11,
+        "december": 12,
+        "dec": 12,
     }
 
     DEMONYM_TO_COUNTRY = {
-        "bangladeshi": "Bangladesh", "japanese": "Japan", "american": "United States",
-        "indian": "India", "chinese": "China", "filipino": "Philippines", "vietnamese": "Vietnam",
-        "nepalese": "Nepal", "nepali": "Nepal", "sri lankan": "Sri Lanka", "korean": "South Korea",
-        "south korean": "South Korea", "british": "United Kingdom", "canadian": "Canada",
-        "australian": "Australia", "german": "Germany", "french": "France", "pakistani": "Pakistan",
+        "bangladeshi": "Bangladesh",
+        "japanese": "Japan",
+        "american": "United States",
+        "indian": "India",
+        "chinese": "China",
+        "filipino": "Philippines",
+        "vietnamese": "Vietnam",
+        "nepalese": "Nepal",
+        "nepali": "Nepal",
+        "sri lankan": "Sri Lanka",
+        "korean": "South Korea",
+        "south korean": "South Korea",
+        "british": "United Kingdom",
+        "canadian": "Canada",
+        "australian": "Australia",
+        "german": "Germany",
+        "french": "France",
+        "pakistani": "Pakistan",
     }
 
     def _normalize_date(val: str) -> str:
@@ -210,16 +243,22 @@ def _fallback_extract(doc_type: DocumentType, filename: str, hint_text: str | No
     for k in ("full name", "applicant name", "holder name", "name", "full legal name"):
         if k in kv:
             v = kv[k].splitlines()[0].strip()
-            if len(v) >= 3 and not re.match(r"^(passport|republic|state|document|field|sample|dummy)", v, re.I):
+            if len(v) >= 3 and not re.match(
+                r"^(passport|republic|state|document|field|sample|dummy)", v, re.I
+            ):
                 fields["full_name"] = ExtractedValue(value=v.title(), confidence=0.95)
                 break
 
     if "full_name" not in fields:
         if name_match := re.search(
-            r"(?:full[ _]?name|holder(?:'s)?[ _]?name|applicant[ _]?name|name)\s*[:=]\s*([^\n,;]+)", text, re.IGNORECASE
+            r"(?:full[ _]?name|holder(?:'s)?[ _]?name|applicant[ _]?name|name)\s*[:=]\s*([^\n,;]+)",
+            text,
+            re.IGNORECASE,
         ):
             raw = name_match.group(1).splitlines()[0].strip()
-            if len(raw) >= 3 and not re.match(r"^(passport|republic|state|document|field|sample|dummy)", raw, re.I):
+            if len(raw) >= 3 and not re.match(
+                r"^(passport|republic|state|document|field|sample|dummy)", raw, re.I
+            ):
                 fields["full_name"] = ExtractedValue(value=raw.title(), confidence=0.9)
 
     # Extract Date of Birth
@@ -241,7 +280,9 @@ def _fallback_extract(doc_type: DocumentType, filename: str, hint_text: str | No
     # Extract Expiry Date / Passport Expiry
     for k in ("passport expiry", "expiry date", "expiration date", "valid until"):
         if k in kv:
-            fields["passport_expiry"] = ExtractedValue(value=_normalize_date(kv[k]), confidence=0.95)
+            fields["passport_expiry"] = ExtractedValue(
+                value=_normalize_date(kv[k]), confidence=0.95
+            )
             break
 
     if "passport_expiry" not in fields:
@@ -273,27 +314,54 @@ def _fallback_extract(doc_type: DocumentType, filename: str, hint_text: str | No
             fields["nationality"] = ExtractedValue(value=val, confidence=0.88)
 
     INVALID_PASSPORT_WORDS = {
-        "PASSPORT", "PASSEPORT", "DOCUMENT", "REPUBLIC", "TRAVEL",
-        "NATIONAL", "GOVERNMENT", "JAPAN", "MINISTRY", "UNITED",
-        "STATES", "OFFICIAL", "SPECIMEN", "AUTHORITY", "DUMMY",
+        "PASSPORT",
+        "PASSEPORT",
+        "DOCUMENT",
+        "REPUBLIC",
+        "TRAVEL",
+        "NATIONAL",
+        "GOVERNMENT",
+        "JAPAN",
+        "MINISTRY",
+        "UNITED",
+        "STATES",
+        "OFFICIAL",
+        "SPECIMEN",
+        "AUTHORITY",
+        "DUMMY",
     }
     INVALID_RC_WORDS = {
-        "RESIDENCE", "RESIDENT", "ENGINEER", "MINISTRY", "JUSTICE",
-        "GOVERNMENT", "PERMISSION", "SPECIMEN", "HUMANITIES",
+        "RESIDENCE",
+        "RESIDENT",
+        "ENGINEER",
+        "MINISTRY",
+        "JUSTICE",
+        "GOVERNMENT",
+        "PERMISSION",
+        "SPECIMEN",
+        "HUMANITIES",
     }
 
     # Direct KV for passport number
     for k in ("passport number", "passport no", "passport num"):
         if k in kv:
             v_p = kv[k].strip().upper()
-            if v_p not in INVALID_PASSPORT_WORDS and any(c.isdigit() for c in v_p) and len(v_p) >= 6:
+            if (
+                v_p not in INVALID_PASSPORT_WORDS
+                and any(c.isdigit() for c in v_p)
+                and len(v_p) >= 6
+            ):
                 fields["passport_number"] = ExtractedValue(value=v_p, confidence=0.95)
                 break
 
     if doc_type == "passport":
         if mrz := re.search(r"(?:^|\n)([A-Z0-9]{6,10})<*[0-9][A-Z]{3}[0-9]{6}", text):
             mrz_val = mrz.group(1).upper()
-            if mrz_val not in INVALID_PASSPORT_WORDS and any(c.isdigit() for c in mrz_val) and len(mrz_val) >= 6:
+            if (
+                mrz_val not in INVALID_PASSPORT_WORDS
+                and any(c.isdigit() for c in mrz_val)
+                and len(mrz_val) >= 6
+            ):
                 fields["passport_number"] = ExtractedValue(value=mrz_val, confidence=0.98)
 
         if "passport_number" not in fields:
@@ -322,11 +390,7 @@ def _fallback_extract(doc_type: DocumentType, filename: str, hint_text: str | No
         for pat in rc_pats:
             if match := re.search(pat, text, re.IGNORECASE):
                 val = match.group(1).upper()
-                if (
-                    val not in INVALID_RC_WORDS
-                    and any(c.isdigit() for c in val)
-                    and len(val) >= 8
-                ):
+                if val not in INVALID_RC_WORDS and any(c.isdigit() for c in val) and len(val) >= 8:
                     fields["residence_card_number"] = ExtractedValue(value=val, confidence=0.95)
                     break
     elif doc_type == "proof_of_funds":

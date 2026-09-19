@@ -30,20 +30,57 @@ def extract_text_with_pymupdf(pdf_bytes: bytes) -> str:
 
 
 MONTHS_MAP = {
-    "january": 1, "jan": 1, "february": 2, "feb": 2, "march": 3, "mar": 3,
-    "april": 4, "apr": 4, "may": 5, "june": 6, "jun": 6, "july": 7, "jul": 7,
-    "august": 8, "aug": 8, "september": 9, "sep": 9, "sept": 9, "october": 10, "oct": 10,
-    "november": 11, "nov": 11, "december": 12, "dec": 12,
+    "january": 1,
+    "jan": 1,
+    "february": 2,
+    "feb": 2,
+    "march": 3,
+    "mar": 3,
+    "april": 4,
+    "apr": 4,
+    "may": 5,
+    "june": 6,
+    "jun": 6,
+    "july": 7,
+    "jul": 7,
+    "august": 8,
+    "aug": 8,
+    "september": 9,
+    "sep": 9,
+    "sept": 9,
+    "october": 10,
+    "oct": 10,
+    "november": 11,
+    "nov": 11,
+    "december": 12,
+    "dec": 12,
 }
 
 DEMONYM_TO_COUNTRY = {
-    "bangladeshi": "Bangladesh", "japanese": "Japan", "american": "United States",
-    "indian": "India", "chinese": "China", "filipino": "Philippines", "vietnamese": "Vietnam",
-    "nepalese": "Nepal", "nepali": "Nepal", "sri lankan": "Sri Lanka", "korean": "South Korea",
-    "south korean": "South Korea", "british": "United Kingdom", "canadian": "Canada",
-    "australian": "Australia", "german": "Germany", "french": "France", "pakistani": "Pakistan",
-    "indonesian": "Indonesia", "malaysian": "Malaysia", "thai": "Thailand",
-    "myanmarese": "Myanmar", "burmese": "Myanmar", "singaporean": "Singapore",
+    "bangladeshi": "Bangladesh",
+    "japanese": "Japan",
+    "american": "United States",
+    "indian": "India",
+    "chinese": "China",
+    "filipino": "Philippines",
+    "vietnamese": "Vietnam",
+    "nepalese": "Nepal",
+    "nepali": "Nepal",
+    "sri lankan": "Sri Lanka",
+    "korean": "South Korea",
+    "south korean": "South Korea",
+    "british": "United Kingdom",
+    "canadian": "Canada",
+    "australian": "Australia",
+    "german": "Germany",
+    "french": "France",
+    "pakistani": "Pakistan",
+    "indonesian": "Indonesia",
+    "malaysian": "Malaysia",
+    "thai": "Thailand",
+    "myanmarese": "Myanmar",
+    "burmese": "Myanmar",
+    "singaporean": "Singapore",
 }
 
 
@@ -106,10 +143,19 @@ def parse_structured_fields_from_text(
 
     # Common fields: Full Name
     # 1. From KV
-    for k in ("full name", "applicant name", "holder name", "name", "full legal name", "taxpayer name"):
+    for k in (
+        "full name",
+        "applicant name",
+        "holder name",
+        "name",
+        "full legal name",
+        "taxpayer name",
+    ):
         if k in kv:
             v = kv[k].splitlines()[0].strip()
-            if len(v) >= 3 and not re.match(r"^(passport|republic|state|document|field|sample|dummy)", v, re.I):
+            if len(v) >= 3 and not re.match(
+                r"^(passport|republic|state|document|field|sample|dummy)", v, re.I
+            ):
                 fields["full_name"] = {"value": v.title(), "confidence": 0.95}
                 break
 
@@ -150,7 +196,13 @@ def parse_structured_fields_from_text(
                 break
 
     # Expiry Date / Passport Expiry (normalized to YYYY-MM-DD)
-    for k in ("passport expiry", "expiry date", "expiration date", "valid until", "period of stay (expiry)"):
+    for k in (
+        "passport expiry",
+        "expiry date",
+        "expiration date",
+        "valid until",
+        "period of stay (expiry)",
+    ):
         if k in kv:
             iso_exp = normalize_date_to_iso(kv[k])
             if re.match(r"^\d{4}-\d{2}-\d{2}$", iso_exp):
@@ -175,7 +227,9 @@ def parse_structured_fields_from_text(
     for k in ("nationality", "citizenship", "country of citizenship", "national of"):
         if k in kv:
             clean_nat = extract_country_from_text(kv[k])
-            if len(clean_nat) >= 3 and not re.match(r"^(the|and|or|date|sex|dummy)", clean_nat, re.I):
+            if len(clean_nat) >= 3 and not re.match(
+                r"^(the|and|or|date|sex|dummy)", clean_nat, re.I
+            ):
                 fields["nationality"] = {"value": clean_nat, "confidence": 0.92}
                 break
 
@@ -186,7 +240,9 @@ def parse_structured_fields_from_text(
         for pat in nat_patterns:
             if m := re.search(pat, combined_text, re.IGNORECASE):
                 clean_nat = extract_country_from_text(m.group(1))
-                if len(clean_nat) >= 3 and not re.match(r"^(the|and|or|date|sex|dummy)", clean_nat, re.I):
+                if len(clean_nat) >= 3 and not re.match(
+                    r"^(the|and|or|date|sex|dummy)", clean_nat, re.I
+                ):
                     fields["nationality"] = {"value": clean_nat, "confidence": 0.88}
                     break
 
@@ -215,7 +271,11 @@ def parse_structured_fields_from_text(
                 break
 
     if "marital_status" not in fields:
-        if m := re.search(r"(?:marital[ _]?status)\s*[:=\t]?\s*(single|married|divorced|widowed)\b", combined_text, re.I):
+        if m := re.search(
+            r"(?:marital[ _]?status)\s*[:=\t]?\s*(single|married|divorced|widowed)\b",
+            combined_text,
+            re.I,
+        ):
             fields["marital_status"] = {"value": m.group(1).lower(), "confidence": 0.9}
 
     # Occupation / Profession
@@ -227,24 +287,46 @@ def parse_structured_fields_from_text(
                 break
 
     if "occupation" not in fields:
-        if m := re.search(r"(?:occupation|profession|job[ _]?title|position)\s*[:=\t]\s*([A-Za-z \-\/]+?)(?:[\r\n;]|$)", combined_text, re.I):
+        if m := re.search(
+            r"(?:occupation|profession|job[ _]?title|position)\s*[:=\t]\s*([A-Za-z \-\/]+?)(?:[\r\n;]|$)",
+            combined_text,
+            re.I,
+        ):
             clean_occ = m.group(1).strip()
-            if len(clean_occ) >= 3 and not re.match(r"^(field|sample|dummy|the|and)", clean_occ, re.I):
+            if len(clean_occ) >= 3 and not re.match(
+                r"^(field|sample|dummy|the|and)", clean_occ, re.I
+            ):
                 fields["occupation"] = {"value": clean_occ.title(), "confidence": 0.88}
 
     # Current Location / Residence Country
-    for k in ("current residing", "current residence", "current location", "current country", "residing in"):
+    for k in (
+        "current residing",
+        "current residence",
+        "current location",
+        "current country",
+        "residing in",
+    ):
         if k in kv:
             raw_loc = kv[k].splitlines()[0].strip()
             fields["current_residence"] = {"value": raw_loc, "confidence": 0.9}
-            fields["current_country"] = {"value": extract_country_from_text(raw_loc), "confidence": 0.9}
+            fields["current_country"] = {
+                "value": extract_country_from_text(raw_loc),
+                "confidence": 0.9,
+            }
             break
 
     if "current_country" not in fields:
-        if m := re.search(r"(?:current(?:ly)?[ _]?(?:residing|residence|location|country)|residing in)\s*[:=\t]\s*([A-Za-z0-9 ,\-]+?)(?:[\r\n;]|$)", combined_text, re.I):
+        if m := re.search(
+            r"(?:current(?:ly)?[ _]?(?:residing|residence|location|country)|residing in)\s*[:=\t]\s*([A-Za-z0-9 ,\-]+?)(?:[\r\n;]|$)",
+            combined_text,
+            re.I,
+        ):
             raw_loc = m.group(1).strip()
             fields["current_residence"] = {"value": raw_loc, "confidence": 0.88}
-            fields["current_country"] = {"value": extract_country_from_text(raw_loc), "confidence": 0.88}
+            fields["current_country"] = {
+                "value": extract_country_from_text(raw_loc),
+                "confidence": 0.88,
+            }
 
     # Phone Number
     for k in ("phone number", "phone", "mobile number", "mobile", "contact number"):
@@ -258,20 +340,43 @@ def parse_structured_fields_from_text(
     doc_type_clean = (doc_type or "").lower().strip()
 
     INVALID_PASSPORT_WORDS = {
-        "PASSPORT", "PASSEPORT", "DOCUMENT", "REPUBLIC", "TRAVEL",
-        "NATIONAL", "GOVERNMENT", "JAPAN", "MINISTRY", "UNITED",
-        "STATES", "OFFICIAL", "SPECIMEN", "AUTHORITY", "DUMMY",
+        "PASSPORT",
+        "PASSEPORT",
+        "DOCUMENT",
+        "REPUBLIC",
+        "TRAVEL",
+        "NATIONAL",
+        "GOVERNMENT",
+        "JAPAN",
+        "MINISTRY",
+        "UNITED",
+        "STATES",
+        "OFFICIAL",
+        "SPECIMEN",
+        "AUTHORITY",
+        "DUMMY",
     }
     INVALID_RC_WORDS = {
-        "RESIDENCE", "RESIDENT", "ENGINEER", "MINISTRY", "JUSTICE",
-        "GOVERNMENT", "PERMISSION", "SPECIMEN", "HUMANITIES",
+        "RESIDENCE",
+        "RESIDENT",
+        "ENGINEER",
+        "MINISTRY",
+        "JUSTICE",
+        "GOVERNMENT",
+        "PERMISSION",
+        "SPECIMEN",
+        "HUMANITIES",
     }
 
     # Also check KV for passport number directly
     for k in ("passport number", "passport no", "passport num", "travel document number"):
         if k in kv:
             val_p = kv[k].strip().upper()
-            if val_p not in INVALID_PASSPORT_WORDS and any(c.isdigit() for c in val_p) and len(val_p) >= 6:
+            if (
+                val_p not in INVALID_PASSPORT_WORDS
+                and any(c.isdigit() for c in val_p)
+                and len(val_p) >= 6
+            ):
                 fields["passport_number"] = {"value": val_p, "confidence": 0.95}
                 break
 
@@ -279,7 +384,11 @@ def parse_structured_fields_from_text(
         # 1. MRZ line 2 (ICAO 9303 passports)
         if mrz := re.search(r"(?:^|\n)([A-Z0-9]{6,10})<*[0-9][A-Z]{3}[0-9]{6}", combined_text):
             mrz_val = mrz.group(1).upper()
-            if mrz_val not in INVALID_PASSPORT_WORDS and any(c.isdigit() for c in mrz_val) and len(mrz_val) >= 6:
+            if (
+                mrz_val not in INVALID_PASSPORT_WORDS
+                and any(c.isdigit() for c in mrz_val)
+                and len(mrz_val) >= 6
+            ):
                 fields["passport_number"] = {"value": mrz_val, "confidence": 0.98}
 
         if "passport_number" not in fields:
@@ -316,11 +425,7 @@ def parse_structured_fields_from_text(
         for pat in rc_pats:
             if m := re.search(pat, combined_text, re.IGNORECASE):
                 val = m.group(1).upper()
-                if (
-                    val not in INVALID_RC_WORDS
-                    and any(c.isdigit() for c in val)
-                    and len(val) >= 8
-                ):
+                if val not in INVALID_RC_WORDS and any(c.isdigit() for c in val) and len(val) >= 8:
                     fields["residence_card_number"] = {"value": val, "confidence": 0.95}
                     break
 

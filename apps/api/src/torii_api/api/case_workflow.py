@@ -632,6 +632,7 @@ def _apply_extracted_fields_to_case_and_user(
             "country_of_nationality",
         ):
             from torii_api.services.ocr_extractor import extract_country_from_text
+
             clean_nat = extract_country_from_text(val_str)
             user.nationality = clean_nat
             answers["nationality"] = clean_nat
@@ -652,16 +653,26 @@ def _apply_extracted_fields_to_case_and_user(
             "passport_expiration_date",
         ):
             from torii_api.services.ocr_extractor import normalize_date_to_iso
+
             iso_exp = normalize_date_to_iso(val_str)
             user.passport_expiry = iso_exp
             answers["passport_expiry"] = iso_exp
         elif norm_key in ("date_of_birth", "dob", "birth_date", "applicant_dob"):
             from torii_api.services.ocr_extractor import normalize_date_to_iso
+
             iso_dob = normalize_date_to_iso(val_str)
             user.date_of_birth = iso_dob
             answers["date_of_birth"] = iso_dob
-        elif norm_key in ("current_country", "current_residence_country", "residence_country", "current_location_country", "current_residence", "current_residing"):
+        elif norm_key in (
+            "current_country",
+            "current_residence_country",
+            "residence_country",
+            "current_location_country",
+            "current_residence",
+            "current_residing",
+        ):
             from torii_api.services.ocr_extractor import extract_country_from_text
+
             ctry = extract_country_from_text(val_str)
             user.current_country = ctry
             answers["current_country"] = ctry
@@ -670,7 +681,13 @@ def _apply_extracted_fields_to_case_and_user(
             answers["residence_country"] = ctry
         elif norm_key in ("sex", "gender"):
             s_val = val_str.strip().lower()
-            norm_s = "male" if s_val in ("male", "m") else "female" if s_val in ("female", "f") else s_val
+            norm_s = (
+                "male"
+                if s_val in ("male", "m")
+                else "female"
+                if s_val in ("female", "f")
+                else s_val
+            )
             answers["sex"] = norm_s
             answers["gender"] = norm_s
         elif norm_key in ("marital_status", "marital"):
