@@ -29,60 +29,229 @@ def extract_text_with_pymupdf(pdf_bytes: bytes) -> str:
         return ""
 
 
+MONTHS_MAP = {
+    "january": 1, "jan": 1, "february": 2, "feb": 2, "march": 3, "mar": 3,
+    "april": 4, "apr": 4, "may": 5, "june": 6, "jun": 6, "july": 7, "jul": 7,
+    "august": 8, "aug": 8, "september": 9, "sep": 9, "sept": 9, "october": 10, "oct": 10,
+    "november": 11, "nov": 11, "december": 12, "dec": 12,
+}
+
+DEMONYM_TO_COUNTRY = {
+    "bangladeshi": "Bangladesh", "japanese": "Japan", "american": "United States",
+    "indian": "India", "chinese": "China", "filipino": "Philippines", "vietnamese": "Vietnam",
+    "nepalese": "Nepal", "nepali": "Nepal", "sri lankan": "Sri Lanka", "korean": "South Korea",
+    "south korean": "South Korea", "british": "United Kingdom", "canadian": "Canada",
+    "australian": "Australia", "german": "Germany", "french": "France", "pakistani": "Pakistan",
+    "indonesian": "Indonesia", "malaysian": "Malaysia", "thai": "Thailand",
+    "myanmarese": "Myanmar", "burmese": "Myanmar", "singaporean": "Singapore",
+}
+
+
+def normalize_date_to_iso(val: str) -> str:
+    """Normalize any date format (e.g. 15 March 2002, 15/03/2002, 2002-03-15) to YYYY-MM-DD."""
+    if not val:
+        return ""
+    s = val.strip().replace(",", " ")
+    if m := re.match(r"^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$", s):
+        return f"{int(m.group(1)):04d}-{int(m.group(2)):02d}-{int(m.group(3)):02d}"
+    if m := re.match(r"^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$", s):
+        return f"{int(m.group(3)):04d}-{int(m.group(2)):02d}-{int(m.group(1)):02d}"
+    parts = s.split()
+    if len(parts) == 3:
+        if parts[0].isdigit() and parts[1].lower() in MONTHS_MAP and parts[2].isdigit():
+            return f"{int(parts[2]):04d}-{MONTHS_MAP[parts[1].lower()]:02d}-{int(parts[0]):02d}"
+        if parts[0].lower() in MONTHS_MAP and parts[1].isdigit() and parts[2].isdigit():
+            return f"{int(parts[2]):04d}-{MONTHS_MAP[parts[0].lower()]:02d}-{int(parts[1]):02d}"
+    return val.replace("/", "-")
+
+
+def extract_country_from_text(text: str) -> str:
+    """Extract standard country name from text or city, country string."""
+    clean = text.strip()
+    lower = clean.lower()
+    for dem, ctry in DEMONYM_TO_COUNTRY.items():
+        if dem in lower:
+            return ctry
+    if "," in clean:
+        parts = [p.strip() for p in clean.split(",")]
+        if len(parts) > 1:
+            last = parts[-1]
+            return DEMONYM_TO_COUNTRY.get(last.lower(), last.title())
+    return DEMONYM_TO_COUNTRY.get(lower, clean.title())
+
+
 def parse_structured_fields_from_text(
     doc_type: str, text: str, filename: str = ""
 ) -> tuple[dict[str, Any], float]:
-    """Parse key-value immigration fields using robust regex and heuristic rules."""
+    """Parse key-value immigration fields using robust table/block KV analysis and regex rules."""
     combined_text = f"{filename}\n{text}"
     fields: dict[str, Any] = {}
 
+    # Pass 1: Parse key-value pairs from lines (supports 'Key: Value' and 2-line table blocks 'Key\nValue')
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    kv: dict[str, str] = {}
+    for i, line in enumerate(lines):
+        if ":" in line:
+            k, v = line.split(":", 1)
+            if k.strip() and v.strip():
+                kv[k.strip().lower()] = v.strip()
+        elif "=" in line:
+            k, v = line.split("=", 1)
+            if k.strip() and v.strip():
+                kv[k.strip().lower()] = v.strip()
+        if i + 1 < len(lines):
+            next_line = lines[i + 1]
+            if len(line) <= 45 and not line.endswith(":"):
+                kv[line.lower()] = next_line
+
     # Common fields: Full Name
-    name_patterns = [
-        r"(?:full[ _]?name|holder(?:'s)?[ _]?name|applicant[ _]?name|surname[,\s]+given[ _]?names?|given[ _]?names?|name)\s*[:=]\s*([A-Za-z \-'\.]{3,40})(?:[\r\n,;]|$)",
-        r"(?:p<[a-z]{3})([a-z\<\s]+)",  # MRZ name pattern
-        r"Name\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)(?:[\r\n]|$)",
-    ]
-    for pat in name_patterns:
-        if m := re.search(pat, combined_text, re.IGNORECASE):
-            raw_name = m.group(1).replace("<", " ").strip()
-            if len(raw_name) >= 3 and not re.match(
-                r"^(passport|republic|state|document)", raw_name, re.I
-            ):
-                fields["full_name"] = {"value": raw_name.title(), "confidence": 0.9}
+    # 1. From KV
+    for k in ("full name", "applicant name", "holder name", "name", "full legal name", "taxpayer name"):
+        if k in kv:
+            v = kv[k].splitlines()[0].strip()
+            if len(v) >= 3 and not re.match(r"^(passport|republic|state|document|field|sample|dummy)", v, re.I):
+                fields["full_name"] = {"value": v.title(), "confidence": 0.95}
                 break
 
-    # Date of Birth
-    dob_patterns = [
-        r"(?:date[ _]?of[ _]?birth|dob|birth[ _]?date|born)\s*[:=]?\s*(\d{4}[-/]\d{1,2}[-/]\d{1,2})",
-        r"(?:date[ _]?of[ _]?birth|dob|birth[ _]?date|born)\s*[:=]?\s*(\d{1,2}[-/]\d{1,2}[-/]\d{4})",
-        r"(?:date[ _]?of[ _]?birth|dob)\s*[:=]?\s*([0-3]?\d\s+[A-Za-z]{3,9}\s+\d{4})",
-    ]
-    for pat in dob_patterns:
-        if m := re.search(pat, combined_text, re.IGNORECASE):
-            fields["date_of_birth"] = {"value": m.group(1).replace("/", "-"), "confidence": 0.9}
-            break
+    # 2. From Regex if not in KV
+    if "full_name" not in fields:
+        name_patterns = [
+            r"(?:full[ _]?name|holder(?:'s)?[ _]?name|applicant[ _]?name|surname[,\s]+given[ _]?names?|given[ _]?names?)\s*[:=]\s*([A-Za-z \-'\.]{3,40})(?:[\r\n,;]|$)",
+            r"(?:p<[a-z]{3})([a-z\<\s]+)",  # MRZ name pattern
+            r"(?:^|[\r\n])Name[ \t]+([A-Z][a-z]+(?:[ \t]+[A-Z][a-z]+)+)(?:[\r\n]|$)",
+        ]
+        for pat in name_patterns:
+            if m := re.search(pat, combined_text, re.IGNORECASE):
+                raw_name = m.group(1).replace("<", " ").splitlines()[0].strip()
+                if len(raw_name) >= 3 and not re.match(
+                    r"^(passport|republic|state|document|field|sample|dummy)", raw_name, re.I
+                ):
+                    fields["full_name"] = {"value": raw_name.title(), "confidence": 0.9}
+                    break
 
-    # Expiry Date / Passport Expiry
-    exp_patterns = [
-        r"(?:passport[ _]?expiry|expiry[ _]?date|expiration[ _]?date|valid[ _]?until|expires)\s*[:=]?\s*(\d{4}[-/]\d{1,2}[-/]\d{1,2})",
-        r"(?:passport[ _]?expiry|expiry[ _]?date|expiration[ _]?date|valid[ _]?until|expires)\s*[:=]?\s*(\d{1,2}[-/]\d{1,2}[-/]\d{4})",
-        r"(?:expiry[ _]?date|valid[ _]?until)\s*[:=]?\s*([0-3]?\d\s+[A-Za-z]{3,9}\s+\d{4})",
-    ]
-    for pat in exp_patterns:
-        if m := re.search(pat, combined_text, re.IGNORECASE):
-            fields["passport_expiry"] = {"value": m.group(1).replace("/", "-"), "confidence": 0.92}
-            fields["expiry_date"] = {"value": m.group(1).replace("/", "-"), "confidence": 0.92}
-            break
+    # Date of Birth (normalized to YYYY-MM-DD)
+    for k in ("date of birth", "dob", "birth date", "born"):
+        if k in kv:
+            iso_dob = normalize_date_to_iso(kv[k])
+            if re.match(r"^\d{4}-\d{2}-\d{2}$", iso_dob):
+                fields["date_of_birth"] = {"value": iso_dob, "confidence": 0.95}
+                break
+
+    if "date_of_birth" not in fields:
+        dob_patterns = [
+            r"(?:date[ _]?of[ _]?birth|dob|birth[ _]?date|born)\s*[:=]?\s*(\d{4}[-/]\d{1,2}[-/]\d{1,2})",
+            r"(?:date[ _]?of[ _]?birth|dob|birth[ _]?date|born)\s*[:=]?\s*(\d{1,2}[-/]\d{1,2}[-/]\d{4})",
+            r"(?:date[ _]?of[ _]?birth|dob)\s*[:=]?\s*([0-3]?\d\s+[A-Za-z]{3,9}\s+\d{4})",
+        ]
+        for pat in dob_patterns:
+            if m := re.search(pat, combined_text, re.IGNORECASE):
+                iso_dob = normalize_date_to_iso(m.group(1))
+                fields["date_of_birth"] = {"value": iso_dob, "confidence": 0.9}
+                break
+
+    # Expiry Date / Passport Expiry (normalized to YYYY-MM-DD)
+    for k in ("passport expiry", "expiry date", "expiration date", "valid until", "period of stay (expiry)"):
+        if k in kv:
+            iso_exp = normalize_date_to_iso(kv[k])
+            if re.match(r"^\d{4}-\d{2}-\d{2}$", iso_exp):
+                fields["passport_expiry"] = {"value": iso_exp, "confidence": 0.95}
+                fields["expiry_date"] = {"value": iso_exp, "confidence": 0.95}
+                break
+
+    if "passport_expiry" not in fields:
+        exp_patterns = [
+            r"(?:passport[ _]?expiry|expiry[ _]?date|expiration[ _]?date|valid[ _]?until|expires)\s*[:=]?\s*(\d{4}[-/]\d{1,2}[-/]\d{1,2})",
+            r"(?:passport[ _]?expiry|expiry[ _]?date|expiration[ _]?date|valid[ _]?until|expires)\s*[:=]?\s*(\d{1,2}[-/]\d{1,2}[-/]\d{4})",
+            r"(?:expiry[ _]?date|valid[ _]?until)\s*[:=]?\s*([0-3]?\d\s+[A-Za-z]{3,9}\s+\d{4})",
+        ]
+        for pat in exp_patterns:
+            if m := re.search(pat, combined_text, re.IGNORECASE):
+                iso_exp = normalize_date_to_iso(m.group(1))
+                fields["passport_expiry"] = {"value": iso_exp, "confidence": 0.92}
+                fields["expiry_date"] = {"value": iso_exp, "confidence": 0.92}
+                break
 
     # Nationality / Citizenship
-    nat_patterns = [
-        r"(?:nationality|citizenship|country[ _]?of[ _]?citizenship|national of)\s*[:=]\s*([A-Za-z ]+?)(?:[\r\n,;\.]|$)",
-    ]
-    for pat in nat_patterns:
-        if m := re.search(pat, combined_text, re.IGNORECASE):
-            clean_nat = m.group(1).strip()
-            if len(clean_nat) >= 3 and not re.match(r"^(the|and|or|date|sex)", clean_nat, re.I):
-                fields["nationality"] = {"value": clean_nat.title(), "confidence": 0.88}
+    for k in ("nationality", "citizenship", "country of citizenship", "national of"):
+        if k in kv:
+            clean_nat = extract_country_from_text(kv[k])
+            if len(clean_nat) >= 3 and not re.match(r"^(the|and|or|date|sex|dummy)", clean_nat, re.I):
+                fields["nationality"] = {"value": clean_nat, "confidence": 0.92}
+                break
+
+    if "nationality" not in fields:
+        nat_patterns = [
+            r"(?:nationality|citizenship|country[ _]?of[ _]?citizenship|national of)\s*[:=]\s*([A-Za-z ]+?)(?:[\r\n,;\.]|$)",
+        ]
+        for pat in nat_patterns:
+            if m := re.search(pat, combined_text, re.IGNORECASE):
+                clean_nat = extract_country_from_text(m.group(1))
+                if len(clean_nat) >= 3 and not re.match(r"^(the|and|or|date|sex|dummy)", clean_nat, re.I):
+                    fields["nationality"] = {"value": clean_nat, "confidence": 0.88}
+                    break
+
+    # Sex / Gender (male / female)
+    for k in ("sex", "gender"):
+        if k in kv:
+            v = kv[k].strip().lower()
+            if v in ("male", "m"):
+                fields["sex"] = {"value": "male", "confidence": 0.95}
+                break
+            elif v in ("female", "f"):
+                fields["sex"] = {"value": "female", "confidence": 0.95}
+                break
+
+    if "sex" not in fields:
+        if m := re.search(r"(?:sex|gender)\s*[:=\t]?\s*(male|female|m|f)\b", combined_text, re.I):
+            v = m.group(1).lower()
+            fields["sex"] = {"value": "male" if v in ("male", "m") else "female", "confidence": 0.9}
+
+    # Marital Status (single / married / divorced / widowed)
+    for k in ("marital status", "marital_status", "marital"):
+        if k in kv:
+            v = kv[k].strip().lower()
+            if v in ("single", "married", "divorced", "widowed"):
+                fields["marital_status"] = {"value": v, "confidence": 0.95}
+                break
+
+    if "marital_status" not in fields:
+        if m := re.search(r"(?:marital[ _]?status)\s*[:=\t]?\s*(single|married|divorced|widowed)\b", combined_text, re.I):
+            fields["marital_status"] = {"value": m.group(1).lower(), "confidence": 0.9}
+
+    # Occupation / Profession
+    for k in ("occupation", "profession", "job title", "current occupation"):
+        if k in kv:
+            v = kv[k].splitlines()[0].strip()
+            if len(v) >= 2 and not re.match(r"^(field|sample|dummy)", v, re.I):
+                fields["occupation"] = {"value": v.title(), "confidence": 0.92}
+                break
+
+    if "occupation" not in fields:
+        if m := re.search(r"(?:occupation|profession|job[ _]?title|position)\s*[:=\t]\s*([A-Za-z \-\/]+?)(?:[\r\n;]|$)", combined_text, re.I):
+            clean_occ = m.group(1).strip()
+            if len(clean_occ) >= 3 and not re.match(r"^(field|sample|dummy|the|and)", clean_occ, re.I):
+                fields["occupation"] = {"value": clean_occ.title(), "confidence": 0.88}
+
+    # Current Location / Residence Country
+    for k in ("current residing", "current residence", "current location", "current country", "residing in"):
+        if k in kv:
+            raw_loc = kv[k].splitlines()[0].strip()
+            fields["current_residence"] = {"value": raw_loc, "confidence": 0.9}
+            fields["current_country"] = {"value": extract_country_from_text(raw_loc), "confidence": 0.9}
+            break
+
+    if "current_country" not in fields:
+        if m := re.search(r"(?:current(?:ly)?[ _]?(?:residing|residence|location|country)|residing in)\s*[:=\t]\s*([A-Za-z0-9 ,\-]+?)(?:[\r\n;]|$)", combined_text, re.I):
+            raw_loc = m.group(1).strip()
+            fields["current_residence"] = {"value": raw_loc, "confidence": 0.88}
+            fields["current_country"] = {"value": extract_country_from_text(raw_loc), "confidence": 0.88}
+
+    # Phone Number
+    for k in ("phone number", "phone", "mobile number", "mobile", "contact number"):
+        if k in kv:
+            v = kv[k].splitlines()[0].strip()
+            if any(c.isdigit() for c in v) and len(v) >= 7:
+                fields["phone_number"] = {"value": v, "confidence": 0.9}
                 break
 
     # Document-specific extraction
@@ -91,12 +260,20 @@ def parse_structured_fields_from_text(
     INVALID_PASSPORT_WORDS = {
         "PASSPORT", "PASSEPORT", "DOCUMENT", "REPUBLIC", "TRAVEL",
         "NATIONAL", "GOVERNMENT", "JAPAN", "MINISTRY", "UNITED",
-        "STATES", "OFFICIAL", "SPECIMEN", "AUTHORITY",
+        "STATES", "OFFICIAL", "SPECIMEN", "AUTHORITY", "DUMMY",
     }
     INVALID_RC_WORDS = {
         "RESIDENCE", "RESIDENT", "ENGINEER", "MINISTRY", "JUSTICE",
         "GOVERNMENT", "PERMISSION", "SPECIMEN", "HUMANITIES",
     }
+
+    # Also check KV for passport number directly
+    for k in ("passport number", "passport no", "passport num", "travel document number"):
+        if k in kv:
+            val_p = kv[k].strip().upper()
+            if val_p not in INVALID_PASSPORT_WORDS and any(c.isdigit() for c in val_p) and len(val_p) >= 6:
+                fields["passport_number"] = {"value": val_p, "confidence": 0.95}
+                break
 
     if doc_type_clean in ("passport", "identity"):
         # 1. MRZ line 2 (ICAO 9303 passports)

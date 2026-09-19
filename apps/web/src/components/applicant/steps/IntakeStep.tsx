@@ -37,27 +37,82 @@ type IntakeStepProps = {
   onRefresh?: () => void;
 };
 
-/** Map profile country names to common ISO codes used in intake enums. */
+/** Map profile country names and demonyms to common ISO codes used in intake enums. */
 const COUNTRY_ALIASES: Record<string, string> = {
   japan: "JP",
+  japanese: "JP",
   "united states": "US",
+  american: "US",
+  usa: "US",
   "united kingdom": "UK",
+  british: "UK",
+  uk: "UK",
   canada: "CA",
+  canadian: "CA",
   australia: "AU",
+  australian: "AU",
   germany: "DE",
+  german: "DE",
   france: "FR",
+  french: "FR",
   singapore: "SG",
+  singaporean: "SG",
   "south korea": "KR",
+  korean: "KR",
   korea: "KR",
   bangladesh: "BD",
+  bangladeshi: "BD",
   india: "IN",
+  indian: "IN",
   pakistan: "PK",
+  pakistani: "PK",
   china: "CN",
+  chinese: "CN",
   philippines: "PH",
+  filipino: "PH",
   vietnam: "VN",
+  vietnamese: "VN",
   nepal: "NP",
+  nepalese: "NP",
+  nepali: "NP",
   "sri lanka": "LK",
+  "sri lankan": "LK",
 };
+
+const MONTHS_LOOKUP: Record<string, number> = {
+  january: 1, jan: 1, february: 2, feb: 2, march: 3, mar: 3,
+  april: 4, apr: 4, may: 5, june: 6, jun: 6, july: 7, jul: 7,
+  august: 8, aug: 8, september: 9, sep: 9, sept: 9, october: 10, oct: 10,
+  november: 11, nov: 11, december: 12, dec: 12,
+};
+
+export function normalizeDateToISO(val?: string | null): string {
+  if (!val) return "";
+  const s = val.trim().replace(/,/g, " ");
+  // YYYY-MM-DD or YYYY/MM/DD
+  const isoMatch = s.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/);
+  if (isoMatch) {
+    return `${isoMatch[1].padStart(4, "0")}-${isoMatch[2].padStart(2, "0")}-${isoMatch[3].padStart(2, "0")}`;
+  }
+  // DD-MM-YYYY or DD/MM/YYYY
+  const dmyMatch = s.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/);
+  if (dmyMatch) {
+    return `${dmyMatch[3].padStart(4, "0")}-${dmyMatch[2].padStart(2, "0")}-${dmyMatch[1].padStart(2, "0")}`;
+  }
+  // 15 March 2002 or March 15 2002
+  const parts = s.split(/\s+/);
+  if (parts.length === 3) {
+    if (/^\d+$/.test(parts[0]) && MONTHS_LOOKUP[parts[1].toLowerCase()] && /^\d{4}$/.test(parts[2])) {
+      const mon = String(MONTHS_LOOKUP[parts[1].toLowerCase()]).padStart(2, "0");
+      return `${parts[2]}-${mon}-${parts[0].padStart(2, "0")}`;
+    }
+    if (MONTHS_LOOKUP[parts[0].toLowerCase()] && /^\d+$/.test(parts[1]) && /^\d{4}$/.test(parts[2])) {
+      const mon = String(MONTHS_LOOKUP[parts[0].toLowerCase()]).padStart(2, "0");
+      return `${parts[2]}-${mon}-${parts[1].padStart(2, "0")}`;
+    }
+  }
+  return val.replace(/\//g, "-");
+}
 
 function matchEnumOption(value: string, options: string[]): string | null {
   if (options.includes(value)) return value;
@@ -70,6 +125,11 @@ function matchEnumOption(value: string, options: string[]): string | null {
   if (alias) {
     const hit = options.find((o) => o.toUpperCase() === alias || o === alias);
     if (hit) return hit;
+    const ctry = ALL_COUNTRIES.find((c) => c.code === alias);
+    if (ctry) {
+      const hitName = options.find((o) => o.toLowerCase() === ctry.name.toLowerCase());
+      if (hitName) return hitName;
+    }
   }
   return null;
 }
@@ -420,6 +480,108 @@ function getAutofillValueForQuestion(
         normPrompt.includes("position in company")
       ) {
         if (normFKey === "position" || normFKey === "job_title") {
+          return { value: fVal, source: docLabel };
+        }
+      }
+
+      // Full Name
+      if (
+        normKey === "full_name" ||
+        normKey === "applicant_name" ||
+        normKey === "name" ||
+        (normPrompt.includes("full name") && !normPrompt.includes("father") && !normPrompt.includes("mother") && !normPrompt.includes("spouse") && !normPrompt.includes("employer"))
+      ) {
+        if (normFKey === "full_name" || normFKey === "applicant_name" || normFKey === "name") {
+          const clean = fVal.split(/\r?\n/)[0].trim();
+          if (clean.length >= 3) return { value: clean, source: docLabel };
+        }
+      }
+
+      // Date of Birth
+      if (
+        normKey === "date_of_birth" ||
+        normKey === "dob" ||
+        normKey === "birth_date" ||
+        normKey === "applicant_dob" ||
+        (normPrompt.includes("date of birth") && !normPrompt.includes("father") && !normPrompt.includes("mother") && !normPrompt.includes("spouse"))
+      ) {
+        if (normFKey === "date_of_birth" || normFKey === "dob" || normFKey === "birth_date") {
+          const iso = normalizeDateToISO(fVal);
+          return { value: iso, source: docLabel };
+        }
+      }
+
+      // Nationality / Citizenship
+      if (
+        normKey === "nationality" ||
+        normKey === "citizenship" ||
+        normKey === "country_of_citizenship" ||
+        (normPrompt.includes("nationality") && !normPrompt.includes("father") && !normPrompt.includes("mother") && !normPrompt.includes("spouse"))
+      ) {
+        if (normFKey === "nationality" || normFKey === "citizenship") {
+          return { value: fVal, source: docLabel };
+        }
+      }
+
+      // Sex / Gender
+      if (
+        normKey === "sex" ||
+        normKey === "gender" ||
+        normPrompt.includes("what sex") ||
+        normPrompt.includes("gender")
+      ) {
+        if (normFKey === "sex" || normFKey === "gender") {
+          const s = fVal.toLowerCase();
+          const mapped = s.startsWith("m") ? "male" : s.startsWith("f") ? "female" : fVal;
+          return { value: mapped, source: docLabel };
+        }
+      }
+
+      // Marital Status
+      if (
+        normKey === "marital_status" ||
+        normPrompt.includes("marital status")
+      ) {
+        if (normFKey === "marital_status" || normFKey === "marital") {
+          return { value: fVal.toLowerCase(), source: docLabel };
+        }
+      }
+
+      // Occupation
+      if (
+        normKey === "occupation" ||
+        normKey === "profession" ||
+        normKey === "job_title" ||
+        normPrompt.includes("occupation") ||
+        normPrompt.includes("profession")
+      ) {
+        if (normFKey === "occupation" || normFKey === "profession" || normFKey === "job_title") {
+          return { value: fVal, source: docLabel };
+        }
+      }
+
+      // Current Country / Residing
+      if (
+        normKey === "current_location_country" ||
+        normKey === "current_country" ||
+        normKey === "residence_country" ||
+        normKey === "current_residence_country" ||
+        normPrompt.includes("currently residing in") ||
+        normPrompt.includes("current country")
+      ) {
+        if (normFKey === "current_country" || normFKey === "current_residence" || normFKey === "residence_country") {
+          return { value: fVal, source: docLabel };
+        }
+      }
+
+      // Phone Number
+      if (
+        normKey === "phone_number" ||
+        normKey === "phone" ||
+        normKey === "contact_number" ||
+        normPrompt.includes("phone number")
+      ) {
+        if (normFKey === "phone_number" || normFKey === "phone" || normFKey === "mobile_number") {
           return { value: fVal, source: docLabel };
         }
       }
@@ -1139,7 +1301,11 @@ export function IntakeStep({
               <div className="pt-1">
                 <input
                   type={q.type === "integer" ? "number" : isDateInput ? "date" : "text"}
-                  value={String(current ?? "")}
+                  value={
+                    isDateInput
+                      ? (normalizeDateToISO(String(current ?? "")) || String(current ?? ""))
+                      : String(current ?? "")
+                  }
                   onChange={(e) => handleChange(q.key, e.target.value)}
                   onBlur={() => void handleSubmit(q.key)}
                   onPaste={(e) => {

@@ -982,10 +982,13 @@ async def sync_wallet_to_profile(
         p_val = str(p_raw.get("value") if isinstance(p_raw, dict) else (p_raw or "")).strip()
         rc_raw = (doc.extracted_fields or {}).get("residence_card_number")
         rc_val = str(rc_raw.get("value") if isinstance(rc_raw, dict) else (rc_raw or "")).strip()
+        fn_raw = (doc.extracted_fields or {}).get("full_name")
+        fn_val = str(fn_raw.get("value") if isinstance(fn_raw, dict) else (fn_raw or "")).strip()
 
         needs_reextract = (
             (doc.doc_type == "passport" and (not p_val or p_val.upper() in {"PASSPORT", "PASSEPORT", "DOCUMENT"} or not any(c.isdigit() for c in p_val)))
             or (doc.doc_type == "residence_card" and (not rc_val or rc_val.upper() in {"RESIDENCE", "ENGINEER", "MINISTRY"} or not any(c.isdigit() for c in rc_val)))
+            or ("\n" in fn_val or "Nationality" in fn_val or "Passport" in fn_val or len(fn_val) > 40)
         )
         if needs_reextract:
             from torii_api.services.ocr_extractor import extract_document_metadata

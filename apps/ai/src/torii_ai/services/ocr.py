@@ -156,55 +156,139 @@ def extract_document_fields(
 
 
 def _fallback_extract(doc_type: DocumentType, filename: str, hint_text: str | None) -> OCRResult:
-    """Fallback regex extraction when vision model is unavailable."""
+    """Fallback regex and KV extraction when vision model is unavailable."""
     import re
 
     text = hint_text or Path(filename).stem.replace("_", " ").replace("-", " ")
     fields: dict[str, ExtractedValue] = {}
 
+    MONTHS_MAP = {
+        "january": 1, "jan": 1, "february": 2, "feb": 2, "march": 3, "mar": 3,
+        "april": 4, "apr": 4, "may": 5, "june": 6, "jun": 6, "july": 7, "jul": 7,
+        "august": 8, "aug": 8, "september": 9, "sep": 9, "sept": 9, "october": 10, "oct": 10,
+        "november": 11, "nov": 11, "december": 12, "dec": 12,
+    }
+
+    DEMONYM_TO_COUNTRY = {
+        "bangladeshi": "Bangladesh", "japanese": "Japan", "american": "United States",
+        "indian": "India", "chinese": "China", "filipino": "Philippines", "vietnamese": "Vietnam",
+        "nepalese": "Nepal", "nepali": "Nepal", "sri lankan": "Sri Lanka", "korean": "South Korea",
+        "south korean": "South Korea", "british": "United Kingdom", "canadian": "Canada",
+        "australian": "Australia", "german": "Germany", "french": "France", "pakistani": "Pakistan",
+    }
+
+    def _normalize_date(val: str) -> str:
+        s = val.strip().replace(",", " ")
+        if m := re.match(r"^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$", s):
+            return f"{int(m.group(1)):04d}-{int(m.group(2)):02d}-{int(m.group(3)):02d}"
+        if m := re.match(r"^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$", s):
+            return f"{int(m.group(3)):04d}-{int(m.group(2)):02d}-{int(m.group(1)):02d}"
+        parts = s.split()
+        if len(parts) == 3:
+            if parts[0].isdigit() and parts[1].lower() in MONTHS_MAP and parts[2].isdigit():
+                return f"{int(parts[2]):04d}-{MONTHS_MAP[parts[1].lower()]:02d}-{int(parts[0]):02d}"
+            if parts[0].lower() in MONTHS_MAP and parts[1].isdigit() and parts[2].isdigit():
+                return f"{int(parts[2]):04d}-{MONTHS_MAP[parts[0].lower()]:02d}-{int(parts[1]):02d}"
+        return val.replace("/", "-")
+
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    kv: dict[str, str] = {}
+    for i, line in enumerate(lines):
+        if ":" in line:
+            k, v = line.split(":", 1)
+            if k.strip() and v.strip():
+                kv[k.strip().lower()] = v.strip()
+        elif "=" in line:
+            k, v = line.split("=", 1)
+            if k.strip() and v.strip():
+                kv[k.strip().lower()] = v.strip()
+        if i + 1 < len(lines):
+            if len(line) <= 45 and not line.endswith(":"):
+                kv[line.lower()] = lines[i + 1]
+
     # Extract Full Name
-    if name_match := re.search(
-        r"(?:full[ _]?name|holder|applicant[ _]?name|name)\s*[:=]\s*([^\n,;]+)", text, re.IGNORECASE
-    ):
-        fields["full_name"] = ExtractedValue(value=name_match.group(1).strip(), confidence=0.9)
+    for k in ("full name", "applicant name", "holder name", "name", "full legal name"):
+        if k in kv:
+            v = kv[k].splitlines()[0].strip()
+            if len(v) >= 3 and not re.match(r"^(passport|republic|state|document|field|sample|dummy)", v, re.I):
+                fields["full_name"] = ExtractedValue(value=v.title(), confidence=0.95)
+                break
+
+    if "full_name" not in fields:
+        if name_match := re.search(
+            r"(?:full[ _]?name|holder(?:'s)?[ _]?name|applicant[ _]?name|name)\s*[:=]\s*([^\n,;]+)", text, re.IGNORECASE
+        ):
+            raw = name_match.group(1).splitlines()[0].strip()
+            if len(raw) >= 3 and not re.match(r"^(passport|republic|state|document|field|sample|dummy)", raw, re.I):
+                fields["full_name"] = ExtractedValue(value=raw.title(), confidence=0.9)
 
     # Extract Date of Birth
-    if dob_match := re.search(
-        r"(?:date[ _]?of[ _]?birth|dob|birth[ _]?date)\s*[:=]?\s*(\d{4}[-/]\d{2}[-/]\d{2})",
-        text,
-        re.IGNORECASE,
-    ):
-        fields["date_of_birth"] = ExtractedValue(
-            value=dob_match.group(1).replace("/", "-"), confidence=0.9
-        )
+    for k in ("date of birth", "dob", "birth date"):
+        if k in kv:
+            fields["date_of_birth"] = ExtractedValue(value=_normalize_date(kv[k]), confidence=0.95)
+            break
+
+    if "date_of_birth" not in fields:
+        if dob_match := re.search(
+            r"(?:date[ _]?of[ _]?birth|dob|birth[ _]?date)\s*[:=]?\s*([0-3]?\d\s+[A-Za-z]{3,9}\s+\d{4}|\d{4}[-/]\d{1,2}[-/]\d{1,2}|\d{1,2}[-/]\d{1,2}[-/]\d{4})",
+            text,
+            re.IGNORECASE,
+        ):
+            fields["date_of_birth"] = ExtractedValue(
+                value=_normalize_date(dob_match.group(1)), confidence=0.9
+            )
 
     # Extract Expiry Date / Passport Expiry
-    if exp_match := re.search(
-        r"(?:passport[ _]?expiry|expiry[ _]?date|expiration[ _]?date|valid[ _]?until)\s*[:=]?\s*(\d{4}[-/]\d{2}[-/]\d{2})",
-        text,
-        re.IGNORECASE,
-    ):
-        fields["passport_expiry"] = ExtractedValue(
-            value=exp_match.group(1).replace("/", "-"), confidence=0.9
-        )
+    for k in ("passport expiry", "expiry date", "expiration date", "valid until"):
+        if k in kv:
+            fields["passport_expiry"] = ExtractedValue(value=_normalize_date(kv[k]), confidence=0.95)
+            break
+
+    if "passport_expiry" not in fields:
+        if exp_match := re.search(
+            r"(?:passport[ _]?expiry|expiry[ _]?date|expiration[ _]?date|valid[ _]?until)\s*[:=]?\s*([0-3]?\d\s+[A-Za-z]{3,9}\s+\d{4}|\d{4}[-/]\d{1,2}[-/]\d{1,2}|\d{1,2}[-/]\d{1,2}[-/]\d{4})",
+            text,
+            re.IGNORECASE,
+        ):
+            fields["passport_expiry"] = ExtractedValue(
+                value=_normalize_date(exp_match.group(1)), confidence=0.9
+            )
 
     # Extract Nationality
-    if nat_match := re.search(
-        r"(?:nationality|citizenship|country[ _]?of[ _]?citizenship)\s*[:=]\s*([A-Za-z\s]+)",
-        text,
-        re.IGNORECASE,
-    ):
-        fields["nationality"] = ExtractedValue(value=nat_match.group(1).strip(), confidence=0.88)
+    for k in ("nationality", "citizenship", "country of citizenship"):
+        if k in kv:
+            c = kv[k].strip().lower()
+            val = DEMONYM_TO_COUNTRY.get(c, kv[k].strip().title())
+            fields["nationality"] = ExtractedValue(value=val, confidence=0.92)
+            break
+
+    if "nationality" not in fields:
+        if nat_match := re.search(
+            r"(?:nationality|citizenship|country[ _]?of[ _]?citizenship)\s*[:=]\s*([A-Za-z\s]+)",
+            text,
+            re.IGNORECASE,
+        ):
+            c = nat_match.group(1).strip().lower()
+            val = DEMONYM_TO_COUNTRY.get(c, nat_match.group(1).strip().title())
+            fields["nationality"] = ExtractedValue(value=val, confidence=0.88)
 
     INVALID_PASSPORT_WORDS = {
         "PASSPORT", "PASSEPORT", "DOCUMENT", "REPUBLIC", "TRAVEL",
         "NATIONAL", "GOVERNMENT", "JAPAN", "MINISTRY", "UNITED",
-        "STATES", "OFFICIAL", "SPECIMEN", "AUTHORITY",
+        "STATES", "OFFICIAL", "SPECIMEN", "AUTHORITY", "DUMMY",
     }
     INVALID_RC_WORDS = {
         "RESIDENCE", "RESIDENT", "ENGINEER", "MINISTRY", "JUSTICE",
         "GOVERNMENT", "PERMISSION", "SPECIMEN", "HUMANITIES",
     }
+
+    # Direct KV for passport number
+    for k in ("passport number", "passport no", "passport num"):
+        if k in kv:
+            v_p = kv[k].strip().upper()
+            if v_p not in INVALID_PASSPORT_WORDS and any(c.isdigit() for c in v_p) and len(v_p) >= 6:
+                fields["passport_number"] = ExtractedValue(value=v_p, confidence=0.95)
+                break
 
     if doc_type == "passport":
         if mrz := re.search(r"(?:^|\n)([A-Z0-9]{6,10})<*[0-9][A-Z]{3}[0-9]{6}", text):

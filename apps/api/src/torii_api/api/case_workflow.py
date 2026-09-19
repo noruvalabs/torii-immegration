@@ -621,18 +621,21 @@ def _apply_extracted_fields_to_case_and_user(
             "holder_name",
             "employee_name",
         ):
-            user.full_name = val_str
-            answers["full_name"] = val_str
-            answers["applicant_name"] = val_str
+            clean_name = val_str.splitlines()[0].strip()
+            user.full_name = clean_name
+            answers["full_name"] = clean_name
+            answers["applicant_name"] = clean_name
         elif norm_key in (
             "nationality",
             "citizenship",
             "country_of_citizenship",
             "country_of_nationality",
         ):
-            user.nationality = val_str
-            answers["nationality"] = val_str
-            answers["citizenship"] = val_str
+            from torii_api.services.ocr_extractor import extract_country_from_text
+            clean_nat = extract_country_from_text(val_str)
+            user.nationality = clean_nat
+            answers["nationality"] = clean_nat
+            answers["citizenship"] = clean_nat
         elif norm_key in ("passport_number", "passport_no", "passport_num"):
             clean_p = val_str.upper()
             if (
@@ -648,14 +651,34 @@ def _apply_extracted_fields_to_case_and_user(
             "expiry_date",
             "passport_expiration_date",
         ):
-            user.passport_expiry = val_str
-            answers["passport_expiry"] = val_str
+            from torii_api.services.ocr_extractor import normalize_date_to_iso
+            iso_exp = normalize_date_to_iso(val_str)
+            user.passport_expiry = iso_exp
+            answers["passport_expiry"] = iso_exp
         elif norm_key in ("date_of_birth", "dob", "birth_date", "applicant_dob"):
-            user.date_of_birth = val_str
-            answers["date_of_birth"] = val_str
-        elif norm_key in ("current_country", "current_residence_country", "residence_country"):
-            user.current_country = val_str
-            answers["current_country"] = val_str
+            from torii_api.services.ocr_extractor import normalize_date_to_iso
+            iso_dob = normalize_date_to_iso(val_str)
+            user.date_of_birth = iso_dob
+            answers["date_of_birth"] = iso_dob
+        elif norm_key in ("current_country", "current_residence_country", "residence_country", "current_location_country", "current_residence", "current_residing"):
+            from torii_api.services.ocr_extractor import extract_country_from_text
+            ctry = extract_country_from_text(val_str)
+            user.current_country = ctry
+            answers["current_country"] = ctry
+            answers["current_location_country"] = ctry
+            answers["current_residence_country"] = ctry
+            answers["residence_country"] = ctry
+        elif norm_key in ("sex", "gender"):
+            s_val = val_str.strip().lower()
+            norm_s = "male" if s_val in ("male", "m") else "female" if s_val in ("female", "f") else s_val
+            answers["sex"] = norm_s
+            answers["gender"] = norm_s
+        elif norm_key in ("marital_status", "marital"):
+            answers["marital_status"] = val_str.strip().lower()
+        elif norm_key in ("occupation", "profession"):
+            answers["occupation"] = val_str
+        elif norm_key in ("phone_number", "phone", "mobile_number", "mobile", "contact_number"):
+            answers["phone_number"] = val_str
         elif norm_key in ("employer_name", "company_name", "sponsor_name"):
             answers["employer_name"] = val_str
             answers["company_name"] = val_str
