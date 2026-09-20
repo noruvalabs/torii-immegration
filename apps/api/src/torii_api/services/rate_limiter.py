@@ -56,7 +56,9 @@ class RateLimitExceeded(HTTPException):
     """HTTP 429 Too Many Requests exception with rate-limit headers."""
 
     def __init__(self, result: RateLimitResult, detail: str | None = None) -> None:
-        msg = detail or f"Rate limit exceeded. Please retry in {max(1, result.retry_after)} seconds."
+        msg = (
+            detail or f"Rate limit exceeded. Please retry in {max(1, result.retry_after)} seconds."
+        )
         super().__init__(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail=msg,
@@ -170,7 +172,8 @@ class InMemoryRateLimitBackend:
     def _cleanup(self, now: float) -> None:
         """Purge empty or stale entries (older than 24 hours max window)."""
         stale_keys = [
-            k for k, timestamps in self._records.items()
+            k
+            for k, timestamps in self._records.items()
             if not timestamps or timestamps[-1] < (now - 86400)
         ]
         for k in stale_keys:
@@ -371,7 +374,9 @@ class ResearchBudgetTracker:
     def __init__(self, limiter: RateLimiter | None = None) -> None:
         self.limiter = limiter or get_rate_limiter()
 
-    async def check_budget(self, user_id: int | str, settings: Settings | None = None) -> RateLimitResult:
+    async def check_budget(
+        self, user_id: int | str, settings: Settings | None = None
+    ) -> RateLimitResult:
         settings = settings or get_settings()
         if not settings.rate_limit_enabled:
             return RateLimitResult(

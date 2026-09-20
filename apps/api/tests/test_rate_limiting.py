@@ -18,6 +18,7 @@ from httpx import AsyncClient
 
 from torii_api.config import get_settings
 from torii_api.services.rate_limiter import (
+    RateLimitExceeded,
     ResearchBudgetTracker,
     get_rate_limiter,
 )
@@ -31,7 +32,9 @@ async def _reset_limiter(monkeypatch: pytest.MonkeyPatch) -> None:
     await limiter.reset()
 
 
-async def test_healthcheck_exempt_from_rate_limit(client: AsyncClient, monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_healthcheck_exempt_from_rate_limit(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Verify healthcheck probe is never throttled even under burst traffic."""
     settings = get_settings()
     monkeypatch.setattr(settings, "rate_limit_enabled", True)
@@ -42,7 +45,9 @@ async def test_healthcheck_exempt_from_rate_limit(client: AsyncClient, monkeypat
         assert resp.status_code == 200
 
 
-async def test_unauthenticated_ip_rate_limiting(client: AsyncClient, monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_unauthenticated_ip_rate_limiting(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Verify unauthenticated requests from an IP are capped and receive 429 on N+1."""
     settings = get_settings()
     monkeypatch.setattr(settings, "rate_limit_enabled", True)
@@ -73,7 +78,9 @@ async def test_unauthenticated_ip_rate_limiting(client: AsyncClient, monkeypatch
     assert other_ip.status_code == 200
 
 
-async def test_authenticated_user_request_limit(client: AsyncClient, monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_authenticated_user_request_limit(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Verify authenticated user request limit is enforced by user ID across IP changes."""
     settings = get_settings()
     monkeypatch.setattr(settings, "rate_limit_enabled", True)
@@ -128,7 +135,9 @@ async def test_authenticated_user_request_limit(client: AsyncClient, monkeypatch
     assert resp_b.status_code == 200
 
 
-async def test_login_brute_force_protection(client: AsyncClient, monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_login_brute_force_protection(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Verify login endpoint throttles brute-force attempts per IP and per identifier."""
     settings = get_settings()
     monkeypatch.setattr(settings, "rate_limit_enabled", True)
@@ -155,7 +164,9 @@ async def test_login_brute_force_protection(client: AsyncClient, monkeypatch: py
     assert "Rate limit exceeded" in resp3.json()["detail"]
 
 
-async def test_register_abuse_protection(client: AsyncClient, monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_register_abuse_protection(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Verify registration spam is throttled per IP."""
     settings = get_settings()
     monkeypatch.setattr(settings, "rate_limit_enabled", True)
@@ -188,7 +199,9 @@ async def test_register_abuse_protection(client: AsyncClient, monkeypatch: pytes
     assert "Rate limit exceeded" in r3.json()["detail"]
 
 
-async def test_email_endpoints_abuse_protection(client: AsyncClient, monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_email_endpoints_abuse_protection(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Verify forgot-password and resend-verification endpoints throttle email bombing."""
     settings = get_settings()
     monkeypatch.setattr(settings, "rate_limit_enabled", True)
@@ -197,21 +210,33 @@ async def test_email_endpoints_abuse_protection(client: AsyncClient, monkeypatch
     headers = {"x-forwarded-for": "198.51.100.70"}
 
     # 2 calls allowed
-    f1 = await client.post("/v1/auth/forgot-password", json={"email": "victim@example.com"}, headers=headers)
+    f1 = await client.post(
+        "/v1/auth/forgot-password", json={"email": "victim@example.com"}, headers=headers
+    )
     assert f1.status_code == 200
-    f2 = await client.post("/v1/auth/forgot-password", json={"email": "victim@example.com"}, headers=headers)
+    f2 = await client.post(
+        "/v1/auth/forgot-password", json={"email": "victim@example.com"}, headers=headers
+    )
     assert f2.status_code == 200
 
     # 3rd call rejected
-    f3 = await client.post("/v1/auth/forgot-password", json={"email": "victim@example.com"}, headers=headers)
+    f3 = await client.post(
+        "/v1/auth/forgot-password", json={"email": "victim@example.com"}, headers=headers
+    )
     assert f3.status_code == 429
 
     # Same check on resend-verification
-    r1 = await client.post("/v1/auth/resend-verification", json={"email": "victim2@example.com"}, headers=headers)
+    r1 = await client.post(
+        "/v1/auth/resend-verification", json={"email": "victim2@example.com"}, headers=headers
+    )
     assert r1.status_code == 200
-    r2 = await client.post("/v1/auth/resend-verification", json={"email": "victim2@example.com"}, headers=headers)
+    r2 = await client.post(
+        "/v1/auth/resend-verification", json={"email": "victim2@example.com"}, headers=headers
+    )
     assert r2.status_code == 200
-    r3 = await client.post("/v1/auth/resend-verification", json={"email": "victim2@example.com"}, headers=headers)
+    r3 = await client.post(
+        "/v1/auth/resend-verification", json={"email": "victim2@example.com"}, headers=headers
+    )
     assert r3.status_code == 429
 
 
@@ -237,7 +262,7 @@ async def test_monthly_research_budget(monkeypatch: pytest.MonkeyPatch) -> None:
     assert r3.remaining == 0
 
     # 4th call raises RateLimitExceeded
-    with pytest.raises(Exception) as exc_info:
+    with pytest.raises(RateLimitExceeded) as exc_info:
         await tracker.check_budget(user_id=42, settings=settings)
     assert "Monthly research budget exceeded" in str(exc_info.value.detail)
 
@@ -264,4 +289,7 @@ async def test_cors_allowlist_headers(client: AsyncClient) -> None:
             "access-control-request-method": "GET",
         },
     )
-    assert disallowed_resp.status_code == 400 or "access-control-allow-origin" not in disallowed_resp.headers
+    assert (
+        disallowed_resp.status_code == 400
+        or "access-control-allow-origin" not in disallowed_resp.headers
+    )
