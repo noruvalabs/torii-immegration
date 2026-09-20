@@ -25,9 +25,14 @@ from torii_api.main import create_app
 def _prevent_real_emails_in_tests(monkeypatch: pytest.MonkeyPatch) -> None:
     """Ensure no tests ever attempt real SMTP delivery to external servers, and keep unit tests fast."""
     monkeypatch.setattr("torii_api.auth.email.send_email", lambda **kwargs: True)
+    try:
+        monkeypatch.setattr("torii_api.api.auth.send_email", lambda **kwargs: True)
+    except AttributeError:
+        pass
     from torii_api.config import get_settings
 
     monkeypatch.setattr(get_settings(), "require_email_verification", False)
+    monkeypatch.setattr(get_settings(), "rate_limit_enabled", False)
 
 
 @pytest_asyncio.fixture

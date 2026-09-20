@@ -5,13 +5,15 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, Header, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, UploadFile, status
 from fastapi.responses import HTMLResponse, Response
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from torii_api.auth.deps import CurrentUserDep
+from torii_api.config import get_settings
 from torii_api.db.session import get_session
+from torii_api.services.rate_limiter import check_rate_limit
 from torii_api.services.wallet import (
     get_document_content,
     get_document_types,
@@ -128,12 +130,24 @@ async def upload_wallet_document(
     session: SessionDep,
     file: UploadFile,
     doc_type: str,
+    request: Request,
     name: str | None = None,
     issued_date: str | None = None,
     expiry_date: str | None = None,
     notes: str | None = None,
 ) -> WalletUploadOut:
     """Upload a document to the wallet."""
+    settings = get_settings()
+    # Abuse protection: per-user heavy rate limit on document upload & OCR processing (T-10)
+    await check_rate_limit(
+        request,
+        limit=settings.rate_limit_heavy_per_minute,
+        window_seconds=60,
+        key_prefix="heavy:wallet_upload",
+        key_suffix=str(current_user.id),
+        settings=settings,
+    )
+
     from torii_api.services.wallet import normalize_doc_type
 
     doc_type = normalize_doc_type(doc_type)

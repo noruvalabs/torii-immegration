@@ -64,6 +64,7 @@ from torii_api.services.pack_overrides import (
 from torii_api.services.packet import assemble_packet
 from torii_api.services.payment import case_has_packet_entitlement
 from torii_api.services.portal_pack import build_portal_pack
+from torii_api.services.rate_limiter import check_rate_limit
 from torii_api.services.research import (
     research_documents,
     research_forms,
@@ -815,7 +816,22 @@ async def acknowledge_review(
 
 
 @router.post("/{case_id}/packet")
-async def build_packet(case_id: int, session: SessionDep, user: CurrentUserDep) -> dict[str, Any]:
+async def build_packet(
+    case_id: int,
+    session: SessionDep,
+    user: CurrentUserDep,
+    request: Request,
+) -> dict[str, Any]:
+    settings = get_settings()
+    # Abuse protection: per-user heavy rate limit on packet compilation (T-10)
+    await check_rate_limit(
+        request,
+        limit=settings.rate_limit_heavy_per_minute,
+        window_seconds=60,
+        key_prefix="heavy:packet",
+        key_suffix=str(user.id),
+        settings=settings,
+    )
     case = await _owned_case(session, case_id, user)
     review = await _review(session, case)
     if review.flags and not case.review_flags_acknowledged:
@@ -1373,6 +1389,17 @@ async def export_case_documents(
     The case reference is still used for the *filename*, which is how the applicant tells
     one download from another.
     """
+    settings = get_settings()
+    # Abuse protection: per-user heavy rate limit on document exports (T-10)
+    await check_rate_limit(
+        request,
+        limit=settings.rate_limit_heavy_per_minute,
+        window_seconds=60,
+        key_prefix="heavy:export",
+        key_suffix=str(user.id),
+        settings=settings,
+    )
+
     case = await _owned_case(session, case_id, user)
     reference = case.reference or f"CASE-{case.id}"
 

@@ -28,6 +28,7 @@ from torii_api.auth.security import (
 )
 from torii_api.config import Settings
 from torii_api.db.models import CreditTransaction, User, UserRole
+from torii_api.services.rate_limiter import check_rate_limit
 
 router = APIRouter(prefix="/v1/auth", tags=["auth"])
 
@@ -189,6 +190,15 @@ async def register(
     request: Request,
 ) -> TokenOut:
     """Create an applicant account or re-send verification for an unverified account."""
+    # Abuse protection: limit registration spam per IP (T-10)
+    await check_rate_limit(
+        request,
+        limit=settings.rate_limit_register_per_minute,
+        window_seconds=60,
+        key_prefix="auth:register:ip",
+        settings=settings,
+    )
+
     email = _normalize_email(payload.email)
 
     # Check for an existing account
@@ -327,8 +337,31 @@ async def register(
 
 
 @router.post("/login", response_model=TokenOut)
-async def login(payload: LoginIn, session: SessionDep, settings: SettingsDep) -> TokenOut:
+async def login(
+    payload: LoginIn,
+    session: SessionDep,
+    settings: SettingsDep,
+    request: Request,
+) -> TokenOut:
     """Sign in with email/username and password; returns a bearer token."""
+    # Abuse protection: limit brute-force attempts per IP and per account identifier (T-10)
+    await check_rate_limit(
+        request,
+        limit=settings.rate_limit_login_per_minute,
+        window_seconds=60,
+        key_prefix="auth:login:ip",
+        settings=settings,
+    )
+    clean_ident = _normalize_email(payload.email_or_username)
+    await check_rate_limit(
+        request,
+        limit=settings.rate_limit_login_per_minute,
+        window_seconds=60,
+        key_prefix="auth:login:ident",
+        key_suffix=clean_ident,
+        settings=settings,
+    )
+
     user = await _find_user_by_email_or_username(session, payload.email_or_username)
     if user is None or not verify_password(payload.password, user.password_hash):
         raise HTTPException(
@@ -708,6 +741,24 @@ async def resend_verification(
 ) -> MessageOut:
     """Resend the email-verification link. Always returns 200 to prevent enumeration."""
     email = _normalize_email(payload.email)
+
+    # Abuse protection: prevent email bombing per IP and per target email (T-10)
+    await check_rate_limit(
+        request,
+        limit=settings.rate_limit_email_per_minute,
+        window_seconds=60,
+        key_prefix="auth:resend:ip",
+        settings=settings,
+    )
+    await check_rate_limit(
+        request,
+        limit=settings.rate_limit_email_per_minute,
+        window_seconds=60,
+        key_prefix="auth:resend:email",
+        key_suffix=email,
+        settings=settings,
+    )
+
     user = await session.scalar(select(User).where(User.email == email))
 
     if user is not None and not user.email_verified:
@@ -752,6 +803,24 @@ async def forgot_password(
 ) -> MessageOut:
     """Send a password-reset email. Always returns 200 to prevent enumeration."""
     email = _normalize_email(payload.email)
+
+    # Abuse protection: prevent email bombing per IP and per target email (T-10)
+    await check_rate_limit(
+        request,
+        limit=settings.rate_limit_email_per_minute,
+        window_seconds=60,
+        key_prefix="auth:forgot:ip",
+        settings=settings,
+    )
+    await check_rate_limit(
+        request,
+        limit=settings.rate_limit_email_per_minute,
+        window_seconds=60,
+        key_prefix="auth:forgot:email",
+        key_suffix=email,
+        settings=settings,
+    )
+
     user = await session.scalar(select(User).where(User.email == email))
 
     if user is not None and user.is_active:
@@ -784,9 +853,20 @@ async def forgot_password(
 
 @router.post("/reset-password", response_model=MessageOut)
 async def reset_password(
-    payload: ResetPasswordIn, session: SessionDep, settings: SettingsDep
+    payload: ResetPasswordIn,
+    session: SessionDep,
+    settings: SettingsDep,
+    request: Request,
 ) -> MessageOut:
     """Reset a password using the token from the email."""
+    # Abuse protection: prevent token brute-forcing per IP (T-10)
+    await check_rate_limit(
+        request,
+        limit=settings.rate_limit_register_per_minute,
+        window_seconds=60,
+        key_prefix="auth:reset:ip",
+        settings=settings,
+    )
     token_hash = hash_token(payload.token)
     user = await session.scalar(select(User).where(User.password_reset_token == token_hash))
     if user is None:

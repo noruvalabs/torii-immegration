@@ -145,6 +145,23 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         redoc_url=None,
         openapi_url="/openapi.json" if settings.docs_enabled else None,
     )
+
+    # Rate limiting & abuse protection middleware (T-10)
+    from starlette.middleware.cors import CORSMiddleware
+
+    from torii_api.middleware.rate_limit import RateLimitMiddleware
+
+    # Inner middleware: Rate limiting enforces per-user and per-IP quotas
+    app.add_middleware(RateLimitMiddleware, settings=settings)
+    # Outer middleware: CORS handles preflight and decorates all responses (including 429s)
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.cors_origins_list,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
     app.include_router(health_router)
     if settings.docs_enabled:
         app.include_router(build_docs_router(title=APP_TITLE))

@@ -139,6 +139,26 @@ class Settings(BaseSettings):
     # entitlement (US-22.2). Off in unit tests unless explicitly enabled.
     require_packet_entitlement: bool = True
 
+    # --- Rate limiting & abuse protection (T-10) ------------------------------
+    rate_limit_enabled: bool = True
+    rate_limit_user_per_minute: int = 120
+    rate_limit_ip_per_minute: int = 60
+    rate_limit_login_per_minute: int = 10
+    rate_limit_register_per_minute: int = 5
+    rate_limit_email_per_minute: int = 3
+    rate_limit_heavy_per_minute: int = 15
+    rate_limit_monthly_research_budget: int = 100
+
+    # Comma-separated list of permitted CORS origins. app_base_url is automatically included.
+    cors_allowed_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
+
+    @property
+    def cors_origins_list(self) -> list[str]:
+        origins = {o.strip() for o in self.cors_allowed_origins.split(",") if o.strip()}
+        if self.app_base_url:
+            origins.add(self.app_base_url.rstrip("/"))
+        return sorted(origins)
+
     # --- Deployment guard -----------------------------------------------------
     # `database_url` defaults to SQLite so the API runs with zero infrastructure locally.
     # That default is a liability anywhere real: if the environment goes missing, the service

@@ -13,12 +13,13 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Annotated, Any
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel, Field
 
-from torii_api.auth.deps import CurrentUserDep, SessionDep
+from torii_api.auth.deps import CurrentUserDep, SessionDep, SettingsDep
 from torii_api.db.models import CaseStageResearch, OutboxEvent, ScopeResearchStatus
 from torii_api.services.agentic import find_admissibility, scope_key, stage_is_usable
+from torii_api.services.rate_limiter import ResearchBudgetTracker, check_rate_limit
 
 router = APIRouter(prefix="/v1/corridors", tags=["corridors"])
 
@@ -63,7 +64,11 @@ def _out(research: CaseStageResearch) -> CorridorCheckOut:
 
 @router.post("/check", response_model=CorridorCheckOut)
 async def check_corridor(
-    payload: CorridorCheckIn, session: SessionDep, user: CurrentUserDep
+    payload: CorridorCheckIn,
+    session: SessionDep,
+    user: CurrentUserDep,
+    settings: SettingsDep,
+    request: Request,
 ) -> CorridorCheckOut:
     """Resolve (or enqueue) the admissibility check for one corridor.
 
@@ -72,6 +77,18 @@ async def check_corridor(
     result is (re)enqueued via the ``case.stage_research.queued`` outbox topic and returned as
     ``"queued"`` for the client to poll ``GET /v1/corridors/{id}``.
     """
+    # Abuse protection: per-user heavy rate limit on research queries (T-10)
+    await check_rate_limit(
+        request,
+        limit=settings.rate_limit_heavy_per_minute,
+        window_seconds=60,
+        key_prefix="research:user",
+        key_suffix=str(user.id),
+        settings=settings,
+    )
+    # Enforce per-user monthly research budget independently of credits (T-10)
+    await ResearchBudgetTracker().check_budget(user_id=user.id, settings=settings)
+
     destination = _normalize(payload.destination_code)
     nationality = _normalize(payload.nationality)
     residence = _normalize(payload.residence_country)
