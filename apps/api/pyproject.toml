@@ -31,6 +31,7 @@ dependencies = [
     "pypdf>=6.0.0",
     "pymupdf>=1.25",
     "openai>=1.60",
+    "cryptography>=42.0.0",
 ]
 
 [project.scripts]

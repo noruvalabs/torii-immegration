@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from torii_api.auth.deps import CurrentUserDep
 from torii_api.config import get_settings
+from torii_api.db.models import UserRole
 from torii_api.db.session import get_session
 from torii_api.services.rate_limiter import check_rate_limit
 from torii_api.services.wallet import (
@@ -188,7 +189,7 @@ async def upload_wallet_document(
         expiry_date=expiry_date,
         notes=notes,
     )
-    save_document_content(document.storage_key, content)
+    save_document_content(document.storage_key, content, user_id=current_user.id)
 
     return WalletUploadOut(
         id=document.id,
@@ -510,6 +511,12 @@ async def get_wallet_document_file(
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
 
+    if user.role == UserRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admins are strictly prohibited from viewing or accessing user document contents.",
+        )
+
     doc = await session.scalar(
         select(DocumentWalletItem).where(
             DocumentWalletItem.id == document_id,
@@ -519,11 +526,11 @@ async def get_wallet_document_file(
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
 
-    content = get_document_content(doc.storage_key)
+    content = get_document_content(doc.storage_key, user_id=user.id)
     if not content:
         # Synthesize dummy PDF on the fly if not on disk
         content, _, _ = generate_dummy_pdf(doc.doc_type, user.full_name or "Kenji Sato")
-        save_document_content(doc.storage_key, content)
+        save_document_content(doc.storage_key, content, user_id=user.id)
 
     media_type = (
         doc.content_type if doc.content_type and "pdf" in doc.content_type else "application/pdf"
@@ -589,6 +596,12 @@ async def get_wallet_document_page_preview(
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
 
+    if user.role == UserRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admins are strictly prohibited from viewing or accessing user document contents.",
+        )
+
     doc = await session.scalar(
         select(DocumentWalletItem).where(
             DocumentWalletItem.id == document_id,
@@ -598,10 +611,10 @@ async def get_wallet_document_page_preview(
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
 
-    content = get_document_content(doc.storage_key)
+    content = get_document_content(doc.storage_key, user_id=user.id)
     if not content:
         content, _, _ = generate_dummy_pdf(doc.doc_type, user.full_name or "Kenji Sato")
-        save_document_content(doc.storage_key, content)
+        save_document_content(doc.storage_key, content, user_id=user.id)
 
     if doc.filename.lower().endswith((".png", ".jpg", ".jpeg", ".webp")):
         return Response(content=content, media_type=doc.content_type or "image/jpeg")
@@ -650,6 +663,12 @@ async def get_wallet_document_html_view(
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
 
+    if user.role == UserRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admins are strictly prohibited from viewing or accessing user document contents.",
+        )
+
     doc = await session.scalar(
         select(DocumentWalletItem).where(
             DocumentWalletItem.id == document_id,
@@ -659,10 +678,10 @@ async def get_wallet_document_html_view(
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
 
-    content = get_document_content(doc.storage_key)
+    content = get_document_content(doc.storage_key, user_id=user.id)
     if not content:
         content, _, _ = generate_dummy_pdf(doc.doc_type, user.full_name or "Kenji Sato")
-        save_document_content(doc.storage_key, content)
+        save_document_content(doc.storage_key, content, user_id=user.id)
 
     is_image = doc.filename.lower().endswith((".png", ".jpg", ".jpeg", ".webp"))
     total_pages = 1
@@ -900,7 +919,7 @@ async def seed_dummy_documents_endpoint(
             expiry_date=expiry_date,
             notes=f"Auto-generated sample dummy document for {default_label}",
         )
-        save_document_content(doc.storage_key, pdf_bytes)
+        save_document_content(doc.storage_key, pdf_bytes, user_id=current_user.id)
         seeded_docs.append(
             {
                 "id": doc.id,

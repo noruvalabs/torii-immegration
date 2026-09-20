@@ -15,6 +15,7 @@ from torii_api.db.models import (
     DocumentWalletItem,
     DocumentWalletItemVersion,
 )
+from torii_api.services.document_crypto import decrypt_document, encrypt_document
 
 log = structlog.get_logger()
 
@@ -77,20 +78,51 @@ _STORAGE_DIR = Path("data/wallet_storage")
 _STORAGE_DIR.mkdir(parents=True, exist_ok=True)
 
 
-def save_document_content(storage_key: str, content: bytes) -> Path:
-    """Save raw document bytes to disk storage."""
+def _extract_user_id_from_storage_key(storage_key: str) -> int | None:
+    """Extract user_id from a storage key formatted as wallets/{user_id}/..."""
+    parts = storage_key.strip("/").split("/")
+    if len(parts) >= 2 and parts[0] == "wallets" and parts[1].isdigit():
+        return int(parts[1])
+    return None
+
+
+def save_document_content(
+    storage_key: str,
+    content: bytes,
+    user_id: int | None = None,
+) -> Path:
+    """Save document bytes to disk storage with end-to-end AES-256-GCM encryption."""
+    if user_id is None:
+        user_id = _extract_user_id_from_storage_key(storage_key)
+
+    if user_id is not None:
+        payload = encrypt_document(content, user_id=user_id)
+    else:
+        payload = content
+
     target = _STORAGE_DIR / storage_key
     target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_bytes(content)
+    target.write_bytes(payload)
     return target
 
 
-def get_document_content(storage_key: str) -> bytes | None:
-    """Retrieve raw document bytes from disk storage."""
+def get_document_content(
+    storage_key: str,
+    user_id: int | None = None,
+    service_context: str | None = None,
+) -> bytes | None:
+    """Retrieve and decrypt document bytes from disk storage."""
     target = _STORAGE_DIR / storage_key
-    if target.is_file():
-        return target.read_bytes()
-    return None
+    if not target.is_file():
+        return None
+
+    raw_bytes = target.read_bytes()
+    if user_id is None:
+        user_id = _extract_user_id_from_storage_key(storage_key)
+
+    if user_id is not None:
+        return decrypt_document(raw_bytes, user_id=user_id, service_context=service_context)
+    return decrypt_document(raw_bytes, user_id=0, service_context=service_context)
 
 
 async def upload_document(

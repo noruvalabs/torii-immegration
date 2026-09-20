@@ -139,6 +139,15 @@ class Settings(BaseSettings):
     # entitlement (US-22.2). Off in unit tests unless explicitly enabled.
     require_packet_entitlement: bool = True
 
+    # --- Document Encryption (AES-256-GCM) -----------------------------------
+    # Master key used to derive per-user document encryption keys.
+    # In production, set TORII_DOCUMENT_ENCRYPTION_KEY to a secure 32+ char secret or KMS key.
+    document_encryption_key: str = Field(
+        default="torii-dev-doc-encryption-secret-key-change-in-prod-32bytes",
+        validation_alias=AliasChoices("TORII_DOCUMENT_ENCRYPTION_KEY", "DOCUMENT_ENCRYPTION_KEY"),
+    )
+    document_encryption_algorithm: str = "AES-256-GCM"
+
     # --- Rate limiting & abuse protection (T-10) ------------------------------
     rate_limit_enabled: bool = True
     rate_limit_user_per_minute: int = 120
