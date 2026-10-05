@@ -1,0 +1,35 @@
+code: IN
+name: India
+host_locale: en
+is_live: true
+efile_enabled: false
+self_filing_allowed: true
+filing_mode: hybrid
+apply_url: https://indianvisaonline.gov.in/
+notes: Official Bureau of Immigration & Ministry of Home Affairs, Government of India medical visa workflows.
+categories:
+  - code: medical
+    name: Medical Visa (MED-1)
+    description: Medical treatment at recognized, specialized hospitals in India.
+    is_live: true
+  - code: medical_attendant
+    name: Medical Attendant Visa (MED-2)
+    description: Accompanying caregiver or family member for the medical patient.
+    is_live: true
+  - code: tourist
+    name: Tourist / e-Tourist Visa
+    description: Tourism, sight-seeing, and casual visits.
+    is_live: false
+actions:
+  - code: new_application
+    name: New application
+    description: First-time medical visa application.
+    is_live: true
+  - code: new
+    name: New Visa
+    description: First-time medical visa application.
+    is_live: true
+  - code: renewal
+    name: Extension of Stay (FRRO)
+    description: Extension of stay inside India for ongoing medical treatment.
+    is_live: true

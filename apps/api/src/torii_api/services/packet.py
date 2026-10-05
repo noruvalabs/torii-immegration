@@ -328,7 +328,77 @@ def resolve_jurisdiction_submission_kit(
             ],
         )
 
-    # 5. DEFAULT / OTHER JURISDICTIONS
+    # 5. INDIA (IN / Medical Visa MED-1 & MED-2)
+    if "in" in code or "india" in combined or "medical" in combined:
+        return (
+            [
+                {
+                    "step": 1,
+                    "title": "Complete Online Application on Indian Visa Portal",
+                    "description": (
+                        "Fill out the official Indian Visa Online Application Form at indianvisaonline.gov.in "
+                        "using your Torii verified field data. Select visa type 'Medical Visa (MED-1)' and enter "
+                        "hospital details, treatment category, and attendant information."
+                    ),
+                    "portal_url": "https://indianvisaonline.gov.in/",
+                    "authority": "Bureau of Immigration, Ministry of Home Affairs, Government of India",
+                    "official_citation_url": "https://indianvisaonline.gov.in/",
+                    "category": "online_portal",
+                },
+                {
+                    "step": 2,
+                    "title": "Pay Visa Processing Fee at VFS / BLS / IVAC",
+                    "description": (
+                        "Pay the statutory consular visa processing fee through the designated "
+                        "visa application centre (VFS Global, BLS International, or IVAC) for your country. "
+                        "Retain the official payment receipt."
+                    ),
+                    "portal_url": "https://www.vfsglobal.com/",
+                    "authority": "Indian Mission / VFS Global / BLS International / IVAC",
+                    "official_citation_url": "https://indianvisaonline.gov.in/",
+                    "category": "fee_payment",
+                },
+                {
+                    "step": 3,
+                    "title": "Submit Physical Dossier & Attend Biometrics",
+                    "description": (
+                        "Bring your Torii-generated Embassy Dossier, original passport, photographs, "
+                        "Indian Hospital Invitation Letter, and all medical reports to the Indian "
+                        "Visa Application Centre or Embassy. Provide biometrics (fingerprints & digital photo)."
+                    ),
+                    "portal_url": "https://indianvisaonline.gov.in/",
+                    "authority": "Indian Embassy / High Commission / Visa Application Centre",
+                    "official_citation_url": "https://indianvisaonline.gov.in/",
+                    "category": "physical_submission",
+                },
+                {
+                    "step": 4,
+                    "title": "Collect Passport with Medical Visa Sticker",
+                    "description": (
+                        "Track your application status via SMS or the visa centre portal. "
+                        "Collect your passport with the Medical Visa sticker upon approval "
+                        "(typically 3-7 working days). Verify visa validity and entry type on collection."
+                    ),
+                    "portal_url": "https://indianvisaonline.gov.in/",
+                    "authority": "Bureau of Immigration, Ministry of Home Affairs, Government of India",
+                    "official_citation_url": "https://indianvisaonline.gov.in/",
+                    "category": "physical_submission",
+                },
+            ],
+            [
+                "1. Official Torii Embassy Cover Letter (addressed to Consular Section, Indian Mission)",
+                "2. Signed Government Online Visa Application Form (Printed from indianvisaonline.gov.in)",
+                "3. Visa Fee Payment Receipt & Appointment Confirmation Slip",
+                "4. Original Valid Passport (6+ months validity, 2+ blank pages) & Passport Bio Page Photocopy",
+                "5. 2 Copies of Recent 2x2 inch (50mm x 50mm) Passport Photographs (White background)",
+                "6. Official Indian Hospital Invitation / Appointment Letter (on hospital letterhead)",
+                "7. Home Country Doctor Referral & Medical Diagnostic Reports",
+                "8. Bank Statement (Last 3-6 months) / Proof of Financial Standing",
+                "9. Medical Attendant Documents — Passport, Relationship Proof (if accompanied)",
+            ],
+        )
+
+    # 6. DEFAULT / OTHER JURISDICTIONS
     return (
         [
             {
