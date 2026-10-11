@@ -250,6 +250,51 @@ Date: ${dateStr}
 `;
 }
 
+export function generateScheduleOfStay(caseData: Case, packet: Record<string, unknown> | null): string {
+  const answers = caseData.intake_answers || {};
+  const fullName = answered(answers, "full_name", "applicant_name");
+  const arrivalDate = answered(answers, "planned_arrival_date");
+  const accommodation = answered(answers, "accommodation_name");
+  const accommodationAddress = answered(answers, "accommodation_address");
+  const rawDays = answers.stay_duration_days ?? answers.intended_length_of_stay_days;
+  const stayDays = Number.parseInt(String(rawDays ?? ""), 10);
+
+  const base = arrivalDate !== BLANK ? new Date(arrivalDate) : null;
+  const dayCount = Number.isFinite(stayDays) && stayDays > 0 ? Math.min(stayDays, 15) : 0;
+  let rows = "";
+  for (let day = 1; day <= dayCount; day++) {
+    let dateLabel = `Day ${day}`;
+    if (base && !Number.isNaN(base.getTime())) {
+      const current = new Date(base);
+      current.setDate(base.getDate() + (day - 1));
+      dateLabel = `Day ${day} (${current.toISOString().split("T")[0]})`;
+    }
+    rows += `${dateLabel.padEnd(22)}|                                        |\n`;
+  }
+  if (!rows) {
+    rows = "(Answer your arrival date and length of stay to get dated rows.)\n";
+  }
+
+  return `SCHEDULE OF STAY / 滞在予定表  (draft — complete and sign before filing)
+
+Applicant: ${fullName}
+Planned arrival: ${arrivalDate}
+Length of stay: ${stayDays > 0 ? `${stayDays} days` : BLANK}
+Accommodation: ${accommodation}
+Address and telephone: ${accommodationAddress}
+
+Write what you will actually do each day. The consulate compares this against your
+bookings, so it has to match them.
+
+Date                  | Plan for the day                       |
+----------------------+----------------------------------------+
+${rows}----------------------+----------------------------------------+
+
+Signature: ______________________________
+Date: ${new Date().toISOString().split("T")[0]}
+`;
+}
+
 type DocType = "cover";
 
 /** Tab order, and the order documents are written into a "download everything" zip. */
