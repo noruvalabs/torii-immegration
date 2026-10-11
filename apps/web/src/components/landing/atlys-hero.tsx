@@ -65,7 +65,7 @@ export function AtlysHero() {
   }, []);
 
   return (
-    <section className="relative overflow-hidden bg-[#0A0D18] pt-28 pb-14 lg:pt-36 lg:pb-20 text-white">
+    <section className="relative overflow-hidden bg-[#0A0D18] pt-20 pb-8 lg:pt-24 lg:pb-10 text-white">
       {/* Background Ambient Glow */}
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
         <div className="absolute -top-40 left-1/2 -translate-x-1/2 size-[650px] rounded-full bg-primary/20 blur-[140px]" />
@@ -73,13 +73,13 @@ export function AtlysHero() {
         <div className="absolute -bottom-20 -left-20 size-[450px] rounded-full bg-blue-600/15 blur-[120px]" />
       </div>
 
-      <div className="relative mx-auto flex w-full max-w-6xl flex-col items-center px-4 sm:px-6 lg:px-8 text-center space-y-7">
+      <div className="relative mx-auto flex w-full max-w-6xl flex-col items-center px-4 sm:px-6 lg:px-8 text-center space-y-4">
         {/* Route Selector Box */}
         <div
           ref={containerRef}
-          className="relative w-full max-w-3xl rounded-2xl border border-white/20 bg-white/10 p-2 sm:p-2.5 backdrop-blur-2xl shadow-2xl transition-all"
+          className="relative w-full max-w-3xl rounded-2xl border border-white/20 bg-white/10 p-1.5 backdrop-blur-2xl shadow-2xl transition-all"
         >
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[1fr_auto_1fr_auto] gap-2 items-center bg-[#101424] rounded-xl p-2 sm:p-2.5 border border-white/10">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[1fr_auto_1fr_auto] gap-2 items-center bg-[#101424] rounded-xl py-1.5 px-2.5 sm:px-3 border border-white/10">
             {/* Passport Selector Custom Menu */}
             <div className="relative">
               <button
@@ -89,26 +89,26 @@ export function AtlysHero() {
                   setDestinationOpen(false);
                 }}
                 className={cn(
-                  "w-full flex items-center justify-between p-2.5 rounded-lg text-left transition-all cursor-pointer",
+                  "w-full flex items-center justify-between py-1 px-2 rounded-lg text-left transition-all cursor-pointer",
                   passportOpen
                     ? "bg-white/10 ring-1 ring-primary/60"
                     : "hover:bg-white/5",
                 )}
               >
-                <div className="flex flex-col space-y-1">
-                  <span className="text-[11px] font-semibold text-white/50 uppercase tracking-wider">
+                <div className="flex flex-col space-y-0.5">
+                  <span className="text-[10px] font-semibold text-white/50 uppercase tracking-wider leading-tight">
                     Passport Country
                   </span>
-                  <div className="flex items-center gap-2.5">
-                    <CountryFlag code={activePassport.code} className="size-5" />
-                    <span className="font-bold text-sm sm:text-base text-white">
+                  <div className="flex items-center gap-2">
+                    <CountryFlag code={activePassport.code} className="size-4.5" />
+                    <span className="font-bold text-sm text-white">
                       {activePassport.name}
                     </span>
                   </div>
                 </div>
                 <ChevronDown
                   className={cn(
-                    "size-4 text-white/60 transition-transform duration-200",
+                    "size-3.5 text-white/60 transition-transform duration-200",
                     passportOpen && "rotate-180 text-white",
                   )}
                 />
@@ -152,7 +152,7 @@ export function AtlysHero() {
             </div>
 
             {/* Divider */}
-            <div className="hidden lg:block h-10 w-px bg-white/10" />
+            <div className="hidden lg:block h-7 w-px bg-white/10" />
 
             {/* Destination Selector Custom Menu */}
             <div className="relative">
@@ -163,26 +163,26 @@ export function AtlysHero() {
                   setPassportOpen(false);
                 }}
                 className={cn(
-                  "w-full flex items-center justify-between p-2.5 rounded-lg text-left transition-all cursor-pointer",
+                  "w-full flex items-center justify-between py-1 px-2 rounded-lg text-left transition-all cursor-pointer",
                   destinationOpen
                     ? "bg-white/10 ring-1 ring-primary/60"
                     : "hover:bg-white/5",
                 )}
               >
-                <div className="flex flex-col space-y-1">
-                  <span className="text-[11px] font-semibold text-white/50 uppercase tracking-wider">
+                <div className="flex flex-col space-y-0.5">
+                  <span className="text-[10px] font-semibold text-white/50 uppercase tracking-wider leading-tight">
                     Destination Country
                   </span>
-                  <div className="flex items-center gap-2.5">
-                    <CountryFlag code={activeDestination.code} className="size-5" />
-                    <span className="font-bold text-sm sm:text-base text-white">
+                  <div className="flex items-center gap-2">
+                    <CountryFlag code={activeDestination.code} className="size-4.5" />
+                    <span className="font-bold text-sm text-white">
                       {activeDestination.name}
                     </span>
                   </div>
                 </div>
                 <ChevronDown
                   className={cn(
-                    "size-4 text-white/60 transition-transform duration-200",
+                    "size-3.5 text-white/60 transition-transform duration-200",
                     destinationOpen && "rotate-180 text-white",
                   )}
                 />
@@ -242,7 +242,7 @@ export function AtlysHero() {
             <button
               type="button"
               onClick={() => handleApplyForVisa()}
-              className="w-full sm:col-span-2 lg:col-span-1 lg:w-auto inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-6 py-3.5 text-sm font-bold text-primary-foreground shadow-lg hover:bg-primary/90 hover:shadow-primary/20 transition-all active:scale-[0.98] shrink-0 cursor-pointer"
+              className="w-full sm:col-span-2 lg:col-span-1 lg:w-auto inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-xs sm:text-sm font-bold text-primary-foreground shadow-lg hover:bg-primary/90 hover:shadow-primary/20 transition-all active:scale-[0.98] shrink-0 cursor-pointer"
             >
               <span>Apply for Visa</span>
               <ArrowRight className="size-4" />
@@ -251,7 +251,7 @@ export function AtlysHero() {
         </div>
 
         {/* Feature Highlights Badges */}
-        <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-7 text-xs sm:text-sm text-white/80 pt-1">
+        <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-7 text-xs sm:text-sm text-white/80 pt-0">
           <div className="flex items-center gap-2">
             <span className="flex size-5 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-400">
               <CheckCircle2 className="size-3.5" />
