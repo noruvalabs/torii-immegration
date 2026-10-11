@@ -4,13 +4,11 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 
-import pytest
-
-from torii_api.services.content_packs import load_pack_by_scope
 from torii_api.services.checklist import (
     IN_MEDICAL_NEW_APPLICATION_DOCUMENT_REQUIREMENTS,
     visible_requirement_items,
 )
+from torii_api.services.content_packs import load_pack_by_scope
 from torii_api.services.medical_visa_validation import (
     check_hospital_letter,
     check_passport_validity,
@@ -19,8 +17,8 @@ from torii_api.services.medical_visa_validation import (
 from torii_api.services.ocr_extractor import parse_structured_fields_from_text
 from torii_api.services.packet import resolve_jurisdiction_submission_kit
 
-
 # ── Content pack loading ───────────────────────────────────────────────────────
+
 
 def test_india_medical_pack_loads() -> None:
     pack = load_pack_by_scope("in/medical.new_application")
@@ -74,14 +72,19 @@ def test_india_medical_pack_has_citations_on_all_rules_and_docs() -> None:
     for rule in pack.rules:
         citation = rule.get("citation")
         assert citation is not None, f"Rule {rule['key']} missing citation"
-        assert citation.get("url", "").startswith("http"), f"Rule {rule['key']} has invalid citation URL"
+        assert citation.get("url", "").startswith("http"), (
+            f"Rule {rule['key']} has invalid citation URL"
+        )
     for doc in pack.document_items:
         citation = doc.get("citation")
         assert citation is not None, f"Document {doc['code']} missing citation"
-        assert citation.get("url", "").startswith("http"), f"Document {doc['code']} has invalid citation URL"
+        assert citation.get("url", "").startswith("http"), (
+            f"Document {doc['code']} has invalid citation URL"
+        )
 
 
 # ── Checklist loading ──────────────────────────────────────────────────────────
+
 
 def test_india_checklist_requirements_load() -> None:
     assert len(IN_MEDICAL_NEW_APPLICATION_DOCUMENT_REQUIREMENTS) >= 5
@@ -100,6 +103,7 @@ def test_india_checklist_visible_items_show_all_required() -> None:
 
 
 # ── Passport validity checks ──────────────────────────────────────────────────
+
 
 def test_passport_valid_produces_no_alerts() -> None:
     future = (date.today() + timedelta(days=365)).isoformat()
@@ -127,6 +131,7 @@ def test_unparseable_expiry_produces_warning() -> None:
 
 
 # ── Hospital letter cross-check ────────────────────────────────────────────────
+
 
 def test_matching_hospital_letter_produces_no_errors() -> None:
     ocr_fields = {
@@ -188,10 +193,14 @@ def test_missing_passport_on_letter_produces_warning() -> None:
 
 # ── Full validation pipeline ──────────────────────────────────────────────────
 
+
 def test_full_validation_catches_multiple_issues() -> None:
     passport_ocr = {
         "full_name": {"value": "Jane Smith", "confidence": 0.9},
-        "passport_expiry": {"value": (date.today() + timedelta(days=60)).isoformat(), "confidence": 0.9},
+        "passport_expiry": {
+            "value": (date.today() + timedelta(days=60)).isoformat(),
+            "confidence": 0.9,
+        },
     }
     hospital_ocr = {
         "patient_name": {"value": "Jane Smith", "confidence": 0.9},
@@ -230,6 +239,7 @@ def test_clean_documents_produce_no_errors() -> None:
 
 
 # ── OCR extraction for medical documents ───────────────────────────────────────
+
 
 def test_ocr_extracts_hospital_name_from_letter() -> None:
     text = """
@@ -282,6 +292,7 @@ def test_ocr_extracts_diagnosis() -> None:
 
 
 # ── India submission kit in packet.py ──────────────────────────────────────────
+
 
 def test_india_packet_returns_india_specific_steps() -> None:
     steps, dossier = resolve_jurisdiction_submission_kit(jurisdiction_code="IN")
