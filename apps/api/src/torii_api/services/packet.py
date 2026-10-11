@@ -336,13 +336,13 @@ def resolve_jurisdiction_submission_kit(
                     "step": 1,
                     "title": "Complete Online Application on Indian Visa Portal",
                     "description": (
-                        "Fill out the official Indian Visa Online Application Form at indianvisaonline.gov.in "
+                        "Fill out the official Indian Visa Online Application Form at indianvisaonline.gov.in/visa/registration "
                         "using your Torii verified field data. Select visa type 'Medical Visa (MED-1)' and enter "
                         "hospital details, treatment category, and attendant information."
                     ),
-                    "portal_url": "https://indianvisaonline.gov.in/",
+                    "portal_url": "https://indianvisaonline.gov.in/visa/registration",
                     "authority": "Bureau of Immigration, Ministry of Home Affairs, Government of India",
-                    "official_citation_url": "https://indianvisaonline.gov.in/",
+                    "official_citation_url": "https://indianvisaonline.gov.in/visa/registration",
                     "category": "online_portal",
                 },
                 {
@@ -353,9 +353,9 @@ def resolve_jurisdiction_submission_kit(
                         "visa application centre (VFS Global, BLS International, or IVAC) for your country. "
                         "Retain the official payment receipt."
                     ),
-                    "portal_url": "https://www.vfsglobal.com/",
+                    "portal_url": "https://indianvisaonline.gov.in/evisa/PaymentCheck",
                     "authority": "Indian Mission / VFS Global / BLS International / IVAC",
-                    "official_citation_url": "https://indianvisaonline.gov.in/",
+                    "official_citation_url": "https://indianvisaonline.gov.in/evisa/PaymentCheck",
                     "category": "fee_payment",
                 },
                 {
@@ -366,9 +366,9 @@ def resolve_jurisdiction_submission_kit(
                         "Indian Hospital Invitation Letter, and all medical reports to the Indian "
                         "Visa Application Centre or Embassy. Provide biometrics (fingerprints & digital photo)."
                     ),
-                    "portal_url": "https://indianvisaonline.gov.in/",
+                    "portal_url": "https://indianvisaonline.gov.in/visa/registration",
                     "authority": "Indian Embassy / High Commission / Visa Application Centre",
-                    "official_citation_url": "https://indianvisaonline.gov.in/",
+                    "official_citation_url": "https://indianvisaonline.gov.in/visa/registration",
                     "category": "physical_submission",
                 },
                 {
@@ -379,9 +379,9 @@ def resolve_jurisdiction_submission_kit(
                         "Collect your passport with the Medical Visa sticker upon approval "
                         "(typically 3-7 working days). Verify visa validity and entry type on collection."
                     ),
-                    "portal_url": "https://indianvisaonline.gov.in/",
+                    "portal_url": "https://indianvisaonline.gov.in/visa/VisaEnquiry",
                     "authority": "Bureau of Immigration, Ministry of Home Affairs, Government of India",
-                    "official_citation_url": "https://indianvisaonline.gov.in/",
+                    "official_citation_url": "https://indianvisaonline.gov.in/visa/VisaEnquiry",
                     "category": "physical_submission",
                 },
             ],

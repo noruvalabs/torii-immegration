@@ -718,6 +718,71 @@ async def get_documents(
     return await _documents(session, case_id)
 
 
+class MedicalValidationIn(BaseModel):
+    passport_ocr: dict[str, Any] | None = None
+    hospital_letter_ocr: dict[str, Any] | None = None
+
+
+class DocumentAlertOut(BaseModel):
+    severity: str
+    field: str
+    message: str
+
+
+class MedicalValidationOut(BaseModel):
+    is_valid: bool
+    alerts: list[DocumentAlertOut]
+    error_count: int
+    warning_count: int
+
+
+@router.post("/{case_id}/validate-medical", response_model=MedicalValidationOut)
+async def validate_medical_case_documents(
+    case_id: int,
+    session: SessionDep,
+    user: CurrentUserDep,
+    payload: MedicalValidationIn | None = None,
+) -> MedicalValidationOut:
+    """Cross-validate uploaded medical documents against intake answers."""
+    case = await _owned_case(session, case_id, user)
+    docs = await _documents(session, case_id)
+
+    passport_ocr = payload.passport_ocr if payload and payload.passport_ocr else None
+    hospital_letter_ocr = (
+        payload.hospital_letter_ocr if payload and payload.hospital_letter_ocr else None
+    )
+
+    if passport_ocr is None or hospital_letter_ocr is None:
+        for doc in docs:
+            fields = dict(doc.extracted_fields or {})
+            if not fields:
+                continue
+            doc_type = (doc.doc_type or "").lower()
+            if passport_ocr is None and ("passport" in doc_type):
+                passport_ocr = fields
+            elif hospital_letter_ocr is None and (
+                "hospital" in doc_type or "medical" in doc_type or "invitation" in doc_type
+            ):
+                hospital_letter_ocr = fields
+
+    from torii_api.services.medical_visa_validation import validate_medical_visa_documents
+
+    alerts = validate_medical_visa_documents(
+        passport_ocr=passport_ocr or {},
+        hospital_letter_ocr=hospital_letter_ocr or {},
+        intake_answers=dict(case.intake_answers or {}),
+    )
+    errors = [a for a in alerts if a.get("severity") == "error"]
+    warnings = [a for a in alerts if a.get("severity") == "warning"]
+    return MedicalValidationOut(
+        is_valid=len(errors) == 0,
+        alerts=[DocumentAlertOut(**a) for a in alerts],
+        error_count=len(errors),
+        warning_count=len(warnings),
+    )
+
+
+
 @router.post("/{case_id}/forms/generate", response_model=list[GeneratedFormOut])
 async def generate_forms(
     case_id: int, session: SessionDep, user: CurrentUserDep
