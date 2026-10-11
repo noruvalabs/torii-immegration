@@ -2,29 +2,13 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { ArrowRight, Clock, Shield, Sparkles } from "lucide-react";
+import { ArrowRight, Clock } from "lucide-react";
 import { POPULAR_DESTINATIONS } from "@/lib/destinations-data";
 
 export function DestinationCards() {
   return (
-    <section id="destinations" className="py-16 sm:py-20 lg:py-24 bg-background">
-      <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 space-y-10">
-        {/* Section Header */}
-        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
-          <div className="space-y-2">
-            <div className="inline-flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/5 px-3 py-1 text-xs font-semibold text-primary">
-              <Sparkles className="size-3.5" />
-              <span>Available Destinations</span>
-            </div>
-            <h2 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-foreground tracking-tight">
-              Popular Visas Made Simple
-            </h2>
-            <p className="text-sm sm:text-base text-muted-foreground max-w-xl">
-              Explore step-by-step requirements, official government fees, and generate your ready-to-submit visa package.
-            </p>
-          </div>
-        </div>
-
+    <section id="destinations" className="py-12 sm:py-16 lg:py-20 bg-background">
+      <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
         {/* 3 Large Destination Cards Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-7">
           {POPULAR_DESTINATIONS.map((destination) => (
