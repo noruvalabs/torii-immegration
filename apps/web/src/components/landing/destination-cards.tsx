@@ -68,7 +68,7 @@ export function DestinationCards() {
                   </div>
 
                   <span className="inline-flex items-center gap-1.5 rounded-lg bg-white px-3.5 py-2 text-xs font-bold text-black shadow-md group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
-                    <span>View Requirements</span>
+                    <span>Apply for visa</span>
                     <ArrowRight className="size-3.5 transition-transform group-hover:translate-x-0.5" />
                   </span>
                 </div>
