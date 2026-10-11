@@ -7,11 +7,7 @@ import { LangProvider } from "@/components/landing/i18n";
 import { DESTINATIONS } from "@/lib/destinations-data";
 
 export function generateStaticParams() {
-  return [
-    { slug: "japan" },
-    { slug: "india" },
-    { slug: "saudi-arabia" },
-  ];
+  return Object.keys(DESTINATIONS).map((slug) => ({ slug }));
 }
 
 export async function generateMetadata({

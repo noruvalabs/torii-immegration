@@ -248,10 +248,352 @@ export const DESTINATIONS: Record<string, DestinationInfo> = {
       },
     ],
   },
+
+  "united-states": {
+    slug: "united-states",
+    code: "US",
+    name: "United States",
+    flag: "🇺🇸",
+    heroImage: "/destinations/united-states.jpg",
+    bannerTag: "B1/B2 DS-160 Dossier",
+    tagline: "Explore America from Coast to Coast",
+    shortDescription: "Complete DS-160 electronic filing preparation, consular cover letter, and embassy interview binder.",
+    overview:
+      "Applying for a US B1/B2 Visitor Visa from Bangladesh? Torii helps you prepare your DS-160 application form without errors, generates your formal travel plan, and structures your interview documentation to establish strong economic and familial ties to your home country.",
+    filingModeLabel: "DS-160 Form + US Embassy Dhaka Interview",
+    processingDays: "Interview Appointment",
+    visas: [
+      {
+        id: "b1-b2-visitor",
+        name: "B1/B2 Tourist & Business Visitor Visa",
+        duration: "Up to 6 Months per visit",
+        entries: "Multiple Entry",
+        validity: "Up to 5 Years",
+        processingTime: "Based on US Embassy interview availability",
+        governmentFee: "৳22,500 ($185 MRV statutory fee)",
+        toriiFee: "৳2,500",
+        totalDisplay: "৳25,000",
+        requiredDocuments: [
+          "Original Passport (valid at least 6 months beyond intended stay)",
+          "DS-160 Barcode Confirmation Page",
+          "MRV Fee Payment Receipt",
+          "Recent 2x2 inch (51mm × 51mm) Color Photo (white background)",
+          "Employment NOC, Salary Certificates & Last 6 Months Bank Statement",
+          "Torii Consular Cover Letter & Structured Travel Itinerary",
+        ],
+        description: "For tourism, vacation, visiting friends and family, or attending business conferences across the United States.",
+      },
+    ],
+    requiredSummary: [
+      "Original passport with 6+ months validity",
+      "DS-160 barcode confirmation page",
+      "MRV visa appointment confirmation receipt",
+      "2x2 inch photo complying with US consular standards",
+      "Bank solvency proof & 6 months statement",
+    ],
+    faqs: [
+      {
+        question: "Does Torii schedule the US Embassy interview appointment?",
+        answer:
+          "Torii prepares your full DS-160 application package and consular interview folder. You then book your preferred interview date directly via the official ustraveldocs / US Embassy appointment system.",
+      },
+      {
+        question: "How long is the US B1/B2 visa valid for Bangladeshi citizens?",
+        answer:
+          "Bangladeshi nationals are typically issued a 5-year multiple-entry visa. Upon entry, the US CBP officer generally stamps permission to stay for up to 6 months per visit.",
+      },
+    ],
+  },
+
+  canada: {
+    slug: "canada",
+    code: "CA",
+    name: "Canada",
+    flag: "🇨🇦",
+    heroImage: "/destinations/canada.jpg",
+    bannerTag: "IRCC Portal Preparation",
+    tagline: "Experience Canada's Natural Wonders & Cities",
+    shortDescription: "Temporary Resident Visa (TRV) application, IMM 5257 form preparation, and IRCC portal filing.",
+    overview:
+      "Planning to visit Canada for leisure, tourism, or visiting family? Torii formats your official IRCC IMM 5257 application, prepares your Purpose of Travel statement, and organizes your financial and employment documentation for biometric submission at VFS Dhaka.",
+    filingModeLabel: "IRCC Online Portal + VFS Dhaka Biometrics",
+    processingDays: "15–30 Days",
+    visas: [
+      {
+        id: "visitor-trv",
+        name: "Temporary Resident Visitor Visa (V-1 / TRV)",
+        duration: "Up to 6 Months per stay",
+        entries: "Multiple Entry",
+        validity: "Up to 10 Years (or passport expiry)",
+        processingTime: "2 to 4 Weeks",
+        governmentFee: "৳15,000 (CAD 100 Visa + CAD 85 Biometrics)",
+        toriiFee: "৳2,500",
+        totalDisplay: "৳17,500",
+        requiredDocuments: [
+          "Original Passport with 2+ blank pages",
+          "Digital Photo (35mm × 45mm, white background, neutral expression)",
+          "Bank Statements (Last 6 Months) with Solvency Certificate",
+          "Employment NOC / Trade License with English notarization",
+          "Torii Purpose of Travel & Client Information Summary Letter",
+        ],
+        description: "For tourism, visiting family members or friends, and exploratory travel across Canada.",
+      },
+    ],
+    requiredSummary: [
+      "Valid passport with 6+ months validity",
+      "Digital biometric photograph",
+      "6-month bank statement & proof of financial solvency",
+      "Employment NOC or business registration",
+      "Detailed travel itinerary & invitation letter (if visiting family)",
+    ],
+    faqs: [
+      {
+        question: "Do I need to submit biometrics for a Canadian visa?",
+        answer:
+          "Yes, most Bangladeshi applicants are required to give fingerprints and a photo at the VFS Global Canada Visa Application Centre in Dhaka after submitting the online application.",
+      },
+      {
+        question: "Can I get a 10-year Canadian visitor visa?",
+        answer:
+          "Canada commonly issues multiple-entry visitor visas valid up to the expiration date of your passport (maximum 10 years).",
+      },
+    ],
+  },
+
+  france: {
+    slug: "france",
+    code: "FR",
+    name: "France",
+    flag: "🇫🇷",
+    heroImage: "/destinations/france.jpg",
+    bannerTag: "France-Visas Schengen Kit",
+    tagline: "Visit Paris & Explore the Schengen Area",
+    shortDescription: "Short-stay Schengen Tourist Visa (Type C) preparation, France-Visas form, and VFS dossier.",
+    overview:
+      "Travel to France and all 29 Schengen member states. Torii auto-generates your official Cerfa Schengen application form, day-by-day travel itinerary, and consular cover letter formatted according to the Embassy of France in Dhaka guidelines.",
+    filingModeLabel: "France-Visas + VFS Global Submission",
+    processingDays: "10–15 Days",
+    visas: [
+      {
+        id: "schengen-tourist-fr",
+        name: "Schengen Short-Stay Tourist Visa (Type C)",
+        duration: "Up to 90 Days in any 180-day period",
+        entries: "Single / Multiple Entry",
+        validity: "Up to 6 Months",
+        processingTime: "10–15 Working Days",
+        governmentFee: "৳11,500 (€90 statutory consular fee)",
+        toriiFee: "৳2,000",
+        totalDisplay: "৳13,500",
+        requiredDocuments: [
+          "Original Passport (issued within 10 years, 3+ months validity post-stay)",
+          "2 Schengen Photos (35mm × 45mm, grey/white background)",
+          "Travel Medical Insurance (€30,000 minimum Schengen coverage)",
+          "Confirmed Flight Itinerary & Hotel Bookings across France",
+          "Bank Statement (Last 6 Months) & Tax Assessment (TIN)",
+          "Torii Consular Cover Letter & Day-by-Day Travel Plan",
+        ],
+        description: "Allows free travel throughout France and all 29 Schengen countries for leisure and sightseeing.",
+      },
+    ],
+    requiredSummary: [
+      "Original passport with 3+ months validity past return date",
+      "2 Biometric Schengen photos (35x45mm)",
+      "€30,000 Schengen travel health insurance policy",
+      "Bank solvency certificate & 6 months statement",
+      "Flight and accommodation reservations",
+    ],
+    faqs: [
+      {
+        question: "Can I travel to other European countries with a French Schengen Visa?",
+        answer:
+          "Yes! A uniform Schengen visa issued by France allows you to travel freely throughout all 29 Schengen zone countries (including Germany, Italy, Spain, Switzerland, etc.).",
+      },
+      {
+        question: "What is the minimum travel insurance required?",
+        answer:
+          "The Schengen regulation mandates travel medical insurance with minimum coverage of €30,000 covering emergency hospitalization and repatriation.",
+      },
+    ],
+  },
+
+  spain: {
+    slug: "spain",
+    code: "ES",
+    name: "Spain",
+    flag: "🇪🇸",
+    heroImage: "/destinations/spain.jpg",
+    bannerTag: "BLS Schengen Dossier",
+    tagline: "Discover Barcelona, Madrid & Andalusia",
+    shortDescription: "Spain Tourist Schengen Visa (Type C) preparation and BLS International Dhaka submission kit.",
+    overview:
+      "Planning a holiday to Spain? Torii organizes your official Schengen application form, hotel bookings, flight route itinerary, and cover letter for submission at BLS International in Dhaka with complete accuracy.",
+    filingModeLabel: "Schengen Form + BLS International Dhaka",
+    processingDays: "10–15 Days",
+    visas: [
+      {
+        id: "schengen-tourist-es",
+        name: "Spain Tourist Schengen Visa (Type C)",
+        duration: "Up to 90 Days",
+        entries: "Single / Multiple Entry",
+        validity: "Up to 6 Months",
+        processingTime: "10–15 Working Days",
+        governmentFee: "৳11,500 (€90 statutory fee + BLS service fee)",
+        toriiFee: "৳2,000",
+        totalDisplay: "৳13,500",
+        requiredDocuments: [
+          "Original Passport with 2+ blank pages",
+          "2 Recent Biometric Photos (35mm × 45mm, white background)",
+          "Travel Medical Insurance with minimum €30,000 coverage",
+          "6 Months Bank Statement & Solvency Certificate",
+          "Employment NOC / Student ID / Trade License with translation",
+          "Torii Consular Cover Letter & Day-by-Day Stay Itinerary",
+        ],
+        description: "For independent leisure travelers exploring Spain and the wider Schengen area.",
+      },
+    ],
+    requiredSummary: [
+      "Valid passport with 2+ blank pages",
+      "2 Schengen-standard biometric photos",
+      "Travel insurance with minimum €30,000 coverage",
+      "6-month bank statement & solvency proof",
+      "Confirmed round-trip flight booking & hotel vouchers",
+    ],
+    faqs: [
+      {
+        question: "Where do I submit my Spain visa in Bangladesh?",
+        answer:
+          "Spain visa applications are processed via BLS International Visa Application Centre located in Gulshan, Dhaka.",
+      },
+      {
+        question: "How long before travel should I apply for Spain?",
+        answer:
+          "You can apply up to 6 months before your intended departure date. We recommend applying at least 3 to 4 weeks ahead.",
+      },
+    ],
+  },
+
+  germany: {
+    slug: "germany",
+    code: "DE",
+    name: "Germany",
+    flag: "🇩🇪",
+    heroImage: "/destinations/germany.jpg",
+    bannerTag: "VIDEX Schengen Kit",
+    tagline: "Visit Germany & the Heart of Europe",
+    shortDescription: "Official VIDEX electronic Schengen form generation and German Embassy Dhaka submission file.",
+    overview:
+      "Visiting Germany for tourism, trade fairs, or visiting family? Torii prepares your official VIDEX electronic form, Day-by-Day schedule, and consular declaration according to the German Embassy in Dhaka.",
+    filingModeLabel: "VIDEX Electronic Form + German Embassy Submission",
+    processingDays: "10–15 Days",
+    visas: [
+      {
+        id: "schengen-tourist-de",
+        name: "Germany Schengen Tourist & Visitor Visa",
+        duration: "Up to 90 Days",
+        entries: "Single / Multiple Entry",
+        validity: "Up to 6 Months",
+        processingTime: "10–15 Working Days",
+        governmentFee: "৳11,500 (€90 statutory consular fee)",
+        toriiFee: "৳2,000",
+        totalDisplay: "৳13,500",
+        requiredDocuments: [
+          "Original Passport (valid 3+ months beyond intended return)",
+          "VIDEX Online Application Form with 2D Barcode",
+          "2 Recent Biometric Photos (35mm × 45mm, light background)",
+          "Schengen Travel Medical Insurance (€30,000 cover)",
+          "6 Months Bank Statement & Tax Return Certificate",
+          "Employment NOC or Trade License with English translation",
+        ],
+        description: "For holidaymakers, cultural visitors, and attending exhibitions across Germany and Europe.",
+      },
+    ],
+    requiredSummary: [
+      "Original passport with 3+ months validity post-return",
+      "VIDEX application form with 2D barcode",
+      "€30,000 Schengen travel health insurance",
+      "Bank solvency certificate & last 6 months statement",
+      "Employment NOC / business registration documents",
+    ],
+    faqs: [
+      {
+        question: "What is the VIDEX form?",
+        answer:
+          "VIDEX is the official online application system utilized by the German Federal Foreign Office. Torii formats your responses into the official VIDEX format with the required 2D barcode.",
+      },
+      {
+        question: "Can I attend trade fairs in Germany on this visa?",
+        answer:
+          "Yes! The short-stay Schengen visa permits attending trade fairs, exhibitions, and business meetings in Germany.",
+      },
+    ],
+  },
+
+  "south-korea": {
+    slug: "south-korea",
+    code: "KR",
+    name: "South Korea",
+    flag: "🇰🇷",
+    heroImage: "/destinations/south-korea.jpg",
+    bannerTag: "C-3-9 Tourist Dossier",
+    tagline: "Experience K-Culture & Modern Seoul",
+    shortDescription: "Short-Term General Tourist Visa (C-3-9) preparation for the Embassy of the Republic of Korea.",
+    overview:
+      "Explore Seoul, Busan, and Jeju Island. Torii formats your official Republic of Korea visa application form, prepares your travel itinerary and financial capability binder, and ensures compliance with Korean consular standards in Dhaka.",
+    filingModeLabel: "Official Form + Embassy of Korea Dhaka Submission",
+    processingDays: "7–10 Days",
+    visas: [
+      {
+        id: "tourist-c39",
+        name: "Short-Term General Tourist Visa (C-3-9)",
+        duration: "Up to 90 Days",
+        entries: "Single Entry",
+        validity: "3 Months from issue date",
+        processingTime: "7–10 Working Days",
+        governmentFee: "৳4,800 ($40 statutory single entry fee)",
+        toriiFee: "৳1,500",
+        totalDisplay: "৳6,300",
+        requiredDocuments: [
+          "Original Passport with 6+ months validity",
+          "1 Color Photo (35mm × 45mm, white background, taken within 6 months)",
+          "Official Korean Visa Application Form (Typed & Completed)",
+          "Bank Statement (Last 6 months) & Bank Solvency Certificate",
+          "Company NOC / Student ID / Trade License",
+          "Detailed Day-by-Day Travel Schedule in Korea",
+        ],
+        description: "For independent leisure travel, sightseeing, and cultural exploration in South Korea.",
+      },
+    ],
+    requiredSummary: [
+      "Original passport with 6+ months validity",
+      "Recent passport-size photo (35x45mm, white background)",
+      "Bank solvency certificate & 6 months statement",
+      "Employment NOC / Student ID / Trade license",
+      "Day-by-day travel plan and confirmed flight booking",
+    ],
+    faqs: [
+      {
+        question: "Does the Embassy of South Korea in Dhaka accept typed forms?",
+        answer:
+          "Yes! The consular section strongly prefers cleanly typed forms. Torii fills out the official MOFA Republic of Korea form so you only sign at the end.",
+      },
+      {
+        question: "How long can I stay in South Korea as a tourist?",
+        answer:
+          "Standard C-3-9 tourist visas permit a stay of up to 90 consecutive days from the date of entry.",
+      },
+    ],
+  },
 };
 
 export const POPULAR_DESTINATIONS = [
   DESTINATIONS.japan,
   DESTINATIONS.india,
   DESTINATIONS["saudi-arabia"],
+  DESTINATIONS["united-states"],
+  DESTINATIONS.canada,
+  DESTINATIONS.france,
+  DESTINATIONS.spain,
+  DESTINATIONS.germany,
+  DESTINATIONS["south-korea"],
 ];
+
