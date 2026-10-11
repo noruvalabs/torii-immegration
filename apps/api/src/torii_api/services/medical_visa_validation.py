@@ -18,6 +18,7 @@ log = structlog.get_logger()
 
 # ── Public types ───────────────────────────────────────────────────────────────
 
+
 class DocumentAlert:
     """One flagged issue on an uploaded document."""
 
@@ -33,6 +34,7 @@ class DocumentAlert:
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
+
 
 def _normalise(value: str | None) -> str:
     """Lowercase, collapse whitespace, strip punctuation for fuzzy matching."""
@@ -55,6 +57,7 @@ def _parse_date_loose(raw: str | None) -> date | None:
 
 
 # ── Passport validity ──────────────────────────────────────────────────────────
+
 
 def check_passport_validity(
     passport_expiry: str | None,
@@ -98,6 +101,7 @@ def check_passport_validity(
 
 # ── Hospital letter cross-check ────────────────────────────────────────────────
 
+
 def check_hospital_letter(
     ocr_fields: dict[str, Any],
     intake_answers: dict[str, Any],
@@ -112,7 +116,9 @@ def check_hospital_letter(
     alerts: list[DocumentAlert] = []
 
     # 1. Patient name match
-    letter_name = _normalise(_ocr_value(ocr_fields, "patient_name") or _ocr_value(ocr_fields, "full_name"))
+    letter_name = _normalise(
+        _ocr_value(ocr_fields, "patient_name") or _ocr_value(ocr_fields, "full_name")
+    )
     intake_name = _normalise(str(intake_answers.get("full_name") or ""))
     if letter_name and intake_name:
         if letter_name not in intake_name and intake_name not in letter_name:
@@ -207,6 +213,7 @@ def _ocr_value(fields: dict[str, Any], key: str) -> str | None:
 
 
 # ── Full validation pipeline ──────────────────────────────────────────────────
+
 
 def validate_medical_visa_documents(
     passport_ocr: dict[str, Any],

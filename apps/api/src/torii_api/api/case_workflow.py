@@ -782,7 +782,6 @@ async def validate_medical_case_documents(
     )
 
 
-
 @router.post("/{case_id}/forms/generate", response_model=list[GeneratedFormOut])
 async def generate_forms(
     case_id: int, session: SessionDep, user: CurrentUserDep
