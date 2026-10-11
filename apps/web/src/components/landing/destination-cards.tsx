@@ -4,12 +4,13 @@ import Link from "next/link";
 import Image from "next/image";
 import { ArrowRight, Clock } from "lucide-react";
 import { POPULAR_DESTINATIONS } from "@/lib/destinations-data";
+import { CountryFlag } from "./country-flag";
 
 export function DestinationCards() {
   return (
     <section id="destinations" className="py-10 sm:py-14 bg-background">
       <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
-        {/* 3 Destination Cards Grid */}
+        {/* Destination Cards Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-7">
           {POPULAR_DESTINATIONS.map((destination) => {
             const defaultVisa = destination.visas[0];
@@ -37,8 +38,8 @@ export function DestinationCards() {
 
                 {/* Top Badges */}
                 <div className="relative z-10 flex items-center justify-between p-4 sm:p-5">
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-white/20 px-3 py-1 text-xs font-bold text-white backdrop-blur-md shadow-xs border border-white/20">
-                    <span className="text-base">{destination.flag}</span>
+                  <span className="inline-flex items-center gap-2 rounded-full bg-black/40 px-3 py-1.5 text-xs font-bold text-white backdrop-blur-md shadow-xs border border-white/20">
+                    <CountryFlag code={destination.code} className="size-4" />
                     <span>{destination.name}</span>
                   </span>
 
