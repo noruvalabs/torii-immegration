@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { ArrowLeft, Check, Loader2, ArrowRight, Search, X } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -57,8 +58,11 @@ const STEP_LABELS: Record<Step, string> = {
   review: "Review",
 };
 
-export default function ScopePage() {
+function ScopePageInner() {
   const { token, user } = useAuth();
+  const searchParams = useSearchParams();
+  const destinationParam = searchParams.get("destination");
+  const seededDestinationRef = useRef(false);
   const queryClient = useQueryClient();
   const [step, setStep] = useState<Step>("identity");
   const [error, setError] = useState<string | null>(null);
@@ -107,6 +111,21 @@ export default function ScopePage() {
     }
   }, [user]);
 
+  // Pre-seed destination if passed via URL (e.g., ?destination=JP or ?destination=IN)
+  useEffect(() => {
+    if (!seededDestinationRef.current && destinationParam && geoData?.destinations) {
+      const matched = geoData.destinations.find(
+        (d) =>
+          d.code.toUpperCase() === destinationParam.toUpperCase() ||
+          d.name.toLowerCase() === destinationParam.toLowerCase(),
+      );
+      if (matched) {
+        setSelectedDestination(matched);
+        seededDestinationRef.current = true;
+      }
+    }
+  }, [destinationParam, geoData]);
+
   function goBack() {
     const i = STEP_ORDER.indexOf(step);
     if (i > 0) goToStep(STEP_ORDER[i - 1]);
@@ -123,8 +142,8 @@ export default function ScopePage() {
     if (!residenceCountry || !nationality || savingIdentity) return;
     setError(null);
     setSavingIdentity(true);
-    // Advance immediately so a profile save cannot yank the user back to identity.
-    setStep("destination");
+    // If destination was pre-seeded from URL, jump directly to visa_type
+    setStep(selectedDestination ? "visa_type" : "destination");
     if (token) {
       try {
         const natName = matchCountry(nationality).name;
@@ -684,5 +703,19 @@ export default function ScopePage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function ScopePage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="mx-auto max-w-lg space-y-6 py-12 text-center">
+          <Loader2 className="mx-auto size-8 animate-spin text-muted-foreground" />
+        </div>
+      }
+    >
+      <ScopePageInner />
+    </Suspense>
   );
 }

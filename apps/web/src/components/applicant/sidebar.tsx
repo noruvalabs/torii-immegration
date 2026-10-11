@@ -99,9 +99,11 @@ export function ApplicantSidebar() {
       <nav className={cn("flex-1 space-y-1.5 overflow-y-auto py-4", isCompact ? "px-2" : "px-3")}>
         {APPLICANT_NAV.map((item) => {
           const active =
-            item.href === "/dashboard"
-              ? pathname === "/dashboard"
-              : pathname.startsWith(item.href);
+            item.href === "/"
+              ? pathname === "/"
+              : item.href === "/dashboard"
+                ? pathname === "/dashboard"
+                : pathname.startsWith(item.href);
           const Icon = item.icon;
           const label = lang === "ja" && item.label_ja ? item.label_ja : item.label;
 
