@@ -196,6 +196,71 @@ def parse_structured_fields_from_text(
         ):
             fields["destination"] = {"value": m.group(1).strip().title(), "confidence": 0.85}
 
+    elif doc_type_clean in (
+        "indian_hospital_letter",
+        "hospital_invitation",
+        "medical_referral",
+        "local_medical_referral",
+    ):
+        # Hospital name
+        hospital_pats = [
+            r"(?:hospital(?:\s*name)?|medical\s*cent(?:er|re)|institute)\s*[:=]\s*([A-Za-z0-9 \-\.,&']+?)(?:[\r\n,;]|$)",
+            r"((?:Apollo|Fortis|Max|Medanta|Narayana|Manipal|CMC|AIIMS|Tata Memorial|Aster|BLK|Artemis|Kokilaben)[A-Za-z0-9 \-\.,&']*?)(?:[\r\n,;]|$)",
+        ]
+        for pat in hospital_pats:
+            if m := re.search(pat, combined_text, re.IGNORECASE):
+                fields["hospital_name"] = {"value": m.group(1).strip(), "confidence": 0.90}
+                break
+
+        # Treating doctor name
+        doctor_pats = [
+            r"(?:treating\s*(?:doctor|physician)|doctor(?:'s)?\s*name|consultant|attending\s*(?:doctor|physician))\s*[:=]\s*(?:Dr\.?\s*)?([A-Za-z \-\.]+?)(?:[\r\n,;]|$)",
+            r"(?:Dr\.?\s+)([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,3})(?:[\r\n,;]|$)",
+        ]
+        for pat in doctor_pats:
+            if m := re.search(pat, combined_text, re.IGNORECASE):
+                fields["doctor_name"] = {"value": m.group(1).strip().title(), "confidence": 0.85}
+                break
+
+        # Patient passport number on hospital letter (for cross-check)
+        if m := re.search(
+            r"(?:passport(?:\s*(?:number|no|num))?\s*[:=#]?\s*)([A-Z0-9]{6,12})",
+            combined_text,
+            re.IGNORECASE,
+        ):
+            val = m.group(1).upper()
+            if not val.startswith("HTTP") and len(val) >= 6:
+                fields["patient_passport_number"] = {"value": val, "confidence": 0.92}
+
+        # Patient name on hospital letter (for cross-check)
+        patient_pats = [
+            r"(?:patient(?:'s)?\s*name|name\s*of\s*(?:the\s*)?patient)\s*[:=]\s*([A-Za-z \-'\.]{3,60})(?:[\r\n,;]|$)",
+        ]
+        for pat in patient_pats:
+            if m := re.search(pat, combined_text, re.IGNORECASE):
+                fields["patient_name"] = {"value": m.group(1).strip().title(), "confidence": 0.88}
+                break
+
+        # Diagnosis / treatment
+        diag_pats = [
+            r"(?:diagnosis|condition|treatment\s*(?:for|plan)?|medical\s*condition|ailment)\s*[:=]\s*([A-Za-z0-9 \-\.,/\(\)]+?)(?:[\r\n;]|$)",
+        ]
+        for pat in diag_pats:
+            if m := re.search(pat, combined_text, re.IGNORECASE):
+                fields["diagnosis"] = {"value": m.group(1).strip(), "confidence": 0.85}
+                break
+
+        # Hospital registration number
+        if m := re.search(
+            r"(?:registration(?:\s*(?:number|no))?|reg\.?\s*no\.?|license\s*no\.?)\s*[:=#]?\s*([A-Z0-9\-/]{4,20})",
+            combined_text,
+            re.IGNORECASE,
+        ):
+            fields["hospital_registration_number"] = {
+                "value": m.group(1).strip().upper(),
+                "confidence": 0.85,
+            }
+
     confidence = 0.9 if len(fields) >= 3 else (0.8 if len(fields) >= 1 else 0.5)
     return fields, confidence
 

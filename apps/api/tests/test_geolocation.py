@@ -178,11 +178,11 @@ async def test_application_types_for_spouse_route_succeeds(
 # content packs are not live sends the applicant to an empty scope.
 
 
-def test_only_japan_and_the_uk_are_offered_as_destinations() -> None:
+def test_only_japan_the_uk_and_india_are_offered_as_destinations() -> None:
     from torii_api.services.geolocation import get_supported_destinations
 
     codes = {destination["code"] for destination in get_supported_destinations()}
-    assert codes == {"JP", "UK", "GB"}
+    assert codes == {"JP", "UK", "GB", "IN"}
     assert "US" not in codes
 
 

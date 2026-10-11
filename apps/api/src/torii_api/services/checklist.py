@@ -22,6 +22,9 @@ JP_STUDENT_NEW_APPLICATION_DOCUMENT_REQUIREMENTS: list[dict[str, Any]] = pack_do
 JP_TOURIST_NEW_APPLICATION_DOCUMENT_REQUIREMENTS: list[dict[str, Any]] = pack_documents(
     "jp/tourist.new_application"
 )
+IN_MEDICAL_NEW_APPLICATION_DOCUMENT_REQUIREMENTS: list[dict[str, Any]] = pack_documents(
+    "in/medical.new_application"
+)
 
 
 class ChecklistDefinitionItem(BaseModel):

@@ -1,0 +1,337 @@
+scope:
+  jurisdiction: IN
+  visa_category: medical
+  action: new_application
+  is_live: true
+  research_enabled: true
+  name: Indian Medical Visa (MED-1) Application
+stages:
+- sequence: 1
+  code: applicant_filing
+  actor: applicant
+intake:
+  questions:
+  - key: full_name
+    section: 1. Applicant Personal Information
+    prompt: What is your full legal name as it appears on your passport?
+    type: string
+    min_length: 2
+    max_length: 200
+    required: true
+    citation:
+      authority: Bureau of Immigration, Ministry of Home Affairs, Government of India
+      title: Medical Visa Guidelines and Application Procedure
+      url: https://indianvisaonline.gov.in/
+  - key: gender
+    section: 1. Applicant Personal Information
+    prompt: What is your gender?
+    type: enum
+    options:
+    - Male
+    - Female
+    - Other
+    required: true
+    citation:
+      authority: Bureau of Immigration, Ministry of Home Affairs, Government of India
+      title: Medical Visa Guidelines and Application Procedure
+      url: https://indianvisaonline.gov.in/
+  - key: date_of_birth
+    section: 1. Applicant Personal Information
+    prompt: What is your date of birth?
+    type: string
+    required: true
+    citation:
+      authority: Bureau of Immigration, Ministry of Home Affairs, Government of India
+      title: Medical Visa Guidelines and Application Procedure
+      url: https://indianvisaonline.gov.in/
+  - key: nationality
+    section: 1. Applicant Personal Information
+    prompt: What is your country of citizenship / nationality?
+    type: string
+    min_length: 2
+    max_length: 100
+    required: true
+    citation:
+      authority: Bureau of Immigration, Ministry of Home Affairs, Government of India
+      title: Medical Visa Guidelines and Application Procedure
+      url: https://indianvisaonline.gov.in/
+  - key: passport_number
+    section: 1. Applicant Personal Information
+    prompt: What is your current passport number?
+    type: string
+    min_length: 5
+    max_length: 32
+    required: true
+    citation:
+      authority: Bureau of Immigration, Ministry of Home Affairs, Government of India
+      title: Medical Visa Guidelines and Application Procedure
+      url: https://indianvisaonline.gov.in/
+  - key: passport_expiry
+    section: 1. Applicant Personal Information
+    prompt: When does your passport expire?
+    type: string
+    required: true
+    citation:
+      authority: Bureau of Immigration, Ministry of Home Affairs, Government of India
+      title: Medical Visa Guidelines and Application Procedure
+      url: https://indianvisaonline.gov.in/
+  - key: current_residence_country
+    section: 1. Applicant Personal Information
+    prompt: Which country are you currently residing in?
+    type: string
+    min_length: 2
+    max_length: 100
+    required: true
+    citation:
+      authority: Bureau of Immigration, Ministry of Home Affairs, Government of India
+      title: Medical Visa Guidelines and Application Procedure
+      url: https://indianvisaonline.gov.in/
+  - key: destination_hospital
+    section: 2. Medical Treatment in India
+    prompt: What is the name of the recognized hospital in India where you will receive treatment?
+    type: string
+    min_length: 3
+    max_length: 200
+    required: true
+    hint: e.g. Apollo Hospitals, Fortis Healthcare, Max Super Speciality, Medanta The Medicity, CMC Vellore
+    citation:
+      authority: Bureau of Immigration, Ministry of Home Affairs, Government of India
+      title: Recognized Medical Institutions for Foreign Patients
+      url: https://indianvisaonline.gov.in/
+  - key: hospital_city
+    section: 2. Medical Treatment in India
+    prompt: In which city in India is the hospital located?
+    type: string
+    min_length: 2
+    max_length: 100
+    required: true
+    hint: e.g. New Delhi, Chennai, Mumbai, Bengaluru, Kolkata, Hyderabad, Vellore
+    citation:
+      authority: Bureau of Immigration, Ministry of Home Affairs, Government of India
+      title: Medical Visa Guidelines and Application Procedure
+      url: https://indianvisaonline.gov.in/
+  - key: illness_treatment_category
+    section: 2. Medical Treatment in India
+    prompt: What is the nature or category of your medical treatment?
+    type: enum
+    options:
+    - Cardiology_Cardiac_Surgery
+    - Oncology_Cancer_Treatment
+    - Organ_Bone_Marrow_Transplant
+    - Orthopedics_Joint_Replacement
+    - Neurology_Neurosurgery
+    - Ophthalmology
+    - IVF_Fertility
+    - General_Surgery_Other
+    required: true
+    citation:
+      authority: Bureau of Immigration, Ministry of Home Affairs, Government of India
+      title: Medical Visa Guidelines and Application Procedure
+      url: https://indianvisaonline.gov.in/
+  - key: has_indian_hospital_invitation
+    section: 2. Medical Treatment in India
+    prompt: Do you have an official Medical Visa Invitation / Appointment Letter from the hospital in India?
+    type: boolean
+    required: true
+    hint: The letter must state your name, passport number, treatment plan, and doctor details on hospital letterhead.
+    citation:
+      authority: Bureau of Immigration, Ministry of Home Affairs, Government of India
+      title: Mandatory Medical Invitation Letter Requirement
+      url: https://indianvisaonline.gov.in/
+  - key: has_local_medical_referral
+    section: 2. Medical Treatment in India
+    prompt: Do you have a medical report or referral letter from a doctor in your home country?
+    type: boolean
+    required: true
+    citation:
+      authority: Bureau of Immigration, Ministry of Home Affairs, Government of India
+      title: Medical Visa Guidelines and Application Procedure
+      url: https://indianvisaonline.gov.in/
+  - key: has_sufficient_funds
+    section: 3. Financial Support & Attendants
+    prompt: Can you demonstrate sufficient financial funds to support your medical treatment and stay in India?
+    type: boolean
+    required: true
+    citation:
+      authority: Bureau of Immigration, Ministry of Home Affairs, Government of India
+      title: Financial Capability Verification for Medical Visa
+      url: https://indianvisaonline.gov.in/
+  - key: accompanying_attendants_count
+    section: 3. Financial Support & Attendants
+    prompt: How many medical attendants (family members/caregivers) will accompany you?
+    type: integer
+    min_value: 0
+    max_value: 3
+    required: true
+    hint: Up to 3 medical attendants (MED-2) are permitted under Government of India guidelines.
+    citation:
+      authority: Bureau of Immigration, Ministry of Home Affairs, Government of India
+      title: Medical Attendant Visa Regulations
+      url: https://indianvisaonline.gov.in/
+eligibility:
+  rules:
+  - key: passport_expiry
+    operator: not_empty
+    value: null
+    failure_status: fail
+    message: You must hold a valid passport with at least 6 months validity from the date of arrival.
+    citation:
+      authority: Bureau of Immigration, Ministry of Home Affairs, Government of India
+      title: General Visa Provisions - Passport Validity
+      url: https://indianvisaonline.gov.in/
+      source_version: 2026-04
+  - key: has_indian_hospital_invitation
+    operator: equals
+    value: true
+    failure_status: fail
+    message: An official Medical Invitation Letter from a recognized hospital in India is mandatory for visa issuance.
+    citation:
+      authority: Bureau of Immigration, Ministry of Home Affairs, Government of India
+      title: Medical Visa Mandatory Requirements
+      url: https://indianvisaonline.gov.in/
+      source_version: 2026-04
+  - key: has_local_medical_referral
+    operator: equals
+    value: true
+    failure_status: at_risk
+    message: A referral letter or diagnosis report from a recognized physician in your home country is required by consular authorities.
+    citation:
+      authority: Bureau of Immigration, Ministry of Home Affairs, Government of India
+      title: Medical Visa Document Guidelines
+      url: https://indianvisaonline.gov.in/
+      source_version: 2026-04
+  - key: has_sufficient_funds
+    operator: equals
+    value: true
+    failure_status: at_risk
+    message: You must demonstrate sufficient financial funds to cover medical costs and living expenses in India.
+    citation:
+      authority: Bureau of Immigration, Ministry of Home Affairs, Government of India
+      title: Financial Support for Medical Travel
+      url: https://indianvisaonline.gov.in/
+      source_version: 2026-04
+  - key: accompanying_attendants_count
+    operator: max
+    value: 3
+    failure_status: fail
+    message: A maximum of 3 medical attendants (MED-2) may accompany the principal patient.
+    citation:
+      authority: Bureau of Immigration, Ministry of Home Affairs, Government of India
+      title: Medical Attendant (MED-2) Limits
+      url: https://indianvisaonline.gov.in/
+      source_version: 2026-04
+documents:
+  items:
+  - code: passport
+    name:
+      en: Valid passport biographic page
+    how_to_obtain:
+      en: Clear color scan or high-resolution photo of your current passport bio page.
+    why_required:
+      en: Verifies legal identity, nationality, and passport validity (must have at least 6 months validity).
+    is_required: true
+    citation:
+      authority: Bureau of Immigration, Ministry of Home Affairs, Government of India
+      title: Travel Document Requirements
+      url: https://indianvisaonline.gov.in/
+      source_version: 2026-04
+  - code: indian_hospital_letter
+    name:
+      en: Official Indian Hospital Invitation Letter
+    how_to_obtain:
+      en: Request an official letter on hospital letterhead from your designated hospital in India detailing patient name, passport number, medical diagnosis, and doctor registration details.
+    why_required:
+      en: Primary requirement establishing the necessity and legitimacy of medical treatment in India.
+    is_required: true
+    citation:
+      authority: Bureau of Immigration, Ministry of Home Affairs, Government of India
+      title: Hospital Invitation Letter Mandate
+      url: https://indianvisaonline.gov.in/
+      source_version: 2026-04
+  - code: local_medical_referral
+    name:
+      en: Home country medical reports and doctor referral
+    how_to_obtain:
+      en: Obtain prescriptions, diagnostic test results, and a referral note from your local doctor or specialist.
+    why_required:
+      en: Confirms the preliminary diagnosis and recommendation to seek specialized treatment abroad.
+    is_required: true
+    citation:
+      authority: Bureau of Immigration, Ministry of Home Affairs, Government of India
+      title: Medical Background Verification
+      url: https://indianvisaonline.gov.in/
+      source_version: 2026-04
+  - code: proof_of_funds
+    name:
+      en: Evidence of financial capability
+    how_to_obtain:
+      en: Recent bank statements covering the last 3-6 months showing sufficient funds, or international currency endorsement.
+    why_required:
+      en: Proves that the patient or sponsor can cover the hospital expenses and living costs in India.
+    is_required: true
+    citation:
+      authority: Bureau of Immigration, Ministry of Home Affairs, Government of India
+      title: Financial Solvency Requirement
+      url: https://indianvisaonline.gov.in/
+      source_version: 2026-04
+  - code: passport_photograph
+    name:
+      en: Recent 2x2 inch color passport photograph
+    how_to_obtain:
+      en: Studio photo with white background, 50mm x 50mm, frontal face view without glasses or borders.
+    why_required:
+      en: Required for consular physical application and visa sticker processing.
+    is_required: true
+    citation:
+      authority: Bureau of Immigration, Ministry of Home Affairs, Government of India
+      title: Photograph Specifications
+      url: https://indianvisaonline.gov.in/
+      source_version: 2026-04
+forms:
+- code: indian_medical_visa_application
+  version: 2026-04
+  official_title: Government of India Online Visa Application (Medical Visa MED-1)
+  citation:
+    authority: Bureau of Immigration, Ministry of Home Affairs, Government of India
+    title: Indian Visa Online Application System
+    url: https://indianvisaonline.gov.in/
+    source_version: 2026-04
+  field_mappings:
+  - form_field: applicant.full_name
+    answer_key: full_name
+    required: true
+  - form_field: applicant.gender
+    answer_key: gender
+    required: true
+  - form_field: applicant.date_of_birth
+    answer_key: date_of_birth
+    required: true
+  - form_field: applicant.nationality
+    answer_key: nationality
+    required: true
+  - form_field: applicant.passport_number
+    answer_key: passport_number
+    required: true
+  - form_field: applicant.passport_expiry
+    answer_key: passport_expiry
+    required: true
+  - form_field: medical.destination_hospital
+    answer_key: destination_hospital
+    required: true
+  - form_field: medical.hospital_city
+    answer_key: hospital_city
+    required: true
+  - form_field: medical.illness_category
+    answer_key: illness_treatment_category
+    required: true
+  - form_field: attendants.count
+    answer_key: accompanying_attendants_count
+    required: true
+fees: []
+sources:
+- title: Bureau of Immigration - Medical Visa (MED)
+  url: https://indianvisaonline.gov.in/
+  retrieved: '2026-10-06'
+- title: Indian Visa Online Official Portal
+  url: https://indianvisaonline.gov.in/visa/
+  retrieved: '2026-10-06'

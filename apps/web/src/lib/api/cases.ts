@@ -300,6 +300,7 @@ export function patchCase(
     intake_answers?: Record<string, unknown>;
     intake_step?: string;
     notes?: string;
+    submission_reference?: string | null;
   },
 ) {
   return req<Case>(`/cases/${caseId}`, token, {
