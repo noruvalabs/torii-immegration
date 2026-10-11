@@ -166,7 +166,7 @@ export function AtlysHero() {
                   </div>
 
                   <div className="flex items-center gap-1.5 text-xs font-semibold text-white/70 group-hover:text-white">
-                    <span>Apply for visa</span>
+                    <span>Apply for Visa</span>
                     <ChevronRight className="size-4 text-white/40 group-hover:translate-x-0.5 group-hover:text-white transition-all" />
                   </div>
                 </button>
