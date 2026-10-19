@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   CheckCircle2,
   ShieldCheck,
@@ -63,12 +63,47 @@ export function QuickEligibilityAndPayment({
     Boolean(caseData.is_entitled);
 
   // View state: "questions" | "score" | "payment" | "paid_success"
-  const [currentStep, setCurrentStep] = useState<"questions" | "score" | "payment" | "paid_success">(
-    isAlreadyPaid ? "paid_success" : "questions"
-  );
+  const [currentStep, setCurrentStep] = useState<"questions" | "score" | "payment" | "paid_success">(() => {
+    if (isAlreadyPaid) return "paid_success";
+    if (typeof window !== "undefined") {
+      try {
+        const savedStep = localStorage.getItem(`torii_eligibility_step_${caseData.id}`);
+        if (savedStep === "score" || savedStep === "payment" || savedStep === "questions") {
+          return savedStep;
+        }
+      } catch {}
+    }
+    return "questions";
+  });
 
-  // Start with no answers pre-selected so applicant chooses their own responses
-  const [answers, setAnswers] = useState<Record<string, number>>({});
+  const goToStep = (step: "questions" | "score" | "payment" | "paid_success") => {
+    setCurrentStep(step);
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.setItem(`torii_eligibility_step_${caseData.id}`, step);
+      } catch {}
+    }
+  };
+
+  // Restore answers from localStorage or caseData.intake_answers
+  const [answers, setAnswers] = useState<Record<string, number>>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const cached = localStorage.getItem(`torii_eligibility_answers_${caseData.id}`);
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (parsed && typeof parsed === "object" && Object.keys(parsed).length > 0) {
+            return parsed;
+          }
+        }
+      } catch {}
+    }
+    const ia = caseData.intake_answers as Record<string, unknown> | undefined;
+    if (ia?.eligibility_answers && typeof ia.eligibility_answers === "object") {
+      return ia.eligibility_answers as Record<string, number>;
+    }
+    return {};
+  });
 
   const [paymentMethod, setPaymentMethod] = useState<"bkash" | "nagad" | "card">("bkash");
   const [mobileNumber, setMobileNumber] = useState("017");
@@ -102,7 +137,8 @@ export function QuickEligibilityAndPayment({
         : "Standard Tourist / Visitor Visa";
 
   // 5 Essential, simple questions
-  const questions: Question[] = [
+  const questions: Question[] = useMemo(
+    () => [
     {
       id: "passport",
       category: "Passport & Identity",
@@ -231,7 +267,44 @@ export function QuickEligibilityAndPayment({
         },
       ],
     },
-  ];
+  ], [isMedical, isStudent, isBusiness]);
+
+  // Reconcile answers with caseData.intake_answers if state is empty or caseData updates later
+  useEffect(() => {
+    const ia = caseData.intake_answers as Record<string, unknown> | undefined;
+    if (!ia) return;
+
+    setAnswers((prev) => {
+      // If we already have answered questions, don't overwrite them
+      if (Object.keys(prev).length > 0) return prev;
+
+      const restored: Record<string, number> = {};
+      if (ia.eligibility_answers && typeof ia.eligibility_answers === "object") {
+        Object.assign(restored, ia.eligibility_answers);
+      } else {
+        // Fallback: match by saved option label
+        for (const q of questions) {
+          const savedLabel = ia[`eligibility_${q.id}`];
+          if (typeof savedLabel === "string") {
+            const idx = q.options.findIndex((opt) => opt.label === savedLabel);
+            if (idx !== -1) {
+              restored[q.id] = idx;
+            }
+          }
+        }
+      }
+
+      if (Object.keys(restored).length > 0) {
+        if (typeof window !== "undefined") {
+          try {
+            localStorage.setItem(`torii_eligibility_answers_${caseData.id}`, JSON.stringify(restored));
+          } catch {}
+        }
+        return restored;
+      }
+      return prev;
+    });
+  }, [caseData.id, caseData.intake_answers, questions]);
 
   const answeredCount = Object.keys(answers).length;
   const isAllAnswered = answeredCount === questions.length;
@@ -254,9 +327,14 @@ export function QuickEligibilityAndPayment({
   };
   const totalAmount = fees.govFee + fees.serviceFee;
 
-  const syncAnswersToDatabase = async (extraAnswers?: Record<string, unknown>, extraStatus?: string) => {
+  const syncAnswersToDatabase = async (
+    extraAnswers?: Record<string, unknown>,
+    extraStatus?: string,
+    overrideAnswers?: Record<string, number>
+  ) => {
     if (!token) return;
-    const optionLabels = Object.entries(answers).reduce((acc, [qId, optIdx]) => {
+    const targetAnswers = overrideAnswers ?? answers;
+    const optionLabels = Object.entries(targetAnswers).reduce((acc, [qId, optIdx]) => {
       const q = questions.find((item) => item.id === qId);
       if (q && q.options[optIdx]) {
         acc[`eligibility_${qId}`] = q.options[optIdx].label;
@@ -271,6 +349,7 @@ export function QuickEligibilityAndPayment({
     const updatedAnswers = {
       ...existingAnswers,
       ...optionLabels,
+      eligibility_answers: targetAnswers,
       eligibility_score: probabilityPercentage,
       ...(mobileNumber && mobileNumber !== "017" ? { mobile_phone: mobileNumber, applicant_phone: mobileNumber } : {}),
       ...(extraAnswers || {}),
@@ -287,20 +366,29 @@ export function QuickEligibilityAndPayment({
   };
 
   const handleSelectOption = (questionId: string, optionIndex: number) => {
-    setAnswers((prev) => ({
-      ...prev,
-      [questionId]: optionIndex,
-    }));
+    setAnswers((prev) => {
+      const next = {
+        ...prev,
+        [questionId]: optionIndex,
+      };
+      if (typeof window !== "undefined") {
+        try {
+          localStorage.setItem(`torii_eligibility_answers_${caseData.id}`, JSON.stringify(next));
+        } catch {}
+      }
+      void syncAnswersToDatabase(undefined, undefined, next);
+      return next;
+    });
   };
 
   const handleCalculateResult = () => {
-    setCurrentStep("score");
+    goToStep("score");
     window.scrollTo({ top: 0, behavior: "smooth" });
     void syncAnswersToDatabase();
   };
 
   const handleProceedToPayment = () => {
-    setCurrentStep("payment");
+    goToStep("payment");
     window.scrollTo({ top: 0, behavior: "smooth" });
     void syncAnswersToDatabase();
   };
@@ -480,7 +568,7 @@ export function QuickEligibilityAndPayment({
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setCurrentStep("questions")}
+              onClick={() => goToStep("questions")}
               className="text-xs shrink-0"
             >
               Edit Answers
@@ -591,7 +679,7 @@ export function QuickEligibilityAndPayment({
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => setCurrentStep("score")}
+            onClick={() => goToStep("score")}
             className="text-xs text-muted-foreground hover:text-foreground"
           >
             ← Back to Eligibility Score
