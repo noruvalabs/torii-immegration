@@ -1,0 +1,23 @@
+steps:
+  # 1. Build Unified API + AI Image
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['build', '-t', 'us-central1-docker.pkg.dev/tori-507709/torii/api:latest', '-f', 'apps/api/Dockerfile', '.']
+
+  # 2. Build Web Frontend Image
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['build', '--build-arg', 'NEXT_PUBLIC_GOOGLE_CLIENT_ID=529415836006-250vb6qgkpjtabm2hmj3jb9uuqkso1en.apps.googleusercontent.com', '-t', 'us-central1-docker.pkg.dev/tori-507709/torii/web:latest', '-f', 'apps/web/Dockerfile', '.']
+
+  # 3. Push API Image
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'us-central1-docker.pkg.dev/tori-507709/torii/api:latest']
+
+  # 4. Push Web Image
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'us-central1-docker.pkg.dev/tori-507709/torii/web:latest']
+
+images:
+  - 'us-central1-docker.pkg.dev/tori-507709/torii/api:latest'
+  - 'us-central1-docker.pkg.dev/tori-507709/torii/web:latest'
+
+options:
+  machineType: 'E2_HIGHCPU_8'

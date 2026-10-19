@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from typing import Any
 from urllib.parse import urlparse
 
+import structlog
 from fastapi import APIRouter, HTTPException, Query, Request, UploadFile, status
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from torii_api.auth.deps import CurrentUserDep, SessionDep, SettingsDep
 from torii_api.auth.email import (
@@ -16,7 +19,6 @@ from torii_api.auth.email import (
     build_password_reset_email_text,
     build_verification_email_body,
     build_verification_email_text,
-    send_email,
 )
 from torii_api.auth.security import (
     create_access_token,
@@ -26,9 +28,32 @@ from torii_api.auth.security import (
     verify_password,
 )
 from torii_api.config import Settings
-from torii_api.db.models import CreditTransaction, User, UserRole
+from torii_api.db.models import CreditTransaction, OutboxEvent, User, UserRole
 
 router = APIRouter(prefix="/v1/auth", tags=["auth"])
+
+log = structlog.get_logger()
+
+
+def _enqueue_email(
+    session: AsyncSession,
+    *,
+    to_email: str,
+    subject: str,
+    html_body: str,
+    text_body: str | None = None,
+    raw_token: str | None = None,
+) -> None:
+    """Queue an email into the transactional outbox to be dispatched asynchronously."""
+    payload: dict[str, Any] = {
+        "to_email": to_email,
+        "subject": subject,
+        "html_body": html_body,
+        "text_body": text_body,
+    }
+    if raw_token is not None:
+        payload["token"] = raw_token
+    session.add(OutboxEvent(topic="email.send", payload=payload))
 
 
 # ── Request / response schemas ────────────────────────────────────────────────
@@ -51,9 +76,19 @@ class AuthConfigOut(BaseModel):
 
 
 class GoogleAuthIn(BaseModel):
+    """Input for POST /v1/auth/google.
+
+    Exactly one credential is required: `code` (authorization code flow, what the web app
+    sends) or `token` (a Google access/ID token). Everything else is advisory.
+    """
+
     token: str | None = None
     code: str | None = None
     redirect_uri: str | None = None
+    # IGNORED for identity, deliberately. The endpoint derives the account's email only from
+    # a Google-verified response; accepting it here once allowed anyone to sign in as any
+    # user by posting their address. Kept on the schema so old clients that still send it get
+    # a normal response rather than a validation error -- the value is simply never read.
     email: str | None = None
     name: str | None = None
     avatar_url: str | None = None
@@ -211,7 +246,8 @@ async def register(
 
         base_url = _resolve_app_base_url(request, settings)
         verification_url = f"{base_url}/verify-email?token={raw_verification_token}"
-        send_email(
+        _enqueue_email(
+            session,
             to_email=email,
             subject="Verify your Torii email address",
             html_body=build_verification_email_body(
@@ -223,7 +259,7 @@ async def register(
                 username=existing_user.username,
                 verification_url=verification_url,
             ),
-            settings=settings,
+            raw_token=raw_verification_token,
         )
 
         token = (
@@ -284,10 +320,11 @@ async def register(
     session.add(welcome_tx)
     await session.flush()
 
-    # Send verification email (best-effort — never blocks registration)
+    # Queue verification email in outbox (transactional, non-blocking)
     base_url = _resolve_app_base_url(request, settings)
     verification_url = f"{base_url}/verify-email?token={raw_verification_token}"
-    send_email(
+    _enqueue_email(
+        session,
         to_email=email,
         subject="Verify your Torii email address",
         html_body=build_verification_email_body(
@@ -299,7 +336,7 @@ async def register(
             username=payload.username,
             verification_url=verification_url,
         ),
-        settings=settings,
+        raw_token=raw_verification_token,
     )
 
     token = (
@@ -361,9 +398,48 @@ async def google_login(
 
     import httpx
 
-    email = payload.email.strip().lower() if payload.email else None
+    # SECURITY: `email` is the identity this endpoint authenticates, so it may ONLY ever come
+    # from a response Google itself signed. It starts as None and is assigned nowhere except
+    # inside the verified branches below.
+    #
+    # It used to be seeded from `payload.email` -- the client's own JSON body. Because step 2
+    # is guarded by `if not email`, supplying an email skipped every verification path, and
+    # the request fell straight through to the user lookup and was issued a valid JWT. In
+    # other words:
+    #
+    #   curl -X POST .../v1/auth/google -d '{"email":"admin@example.com"}'
+    #
+    # returned a working admin session to anyone who asked, with no Google token, no
+    # authorization code, and no password. `name` and `avatar_url` stay client-supplied
+    # because they are display-only and are overwritten by Google's values when present, but
+    # identity never is.
+    email: str | None = None
     name = payload.name
     avatar_url = payload.avatar_url
+
+    # Why this endpoint tracks a failure reason at all: every Google call below can fail for
+    # causes that need completely different responses from whoever is debugging -- the host
+    # having no outbound network, the client secret being wrong, Google rejecting an expired
+    # token, or the account genuinely exposing no email. All of them used to be swallowed by
+    # `except Exception: pass` and reported as the single message "email address not received
+    # from provider", which describes only the last of those.
+    #
+    # That masking cost real time: on 2026-09-13 container egress was down (ip_forward=0) and
+    # the resulting ConnectError surfaced to users as a Google account problem, with nothing
+    # in the logs. Never let these paths fail silently again.
+    failure_reason: str | None = None
+
+    if not payload.code and not payload.token:
+        failure_reason = "no_credential"
+        log.warning("auth.google.no_credential_supplied")
+
+    if payload.code and not (settings.google_client_id and settings.google_client_secret):
+        failure_reason = "server_not_configured"
+        log.error(
+            "auth.google.not_configured",
+            has_client_id=bool(settings.google_client_id),
+            has_client_secret=bool(settings.google_client_secret),
+        )
 
     # 1. If an authorization code was provided, exchange it for tokens with Google
     if payload.code and settings.google_client_id and settings.google_client_secret:
@@ -403,8 +479,24 @@ async def google_login(
                             email = (g_data.get("email") or email or "").strip().lower() or None
                             name = g_data.get("name") or name
                             avatar_url = g_data.get("picture") or avatar_url
-        except Exception:
-            pass
+                else:
+                    # Google rejected the exchange. Its JSON error body is the single most
+                    # useful thing here -- `redirect_uri_mismatch` and `invalid_client` both
+                    # land on this branch and mean very different fixes.
+                    failure_reason = "code_exchange_rejected"
+                    log.error(
+                        "auth.google.code_exchange_failed",
+                        status_code=token_resp.status_code,
+                        # Never the code or the secret; the error body carries neither.
+                        google_error=token_resp.text[:300],
+                    )
+        except Exception as exc:
+            failure_reason = "google_unreachable"
+            log.exception(
+                "auth.google.code_exchange_error",
+                error_type=type(exc).__name__,
+                error=str(exc),
+            )
 
     # 2. If a direct access_token or id_token was provided, verify with Google
     if not email and payload.token:
@@ -428,13 +520,53 @@ async def google_login(
                         email = (g_data.get("email") or email or "").strip().lower() or None
                         name = g_data.get("name") or name
                         avatar_url = g_data.get("picture") or avatar_url
-        except Exception:
-            pass
+                    else:
+                        failure_reason = "token_rejected"
+                        log.error(
+                            "auth.google.token_verification_failed",
+                            userinfo_status=res.status_code,
+                            tokeninfo_status=res_id.status_code,
+                        )
+        except Exception as exc:
+            failure_reason = "google_unreachable"
+            log.exception(
+                "auth.google.token_verification_error",
+                error_type=type(exc).__name__,
+                error=str(exc),
+            )
 
     if not email:
+        # The message tells the user what to do; the reason tells us what broke. Both matter:
+        # "try again" is useless advice when the real fault is server-side.
+        detail = {
+            "server_not_configured": (
+                "Google sign-in is not configured on the server. Please contact support or "
+                "sign in with your email and password."
+            ),
+            "google_unreachable": (
+                "Could not reach Google to verify your sign-in. This is a problem on our "
+                "side, not with your account. Please try again shortly."
+            ),
+            "code_exchange_rejected": (
+                "Google rejected this sign-in attempt. Please try signing in again."
+            ),
+            "token_rejected": (
+                "Your Google sign-in has expired or is no longer valid. Please try again."
+            ),
+            "no_credential": (
+                "No Google credential was supplied. Please start the sign-in from the Google "
+                "button."
+            ),
+        }.get(
+            failure_reason or "",
+            "Google authentication failed: no email address was returned for this account.",
+        )
+        log.warning("auth.google.login_failed", reason=failure_reason or "no_email_in_response")
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Google authentication failed: email address not received from provider.",
+            status_code=status.HTTP_502_BAD_GATEWAY
+            if failure_reason in {"google_unreachable", "server_not_configured"}
+            else status.HTTP_400_BAD_REQUEST,
+            detail=detail,
         )
 
     user = await _find_user_by_email_or_username(session, email)
@@ -612,7 +744,8 @@ async def resend_verification(
 
         base_url = _resolve_app_base_url(request, settings)
         verification_url = f"{base_url}/verify-email?token={raw_token}"
-        send_email(
+        _enqueue_email(
+            session,
             to_email=email,
             subject="Verify your Torii email address",
             html_body=build_verification_email_body(
@@ -624,7 +757,7 @@ async def resend_verification(
                 username=user.username,
                 verification_url=verification_url,
             ),
-            settings=settings,
+            raw_token=raw_token,
         )
 
     return MessageOut(
@@ -656,7 +789,8 @@ async def forgot_password(
 
         base_url = _resolve_app_base_url(request, settings)
         reset_url = f"{base_url}/reset-password?token={raw_token}"
-        send_email(
+        _enqueue_email(
+            session,
             to_email=email,
             subject="Reset your Torii password",
             html_body=build_password_reset_email_body(
@@ -668,7 +802,7 @@ async def forgot_password(
                 username=user.username,
                 reset_url=reset_url,
             ),
-            settings=settings,
+            raw_token=raw_token,
         )
 
     return MessageOut(detail="If that email is registered, a password-reset link has been sent")

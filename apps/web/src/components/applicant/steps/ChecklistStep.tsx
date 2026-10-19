@@ -222,7 +222,7 @@ export function ChecklistStep({
         checklist_item_id: itemId,
         filename: walletDoc.filename,
         storage_key: `wallet/${walletDoc.id}`,
-        extracted_fields: {},
+        extracted_fields: walletDoc.extracted_fields || {},
         content_type: walletDoc.content_type,
       });
       await onStatusChange(itemId, "uploaded");
