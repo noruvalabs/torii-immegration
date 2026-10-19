@@ -336,6 +336,38 @@ async def run_stage_research(ctx: dict[str, Any], event: OutboxEvent) -> None:
     log.info("stage_research.done", research_id=research_id, stage=stage, valid=valid)
 
 
+async def run_email_dispatch(ctx: dict[str, Any], event: OutboxEvent) -> None:
+    """Send an email queued in the transactional outbox."""
+    payload = event.payload or {}
+    to_email = payload.get("to_email")
+    subject = payload.get("subject")
+    html_body = payload.get("html_body")
+    text_body = payload.get("text_body")
+
+    if not to_email or not subject or not html_body:
+        log.warning("email.dispatch_missing_fields", event_id=event.id, payload=payload)
+        return
+
+    settings = get_settings()
+    import anyio.to_thread
+
+    from torii_api.auth.email import send_email
+
+    success = await anyio.to_thread.run_sync(
+        lambda: send_email(
+            to_email=to_email,
+            subject=subject,
+            html_body=html_body,
+            text_body=text_body,
+            settings=settings,
+        )
+    )
+    if success:
+        log.info("email.dispatched", event_id=event.id, to=to_email, subject=subject)
+    else:
+        log.warning("email.dispatch_failed", event_id=event.id, to=to_email, subject=subject)
+
+
 async def poll_outbox(ctx: dict[str, Any]) -> int:
     """Drain unprocessed outbox events (at-least-once), stamping ``processed_at``.
 
@@ -378,6 +410,8 @@ async def poll_outbox(ctx: dict[str, Any]) -> int:
             await run_case_research(ctx, event)
         elif event.topic == "case.stage_research.queued":
             await run_stage_research(ctx, event)
+        elif event.topic == "email.send":
+            await run_email_dispatch(ctx, event)
         else:
             log.info("outbox.handle", topic=event.topic, event_id=event.id)
         handled += 1

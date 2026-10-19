@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from typing import Any
 from urllib.parse import urlparse
 
 import structlog
@@ -10,6 +11,7 @@ from fastapi import APIRouter, HTTPException, Query, Request, UploadFile, status
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from torii_api.auth.deps import CurrentUserDep, SessionDep, SettingsDep
 from torii_api.auth.email import (
@@ -17,7 +19,6 @@ from torii_api.auth.email import (
     build_password_reset_email_text,
     build_verification_email_body,
     build_verification_email_text,
-    send_email,
 )
 from torii_api.auth.security import (
     create_access_token,
@@ -27,11 +28,32 @@ from torii_api.auth.security import (
     verify_password,
 )
 from torii_api.config import Settings
-from torii_api.db.models import CreditTransaction, User, UserRole
+from torii_api.db.models import CreditTransaction, OutboxEvent, User, UserRole
 
 router = APIRouter(prefix="/v1/auth", tags=["auth"])
 
 log = structlog.get_logger()
+
+
+def _enqueue_email(
+    session: AsyncSession,
+    *,
+    to_email: str,
+    subject: str,
+    html_body: str,
+    text_body: str | None = None,
+    raw_token: str | None = None,
+) -> None:
+    """Queue an email into the transactional outbox to be dispatched asynchronously."""
+    payload: dict[str, Any] = {
+        "to_email": to_email,
+        "subject": subject,
+        "html_body": html_body,
+        "text_body": text_body,
+    }
+    if raw_token is not None:
+        payload["token"] = raw_token
+    session.add(OutboxEvent(topic="email.send", payload=payload))
 
 
 # ── Request / response schemas ────────────────────────────────────────────────
@@ -224,7 +246,8 @@ async def register(
 
         base_url = _resolve_app_base_url(request, settings)
         verification_url = f"{base_url}/verify-email?token={raw_verification_token}"
-        send_email(
+        _enqueue_email(
+            session,
             to_email=email,
             subject="Verify your Torii email address",
             html_body=build_verification_email_body(
@@ -236,7 +259,7 @@ async def register(
                 username=existing_user.username,
                 verification_url=verification_url,
             ),
-            settings=settings,
+            raw_token=raw_verification_token,
         )
 
         token = (
@@ -297,10 +320,11 @@ async def register(
     session.add(welcome_tx)
     await session.flush()
 
-    # Send verification email (best-effort — never blocks registration)
+    # Queue verification email in outbox (transactional, non-blocking)
     base_url = _resolve_app_base_url(request, settings)
     verification_url = f"{base_url}/verify-email?token={raw_verification_token}"
-    send_email(
+    _enqueue_email(
+        session,
         to_email=email,
         subject="Verify your Torii email address",
         html_body=build_verification_email_body(
@@ -312,7 +336,7 @@ async def register(
             username=payload.username,
             verification_url=verification_url,
         ),
-        settings=settings,
+        raw_token=raw_verification_token,
     )
 
     token = (
@@ -720,7 +744,8 @@ async def resend_verification(
 
         base_url = _resolve_app_base_url(request, settings)
         verification_url = f"{base_url}/verify-email?token={raw_token}"
-        send_email(
+        _enqueue_email(
+            session,
             to_email=email,
             subject="Verify your Torii email address",
             html_body=build_verification_email_body(
@@ -732,7 +757,7 @@ async def resend_verification(
                 username=user.username,
                 verification_url=verification_url,
             ),
-            settings=settings,
+            raw_token=raw_token,
         )
 
     return MessageOut(
@@ -764,7 +789,8 @@ async def forgot_password(
 
         base_url = _resolve_app_base_url(request, settings)
         reset_url = f"{base_url}/reset-password?token={raw_token}"
-        send_email(
+        _enqueue_email(
+            session,
             to_email=email,
             subject="Reset your Torii password",
             html_body=build_password_reset_email_body(
@@ -776,7 +802,7 @@ async def forgot_password(
                 username=user.username,
                 reset_url=reset_url,
             ),
-            settings=settings,
+            raw_token=raw_token,
         )
 
     return MessageOut(detail="If that email is registered, a password-reset link has been sent")
