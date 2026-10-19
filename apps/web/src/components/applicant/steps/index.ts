@@ -7,6 +7,7 @@ export { PacketStep } from "./PacketStep";
 export { ResearchStep } from "./ResearchStep";
 export { DeadlinesCard } from "./DeadlinesCard";
 export { JourneyMap } from "./JourneyMap";
+export { PostSubmissionGuide } from "./PostSubmissionGuide";
 export type {
   Step,
   Case,

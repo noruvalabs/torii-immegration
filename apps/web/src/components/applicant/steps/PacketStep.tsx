@@ -9,7 +9,6 @@ import {
   FileText,
   Copy,
   Sparkles,
-  Layers,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -19,8 +18,7 @@ import { useCredits } from "@/lib/credits-context";
 import { draftDocument } from "@/lib/api/ai";
 import { exportCaseDocuments, type ExportFormat } from "@/lib/api/cases";
 import { toast } from "@/components/ui/sonner";
-import { formatScopeLabel } from "@/lib/utils";
-import { JourneyMap } from "./JourneyMap";
+import { PostSubmissionGuide } from "./PostSubmissionGuide";
 import type { Case } from "./types";
 
 type PacketStepProps = {
@@ -32,11 +30,7 @@ type PacketStepProps = {
 };
 
 // These are drafts the applicant completes and signs, not finished official documents.
-// Nothing here may assert a fact the applicant has not stated: an earlier version
-// invented a hotel ("Tokyo Central Hotel"), its address and phone number, a day-by-day
-// itinerary generated from `day % 3`, and had the applicant certify that all travel costs
-// were "fully provided for and guaranteed" with bank statements enclosed — regardless of
-// what they had actually answered or attached.
+// Nothing here may assert a fact the applicant has not stated.
 const BLANK = "\u2014";
 
 function answered(answers: Record<string, unknown>, ...keys: string[]): string {
@@ -76,45 +70,187 @@ function generateCoverLetter(caseData: Case, packet: Record<string, unknown> | n
   });
 
   const answers = caseData.intake_answers || {};
-  const fullName = answered(answers, "full_name", "applicant_name");
-  const passportNo = answered(answers, "passport_number", "passport_no");
-  const nationality = answered(answers, "nationality");
-  const purpose = answered(answers, "main_purpose", "purpose_of_visit");
+  const fullName = answered(answers, "full_name", "applicant_name", "name") || "Applicant";
+  const passportNo = answered(answers, "passport_number", "passport_no") || "On File";
+  const passportExpiry = answered(answers, "passport_expiry", "passport_expiry_date");
+  const nationality = answered(answers, "nationality", "citizenship", "country_of_citizenship") || "Citizen";
+  const residenceCountry = answered(answers, "current_residence_country", "current_country", "residence_country");
+  const dob = answered(answers, "date_of_birth", "dob");
+
+  const isIndia =
+    reference.startsWith("IN-") ||
+    caseData.jurisdiction_code === "IN" ||
+    scope.toLowerCase().includes("india");
+
+  const isUK =
+    reference.startsWith("UK-") ||
+    reference.startsWith("GB-") ||
+    caseData.jurisdiction_code === "UK" ||
+    scope.toLowerCase().includes("united kingdom");
+
+  // Medical visa specific fields
+  const hospital = answered(answers, "destination_hospital", "hospital_name");
+  const hospitalCity = answered(answers, "hospital_city");
+  const treatment = answered(answers, "illness_treatment_category", "medical_condition");
+  const attendants = answered(answers, "accompanying_attendants_count");
+
+  // General visit / work fields
+  const purpose = answered(answers, "main_purpose", "purpose_of_visit", "illness_treatment_category");
   const stayDays = answered(answers, "stay_duration_days", "intended_length_of_stay_days");
   const arrivalDate = answered(answers, "planned_arrival_date");
+  const employer = answered(answers, "employer_name", "company_name");
+  const occupation = answered(answers, "occupation", "job_title");
 
-  const documents = numberedOrNone(
-    gatheredDocuments(packet),
-    "(No documents recorded yet — complete your checklist.)",
-  );
+  // 1. Indian Medical Visa
+  if (isIndia && (scope.toLowerCase().includes("medical") || hospital !== BLANK || treatment !== BLANK)) {
+    return `To:
+The Consular Officer / Visa Section
+High Commission of India / Embassy of India
 
-  return `APPLICATION COVER LETTER  (draft — check and sign before filing)
-
-Reference: ${reference}
-Scope: ${scope}
 Date: ${dateStr}
+Reference: ${reference}
 
-Applicant: ${fullName}
-Nationality: ${nationality}
-Passport number: ${passportNo}
+SUBJECT: APPLICATION FOR INDIAN MEDICAL VISA (MED-1) – ${fullName.toUpperCase()}
 
-Purpose of visit: ${purpose}
-Intended length of stay: ${stayDays}
-Planned arrival: ${arrivalDate}
+Dear Consular Officer,
 
-Enclosed documents:
-${documents}
+I am writing to formally submit my visa application for an Indian Medical Visa (MED-1) to undergo specialized medical treatment in India.
 
-I submit this application and the documents listed above for your consideration.
-Please contact me if any further document or clarification is required.
+1. APPLICANT PARTICULARS:
+   • Full Name: ${fullName}
+   • Nationality: ${nationality}
+   • Passport Number: ${passportNo}${passportExpiry !== BLANK ? ` (Valid until: ${passportExpiry})` : ""}
+   • Country of Residence: ${residenceCountry !== BLANK ? residenceCountry : nationality}
+   ${dob !== BLANK ? `• Date of Birth: ${dob}` : ""}
 
-Signature: ______________________________
-Name: ${fullName}
+2. PURPOSE OF VISIT & TREATMENT DETAILS:
+   • Medical Condition / Category: ${treatment !== BLANK ? treatment : "Specialized Medical Treatment"}
+   • Destination Hospital: ${hospital !== BLANK ? hospital : "Recognized Specialized Hospital"}${hospitalCity !== BLANK ? `, ${hospitalCity}` : ""}, India
+   • Hospital Invitation: Secured from the treating hospital in India
+   • Referral: Local physician referral and diagnostic case history enclosed
+   ${attendants !== BLANK && Number(attendants) > 0 ? `• Accompanying Caregiver(s): ${attendants} attendant(s) under Medical Attendant (MED-2) route` : ""}
+
+3. FINANCIAL UNDERTAKING:
+   I confirm that all financial expenses relating to my medical consultation, hospital procedures, boarding, lodging, and return travel will be fully borne by myself. Proof of adequate financial solvency and bank statements are enclosed.
+
+4. ENCLOSED SUPPORTING DOCUMENTS:
+   1. Valid Passport and bio-data page copy
+   2. Official Medical Visa Invitation Letter from ${hospital !== BLANK ? hospital : "Recognized Hospital in India"}
+   3. Local medical referral certificate & diagnostic history
+   4. Proof of financial solvency & recent bank statements
+   5. Recent passport-sized color photographs
+
+I respectfully request that my Medical Visa application be granted to facilitate my scheduled medical treatment in India. Please contact me if any further information is required.
+
+Thank you for your assistance.
+
+Sincerely yours,
+
+________________________________________
+${fullName}
+Passport No: ${passportNo}
+Date: ${dateStr}
+`;
+  }
+
+  // 2. UK Visas
+  if (isUK) {
+    return `To:
+UK Visas and Immigration (UKVI)
+Home Office, United Kingdom
+
+Date: ${dateStr}
+Reference: ${reference}
+
+SUBJECT: VISA APPLICATION COVER LETTER – ${fullName.toUpperCase()}
+Category: ${scope}
+
+Dear Visa Officer,
+
+I am writing to formally submit my visa application for entry clearance to the United Kingdom under the ${scope} route.
+
+1. APPLICANT DETAILS:
+   • Full Name: ${fullName}
+   • Nationality: ${nationality}
+   • Passport Number: ${passportNo}${passportExpiry !== BLANK ? ` (Valid until: ${passportExpiry})` : ""}
+   • Country of Residence: ${residenceCountry !== BLANK ? residenceCountry : nationality}
+
+2. APPLICATION DETAILS & PURPOSE:
+   • Category: ${scope}
+   • Purpose of Travel: ${purpose !== BLANK ? purpose : "Travel and authorized stay in the United Kingdom"}
+   ${stayDays !== BLANK ? `• Intended Duration of Stay: ${stayDays} days` : ""}
+   ${arrivalDate !== BLANK ? `• Planned Arrival: ${arrivalDate}` : ""}
+   ${employer !== BLANK ? `• Sponsor / Employer: ${employer}` : ""}
+
+3. FINANCIAL DECLARATION & COMPLIANCE:
+   I confirm that I possess sufficient funds to support myself throughout my intended stay in the United Kingdom without recourse to public funds. I undertake to abide by all immigration conditions and leave the United Kingdom upon conclusion of my authorized stay.
+
+4. ENCLOSED DOCUMENTS:
+   1. Valid Passport bio-data copy
+   2. Comprehensive evidence of financial solvency and bank statements
+   3. Supporting documentation and letters relevant to ${scope}
+   4. Travel and accommodation details
+
+Thank you for considering my application.
+
+Yours sincerely,
+
+________________________________________
+${fullName}
+Passport No: ${passportNo}
+Date: ${dateStr}
+`;
+  }
+
+  // 3. Japan / Generic Consular Visas
+  return `To:
+The Consular Section / Immigration Services Agency
+Visa & Immigration Department
+
+Date: ${dateStr}
+Reference: ${reference}
+
+SUBJECT: APPLICATION COVER LETTER – ${fullName.toUpperCase()}
+Scope: ${scope}
+
+Dear Consular Officer,
+
+I respectfully submit my visa application for consideration under the ${scope} route.
+
+1. APPLICANT INFORMATION:
+   • Full Name: ${fullName}
+   • Nationality: ${nationality}
+   • Passport Number: ${passportNo}${passportExpiry !== BLANK ? ` (Valid until: ${passportExpiry})` : ""}
+   • Current Residence: ${residenceCountry !== BLANK ? residenceCountry : nationality}
+
+2. PURPOSE OF VISIT & INTENDED STAY:
+   • Purpose: ${purpose !== BLANK ? purpose : "Travel and stay under designated visa category"}
+   ${stayDays !== BLANK ? `• Intended Duration: ${stayDays} days` : ""}
+   ${arrivalDate !== BLANK ? `• Planned Arrival: ${arrivalDate}` : ""}
+   ${occupation !== BLANK ? `• Current Occupation: ${occupation}` : ""}
+   ${employer !== BLANK ? `• Organization / Sponsor: ${employer}` : ""}
+
+3. DECLARATION:
+   All information provided in my application and supporting documents is genuine, complete, and accurate. All expenses incurred during my stay will be adequately covered. I will strictly adhere to the immigration laws and regulations of the destination country.
+
+4. ENCLOSED DOCUMENTS:
+   1. Valid Passport bio-data copy
+   2. Financial documentation demonstrating solvency
+   3. Supporting letters and certificates relevant to ${scope}
+   4. Passport photographs
+
+I respectfully request favorable consideration of my application.
+
+Sincerely yours,
+
+________________________________________
+${fullName}
+Passport No: ${passportNo}
 Date: ${dateStr}
 `;
 }
 
-function generateScheduleOfStay(caseData: Case, packet: Record<string, unknown> | null): string {
+export function generateScheduleOfStay(caseData: Case, packet: Record<string, unknown> | null): string {
   const answers = caseData.intake_answers || {};
   const fullName = answered(answers, "full_name", "applicant_name");
   const arrivalDate = answered(answers, "planned_arrival_date");
@@ -123,9 +259,6 @@ function generateScheduleOfStay(caseData: Case, packet: Record<string, unknown> 
   const rawDays = answers.stay_duration_days ?? answers.intended_length_of_stay_days;
   const stayDays = Number.parseInt(String(rawDays ?? ""), 10);
 
-  // The itinerary is the applicant's to write. Generating plausible activities would put
-  // a fictional plan in front of a consular officer over the applicant's own signature,
-  // so the rows are left blank — dated where the arrival date is known.
   const base = arrivalDate !== BLANK ? new Date(arrivalDate) : null;
   const dayCount = Number.isFinite(stayDays) && stayDays > 0 ? Math.min(stayDays, 15) : 0;
   let rows = "";
@@ -162,89 +295,10 @@ Date: ${new Date().toISOString().split("T")[0]}
 `;
 }
 
-function generateReasonForVisit(caseData: Case, packet: Record<string, unknown> | null): string {
-  const answers = caseData.intake_answers || {};
-  const fullName = answered(answers, "full_name", "applicant_name");
-  const passportNo = answered(answers, "passport_number", "passport_no");
-  const nationality = answered(answers, "nationality");
-  const residence = answered(answers, "current_residence_country", "residence_country");
-  const purpose = answered(answers, "main_purpose", "purpose_of_visit");
-  const stayDays = answered(answers, "stay_duration_days", "intended_length_of_stay_days");
-  const occupation = answered(answers, "occupation");
-  const employer = answered(answers, "employer_name");
-
-  return `STATEMENT OF PURPOSE / 理由書  (draft — write this in your own words)
-
-Applicant: ${fullName}
-Nationality: ${nationality}
-Passport number: ${passportNo}
-Country of residence: ${residence}
-Occupation: ${occupation}
-Employer: ${employer}
-Purpose of visit: ${purpose}
-Intended length of stay: ${stayDays}
-
-Write your statement below. A consular officer is reading for your reasons in your own
-words, so cover why you are travelling, what ties you to your home country, and how the
-trip is paid for. Torii does not write this for you: a statement you did not write is one
-you cannot stand behind at an interview.
-
-
-____________________________________________________________________________________
-
-____________________________________________________________________________________
-
-____________________________________________________________________________________
-
-
-Signature: ______________________________
-Date: ${new Date().toISOString().split("T")[0]}
-`;
-}
-
-function generateFinancialGuarantee(
-  caseData: Case,
-  packet: Record<string, unknown> | null,
-): string {
-  const answers = caseData.intake_answers || {};
-  const fullName = answered(answers, "full_name", "applicant_name");
-  const passportNo = answered(answers, "passport_number", "passport_no");
-  const payer = answered(answers, "trip_payer");
-  const salary = answered(answers, "monthly_salary", "annual_salary_jpy");
-  const savings = answered(answers, "estimated_savings_available");
-  const employer = answered(answers, "employer_name");
-
-  const enclosed = numberedOrNone(
-    gatheredDocuments(packet, /bank|financial|tax|income|salary|fund/i),
-    "(None recorded yet — attach your financial evidence and list it here.)",
-  );
-
-  return `EXPLANATION OF EXPENSES / 経費支弁書  (draft — check and sign before filing)
-
-Applicant: ${fullName}
-Passport number: ${passportNo}
-
-Who is paying for the trip: ${payer}
-Employer: ${employer}
-Stated income: ${salary}
-Stated available funds: ${savings}
-
-Financial evidence recorded so far:
-${enclosed}
-
-Check every figure above against the documents you are attaching before you sign. This is
-a declaration to a government: it must state what you can evidence, and nothing more.
-
-Signature: ______________________________
-Name: ${fullName}
-Date: ${new Date().toISOString().split("T")[0]}
-`;
-}
-
-type DocType = "cover" | "schedule" | "reason" | "financial";
+type DocType = "cover";
 
 /** Tab order, and the order documents are written into a "download everything" zip. */
-const DOC_ORDER: DocType[] = ["cover", "schedule", "reason", "financial"];
+const DOC_ORDER: DocType[] = ["cover"];
 
 const FORMAT_LABELS: Record<ExportFormat, string> = {
   pdf: "PDF",
@@ -275,19 +329,12 @@ export function PacketStep({ packet, caseData, loading, onBuild, onSubmit }: Pac
     }
   }, [caseData.is_entitled, caseData.status]);
 
-  async function handleGenerateAIDraft(targetDoc?: DocType) {
-    const doc = targetDoc || activeDoc;
-    setAiDrafting(doc);
+  async function handleGenerateAIDraft() {
+    setAiDrafting("cover");
     setAiError(null);
     try {
-      const docTypeMapping: Record<DocType, string> = {
-        cover: "cover_letter",
-        reason: "statement_of_reason",
-        schedule: "schedule_of_stay",
-        financial: "financial_solvency",
-      };
       const res = await draftDocument({
-        doc_type: docTypeMapping[doc] || doc,
+        doc_type: "cover_letter",
         jurisdiction_code: caseData.reference ? caseData.reference.split("-")[0] : "JP",
         scope_label: caseData.scope_label || caseData.locale.toUpperCase(),
         case_reference: caseData.reference || `CASE-${caseData.id}`,
@@ -295,7 +342,7 @@ export function PacketStep({ packet, caseData, loading, onBuild, onSubmit }: Pac
         checklist: Array.isArray(packet?.checklist) ? (packet.checklist as Record<string, unknown>[]) : [],
         custom_instructions: customInstructions || undefined,
       });
-      setAiDrafts((prev) => ({ ...prev, [doc]: res.content }));
+      setAiDrafts((prev) => ({ ...prev, cover: res.content }));
       setShowPromptInput(false);
     } catch (err) {
       setAiError(err instanceof Error ? err.message : "AI drafting failed");
@@ -387,66 +434,34 @@ export function PacketStep({ packet, caseData, loading, onBuild, onSubmit }: Pac
   const isSchengen = scopeLower.includes("schengen") || scopeLower.includes("france") || scopeLower.includes("germany") || scopeLower.includes("italy") || scopeLower.includes("spain");
 
   const isWork = scopeLower.includes("work") || scopeLower.includes("h-1b") || scopeLower.includes("employment");
-  const isStudent = scopeLower.includes("student") || scopeLower.includes("f-1") || scopeLower.includes("study");
 
   function getDocLabels() {
     if (isJapan) {
-      if (isWork) {
-        return {
-          cover: "Bureau Cover Letter",
-          schedule: "Job Duties Specification",
-          reason: "Statement of Reason",
-          financial: "Tax & Income Proof",
-        };
-      }
-      if (isStudent) {
-        return {
-          cover: "Embassy Cover Letter",
-          schedule: "Study & Activity Plan",
-          reason: "Statement of Purpose",
-          financial: "Sponsor Affidavit",
-        };
-      }
       return {
-        cover: "Embassy Cover Letter",
-        schedule: "Schedule of Stay",
-        reason: "Reason for Visit",
-        financial: "Financial Guarantee",
+        cover: isWork ? "Bureau Cover Letter" : "Embassy Cover Letter",
       };
     }
 
     if (isUSA) {
       return {
         cover: "Consular Cover Letter",
-        schedule: "Travel Itinerary",
-        reason: "Statement of Purpose",
-        financial: "Financial Solvency Affidavit",
       };
     }
 
     if (isUK) {
       return {
         cover: "UKVI Cover Letter",
-        schedule: "Travel & Stay Itinerary",
-        reason: "Purpose of Visit",
-        financial: "Maintenance & Solvency",
       };
     }
 
     if (isSchengen) {
       return {
         cover: "Schengen Cover Letter",
-        schedule: "Travel Itinerary",
-        reason: "Travel Intent Declaration",
-        financial: "Proof of Subsistence",
       };
     }
 
     return {
       cover: "Cover Letter",
-      schedule: "Schedule of Stay",
-      reason: "Statement of Purpose",
-      financial: "Financial Declaration",
     };
   }
 
@@ -458,47 +473,20 @@ export function PacketStep({ packet, caseData, loading, onBuild, onSubmit }: Pac
       ? { reference: caseData.reference, checklist: [], forms: [], dossier_order: [] }
       : null);
 
-  function getDocText(doc: DocType): {
+  function getDocText(_doc: DocType = "cover"): {
     title: string;
     stem: string;
     text: string;
     isAi: boolean;
   } {
-    let base = { title: "", stem: "", text: "" };
-    switch (doc) {
-      case "schedule":
-        base = {
-          title: docLabels.schedule,
-          stem: `${caseData.reference}-schedule`,
-          text: generateScheduleOfStay(caseData, effectivePacket),
-        };
-        break;
-      case "reason":
-        base = {
-          title: docLabels.reason,
-          stem: `${caseData.reference}-statement-of-purpose`,
-          text: generateReasonForVisit(caseData, effectivePacket),
-        };
-        break;
-      case "financial":
-        base = {
-          title: docLabels.financial,
-          stem: `${caseData.reference}-financial-affidavit`,
-          text: generateFinancialGuarantee(caseData, effectivePacket),
-        };
-        break;
-      case "cover":
-      default:
-        base = {
-          title: docLabels.cover,
-          stem: `${caseData.reference}-cover-letter`,
-          text: generateCoverLetter(caseData, effectivePacket),
-        };
-        break;
-    }
+    const base = {
+      title: docLabels.cover,
+      stem: `${caseData.reference}-cover-letter`,
+      text: generateCoverLetter(caseData, effectivePacket),
+    };
 
-    if (aiDrafts[doc]) {
-      return { ...base, text: aiDrafts[doc]!, isAi: true };
+    if (aiDrafts.cover) {
+      return { ...base, text: aiDrafts.cover, isAi: true };
     }
     return { ...base, isAi: false };
   }
@@ -527,15 +515,7 @@ export function PacketStep({ packet, caseData, loading, onBuild, onSubmit }: Pac
     }, 10000);
   }
 
-  /**
-   * Render the drafts as real files.
-   *
-   * The text is sent to the server rather than saved from the browser because the same
-   * text has to come back as a paginated PDF or an editable Word file, not only as the
-   * plain `.txt` this step used to be limited to. What is sent is exactly what is on
-   * screen — template, AI draft, or either after the applicant edited it.
-   */
-  async function exportDocuments(fmt: ExportFormat, scope: "active" | "all") {
+  async function exportDocuments(fmt: ExportFormat) {
     const activeToken =
       token || (typeof window !== "undefined" ? localStorage.getItem("torii_token") : null);
     if (!activeToken) {
@@ -543,28 +523,21 @@ export function PacketStep({ packet, caseData, loading, onBuild, onSubmit }: Pac
       return;
     }
 
-    const selected: DocType[] = scope === "all" ? DOC_ORDER : [activeDoc];
-    const documents = selected.map((doc) => {
-      const { title, stem, text } = getDocText(doc);
-      return { title, content: text, filename_stem: stem };
-    });
+    const { title, stem, text } = getDocText("cover");
+    const documents = [{ title, content: text, filename_stem: stem }];
 
-    setExporting(`${scope}:${fmt}`);
+    setExporting(fmt);
     try {
       const file = await exportCaseDocuments(activeToken, caseData.id, {
         documents,
         format: fmt,
-        separate: scope === "all",
+        separate: false,
       });
       const binary = atob(file.data_base64);
       const bytes = new Uint8Array(binary.length);
       for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
       saveFile(bytes, file.filename, file.media_type);
-      toast.success(
-        scope === "all"
-          ? `All ${documents.length} documents downloaded as ${fmt.toUpperCase()} in a zip.`
-          : `${FORMAT_LABELS[fmt]} downloaded.`,
-      );
+      toast.success(`${FORMAT_LABELS[fmt]} downloaded.`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Download failed. Please try again.");
     } finally {
@@ -575,317 +548,199 @@ export function PacketStep({ packet, caseData, loading, onBuild, onSubmit }: Pac
 
   return (
     <div className="space-y-6">
-      {/* Top Header */}
-      <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between border-b pb-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <h3 className="text-base font-semibold text-foreground">
-              {formatScopeLabel(caseData.scope_label) || "Application Package"}
-            </h3>
-            <Badge tone="success" className="text-[11px]">
-              {caseData.status === "submitted" ? "Submitted" : "Ready to File"}
-            </Badge>
-          </div>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            Ref: <span className="font-mono font-medium text-foreground">{caseData.reference}</span>
-          </p>
-        </div>
-      </div>
+      {/* Official Government Portal & Next Steps */}
+      <PostSubmissionGuide token={token} caseData={caseData} />
 
-      {!effectivePacket ? (
-        <Card>
-          <CardContent className="flex flex-col items-center py-10 text-center space-y-3">
-            <Sparkles className="size-8 text-primary/60" />
-            <div>
-              <p className="text-sm font-semibold">Assemble Filing Package</p>
-              <p className="text-xs text-muted-foreground mt-1 max-w-md mx-auto">
-                Generate your official forms, cover letter, and document package.
+      {/* Supporting Cover Letter */}
+      <Card id="cover-letter-card" className="scroll-mt-6 border-border/80 shadow-xs">
+        <CardContent className="p-4 sm:p-5 space-y-4">
+          {/* Integrated Header & Actions */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b pb-3.5">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <FileText className="size-4.5 text-primary shrink-0" />
+                <h4 className="text-sm sm:text-base font-bold text-foreground whitespace-nowrap">
+                  {docLabels.cover}
+                </h4>
+                {getActiveDocText().isAi && (
+                  <Badge tone="success" className="text-[10px] py-0 px-2 font-medium">
+                    AI Enhanced
+                  </Badge>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Review, edit, copy, or download your official visa cover letter.
               </p>
             </div>
-            <Button onClick={onBuild} disabled={loading} size="sm" className="mt-2 text-xs">
-              {loading ? <Loader2 className="mr-1.5 size-3.5 animate-spin" /> : <Layers className="mr-1.5 size-3.5" />}
-              Assemble Package
-            </Button>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="space-y-6">
-          {/* Supporting Letters & Statements Editor */}
-          <Card>
-            <CardContent className="p-4 sm:p-5 space-y-4">
-              {/* Toolbar */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b pb-3">
-                <div>
-                  <h4 className="text-sm font-semibold text-foreground">
-                    Supporting Letters &amp; Statements
-                  </h4>
-                  <p className="text-[11px] text-muted-foreground">
-                    Review or customize required statements before signing.
-                  </p>
-                </div>
 
-                <div className="flex flex-wrap items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleGenerateAIDraft()}
-                    disabled={aiDrafting !== null}
-                    className="text-xs h-8"
-                  >
-                    {aiDrafting === activeDoc ? (
-                      <Loader2 className="mr-1.5 size-3.5 animate-spin" />
-                    ) : (
-                      <Sparkles className="mr-1.5 size-3.5 text-primary" />
-                    )}
-                    {getActiveDocText().isAi ? "Regenerate" : "Draft with AI"}
-                  </Button>
+            <div className="flex items-center gap-2 shrink-0 flex-wrap">
+              {/* Draft with AI */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleGenerateAIDraft()}
+                disabled={aiDrafting !== null}
+                className="text-xs h-8.5 gap-1.5"
+              >
+                {aiDrafting === "cover" ? (
+                  <Loader2 className="size-3.5 animate-spin" />
+                ) : (
+                  <Sparkles className="size-3.5 text-primary" />
+                )}
+                {getActiveDocText().isAi ? "Regenerate" : "AI Rewrite"}
+              </Button>
 
-                  {getActiveDocText().isAi && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={handleResetToTemplate}
-                      className="text-xs h-8 text-muted-foreground hover:text-foreground"
-                    >
-                      Reset
-                    </Button>
-                  )}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowPromptInput((prev) => !prev)}
+                className="text-xs h-8.5 text-muted-foreground hover:text-foreground px-2"
+                title="Customize AI instructions"
+              >
+                Instructions
+              </Button>
 
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setShowPromptInput((prev) => !prev)}
-                    className="text-xs h-8 text-muted-foreground hover:text-foreground"
-                    title="Customize AI instructions"
-                  >
-                    Instructions
-                  </Button>
-
-                  <div className="h-4 w-px bg-border mx-0.5" />
-
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleCopyActiveDoc}
-                    className="text-xs h-8"
-                  >
-                    {copiedDoc ? (
-                      <>
-                        <Check className="mr-1.5 size-3.5 text-[var(--color-success)]" /> Copied
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="mr-1.5 size-3.5" /> Copy
-                      </>
-                    )}
-                  </Button>
-
-                  {/* Format Toggle */}
-                  <div className="inline-flex overflow-hidden rounded-md border text-xs">
-                    {(["pdf", "docx"] as ExportFormat[]).map((fmt) => (
-                      <button
-                        key={fmt}
-                        type="button"
-                        onClick={() => setExportFormat(fmt)}
-                        className={`px-2.5 py-1 text-[11px] font-medium transition-colors ${
-                          exportFormat === fmt
-                            ? "bg-primary text-primary-foreground"
-                            : "bg-transparent text-muted-foreground hover:bg-accent"
-                        }`}
-                      >
-                        {fmt === "docx" ? "Word" : fmt.toUpperCase()}
-                      </button>
-                    ))}
-                  </div>
-
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => void exportDocuments(exportFormat, "active")}
-                    disabled={exporting !== null}
-                    className="text-xs h-8"
-                  >
-                    {exporting === `active:${exportFormat}` ? (
-                      <Loader2 className="mr-1.5 size-3.5 animate-spin" />
-                    ) : (
-                      <Download className="mr-1.5 size-3.5" />
-                    )}
-                    Download
-                  </Button>
-
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => void exportDocuments(exportFormat, "all")}
-                    disabled={exporting !== null}
-                    className="text-xs h-8"
-                    title={`Download all ${DOC_ORDER.length} statements in a zip`}
-                  >
-                    {exporting === `all:${exportFormat}` ? (
-                      <Loader2 className="mr-1.5 size-3.5 animate-spin" />
-                    ) : (
-                      <Layers className="mr-1.5 size-3.5" />
-                    )}
-                    All (.zip)
-                  </Button>
-                </div>
-              </div>
-
-              {/* Optional Custom Instructions Input */}
-              {showPromptInput && (
-                <div className="rounded-md border bg-muted/20 p-2.5 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <label className="text-[11px] font-medium text-foreground">
-                      Custom AI Drafting Instructions (Optional)
-                    </label>
-                  </div>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={customInstructions}
-                      onChange={(e) => setCustomInstructions(e.target.value)}
-                      placeholder="e.g. Emphasize work history and Japanese proficiency..."
-                      className="flex-1 rounded-md border bg-background px-3 py-1.5 text-xs outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                    />
-                    <Button
-                      size="sm"
-                      onClick={() => handleGenerateAIDraft()}
-                      disabled={aiDrafting !== null}
-                      className="text-xs shrink-0"
-                    >
-                      {aiDrafting === activeDoc ? <Loader2 className="size-3.5 animate-spin" /> : "Apply"}
-                    </Button>
-                  </div>
-                </div>
+              {getActiveDocText().isAi && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleResetToTemplate}
+                  className="text-xs h-8.5 text-muted-foreground hover:text-foreground px-2"
+                >
+                  Reset
+                </Button>
               )}
 
-              {aiError && (
-                <div className="rounded-md border border-[var(--color-danger)]/30 bg-[var(--color-danger)]/10 p-2.5 text-xs text-[var(--color-danger)]">
-                  {aiError}
-                </div>
-              )}
+              {/* Copy */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleCopyActiveDoc}
+                className="text-xs h-8.5 gap-1.5"
+              >
+                {copiedDoc ? (
+                  <>
+                    <Check className="size-3.5 text-[var(--color-success)]" /> Copied
+                  </>
+                ) : (
+                  <>
+                    <Copy className="size-3.5" /> Copy
+                  </>
+                )}
+              </Button>
 
-              {/* Clean Tabs */}
-              <div className="flex flex-wrap gap-1 border-b pb-2.5">
-                {[
-                  { id: "cover" as DocType, label: docLabels.cover },
-                  { id: "schedule" as DocType, label: docLabels.schedule },
-                  { id: "reason" as DocType, label: docLabels.reason },
-                  { id: "financial" as DocType, label: docLabels.financial },
-                ].map((tab) => (
+              {/* Format Toggle & Download */}
+              <div className="flex items-center rounded-lg border bg-muted/30 p-0.5">
+                {(["pdf", "docx"] as ExportFormat[]).map((fmt) => (
                   <button
-                    key={tab.id}
-                    onClick={() => setActiveDoc(tab.id)}
-                    className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-all ${
-                      activeDoc === tab.id
-                        ? "bg-muted text-foreground font-semibold shadow-xs"
-                        : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                    key={fmt}
+                    type="button"
+                    onClick={() => setExportFormat(fmt)}
+                    className={`px-2 py-1 text-[11px] rounded-md font-semibold transition-colors ${
+                      exportFormat === fmt
+                        ? "bg-background text-foreground shadow-xs"
+                        : "text-muted-foreground hover:text-foreground"
                     }`}
                   >
-                    <span>{tab.label}</span>
-                    {aiDrafts[tab.id] && (
-                      <span className="size-1.5 rounded-full bg-emerald-500" />
-                    )}
+                    {fmt === "docx" ? "Word" : "PDF"}
                   </button>
                 ))}
               </div>
 
-              {/* Active Document Indicator */}
-              <div className="flex items-center justify-between text-xs text-muted-foreground">
-                <div className="flex items-center gap-2">
-                  <span className="font-medium text-foreground">{getActiveDocText().title}</span>
-                  {getActiveDocText().isAi && (
-                    <Badge tone="success" className="text-[10px] py-0 px-1.5">AI Drafted</Badge>
-                  )}
-                </div>
-                <span className="font-mono text-[11px]">{getActiveDocText().stem}.{exportFormat}</span>
+              <Button
+                size="sm"
+                onClick={() => void exportDocuments(exportFormat)}
+                disabled={exporting !== null}
+                className="text-xs h-8.5 gap-1.5 bg-primary text-primary-foreground hover:bg-primary/90 font-medium px-3.5"
+              >
+                {exporting === exportFormat ? (
+                  <Loader2 className="size-3.5 animate-spin" />
+                ) : (
+                  <Download className="size-3.5" />
+                )}
+                Download {exportFormat.toUpperCase()}
+              </Button>
+            </div>
+          </div>
+
+          {/* Optional Custom Instructions Input */}
+          {showPromptInput && (
+            <div className="rounded-lg border bg-muted/20 p-2.5 space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-[11px] font-medium text-foreground">
+                  Custom AI Drafting Instructions (Optional)
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setShowPromptInput(false)}
+                  className="text-[11px] text-muted-foreground hover:text-foreground"
+                >
+                  Close
+                </button>
               </div>
-
-              {/* Textarea or Loading */}
-              {aiDrafting === activeDoc ? (
-                <div className="rounded-md border bg-muted/10 p-8 flex flex-col items-center justify-center gap-2 text-center">
-                  <Loader2 className="size-5 text-primary animate-spin" />
-                  <p className="text-xs font-medium text-foreground">Drafting with AI...</p>
-                </div>
-              ) : (
-                <textarea
-                  value={getActiveDocText().text}
-                  onChange={(e) => handleTextEdit(e.target.value)}
-                  rows={12}
-                  className="w-full rounded-md border bg-muted/20 p-3.5 font-mono text-xs text-foreground/90 whitespace-pre leading-relaxed outline-none focus-visible:ring-1 focus-visible:ring-ring resize-y"
-                  placeholder="Document text..."
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={customInstructions}
+                  onChange={(e) => setCustomInstructions(e.target.value)}
+                  placeholder="e.g. Emphasize medical urgency and hospital dates..."
+                  className="flex-1 rounded-md border bg-background px-3 py-1.5 text-xs outline-none focus-visible:ring-1 focus-visible:ring-ring"
                 />
-              )}
-            </CardContent>
-          </Card>
+                <Button
+                  size="sm"
+                  onClick={() => handleGenerateAIDraft()}
+                  disabled={aiDrafting !== null}
+                  className="text-xs shrink-0"
+                >
+                  {aiDrafting === "cover" ? <Loader2 className="size-3.5 animate-spin" /> : "Apply"}
+                </Button>
+              </div>
+            </div>
+          )}
 
-          {/* Journey Map */}
-          <JourneyMap token={token} caseData={caseData} />
+          {aiError && (
+            <div className="rounded-md border border-[var(--color-danger)]/30 bg-[var(--color-danger)]/10 p-2.5 text-xs text-[var(--color-danger)]">
+              {aiError}
+            </div>
+          )}
 
-          {/* Document Submission Order */}
-          <Card>
-            <CardContent className="p-4 space-y-2.5">
-              <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Document Submission Order
-              </h4>
-              {effectivePacket && Array.isArray(effectivePacket.dossier_order) && effectivePacket.dossier_order.length > 0 ? (
-                <ol className="space-y-1.5 text-xs text-foreground">
-                  {(effectivePacket.dossier_order as string[]).map((item, idx) => (
-                    <li key={idx} className="flex items-start gap-2">
-                      <Badge tone="muted" className="text-[10px] shrink-0">{idx + 1}</Badge>
-                      <span>{item.replace(/^\d+\.\s*/, "")}</span>
-                    </li>
-                  ))}
-                </ol>
-              ) : (
-                <ol className="space-y-1.5 text-xs text-foreground">
-                  <li className="flex items-center gap-2">
-                    <Badge tone="muted" className="text-[10px]">1</Badge> Signed Application Form
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <Badge tone="muted" className="text-[10px]">2</Badge> Cover Letter &amp; Statements
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <Badge tone="muted" className="text-[10px]">3</Badge> Valid Passport &amp; Bio-Data Copy
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <Badge tone="muted" className="text-[10px]">4</Badge> Passport Photographs
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <Badge tone="muted" className="text-[10px]">5</Badge> Proof of Financial Solvency (Bank Statements)
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <Badge tone="muted" className="text-[10px]">6</Badge> Flight / Travel Bookings &amp; Itinerary
-                  </li>
-                </ol>
-              )}
-            </CardContent>
-          </Card>
+          {/* Textarea or Loading */}
+          {aiDrafting === activeDoc ? (
+            <div className="rounded-md border bg-muted/10 p-8 flex flex-col items-center justify-center gap-2 text-center">
+              <Loader2 className="size-5 text-primary animate-spin" />
+              <p className="text-xs font-medium text-foreground">Drafting with AI...</p>
+            </div>
+          ) : (
+            <textarea
+              value={getActiveDocText().text}
+              onChange={(e) => handleTextEdit(e.target.value)}
+              rows={15}
+              className="w-full rounded-lg border border-border/80 bg-muted/15 p-4 font-mono text-xs sm:text-[13px] text-foreground/90 whitespace-pre leading-relaxed outline-none focus-visible:ring-1 focus-visible:ring-ring resize-y"
+              placeholder="Document text..."
+            />
+          )}
 
-          {/* Mark as Filed */}
+          {/* Filing Status / Action */}
           {caseData.status !== "submitted" ? (
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between border-t pt-4">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between border-t pt-3">
               <p className="text-xs text-muted-foreground">
-                Ready to submit? Mark this application as filed to track status and deadlines.
+                Finished submitting on the official portal? Mark as filed to record your submission.
               </p>
-              <Button onClick={onSubmit} disabled={loading} className="shrink-0">
-                {loading ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Send className="mr-2 size-4" />}
+              <Button onClick={onSubmit} disabled={loading} size="sm" className="shrink-0 text-xs">
+                {loading ? <Loader2 className="mr-1.5 size-3.5 animate-spin" /> : <Send className="mr-1.5 size-3.5" />}
                 Mark as Filed
               </Button>
             </div>
           ) : (
-            <div className="flex items-center gap-2 rounded-lg border border-[var(--color-success)]/30 bg-[var(--color-success)]/10 p-3 text-xs text-[var(--color-success)]">
-              <Check className="size-4 shrink-0" />
+            <div className="flex items-center gap-2 rounded-md border border-[var(--color-success)]/30 bg-[var(--color-success)]/5 px-3 py-2 text-xs text-muted-foreground">
+              <Check className="size-3.5 text-[var(--color-success)] shrink-0" />
               <span>
-                Recorded as filed ·{" "}
-                <span className="font-mono font-bold">
-                  {caseData.submission_reference || caseData.reference}
-                </span>
+                Application filed · Snapshot safely archived for reference.
               </span>
             </div>
           )}
-        </div>
-      )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

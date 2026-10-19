@@ -30,13 +30,14 @@ COUNTRY_META: dict[str, dict[str, str]] = {
     "US": {"name": "United States", "currency": "USD", "flag": "🇺🇸"},
     "UK": {"name": "United Kingdom", "currency": "GBP", "flag": "🇬🇧"},
     "GB": {"name": "United Kingdom", "currency": "GBP", "flag": "🇬🇧"},
+    "IN": {"name": "India", "currency": "INR", "flag": "🇮🇳"},
 }
 
 # Which of those are actually offered. US is parked (see
 # docs/jurisdictions/us/_jurisdiction.yml); listing it here would put it back in the
 # destination picker even though no live content pack backs it, so the applicant would
 # pick a country and then hit an empty scope.
-OFFERED_DESTINATIONS: tuple[str, ...] = ("JP", "UK", "GB")
+OFFERED_DESTINATIONS: tuple[str, ...] = ("JP", "UK", "GB", "IN")
 
 # Retained under its original name for callers that only need the country labels.
 SUPPORTED_DESTINATIONS = COUNTRY_META
@@ -118,6 +119,14 @@ VISA_TYPES: dict[str, dict[str, str]] = {
     },
     "student": {"name": "Student", "description": "Study at an educational institution"},
     "work": {"name": "Work / Employment", "description": "Employment or business activities"},
+    "medical": {
+        "name": "Medical Visa (MED-1)",
+        "description": "Medical treatment at recognized specialized hospitals in India",
+    },
+    "medical_attendant": {
+        "name": "Medical Attendant (MED-2)",
+        "description": "Accompanying caregiver or family member for the medical patient",
+    },
 }
 
 # Application types

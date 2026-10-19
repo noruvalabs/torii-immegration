@@ -174,6 +174,7 @@ class CaseProgressIn(BaseModel):
     intake_step: str | None = Field(default=None, max_length=128)
     notes: str | None = None
     is_archived: bool | None = None
+    submission_reference: str | None = Field(default=None, max_length=128)
 
 
 class CaseOut(BaseModel):
@@ -1396,6 +1397,8 @@ async def save_case_progress(
         case.notes = data["notes"]
     if "is_archived" in data and data["is_archived"] is not None:
         case.is_archived = data["is_archived"]
+    if "submission_reference" in data:
+        case.submission_reference = data["submission_reference"]
     await session.flush()
     await session.refresh(case)
     return await _enrich_case(session, case)

@@ -35,7 +35,7 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import {
   IntakeStep, EligibilityStep, ChecklistStep, FormsStep, ReviewStep, PacketStep, ResearchStep,
-  DeadlinesCard,
+  DeadlinesCard, PostSubmissionGuide,
   STEPS, phaseToStep, canVisitStep, nextWorkflowStep,
   type Step,
 } from "@/components/applicant/steps";
@@ -335,24 +335,38 @@ export default function CaseDetailPage() {
         <DeadlinesCard deadlines={guidance.deadlines} />
       )}
 
-      {guidance && guidance.phase !== "done" && (
-        <Card className="border-primary/30 bg-primary/5">
-          <CardContent className="flex flex-col gap-3 pt-5 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-primary">What to do next</p>
-              <h2 className="mt-1 text-base font-semibold">{guidance.title}</h2>
-              <p className="mt-1 text-sm text-muted-foreground">{guidance.instruction}</p>
-              {guidance.blocked_reason && (
-                <p className="mt-2 text-sm text-[var(--color-danger)]">{guidance.blocked_reason}</p>
+      {/* Post-submission guidance & next steps */}
+      {caseData.status === "submitted" ? (
+        activeStep !== "packet" ? (
+          <PostSubmissionGuide
+            token={token}
+            caseData={caseData}
+            onRefresh={() => {
+              void queryClient.invalidateQueries({ queryKey: caseKeys.detail(caseId) });
+              void queryClient.invalidateQueries({ queryKey: caseKeys.guidance(caseId) });
+            }}
+          />
+        ) : null
+      ) : (
+        guidance && guidance.phase !== "done" && (
+          <Card className="border-primary/30 bg-primary/5">
+            <CardContent className="flex flex-col gap-3 pt-5 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-primary">What to do next</p>
+                <h2 className="mt-1 text-base font-semibold">{guidance.title}</h2>
+                <p className="mt-1 text-sm text-muted-foreground">{guidance.instruction}</p>
+                {guidance.blocked_reason && (
+                  <p className="mt-2 text-sm text-[var(--color-danger)]">{guidance.blocked_reason}</p>
+                )}
+              </div>
+              {guidance.phase !== "blocked" && phaseToStep(guidance.phase) !== activeStep && (
+                <Button onClick={goToGuidancePhase} className="shrink-0">
+                  {guidance.cta_label}
+                </Button>
               )}
-            </div>
-            {guidance.phase !== "blocked" && phaseToStep(guidance.phase) !== activeStep && (
-              <Button onClick={goToGuidancePhase} className="shrink-0">
-                {guidance.cta_label}
-              </Button>
-            )}
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        )
       )}
 
       {error && (
