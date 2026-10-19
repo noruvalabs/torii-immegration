@@ -31,6 +31,7 @@ from torii_api.db.models import (
     ScopeResearch,
     ScopeResearchStatus,
     User,
+    UserRole,
     VisaCategory,
 )
 from torii_api.db.session import get_session
@@ -175,6 +176,7 @@ class CaseProgressIn(BaseModel):
     notes: str | None = None
     is_archived: bool | None = None
     submission_reference: str | None = Field(default=None, max_length=128)
+    status: str | None = Field(default=None, max_length=64)
 
 
 class CaseOut(BaseModel):
@@ -412,6 +414,7 @@ async def scope_case(
         case_action_id=case_action.id,
         user_id=user.id,
         status="draft",
+        applicant_email=user.email,
         locale=payload.locale,
         intake_answers=_prefill_from_profile(user),
         origin_country=_normalize_country_code(payload.origin_country),
@@ -557,8 +560,11 @@ async def _enqueue_research_if_needed(
 
 
 async def _owned_case(session: AsyncSession, case_id: int, user: User) -> Case:
-    """Load a case owned by ``user``, or raise 404 (no existence leak across owners)."""
-    case = await session.scalar(select(Case).where(Case.id == case_id, Case.user_id == user.id))
+    """Load a case owned by ``user`` (or any case if user is admin/ops), or raise 404."""
+    if user.role in (UserRole.ADMIN, UserRole.OPS):
+        case = await session.scalar(select(Case).where(Case.id == case_id))
+    else:
+        case = await session.scalar(select(Case).where(Case.id == case_id, Case.user_id == user.id))
     if case is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -924,6 +930,11 @@ async def _case_guidance(session: AsyncSession, case: Case) -> GuidanceOut:
 async def _enrich_case(session: AsyncSession, case: Case) -> CaseOut:
     j_code, v_code, a_code, label = await _scope_label(session, case)
     guidance = await _case_guidance(session, case)
+    email = case.applicant_email
+    if not email and case.user_id:
+        owner = await session.get(User, case.user_id)
+        if owner:
+            email = owner.email
     base = CaseOut.model_validate(case)
     return base.model_copy(
         update={
@@ -933,6 +944,7 @@ async def _enrich_case(session: AsyncSession, case: Case) -> CaseOut:
             "scope_label": label,
             "next_phase": guidance.phase,
             "next_title": guidance.title,
+            "applicant_email": email,
         }
     )
 
@@ -945,10 +957,12 @@ async def list_cases(
     session: SessionDep,
     user: CurrentUserDep,
 ) -> list[CaseOut]:
-    """List the current user's cases (US-03.3, US-03.4)."""
-    result = await session.execute(
-        select(Case).where(Case.user_id == user.id).order_by(Case.created_at.desc())
-    )
+    """List the current user's cases (or all cases if staff/admin) (US-03.3, US-03.4)."""
+    if user.role in (UserRole.ADMIN, UserRole.OPS):
+        stmt = select(Case).order_by(Case.created_at.desc())
+    else:
+        stmt = select(Case).where(Case.user_id == user.id).order_by(Case.created_at.desc())
+    result = await session.execute(stmt)
     cases = list(result.scalars().all())
     if not cases:
         return []
@@ -1399,6 +1413,8 @@ async def save_case_progress(
         case.is_archived = data["is_archived"]
     if "submission_reference" in data:
         case.submission_reference = data["submission_reference"]
+    if "status" in data and data["status"]:
+        case.status = data["status"]
     await session.flush()
     await session.refresh(case)
     return await _enrich_case(session, case)

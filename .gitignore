@@ -67,5 +67,6 @@ test_documents/
 
 # Runtime uploaded wallet documents
 apps/api/data/
-
-
+apps/api/apps/
+apps/data/
+data/

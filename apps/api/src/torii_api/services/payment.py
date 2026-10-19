@@ -127,11 +127,12 @@ async def process_mock_payment(
     payment.status = PaymentStatus.COMPLETED
     payment.paid_at = datetime.now(UTC)
 
-    # Update case status to payment_completed
+    # Update case status to payment_completed and unlock case
     case_result = await db.execute(select(Case).where(Case.id == payment.case_id))
     case = case_result.scalar_one_or_none()
-    if case and case.status in ("checklist_ready", "forms_generated", "packet_ready"):
+    if case:
         case.status = "payment_completed"
+        case.is_entitled = True
 
     await db.flush()
     log.info(
@@ -146,14 +147,13 @@ async def process_mock_payment(
 async def get_payment_by_case(
     db: AsyncSession,
     case_id: int,
-    user_id: int,
+    user_id: int | None = None,
 ) -> Payment | None:
     """Get the latest payment for a case."""
-    result = await db.execute(
-        select(Payment)
-        .where(Payment.case_id == case_id, Payment.user_id == user_id)
-        .order_by(Payment.created_at.desc())
-    )
+    stmt = select(Payment).where(Payment.case_id == case_id)
+    if user_id is not None:
+        stmt = stmt.where(Payment.user_id == user_id)
+    result = await db.execute(stmt.order_by(Payment.created_at.desc()))
     return result.scalar_one_or_none()
 
 

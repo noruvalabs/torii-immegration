@@ -1,10 +1,23 @@
 # Torii ⛩️
 
-**Guided form-preparation platform for immigration** — a "TurboTax for visas". Torii walks a
-person through renewing a visa, changing status, or filing a new application: conversational
-intake, an eligibility read, a personalized document checklist, auto-filled government forms, a
-final consistency check, and post-submission tracking with renewal reminders. Every instruction
-links to the official government source it came from.
+**Guided visa preparation & immigration concierge platform** — simplifying complex international visa applications.
+
+### Our Core Mission
+Navigating official government immigration websites is notoriously complex, slow, and error-prone. Users face confusing portals, rigid form requirements, and payment gateways that reject local cards. Torii eliminates this entire burden:
+
+1. **Full-Service Government Portal Submission & Fee Payment** *(When a country has an online portal & digital fee)*
+   - **One-Stop Data Intake**: The user provides their information once on Torii's clean, modern interface. Profile and passport data are securely saved and can be reused for future trips and family members without re-typing.
+   - **No Portal Hassle**: The user never has to navigate messy foreign government websites or foreign currency payment roadblocks.
+   - **All-in-One Local Payment**: The user pays all fees (Torii service fee + government fee) in a single transaction to Torii using familiar local payment methods.
+   - **Staff Concierge Fulfillment**: Torii's operations staff logs into the official government website, enters the applicant's verified data, pays the government visa/portal fee, and downloads the official registration barcodes and payment receipts.
+   - **Complete Delivery**: We send the user their confirmed filing invoice, appointment slips, and visa documents directly to their dashboard.
+
+2. **Official Form Preparation & In-Person Dossier Kit** *(When a country does not have online portal payment and requires in-person submission or paper forms, e.g. Japan)*
+   - **Affordable Service Charge**: The user pays only a nominal Torii service charge.
+   - **Flawless Official Documentation**: Torii's platform and team generate the exact official typewritten government forms (e.g. Japan's 2-page MOFA form, day-by-day Schedule of Stay itinerary, and formal consular cover letter).
+   - **Submission Ready**: If an online submission channel exists, our team submits it directly. Otherwise, we deliver a flawless, print-ready PDF dossier to the user so they can submit it in person at VFS/IVAC/Embassy, paying the consular fee only upon approval.
+
+In short, **Torii takes over all the complex online work** so travelers never get stuck or confused.
 
 > "Torii" (⛩️ — the gate one passes through to enter) is a working codename. Product truth lives
 > in [`docs/specs/`](docs/specs/); read [`00_overview.md`](docs/specs/00_overview.md) first.

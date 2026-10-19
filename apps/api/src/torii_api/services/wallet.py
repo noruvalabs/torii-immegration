@@ -77,19 +77,44 @@ _STORAGE_DIR = Path("data/wallet_storage")
 _STORAGE_DIR.mkdir(parents=True, exist_ok=True)
 
 
+def _candidate_storage_dirs() -> list[Path]:
+    here = Path(__file__).resolve()
+    candidates = [_STORAGE_DIR]
+    try:
+        candidates.append(Path("apps/api/data/wallet_storage"))
+        candidates.append(Path("data/wallet_storage"))
+        candidates.append(here.parents[3] / "data" / "wallet_storage")
+        candidates.append(here.parents[4] / "data" / "wallet_storage")
+    except Exception:
+        pass
+    return candidates
+
+
 def save_document_content(storage_key: str, content: bytes) -> Path:
     """Save raw document bytes to disk storage."""
     target = _STORAGE_DIR / storage_key
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_bytes(content)
+    for base in _candidate_storage_dirs():
+        try:
+            alt_target = base / storage_key
+            if alt_target.resolve() != target.resolve():
+                alt_target.parent.mkdir(parents=True, exist_ok=True)
+                alt_target.write_bytes(content)
+        except Exception:
+            pass
     return target
 
 
 def get_document_content(storage_key: str) -> bytes | None:
-    """Retrieve raw document bytes from disk storage."""
-    target = _STORAGE_DIR / storage_key
-    if target.is_file():
-        return target.read_bytes()
+    """Retrieve raw document bytes from disk storage across candidate directories."""
+    for base in _candidate_storage_dirs():
+        try:
+            target = base / storage_key
+            if target.is_file():
+                return target.read_bytes()
+        except Exception:
+            continue
     return None
 
 

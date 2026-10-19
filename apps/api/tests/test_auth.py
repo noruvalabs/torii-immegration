@@ -1,5 +1,8 @@
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import select
+
+from torii_api.db.models import OutboxEvent
 
 
 @pytest.fixture(autouse=True)
@@ -9,43 +12,41 @@ def _enable_verification(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(get_settings(), "require_email_verification", True)
 
 
+async def _get_latest_email_token(client: AsyncClient) -> str:
+    app = getattr(client._transport, "app", None)
+    assert app is not None
+    session_factory = app.state.session_factory
+    async with session_factory() as session:
+        event = await session.scalar(
+            select(OutboxEvent)
+            .where(OutboxEvent.topic == "email.send")
+            .order_by(OutboxEvent.id.desc())
+        )
+        assert event is not None, "No outbox event found with topic 'email.send'"
+        payload = event.payload or {}
+        if "token" in payload:
+            return payload["token"]
+        html = payload.get("html_body", "")
+        if "token=" in html:
+            return html.split("token=")[1].split('"')[0]
+        raise ValueError("No token found in outbox event payload")
+
+
 async def _register_and_verify(
     client: AsyncClient, monkeypatch, email: str, password: str, username: str | None = None
 ) -> str:
-    sent_tokens: list[str] = []
-
-    def mock_send(**kwargs):
-        html = kwargs.get("html_body", "")
-        if "token=" in html:
-            token = html.split("token=")[1].split('"')[0]
-            sent_tokens.append(token)
-        return True
-
-    monkeypatch.setattr("torii_api.api.auth.send_email", mock_send)
     payload: dict[str, str] = {"email": email, "password": password}
     if username:
         payload["username"] = username
     reg = await client.post("/v1/auth/register", json=payload)
     assert reg.status_code == 201
-    assert len(sent_tokens) >= 1
-    raw_token = sent_tokens[-1]
+    raw_token = await _get_latest_email_token(client)
     verify_resp = await client.get(f"/v1/auth/verify-email?token={raw_token}")
     assert verify_resp.status_code == 200
     return verify_resp.json()["access_token"]
 
 
 async def test_register_login_and_me(client: AsyncClient, monkeypatch) -> None:
-    sent_tokens: list[str] = []
-
-    def mock_send(**kwargs):
-        html = kwargs.get("html_body", "")
-        if "token=" in html:
-            token = html.split("token=")[1].split('"')[0]
-            sent_tokens.append(token)
-        return True
-
-    monkeypatch.setattr("torii_api.api.auth.send_email", mock_send)
-
     register = await client.post(
         "/v1/auth/register",
         json={"email": "Applicant@Example.com", "password": "secure-pass"},
@@ -72,8 +73,8 @@ async def test_register_login_and_me(client: AsyncClient, monkeypatch) -> None:
     )
     assert rereg.status_code == 201
 
-    # Now verify the email with the sent token
-    raw_token = sent_tokens[-1]
+    # Now verify the email with the sent token from outbox
+    raw_token = await _get_latest_email_token(client)
     verify_resp = await client.get(f"/v1/auth/verify-email?token={raw_token}")
     assert verify_resp.status_code == 200
     verify_data = verify_resp.json()
@@ -244,14 +245,57 @@ async def test_profile_update_and_get(client: AsyncClient, monkeypatch) -> None:
     assert me_body["passport_expiry"] == "2030-12-31"
 
 
-async def test_google_social_login(client: AsyncClient) -> None:
+def _mock_google_userinfo(monkeypatch, *, email: str, name: str, picture: str) -> None:
+    """Stand in for Google's userinfo endpoint.
+
+    The handler does `async with httpx.AsyncClient(...) as c: await c.get(...)`, so the
+    double has to be an async context manager returning an object with `status_code` and
+    `json()`. This is what makes the test exercise the real code path: the endpoint only
+    ever trusts an email that came back from this call.
+    """
+
+    class _Response:
+        status_code = 200
+
+        @staticmethod
+        def json() -> dict[str, str]:
+            return {"email": email, "name": name, "picture": picture}
+
+    class _Client:
+        def __init__(self, *args, **kwargs) -> None: ...
+
+        async def __aenter__(self) -> "_Client":
+            return self
+
+        async def __aexit__(self, *exc) -> None:
+            return None
+
+        async def get(self, *args, **kwargs) -> _Response:
+            return _Response()
+
+    import httpx
+
+    monkeypatch.setattr(httpx, "AsyncClient", _Client)
+
+
+async def test_google_social_login(client: AsyncClient, monkeypatch) -> None:
+    """A Google-verified token creates the account and signs it in.
+
+    Note what is asserted about identity: the email comes from the mocked Google response,
+    NOT from the request body. The body's `email` is deliberately a different address to
+    prove it is ignored -- an earlier version of this endpoint trusted it, which let anyone
+    sign in as anyone (see test_google_login_rejects_client_supplied_email).
+    """
+    _mock_google_userinfo(
+        monkeypatch,
+        email="googleuser@example.com",
+        name="Google Tester",
+        picture="https://lh3.googleusercontent.com/a/default-user",
+    )
+
     resp = await client.post(
         "/v1/auth/google",
-        json={
-            "email": "googleuser@example.com",
-            "name": "Google Tester",
-            "avatar_url": "https://lh3.googleusercontent.com/a/default-user",
-        },
+        json={"token": "a-google-access-token", "email": "attacker@example.com"},
     )
     assert resp.status_code == 200
     data = resp.json()
@@ -261,13 +305,11 @@ async def test_google_social_login(client: AsyncClient) -> None:
     assert data["user"]["email_verified"] is True
     assert data["user"]["full_name"] == "Google Tester"
 
-    # Repeat login with existing user
-    resp2 = await client.post(
-        "/v1/auth/google",
-        json={"email": "googleuser@example.com"},
-    )
+    # Repeat login resolves the existing user rather than creating a second one.
+    resp2 = await client.post("/v1/auth/google", json={"token": "a-google-access-token"})
     assert resp2.status_code == 200
     assert resp2.json()["user"]["email"] == "googleuser@example.com"
+    assert resp2.json()["user"]["id"] == data["user"]["id"]
 
 
 async def test_auth_config(client: AsyncClient) -> None:
@@ -300,23 +342,25 @@ async def test_login_rejects_unverified_user_when_required(
     assert "verify your email" in login_resp.json()["detail"].lower()
 
 
-async def test_register_respects_request_origin(client: AsyncClient, monkeypatch) -> None:
-    sent_emails = []
-
-    def mock_send_email(**kwargs):
-        sent_emails.append(kwargs)
-        return True
-
-    monkeypatch.setattr("torii_api.api.auth.send_email", mock_send_email)
-
+async def test_register_respects_request_origin(client: AsyncClient) -> None:
     resp = await client.post(
         "/v1/auth/register",
         json={"email": "dynamic_url@test.com", "password": "secure-password"},
         headers={"Origin": "https://visa.noruvalabs.com"},
     )
     assert resp.status_code == 201
-    assert len(sent_emails) == 1
-    assert "https://visa.noruvalabs.com/verify-email?token=" in sent_emails[0]["html_body"]
+
+    app = getattr(client._transport, "app", None)
+    assert app is not None
+    session_factory = app.state.session_factory
+    async with session_factory() as session:
+        event = await session.scalar(
+            select(OutboxEvent)
+            .where(OutboxEvent.topic == "email.send")
+            .order_by(OutboxEvent.id.desc())
+        )
+        assert event is not None
+        assert "https://visa.noruvalabs.com/verify-email?token=" in event.payload["html_body"]
 
 
 async def test_change_password(client: AsyncClient, monkeypatch) -> None:
@@ -375,16 +419,6 @@ async def test_change_password(client: AsyncClient, monkeypatch) -> None:
 
 
 async def test_verify_email_expires(client: AsyncClient, monkeypatch) -> None:
-    sent_tokens: list[str] = []
-
-    def mock_send(**kwargs):
-        html = kwargs.get("html_body", "")
-        if "token=" in html:
-            token = html.split("token=")[1].split('"')[0]
-            sent_tokens.append(token)
-        return True
-
-    monkeypatch.setattr("torii_api.api.auth.send_email", mock_send)
     from torii_api.config import get_settings
 
     settings = get_settings()
@@ -396,9 +430,77 @@ async def test_verify_email_expires(client: AsyncClient, monkeypatch) -> None:
         json={"email": "expired@example.com", "password": "secure-password"},
     )
     assert reg.status_code == 201
-    assert len(sent_tokens) >= 1
-    raw_token = sent_tokens[-1]
+    raw_token = await _get_latest_email_token(client)
 
     verify_resp = await client.get(f"/v1/auth/verify-email?token={raw_token}")
     assert verify_resp.status_code == 400
     assert "expired" in verify_resp.json()["detail"].lower()
+
+
+# ── Google sign-in: identity must come from Google, never from the client ─────
+
+
+async def test_google_login_rejects_client_supplied_email(client: AsyncClient, monkeypatch) -> None:
+    """Posting only an email must NOT mint a session for that account.
+
+    Regression test for an authentication bypass: the handler seeded `email` from the
+    request body, and the token-verification branch was guarded by `if not email`, so a
+    body of {"email": "..."} skipped every Google check and fell through to the user
+    lookup. Anyone could obtain a valid JWT for any account -- including an admin -- by
+    posting its address, with no token, no authorization code and no password.
+    """
+    victim_email = "victim@example.com"
+    await _register_and_verify(client, monkeypatch, victim_email, "CorrectHorse1!")
+
+    resp = await client.post("/v1/auth/google", json={"email": victim_email})
+
+    assert resp.status_code != 200, (
+        "google_login issued a session from a client-supplied email — auth bypass is back"
+    )
+    assert "access_token" not in resp.json()
+
+
+async def test_google_login_requires_a_credential(client: AsyncClient) -> None:
+    """No code and no token is a client error, not an account lookup."""
+    resp = await client.post("/v1/auth/google", json={})
+    assert resp.status_code != 200
+    assert "access_token" not in resp.json()
+
+
+async def test_google_login_does_not_autocreate_from_email(client: AsyncClient) -> None:
+    """The bypass also silently created accounts; an unknown email must not register one."""
+    resp = await client.post("/v1/auth/google", json={"email": "stranger@example.com"})
+    assert resp.status_code != 200
+
+    # And the address must not now exist as an account.
+    login = await client.post(
+        "/v1/auth/login",
+        json={"email_or_username": "stranger@example.com", "password": "anything-at-all"},
+    )
+    assert login.status_code != 200
+
+
+async def test_outbox_email_drain(client: AsyncClient, monkeypatch) -> None:
+    sent_emails = []
+
+    def mock_send(**kwargs):
+        sent_emails.append(kwargs)
+        return True
+
+    monkeypatch.setattr("torii_api.auth.email.send_email", mock_send)
+
+    resp = await client.post(
+        "/v1/auth/register",
+        json={"email": "drain_test@example.com", "password": "secure-password"},
+    )
+    assert resp.status_code == 201
+
+    app = getattr(client._transport, "app", None)
+    assert app is not None
+    ctx = {"session_factory": app.state.session_factory}
+    from torii_api.worker.scheduler import poll_outbox
+
+    handled = await poll_outbox(ctx)
+    assert handled >= 1
+    assert len(sent_emails) >= 1
+    assert sent_emails[-1]["to_email"] == "drain_test@example.com"

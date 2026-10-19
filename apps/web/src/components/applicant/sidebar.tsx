@@ -16,6 +16,7 @@ import {
   PanelLeftOpen,
   Coins,
   BookOpen,
+  ShieldCheck,
 } from "lucide-react";
 
 import { useCredits } from "@/lib/credits-context";
@@ -99,9 +100,11 @@ export function ApplicantSidebar() {
       <nav className={cn("flex-1 space-y-1.5 overflow-y-auto py-4", isCompact ? "px-2" : "px-3")}>
         {APPLICANT_NAV.map((item) => {
           const active =
-            item.href === "/dashboard"
-              ? pathname === "/dashboard"
-              : pathname.startsWith(item.href);
+            item.href === "/"
+              ? pathname === "/"
+              : item.href === "/dashboard"
+                ? pathname === "/dashboard"
+                : pathname.startsWith(item.href);
           const Icon = item.icon;
           const label = lang === "ja" && item.label_ja ? item.label_ja : item.label;
 
@@ -141,6 +144,28 @@ export function ApplicantSidebar() {
             </Link>
           );
         })}
+
+        {(user?.role === "admin" || user?.role === "ops") && (
+          isCompact ? (
+            <Link
+              href="/admin"
+              onClick={onItemClick}
+              title="Admin Portal"
+              className="group relative flex size-11 items-center justify-center rounded-xl transition-all mx-auto border border-primary/30 bg-primary/10 text-primary hover:bg-primary/20"
+            >
+              <ShieldCheck className="size-5 shrink-0" />
+            </Link>
+          ) : (
+            <Link
+              href="/admin"
+              onClick={onItemClick}
+              className="flex items-center gap-3 rounded-lg px-3 py-2 text-xs font-bold transition-all border border-primary/30 bg-primary/10 text-primary hover:bg-primary/20"
+            >
+              <ShieldCheck className="size-4 shrink-0" />
+              <span>Admin Portal</span>
+            </Link>
+          )
+        )}
       </nav>
 
       {/* User Profile & Logout Menu */}

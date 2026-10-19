@@ -22,15 +22,8 @@ const nextConfig: NextConfig = {
     NEXT_PUBLIC_GOOGLE_CLIENT_ID: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID,
   },
   async rewrites() {
-    // Browser calls to /api/* are proxied to the FastAPI system of record. In dev this
-    // points at the local API; in the container the edge (nginx) owns the routing, so
-    // this rewrite is a dev convenience. Set NEXT_PUBLIC_API_BASE_URL to override.
-    const apiBase = process.env.API_PROXY_TARGET ?? "http://localhost:8000";
-    const aiBase = process.env.AI_PROXY_TARGET ?? "http://localhost:8001";
-    return [
-      { source: "/backend/:path*", destination: `${apiBase}/:path*` },
-      { source: "/assistant/:path*", destination: `${aiBase}/:path*` },
-    ];
+    // Dynamic runtime proxying is handled in src/middleware.ts
+    return [];
   },
   async redirects() {
     return [

@@ -30,6 +30,7 @@ dependencies = [
     "reportlab>=5.0.0",
     "pypdf>=6.0.0",
     "pymupdf>=1.25",
+    "openai>=1.60",
 ]
 
 [project.scripts]

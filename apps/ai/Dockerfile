@@ -26,4 +26,4 @@ EXPOSE 8001
 HEALTHCHECK --interval=30s --timeout=10s --start-period=45s --retries=5 \
     CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8001/health', timeout=5).status==200 else 1)"
 
-CMD ["uvicorn", "torii_ai.main:app", "--host", "0.0.0.0", "--port", "8001"]
+CMD ["sh", "-c", "exec uvicorn torii_ai.main:app --host 0.0.0.0 --port ${PORT:-8001}"]

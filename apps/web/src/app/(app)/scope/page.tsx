@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, Check, Loader2, ArrowRight, Search, X } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -57,8 +58,12 @@ const STEP_LABELS: Record<Step, string> = {
   review: "Review",
 };
 
-export default function ScopePage() {
+function ScopePageInner() {
+  const router = useRouter();
   const { token, user } = useAuth();
+  const searchParams = useSearchParams();
+  const destinationParam = searchParams.get("destination");
+  const seededDestinationRef = useRef(false);
   const queryClient = useQueryClient();
   const [step, setStep] = useState<Step>("identity");
   const [error, setError] = useState<string | null>(null);
@@ -107,6 +112,21 @@ export default function ScopePage() {
     }
   }, [user]);
 
+  // Pre-seed destination if passed via URL (e.g., ?destination=JP or ?destination=IN)
+  useEffect(() => {
+    if (!seededDestinationRef.current && destinationParam && geoData?.destinations) {
+      const matched = geoData.destinations.find(
+        (d) =>
+          d.code.toUpperCase() === destinationParam.toUpperCase() ||
+          d.name.toLowerCase() === destinationParam.toLowerCase(),
+      );
+      if (matched) {
+        setSelectedDestination(matched);
+        seededDestinationRef.current = true;
+      }
+    }
+  }, [destinationParam, geoData]);
+
   function goBack() {
     const i = STEP_ORDER.indexOf(step);
     if (i > 0) goToStep(STEP_ORDER[i - 1]);
@@ -123,8 +143,8 @@ export default function ScopePage() {
     if (!residenceCountry || !nationality || savingIdentity) return;
     setError(null);
     setSavingIdentity(true);
-    // Advance immediately so a profile save cannot yank the user back to identity.
-    setStep("destination");
+    // If destination was pre-seeded from URL, jump directly to visa_type
+    setStep(selectedDestination ? "visa_type" : "destination");
     if (token) {
       try {
         const natName = matchCountry(nationality).name;
@@ -180,6 +200,7 @@ export default function ScopePage() {
       });
       setCreatedCase(result);
       void queryClient.invalidateQueries({ queryKey: caseKeys.list() });
+      router.push(`/cases/${result.id}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to create case");
     } finally {
@@ -293,19 +314,19 @@ export default function ScopePage() {
           <ol className="space-y-2 text-xs sm:text-sm text-muted-foreground">
             <li className="flex items-center gap-2">
               <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-semibold text-primary">1</span>
-              <span>Answer intake questions to capture your background</span>
+              <span>Quick 60-second eligibility screening &amp; approval likelihood score (100%)</span>
             </li>
             <li className="flex items-center gap-2">
               <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-semibold text-primary">2</span>
-              <span>Verify your eligibility against official immigration rules</span>
+              <span>Pay service fee securely via bKash, Nagad, or Credit/Debit Card</span>
             </li>
             <li className="flex items-center gap-2">
               <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-semibold text-primary">3</span>
-              <span>Upload and confirm required supporting documents</span>
+              <span>Fill out personal particulars &amp; upload required documents</span>
             </li>
             <li className="flex items-center gap-2">
               <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-semibold text-primary">4</span>
-              <span>Generate official visa forms and assemble your submission packet</span>
+              <span>Torii staff submits on government portal &amp; issues appointment confirmation</span>
             </li>
           </ol>
         </div>
@@ -313,9 +334,9 @@ export default function ScopePage() {
         <div>
           <Link
             href={`/cases/${createdCase.id}`}
-            className="inline-flex w-full sm:w-auto items-center justify-center gap-2 rounded-[var(--radius)] bg-primary px-6 py-3 text-sm font-semibold text-primary-foreground shadow-sm hover:opacity-90 transition-opacity"
+            className="inline-flex w-full sm:w-auto items-center justify-center gap-2 rounded-[var(--radius)] bg-primary px-6 py-3.5 text-sm font-bold text-primary-foreground shadow-md hover:opacity-90 transition-opacity"
           >
-            Continue to Intake <ArrowRight className="size-4" />
+            Check Visa Eligibility &amp; Start (Free) <ArrowRight className="size-4" />
           </Link>
         </div>
       </div>
@@ -641,48 +662,96 @@ export default function ScopePage() {
           <button onClick={goBack} className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
             <ArrowLeft className="size-3.5" /> Back
           </button>
-          <h3 className="text-sm font-medium text-muted-foreground">
-            Confirm your application details
-          </h3>
-          <Card>
+          
+          <div className="space-y-1">
+            <h3 className="text-base font-bold text-foreground">
+              Confirm your application details
+            </h3>
+            <p className="text-xs text-muted-foreground">
+              Review your selection. Next, you will complete a quick 60-second eligibility screening.
+            </p>
+          </div>
+
+          <Card className="border border-border/80 shadow-xs">
             <CardContent className="space-y-3 pt-5">
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Residence</span>
-                <span className="font-medium">{residenceLabel}</span>
+                <span className="font-medium text-foreground">{residenceLabel}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Nationality</span>
-                <span className="font-medium">{nationalityLabel}</span>
+                <span className="font-medium text-foreground">{nationalityLabel}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">To</span>
-                <span className="font-medium">{destinationFlag} {selectedDestination?.name}</span>
+                <span className="font-medium text-foreground">{destinationFlag} {selectedDestination?.name}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Visa type</span>
-                <span className="font-medium">{selectedVisaType?.name}</span>
+                <span className="font-medium text-foreground">{selectedVisaType?.name}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Application</span>
-                <span className="font-medium">{selectedAppType?.name}</span>
+                <span className="font-medium text-foreground">{selectedAppType?.name}</span>
               </div>
             </CardContent>
           </Card>
+
+          <div className="rounded-lg border border-border/60 bg-muted/30 p-4 text-left">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+              Next steps in your application
+            </p>
+            <ol className="space-y-2 text-xs sm:text-sm text-muted-foreground">
+              <li className="flex items-center gap-2">
+                <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-semibold text-primary">1</span>
+                <span>Quick 60-second eligibility screening &amp; approval likelihood score (100%)</span>
+              </li>
+              <li className="flex items-center gap-2">
+                <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-semibold text-primary">2</span>
+                <span>Pay service fee securely via bKash, Nagad, or Credit/Debit Card</span>
+              </li>
+              <li className="flex items-center gap-2">
+                <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-semibold text-primary">3</span>
+                <span>Fill out personal particulars &amp; upload required documents</span>
+              </li>
+              <li className="flex items-center gap-2">
+                <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-semibold text-primary">4</span>
+                <span>Torii staff submits on government portal &amp; issues appointment confirmation</span>
+              </li>
+            </ol>
+          </div>
+
           <button
             onClick={() => void createCase()}
             disabled={submitting}
-            className="inline-flex w-full items-center justify-center gap-2 rounded-[var(--radius)] bg-primary px-4 py-3 text-sm font-medium text-primary-foreground transition-colors hover:opacity-90 disabled:pointer-events-none disabled:opacity-50"
+            className="inline-flex w-full items-center justify-center gap-2 rounded-[var(--radius)] bg-primary px-5 py-3.5 text-sm font-bold text-primary-foreground shadow-md transition-opacity hover:opacity-90 disabled:pointer-events-none disabled:opacity-50"
           >
             {submitting ? (
               <>
-                <Loader2 className="size-4 animate-spin" /> Creating…
+                <Loader2 className="size-4 animate-spin" /> Starting application &amp; loading eligibility…
               </>
             ) : (
-              "Start application"
+              <>
+                Check Visa Eligibility &amp; Start (Free) <ArrowRight className="size-4" />
+              </>
             )}
           </button>
         </div>
       )}
     </div>
+  );
+}
+
+export default function ScopePage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="mx-auto max-w-lg space-y-6 py-12 text-center">
+          <Loader2 className="mx-auto size-8 animate-spin text-muted-foreground" />
+        </div>
+      }
+    >
+      <ScopePageInner />
+    </Suspense>
   );
 }

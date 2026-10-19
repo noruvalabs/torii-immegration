@@ -2,28 +2,25 @@
 
 import { useEffect, useState } from "react";
 import {
-  ExternalLink,
-  Globe,
-  CreditCard,
-  FileText,
   CheckCircle2,
-  Loader2,
-  Check,
-  ArrowDown,
-  Hash,
+  Clock,
   ShieldCheck,
-  Search,
+  FileText,
+  Calendar,
+  Sparkles,
+  Phone,
+  MessageCircle,
+  RefreshCw,
+  Copy,
+  Check,
+  Lock,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import {
-  getCaseJourney,
-  patchCase,
-  type CaseJourney,
-  type Case,
-} from "@/lib/api/cases";
+import { SUPPORT_CONFIG } from "@/lib/support";
+import type { Case } from "./types";
 
 type PostSubmissionGuideProps = {
   token: string | null;
@@ -36,375 +33,264 @@ export function PostSubmissionGuide({
   caseData,
   onRefresh,
 }: PostSubmissionGuideProps) {
-  const [journey, setJourney] = useState<CaseJourney | null>(null);
-  const [arnInput, setArnInput] = useState("");
-  const [savingArn, setSavingArn] = useState(false);
-  const [editingArn, setEditingArn] = useState(false);
+  const [copiedRef, setCopiedRef] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const isIndia =
     caseData.reference.startsWith("IN-") ||
     caseData.jurisdiction_code === "IN" ||
     (caseData.scope_label && caseData.scope_label.toLowerCase().includes("india"));
 
-  const isMedical =
-    Boolean(caseData.scope_label && caseData.scope_label.toLowerCase().includes("medical")) ||
-    caseData.reference.toLowerCase().includes("medical");
-
-  const isUK =
-    caseData.reference.startsWith("UK-") ||
-    caseData.reference.startsWith("GB-") ||
-    caseData.jurisdiction_code === "UK" ||
-    (caseData.scope_label && caseData.scope_label.toLowerCase().includes("united kingdom"));
-
-  useEffect(() => {
-    if (!token || !caseData.id) return;
-    let active = true;
-    getCaseJourney(token, caseData.id)
-      .then((data) => {
-        if (active) setJourney(data);
-      })
-      .catch(() => {});
-    return () => {
-      active = false;
-    };
-  }, [token, caseData.id]);
-
-  // Exact Official Government Direct Links
-  const officialPortalUrl = isIndia
-    ? "https://indianvisaonline.gov.in/visa/registration"
-    : isUK
-      ? "https://www.gov.uk/browse/visas-immigration"
-      : journey?.apply_url || null;
-
-  const officialPaymentUrl = isIndia
-    ? "https://indianvisaonline.gov.in/evisa/PaymentCheck"
-    : isUK
-      ? "https://www.gov.uk/healthcare-immigration-application"
-      : officialPortalUrl;
-
-  const officialTrackingUrl = isIndia
-    ? "https://indianvisaonline.gov.in/visa/VisaEnquiry"
-    : isUK
-      ? "https://www.gov.uk/view-prove-immigration-status"
-      : null;
-
-  const hasCustomArn =
+  const destinationName = isIndia ? "India" : caseData.jurisdiction_code || "Destination";
+  const hasStaffFilingRef =
     Boolean(caseData.submission_reference) &&
     caseData.submission_reference !== caseData.reference &&
     !caseData.submission_reference?.startsWith("EFILE-");
 
-  async function handleSaveArn() {
-    if (!token || !arnInput.trim()) return;
-    setSavingArn(true);
-    try {
-      await patchCase(token, caseData.id, {
-        submission_reference: arnInput.trim(),
-      });
-      toast.success("Government receipt number saved!");
-      setEditingArn(false);
-      if (onRefresh) onRefresh();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to save reference number");
-    } finally {
-      setSavingArn(false);
-    }
-  }
+  const handleCopyRef = () => {
+    navigator.clipboard.writeText(caseData.reference);
+    setCopiedRef(true);
+    toast.success("Case reference copied to clipboard");
+    setTimeout(() => setCopiedRef(false), 2000);
+  };
 
-  function handleScrollToLetter() {
-    const el = document.getElementById("cover-letter-card");
-    if (el) {
-      el.scrollIntoView({ behavior: "smooth" });
+  const handleRefreshClick = () => {
+    setIsRefreshing(true);
+    if (onRefresh) {
+      onRefresh();
     }
-  }
+    setTimeout(() => {
+      setIsRefreshing(false);
+      toast.success("Status refreshed from Torii operations queue");
+    }, 600);
+  };
 
   return (
-    <Card className="border-primary/30 bg-gradient-to-b from-card to-card/95 shadow-md overflow-hidden">
-      <CardContent className="p-5 sm:p-6 lg:p-7 space-y-6">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/80 pb-5">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2.5">
-              <span className="flex size-7 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                <ShieldCheck className="size-4.5" />
+    <Card className="border-2 border-emerald-500/30 bg-gradient-to-b from-card via-card to-emerald-500/[0.03] shadow-md overflow-hidden">
+      <CardContent className="p-5 sm:p-7 space-y-6">
+        {/* Top Celebration & Staff Queue Banner */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/80 pb-6">
+          <div className="space-y-1.5">
+            <div className="flex flex-wrap items-center gap-2.5">
+              <span className="flex size-8 items-center justify-center rounded-xl bg-emerald-500 text-white shadow-md shadow-emerald-500/20">
+                <CheckCircle2 className="size-5" />
               </span>
-              <h3 className="text-base sm:text-lg font-bold text-foreground tracking-tight">
-                Next Steps: Official Visa Submission &amp; Payment
+              <h3 className="text-lg sm:text-xl font-extrabold text-foreground tracking-tight">
+                Visa Application Request Successful!
               </h3>
-              <Badge tone="success" className="text-[11px] font-semibold px-2">
-                Ready to Submit
+              <Badge tone="success" className="text-[11px] font-bold px-2.5 py-0.5 uppercase tracking-wide">
+                Assigned to Staff
               </Badge>
             </div>
-            <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed pl-9">
-              Your cover letter has been prepared by Torii. Follow these 3 clear steps to submit your application and complete official payment.
+            <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed pl-10 sm:max-w-2xl">
+              All your information has been received. Our dedicated operations team is now handling your official government visa submission and fee payment on your behalf.
             </p>
           </div>
 
-          {officialPortalUrl && (
-            <div className="flex items-center gap-2 self-start sm:self-auto shrink-0 pl-9 sm:pl-0">
-              <a
-                href={officialPortalUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground shadow-sm hover:bg-primary/90 transition-all"
-              >
-                <Globe className="size-4" />
-                {isIndia && isMedical ? "Open Medical Visa Form" : "Open Gov Portal"}
-                <ExternalLink className="size-3.5 opacity-80" />
-              </a>
+          <div className="flex items-center gap-2 shrink-0 pl-10 sm:pl-0">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleRefreshClick}
+              disabled={isRefreshing}
+              className="text-xs h-9 gap-1.5 font-medium"
+            >
+              <RefreshCw className={`size-3.5 ${isRefreshing ? "animate-spin" : ""}`} />
+              Refresh Status
+            </Button>
+          </div>
+        </div>
+
+        {/* 3 Concierge Process Stages */}
+        <div className="grid gap-4 sm:gap-5 md:grid-cols-3">
+          {/* ── Stage 1: Info & Payment Received (Completed) ── */}
+          <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-5 flex flex-col justify-between space-y-4">
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="flex size-8 items-center justify-center rounded-lg bg-emerald-500 text-white font-bold text-xs shadow-xs">
+                  ✓
+                </span>
+                <Badge tone="success" className="text-[10px] font-bold">
+                  Completed
+                </Badge>
+              </div>
+
+              <div>
+                <h4 className="text-sm sm:text-base font-bold text-foreground">
+                  1. Information &amp; Payment Received
+                </h4>
+                <p className="mt-1.5 text-xs text-muted-foreground leading-relaxed">
+                  Your personal particulars, passport information, and service charge are confirmed and verified.
+                </p>
+              </div>
+            </div>
+
+            <div className="pt-2 border-t border-emerald-500/20 flex items-center justify-between text-[11px] text-muted-foreground">
+              <span>Status:</span>
+              <span className="font-semibold text-emerald-600 dark:text-emerald-400">Verified &amp; Locked</span>
+            </div>
+          </div>
+
+          {/* ── Stage 2: Staff Submitting on Gov Portal (Active In Progress) ── */}
+          <div className="rounded-xl border-2 border-primary bg-primary/[0.04] p-5 flex flex-col justify-between space-y-4 shadow-sm relative ring-2 ring-primary/20">
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground font-bold text-xs shadow-xs">
+                  2
+                </span>
+                <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold text-primary animate-pulse">
+                  <Clock className="size-3" /> In Progress
+                </span>
+              </div>
+
+              <div>
+                <h4 className="text-sm sm:text-base font-bold text-foreground flex items-center gap-1.5">
+                  <ShieldCheck className="size-4.5 text-primary shrink-0" />
+                  Staff Government Portal Filing
+                </h4>
+                <p className="mt-1.5 text-xs text-muted-foreground leading-relaxed">
+                  Our operations staff is logging into the official {destinationName} visa portal, entering your full dossier, and paying the government fee on your behalf.
+                </p>
+              </div>
+            </div>
+
+            <div className="pt-2 border-t border-primary/20 flex items-center justify-between text-[11px]">
+              <span className="text-muted-foreground">Action required by you:</span>
+              <span className="font-bold text-primary">None (Please wait)</span>
+            </div>
+          </div>
+
+          {/* ── Stage 3: Official Appointment & Stamped Slip (Next) ── */}
+          <div className="rounded-xl border border-border/80 bg-muted/20 p-5 flex flex-col justify-between space-y-4">
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="flex size-8 items-center justify-center rounded-lg bg-muted text-muted-foreground font-bold text-xs">
+                  3
+                </span>
+                <Badge tone="default" className="text-[10px] font-semibold">
+                  Upcoming
+                </Badge>
+              </div>
+
+              <div>
+                <h4 className="text-sm sm:text-base font-bold text-foreground flex items-center gap-1.5">
+                  <Calendar className="size-4 text-muted-foreground shrink-0" />
+                  Appointment Slip &amp; Dossier
+                </h4>
+                <p className="mt-1.5 text-xs text-muted-foreground leading-relaxed">
+                  As soon as staff filing completes, you will receive your official government Web File / ARN #, biometric appointment slip, and stamped PDF packet.
+                </p>
+              </div>
+            </div>
+
+            <div className="pt-2 border-t border-border/50 flex items-center justify-between text-[11px] text-muted-foreground">
+              <span>Delivery mode:</span>
+              <span className="font-semibold text-foreground">Online &amp; WhatsApp</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Staff Filing Status / Official ARN Banner */}
+        <div className="rounded-xl border bg-card p-4 sm:p-5 space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-border/70">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                Torii Concierge Case Reference
+              </p>
+              <div className="flex items-center gap-2 mt-0.5">
+                <span className="font-mono text-base font-black text-foreground">
+                  {caseData.reference}
+                </span>
+                <button
+                  type="button"
+                  onClick={handleCopyRef}
+                  className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                  title="Copy Reference"
+                >
+                  {copiedRef ? <Check className="size-3.5 text-emerald-500" /> : <Copy className="size-3.5" />}
+                </button>
+              </div>
+            </div>
+
+            <div className="text-left sm:text-right">
+              <span className="text-xs text-muted-foreground block">Estimated Completion Time</span>
+              <span className="text-xs sm:text-sm font-bold text-emerald-600 dark:text-emerald-400">
+                Within 2 – 6 Business Hours
+              </span>
+            </div>
+          </div>
+
+          {hasStaffFilingRef ? (
+            <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/30 p-3.5 flex items-center justify-between gap-3 text-xs sm:text-sm">
+              <div className="flex items-center gap-2.5">
+                <CheckCircle2 className="size-5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                <div>
+                  <span className="font-bold text-emerald-950 dark:text-emerald-100 block">
+                    Official Government Submission Number:
+                  </span>
+                  <span className="font-mono font-black text-emerald-700 dark:text-emerald-300 text-sm sm:text-base">
+                    {caseData.submission_reference}
+                  </span>
+                </div>
+              </div>
+              <Badge tone="success" className="shrink-0 font-bold">
+                Officially Filed
+              </Badge>
+            </div>
+          ) : (
+            <div className="rounded-lg bg-muted/40 p-3.5 flex items-start sm:items-center gap-3 text-xs text-muted-foreground">
+              <Sparkles className="size-4 text-primary shrink-0 mt-0.5 sm:mt-0" />
+              <div>
+                <span className="font-semibold text-foreground">You do not need to visit any other website. </span>
+                <span>Our staff is processing your official portal filing. We will notify you via SMS and WhatsApp as soon as your government appointment slip is ready.</span>
+              </div>
             </div>
           )}
         </div>
 
-        {/* 3 Large, Actionable Step Cards */}
-        <div className="grid gap-4 sm:gap-5 md:grid-cols-3">
-          {/* ── Step 1: Download Cover Letter ── */}
-          <div className="group rounded-xl border border-border/80 bg-muted/20 hover:border-blue-500/40 hover:bg-blue-500/[0.02] p-5 flex flex-col justify-between transition-all space-y-4">
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="flex size-9 items-center justify-center rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 font-bold text-sm border border-blue-500/20 shadow-xs">
-                  1
-                </span>
-                <Badge tone="info" className="text-[10px] font-semibold">
-                  Step 1
-                </Badge>
-              </div>
-
-              <div>
-                <h4 className="text-sm sm:text-base font-semibold text-foreground flex items-center gap-1.5">
-                  <FileText className="size-4 text-blue-500" />
-                  Download Cover Letter
-                </h4>
-                <p className="mt-1.5 text-xs text-muted-foreground leading-relaxed">
-                  Your customized embassy cover letter is ready with your passport details, purpose of travel, and dates.
-                </p>
-              </div>
+        {/* Direct Contact & Call Helpline Section */}
+        <div className="rounded-xl border-2 border-primary/20 bg-gradient-to-r from-primary/10 via-card to-background p-4 sm:p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <span className="flex size-7 items-center justify-center rounded-lg bg-primary/20 text-primary">
+                <Phone className="size-4" />
+              </span>
+              <h4 className="text-sm sm:text-base font-bold text-foreground">
+                Have a Query? Call Our Visa Team Directly
+              </h4>
             </div>
+            <p className="text-xs text-muted-foreground pl-9 max-w-xl">
+              Our operations officers are ready to answer any questions regarding hospital referrals, urgent processing, or appointment dates.
+            </p>
+            <div className="flex flex-wrap items-center gap-3 pl-9 pt-0.5 text-[11px] text-muted-foreground">
+              <span className="flex items-center gap-1 font-medium">
+                <Clock className="size-3 text-primary" /> {SUPPORT_CONFIG.hours}
+              </span>
+              <span>·</span>
+              <span className="text-emerald-600 dark:text-emerald-400 font-semibold">
+                {SUPPORT_CONFIG.emergencySupport}
+              </span>
+            </div>
+          </div>
 
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleScrollToLetter}
-              className="w-full text-xs font-medium border-blue-500/30 text-blue-600 dark:text-blue-400 hover:bg-blue-500/10 hover:text-blue-700 dark:hover:text-blue-300 gap-1.5 h-9"
+          <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto shrink-0 pl-9 md:pl-0">
+            <a
+              href={SUPPORT_CONFIG.telLink}
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-xs font-bold text-primary-foreground shadow-md hover:bg-primary/90 transition-all flex-1 md:flex-initial"
             >
-              <ArrowDown className="size-3.5" />
-              Review Cover Letter Below
-            </Button>
-          </div>
+              <Phone className="size-4" />
+              <span>Call: {SUPPORT_CONFIG.phoneDisplay}</span>
+            </a>
 
-          {/* ── Step 2: Apply & Pay Fee (Crucial Highlighted Step) ── */}
-          <div className="group rounded-xl border-2 border-primary/40 bg-primary/[0.04] hover:border-primary p-5 flex flex-col justify-between transition-all space-y-4 shadow-sm relative ring-1 ring-primary/20">
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="flex size-9 items-center justify-center rounded-xl bg-primary text-primary-foreground font-bold text-sm shadow-sm">
-                  2
-                </span>
-                <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">
-                  Official Portal
-                </span>
-              </div>
-
-              <div>
-                <h4 className="text-sm sm:text-base font-semibold text-foreground flex items-center gap-1.5">
-                  <Globe className="size-4 text-primary" />
-                  Fill Form &amp; Pay Visa Fee
-                </h4>
-                <p className="mt-1.5 text-xs text-muted-foreground leading-relaxed">
-                  {isIndia && isMedical
-                    ? "Go directly to the Indian Medical Visa online registration form. Fill in your details, upload documents, and complete fee payment."
-                    : "Go to the official government visa website, fill in your application, upload your documents, and complete fee payment."}
-                </p>
-              </div>
-            </div>
-
-            {/* Direct Links to Gov Portal & Payment */}
-            <div className="space-y-2 pt-1">
-              {isIndia && isMedical ? (
-                <>
-                  <a
-                    href="https://indianvisaonline.gov.in/visa/registration"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center justify-between gap-2 w-full rounded-lg bg-primary py-2.5 px-3.5 text-xs font-semibold text-primary-foreground shadow-sm hover:bg-primary/90 transition-all text-left"
-                  >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <Globe className="size-4 shrink-0" />
-                      <div className="flex flex-col truncate">
-                        <span>Apply for Medical Visa</span>
-                        <span className="text-[10px] font-normal opacity-90 truncate">Direct Government Online Registration Form</span>
-                      </div>
-                    </div>
-                    <ExternalLink className="size-3.5 shrink-0 opacity-80" />
-                  </a>
-
-                  {officialPaymentUrl && (
-                    <a
-                      href={officialPaymentUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center justify-between gap-2 w-full rounded-lg bg-emerald-600 hover:bg-emerald-700 py-2.5 px-3.5 text-xs font-semibold text-white shadow-xs transition-all text-left"
-                    >
-                      <div className="flex items-center gap-2 min-w-0">
-                        <CreditCard className="size-4 shrink-0" />
-                        <div className="flex flex-col truncate">
-                          <span>Pay Visa Fee Online</span>
-                          <span className="text-[10px] font-normal opacity-90 truncate">Verify &amp; pay consular fee</span>
-                        </div>
-                      </div>
-                      <ExternalLink className="size-3.5 shrink-0 opacity-80" />
-                    </a>
-                  )}
-
-                  <div className="rounded-lg border border-amber-500/25 bg-amber-500/10 p-2.5 text-[11px] leading-relaxed text-amber-900 dark:text-amber-200 flex items-start gap-2">
-                    <span className="font-bold text-xs text-amber-600 dark:text-amber-400 mt-0.5 shrink-0">💡 Tip:</span>
-                    <span>
-                      On the portal form, select <strong>&ldquo;MEDICAL VISA&rdquo;</strong> under Visa Type and <strong>&ldquo;FOR MEDICAL TREATMENT&rdquo;</strong> under Purpose.
-                    </span>
-                  </div>
-                </>
-              ) : (
-                <>
-                  {officialPortalUrl && (
-                    <a
-                      href={officialPortalUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center justify-center gap-2 w-full rounded-lg bg-primary py-2.5 px-3.5 text-xs font-semibold text-primary-foreground shadow-sm hover:bg-primary/90 transition-all text-center"
-                    >
-                      <Globe className="size-4 shrink-0" />
-                      <span>Go to Official Gov Website</span>
-                      <ExternalLink className="size-3.5 shrink-0 ml-auto opacity-75" />
-                    </a>
-                  )}
-
-                  {officialPaymentUrl && (
-                    <a
-                      href={officialPaymentUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center justify-center gap-2 w-full rounded-lg bg-emerald-600 hover:bg-emerald-700 py-2.5 px-3.5 text-xs font-semibold text-white shadow-xs transition-all text-center"
-                    >
-                      <CreditCard className="size-4 shrink-0" />
-                      <span>Pay Visa Fee Online</span>
-                      <ExternalLink className="size-3.5 shrink-0 ml-auto opacity-75" />
-                    </a>
-                  )}
-                </>
-              )}
-            </div>
-          </div>
-
-          {/* ── Step 3: Track Application & Save ARN ── */}
-          <div className="group rounded-xl border border-border/80 bg-muted/20 hover:border-purple-500/40 hover:bg-purple-500/[0.02] p-5 flex flex-col justify-between transition-all space-y-4">
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="flex size-9 items-center justify-center rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400 font-bold text-sm border border-purple-500/20 shadow-xs">
-                  3
-                </span>
-                <Badge tone="muted" className="text-[10px] font-semibold">
-                  Step 3
-                </Badge>
-              </div>
-
-              <div>
-                <h4 className="text-sm sm:text-base font-semibold text-foreground flex items-center gap-1.5">
-                  <CheckCircle2 className="size-4 text-purple-500" />
-                  Track Your Application
-                </h4>
-                <p className="mt-1.5 text-xs text-muted-foreground leading-relaxed">
-                  After submitting online, you receive a Government Web File / ARN #. Save it here to keep your records updated.
-                </p>
-              </div>
-            </div>
-
-            {/* ARN Tracking Widget */}
-            <div className="rounded-lg border bg-background/80 p-2.5 space-y-2">
-              {hasCustomArn && !editingArn ? (
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between gap-1.5 text-xs">
-                    <span className="text-[11px] text-muted-foreground">Gov ARN:</span>
-                    <span className="font-mono font-bold text-[var(--color-success)] text-xs truncate">
-                      {caseData.submission_reference}
-                    </span>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        setArnInput(caseData.submission_reference || "");
-                        setEditingArn(true);
-                      }}
-                      className="h-6 px-1.5 text-[10px] text-muted-foreground hover:text-foreground shrink-0"
-                    >
-                      Edit
-                    </Button>
-                  </div>
-
-                  {officialTrackingUrl && (
-                    <a
-                      href={officialTrackingUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center justify-center gap-1.5 w-full rounded border border-purple-500/30 bg-purple-500/5 py-1.5 px-2 text-[11px] font-medium text-purple-600 dark:text-purple-300 hover:bg-purple-500/10 transition-colors"
-                    >
-                      <Search className="size-3" />
-                      Track on Gov Website
-                      <ExternalLink className="size-3" />
-                    </a>
-                  )}
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  <div className="flex items-center gap-1.5">
-                    <input
-                      type="text"
-                      placeholder="Enter ARN / Web File #"
-                      value={arnInput}
-                      onChange={(e) => setArnInput(e.target.value)}
-                      className="h-8 w-full rounded border bg-background px-2.5 font-mono text-xs outline-none focus:ring-1 focus:ring-primary"
-                    />
-                    <Button
-                      size="sm"
-                      onClick={handleSaveArn}
-                      disabled={savingArn || !arnInput.trim()}
-                      className="h-8 px-3 text-xs shrink-0 font-medium"
-                    >
-                      {savingArn ? <Loader2 className="size-3 animate-spin" /> : "Save"}
-                    </Button>
-                  </div>
-                  {editingArn && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setEditingArn(false)}
-                      className="h-5 px-1.5 text-[10px] text-muted-foreground w-full"
-                    >
-                      Cancel
-                    </Button>
-                  )}
-                  {isIndia && (
-                    <div className="pt-1 flex items-center justify-between text-[11px] border-t border-border/50">
-                      <a
-                        href="https://indianvisaonline.gov.in/visa/VisaEnquiry"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 text-purple-600 dark:text-purple-400 hover:underline"
-                      >
-                        <Search className="size-3" /> Track Status
-                        <ExternalLink className="size-2.5 opacity-70" />
-                      </a>
-                      <a
-                        href="https://indianvisaonline.gov.in/visa/PrintApplication"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground hover:underline"
-                      >
-                        <FileText className="size-3" /> Reprint Form
-                        <ExternalLink className="size-2.5 opacity-70" />
-                      </a>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
+            <a
+              href={SUPPORT_CONFIG.whatsappLink}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#25D366] hover:bg-[#20ba5a] text-white px-4 py-2.5 text-xs font-bold shadow-md transition-all flex-1 md:flex-initial"
+            >
+              <MessageCircle className="size-4" />
+              <span>WhatsApp Us</span>
+            </a>
           </div>
         </div>
       </CardContent>

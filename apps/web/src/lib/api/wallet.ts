@@ -211,6 +211,15 @@ export function reextractDocument(
   return request<WalletDocument>(`/${documentId}/re-extract`, { method: "POST" }, token);
 }
 
+export function syncProfileFromWallet(token?: string | null) {
+  return request<{
+    success: boolean;
+    message: string;
+    fields_synced: string[];
+    user_profile: Record<string, unknown>;
+  }>("/sync-profile", { method: "POST" }, token);
+}
+
 export function seedDummyDocuments(token?: string | null) {
   return request<{
     success: boolean;
@@ -230,6 +239,3 @@ export function getDocumentViewUrl(documentId: number, token?: string | null): s
   const query = authToken ? `?token=${encodeURIComponent(authToken)}` : "";
   return `${API}/${documentId}/view${query}`;
 }
-
-
-

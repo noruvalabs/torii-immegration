@@ -9,6 +9,7 @@ import {
   FileText,
   Copy,
   Sparkles,
+  CheckCircle2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -548,197 +549,103 @@ export function PacketStep({ packet, caseData, loading, onBuild, onSubmit }: Pac
 
   return (
     <div className="space-y-6">
+      {/* Official Government Submission Action Banner */}
+      {caseData.status !== "submitted" ? (
+        <Card className="border-2 border-emerald-500/40 bg-emerald-500/5 shadow-sm">
+          <CardContent className="p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <Badge tone="default" className="text-xs font-bold uppercase tracking-wider">
+                  Final Step
+                </Badge>
+                <h3 className="text-base font-bold text-foreground">
+                  Ready to Submit to Torii Operations &amp; Government Console
+                </h3>
+              </div>
+              <p className="text-xs text-muted-foreground max-w-xl">
+                Your dossier, questionnaire particulars, and required documents are compiled. Click below to submit your application directly to the Torii concierge operations team for official embassy portal filing.
+              </p>
+            </div>
+            <Button
+              size="lg"
+              onClick={onSubmit}
+              disabled={loading}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-6 shrink-0 shadow-md gap-2"
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="size-4 animate-spin" />
+                  <span>Submitting…</span>
+                </>
+              ) : (
+                <>
+                  <Send className="size-4" />
+                  <span>Submit Application</span>
+                </>
+              )}
+            </Button>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 flex items-center justify-between gap-3 text-xs text-emerald-900 dark:text-emerald-200">
+          <div className="flex items-center gap-2.5">
+            <CheckCircle2 className="size-5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+            <div>
+              <p className="font-bold text-sm text-emerald-950 dark:text-emerald-100">
+                Application Submitted to Admin &amp; Embassy Operations Queue
+              </p>
+              <p className="text-xs text-emerald-800 dark:text-emerald-300">
+                Your application has been received by our operations team and is registered in the government filing console.
+              </p>
+            </div>
+          </div>
+          <Badge tone="success" className="px-3 py-1 font-bold shrink-0">
+            ✓ In Queue
+          </Badge>
+        </div>
+      )}
+
       {/* Official Government Portal & Next Steps */}
       <PostSubmissionGuide token={token} caseData={caseData} />
 
-      {/* Supporting Cover Letter */}
-      <Card id="cover-letter-card" className="scroll-mt-6 border-border/80 shadow-xs">
-        <CardContent className="p-4 sm:p-5 space-y-4">
-          {/* Integrated Header & Actions */}
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b pb-3.5">
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <FileText className="size-4.5 text-primary shrink-0" />
-                <h4 className="text-sm sm:text-base font-bold text-foreground whitespace-nowrap">
-                  {docLabels.cover}
-                </h4>
-                {getActiveDocText().isAi && (
-                  <Badge tone="success" className="text-[10px] py-0 px-2 font-medium">
-                    AI Enhanced
-                  </Badge>
-                )}
-              </div>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Review, edit, copy, or download your official visa cover letter.
-              </p>
+      {/* Clean Application Copy & Cover Letter Download */}
+      <Card className="border border-border/80 bg-card shadow-xs">
+        <CardContent className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-start gap-3 min-w-0">
+            <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+              <FileText className="size-5" />
             </div>
-
-            <div className="flex items-center gap-2 shrink-0 flex-wrap">
-              {/* Draft with AI */}
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handleGenerateAIDraft()}
-                disabled={aiDrafting !== null}
-                className="text-xs h-8.5 gap-1.5"
-              >
-                {aiDrafting === "cover" ? (
-                  <Loader2 className="size-3.5 animate-spin" />
-                ) : (
-                  <Sparkles className="size-3.5 text-primary" />
-                )}
-                {getActiveDocText().isAi ? "Regenerate" : "AI Rewrite"}
-              </Button>
-
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setShowPromptInput((prev) => !prev)}
-                className="text-xs h-8.5 text-muted-foreground hover:text-foreground px-2"
-                title="Customize AI instructions"
-              >
-                Instructions
-              </Button>
-
-              {getActiveDocText().isAi && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleResetToTemplate}
-                  className="text-xs h-8.5 text-muted-foreground hover:text-foreground px-2"
-                >
-                  Reset
-                </Button>
-              )}
-
-              {/* Copy */}
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleCopyActiveDoc}
-                className="text-xs h-8.5 gap-1.5"
-              >
-                {copiedDoc ? (
-                  <>
-                    <Check className="size-3.5 text-[var(--color-success)]" /> Copied
-                  </>
-                ) : (
-                  <>
-                    <Copy className="size-3.5" /> Copy
-                  </>
-                )}
-              </Button>
-
-              {/* Format Toggle & Download */}
-              <div className="flex items-center rounded-lg border bg-muted/30 p-0.5">
-                {(["pdf", "docx"] as ExportFormat[]).map((fmt) => (
-                  <button
-                    key={fmt}
-                    type="button"
-                    onClick={() => setExportFormat(fmt)}
-                    className={`px-2 py-1 text-[11px] rounded-md font-semibold transition-colors ${
-                      exportFormat === fmt
-                        ? "bg-background text-foreground shadow-xs"
-                        : "text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    {fmt === "docx" ? "Word" : "PDF"}
-                  </button>
-                ))}
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h4 className="text-sm font-bold text-foreground">
+                  Official Embassy Cover Letter &amp; Summary
+                </h4>
+                <Badge tone="success" className="text-[10px] py-0 px-2 font-semibold">
+                  Prepared by Staff
+                </Badge>
               </div>
-
-              <Button
-                size="sm"
-                onClick={() => void exportDocuments(exportFormat)}
-                disabled={exporting !== null}
-                className="text-xs h-8.5 gap-1.5 bg-primary text-primary-foreground hover:bg-primary/90 font-medium px-3.5"
-              >
-                {exporting === exportFormat ? (
-                  <Loader2 className="size-3.5 animate-spin" />
-                ) : (
-                  <Download className="size-3.5" />
-                )}
-                Download {exportFormat.toUpperCase()}
-              </Button>
+              <p className="text-xs text-muted-foreground mt-0.5 max-w-xl">
+                A formal consular cover letter with your passport details, travel purpose, and document citations has been generated by our team. You can download a personal copy for your records.
+              </p>
             </div>
           </div>
 
-          {/* Optional Custom Instructions Input */}
-          {showPromptInput && (
-            <div className="rounded-lg border bg-muted/20 p-2.5 space-y-2">
-              <div className="flex items-center justify-between">
-                <label className="text-[11px] font-medium text-foreground">
-                  Custom AI Drafting Instructions (Optional)
-                </label>
-                <button
-                  type="button"
-                  onClick={() => setShowPromptInput(false)}
-                  className="text-[11px] text-muted-foreground hover:text-foreground"
-                >
-                  Close
-                </button>
-              </div>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={customInstructions}
-                  onChange={(e) => setCustomInstructions(e.target.value)}
-                  placeholder="e.g. Emphasize medical urgency and hospital dates..."
-                  className="flex-1 rounded-md border bg-background px-3 py-1.5 text-xs outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                />
-                <Button
-                  size="sm"
-                  onClick={() => handleGenerateAIDraft()}
-                  disabled={aiDrafting !== null}
-                  className="text-xs shrink-0"
-                >
-                  {aiDrafting === "cover" ? <Loader2 className="size-3.5 animate-spin" /> : "Apply"}
-                </Button>
-              </div>
-            </div>
-          )}
-
-          {aiError && (
-            <div className="rounded-md border border-[var(--color-danger)]/30 bg-[var(--color-danger)]/10 p-2.5 text-xs text-[var(--color-danger)]">
-              {aiError}
-            </div>
-          )}
-
-          {/* Textarea or Loading */}
-          {aiDrafting === activeDoc ? (
-            <div className="rounded-md border bg-muted/10 p-8 flex flex-col items-center justify-center gap-2 text-center">
-              <Loader2 className="size-5 text-primary animate-spin" />
-              <p className="text-xs font-medium text-foreground">Drafting with AI...</p>
-            </div>
-          ) : (
-            <textarea
-              value={getActiveDocText().text}
-              onChange={(e) => handleTextEdit(e.target.value)}
-              rows={15}
-              className="w-full rounded-lg border border-border/80 bg-muted/15 p-4 font-mono text-xs sm:text-[13px] text-foreground/90 whitespace-pre leading-relaxed outline-none focus-visible:ring-1 focus-visible:ring-ring resize-y"
-              placeholder="Document text..."
-            />
-          )}
-
-          {/* Filing Status / Action */}
-          {caseData.status !== "submitted" ? (
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between border-t pt-3">
-              <p className="text-xs text-muted-foreground">
-                Finished submitting on the official portal? Mark as filed to record your submission.
-              </p>
-              <Button onClick={onSubmit} disabled={loading} size="sm" className="shrink-0 text-xs">
-                {loading ? <Loader2 className="mr-1.5 size-3.5 animate-spin" /> : <Send className="mr-1.5 size-3.5" />}
-                Mark as Filed
-              </Button>
-            </div>
-          ) : (
-            <div className="flex items-center gap-2 rounded-md border border-[var(--color-success)]/30 bg-[var(--color-success)]/5 px-3 py-2 text-xs text-muted-foreground">
-              <Check className="size-3.5 text-[var(--color-success)] shrink-0" />
-              <span>
-                Application filed · Snapshot safely archived for reference.
-              </span>
-            </div>
-          )}
+          <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void exportDocuments("pdf")}
+              disabled={exporting !== null}
+              className="text-xs h-9 gap-1.5 font-semibold px-4"
+            >
+              {exporting === "pdf" ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                <Download className="size-3.5" />
+              )}
+              Download PDF Copy
+            </Button>
+          </div>
         </CardContent>
       </Card>
     </div>

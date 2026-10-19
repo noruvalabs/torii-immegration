@@ -1,11 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { User, Lock, ArrowRight, Sparkles } from "lucide-react";
+import { User, Lock, ArrowRight, Loader2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { login, resendVerification } from "@/lib/api/auth";
@@ -38,7 +38,7 @@ export function GoogleLogo() {
   );
 }
 
-export default function LoginPage() {
+function LoginForm() {
   const [error, setError] = useState<string | null>(null);
   const [googleSubmitting, setGoogleSubmitting] = useState(false);
   const [resendSuccess, setResendSuccess] = useState(false);
@@ -46,6 +46,8 @@ export default function LoginPage() {
   const { setAuth } = useAuth();
   const { lang, t } = useI18n();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const redirectParam = searchParams.get("redirect");
 
   const {
     register,
@@ -65,7 +67,11 @@ export default function LoginPage() {
     try {
       const res = await login(data.emailOrUsername, data.password);
       setAuth(res.access_token, res.user);
-      router.push(res.user.role === "applicant" ? "/dashboard" : "/admin");
+      if (redirectParam && redirectParam.startsWith("/")) {
+        router.push(redirectParam);
+      } else {
+        router.push(res.user.role === "applicant" ? "/dashboard" : "/admin");
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");
     }
@@ -73,9 +79,10 @@ export default function LoginPage() {
 
   async function handleGoogleLogin() {
     setError(null);
+    const returnTarget = redirectParam && redirectParam.startsWith("/") ? redirectParam : window.location.pathname;
     await initiateGoogleLogin({
       lang,
-      state: window.location.pathname,
+      state: returnTarget,
       onStart: () => setGoogleSubmitting(true),
       onError: (msg) => {
         setError(msg);
@@ -99,7 +106,9 @@ export default function LoginPage() {
             {t("auth_welcome_back", "Sign in to Torii")}
           </CardTitle>
           <CardDescription className="text-xs">
-            {t("auth_welcome_sub", "Official immigration application and dossier management system.")}
+            {redirectParam
+              ? "Sign in to start your official visa application process."
+              : t("auth_welcome_sub", "Official immigration application and dossier management system.")}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -224,7 +233,10 @@ export default function LoginPage() {
 
             <p className="text-center text-xs text-muted-foreground pt-1">
               {t("auth_no_account", "No account?")}{" "}
-              <Link href="/register" className="font-semibold text-primary hover:underline">
+              <Link
+                href={redirectParam ? `/register?redirect=${encodeURIComponent(redirectParam)}` : "/register"}
+                className="font-semibold text-primary hover:underline"
+              >
                 {t("auth_create_one", "Create one")}
               </Link>
             </p>
@@ -232,5 +244,19 @@ export default function LoginPage() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex h-64 items-center justify-center">
+          <Loader2 className="size-6 animate-spin text-muted-foreground" />
+        </div>
+      }
+    >
+      <LoginForm />
+    </Suspense>
   );
 }
