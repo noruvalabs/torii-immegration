@@ -547,66 +547,57 @@ export function PacketStep({ packet, caseData, loading, onBuild, onSubmit }: Pac
   }
 
 
+  if (caseData.status === "submitted") {
+    return (
+      <div className="space-y-6">
+        <PostSubmissionGuide
+          token={token}
+          caseData={caseData}
+          onDownloadPdf={() => void exportDocuments("pdf")}
+          isExportingPdf={exporting === "pdf"}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Official Government Submission Action Banner */}
-      {caseData.status !== "submitted" ? (
-        <Card className="border-2 border-emerald-500/40 bg-emerald-500/5 shadow-sm">
-          <CardContent className="p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            <div className="space-y-1">
-              <div className="flex items-center gap-2">
-                <Badge tone="default" className="text-xs font-bold uppercase tracking-wider">
-                  Final Step
-                </Badge>
-                <h3 className="text-base font-bold text-foreground">
-                  Ready to Submit to Torii Operations &amp; Government Console
-                </h3>
-              </div>
-              <p className="text-xs text-muted-foreground max-w-xl">
-                Your dossier, questionnaire particulars, and required documents are compiled. Click below to submit your application directly to the Torii concierge operations team for official embassy portal filing.
-              </p>
+      <Card className="border-2 border-emerald-500/40 bg-emerald-500/5 shadow-sm">
+        <CardContent className="p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <Badge tone="default" className="text-xs font-bold uppercase tracking-wider">
+                Final Step
+              </Badge>
+              <h3 className="text-base font-bold text-foreground">
+                Ready to Submit to Torii Operations &amp; Government Console
+              </h3>
             </div>
-            <Button
-              size="lg"
-              onClick={onSubmit}
-              disabled={loading}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-6 shrink-0 shadow-md gap-2"
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="size-4 animate-spin" />
-                  <span>Submitting…</span>
-                </>
-              ) : (
-                <>
-                  <Send className="size-4" />
-                  <span>Submit Application</span>
-                </>
-              )}
-            </Button>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 flex items-center justify-between gap-3 text-xs text-emerald-900 dark:text-emerald-200">
-          <div className="flex items-center gap-2.5">
-            <CheckCircle2 className="size-5 text-emerald-600 dark:text-emerald-400 shrink-0" />
-            <div>
-              <p className="font-bold text-sm text-emerald-950 dark:text-emerald-100">
-                Application Submitted to Admin &amp; Embassy Operations Queue
-              </p>
-              <p className="text-xs text-emerald-800 dark:text-emerald-300">
-                Your application has been received by our operations team and is registered in the government filing console.
-              </p>
-            </div>
+            <p className="text-xs text-muted-foreground max-w-xl">
+              Your dossier, questionnaire particulars, and required documents are compiled. Click below to submit your application directly to the Torii concierge operations team for official embassy portal filing.
+            </p>
           </div>
-          <Badge tone="success" className="px-3 py-1 font-bold shrink-0">
-            ✓ In Queue
-          </Badge>
-        </div>
-      )}
-
-      {/* Official Government Portal & Next Steps */}
-      <PostSubmissionGuide token={token} caseData={caseData} />
+          <Button
+            size="lg"
+            onClick={onSubmit}
+            disabled={loading}
+            className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-6 shrink-0 shadow-md gap-2"
+          >
+            {loading ? (
+              <>
+                <Loader2 className="size-4 animate-spin" />
+                <span>Submitting…</span>
+              </>
+            ) : (
+              <>
+                <Send className="size-4" />
+                <span>Submit Application</span>
+              </>
+            )}
+          </Button>
+        </CardContent>
+      </Card>
 
       {/* Clean Application Copy & Cover Letter Download */}
       <Card className="border border-border/80 bg-card shadow-xs">
