@@ -595,11 +595,11 @@ def _normalize_extracted_key(key: str) -> str:
 
 
 def _apply_extracted_fields_to_case_and_user(
-    case: Case, user: User, extracted_fields: dict[str, Any]
+    case: Case | None, user: User, extracted_fields: dict[str, Any]
 ) -> None:
     if not extracted_fields:
         return
-    answers = dict(case.intake_answers or {})
+    answers = dict(case.intake_answers or {}) if case is not None else {}
     for key, raw_val in extracted_fields.items():
         val = raw_val.get("value") if isinstance(raw_val, dict) else raw_val
         if val is None:
@@ -621,44 +621,144 @@ def _apply_extracted_fields_to_case_and_user(
             "holder_name",
             "employee_name",
         ):
-            user.full_name = val_str
-            answers["full_name"] = val_str
+            clean_name = val_str.splitlines()[0].strip()
+            user.full_name = clean_name
+            answers["full_name"] = clean_name
+            answers["applicant_name"] = clean_name
         elif norm_key in (
             "nationality",
             "citizenship",
             "country_of_citizenship",
             "country_of_nationality",
         ):
-            user.nationality = val_str
-            answers["nationality"] = val_str
+            from torii_api.services.ocr_extractor import extract_country_from_text
+
+            clean_nat = extract_country_from_text(val_str)
+            user.nationality = clean_nat
+            answers["nationality"] = clean_nat
+            answers["citizenship"] = clean_nat
         elif norm_key in ("passport_number", "passport_no", "passport_num"):
-            user.passport_number = val_str
-            answers["passport_number"] = val_str
+            clean_p = val_str.upper()
+            if (
+                clean_p not in {"PASSPORT", "PASSEPORT", "DOCUMENT", "NULL", "NONE", "JAPAN"}
+                and any(c.isdigit() for c in clean_p)
+                and len(clean_p) >= 6
+            ):
+                user.passport_number = val_str
+                answers["passport_number"] = val_str
         elif norm_key in (
             "passport_expiry",
             "passport_expiry_date",
             "expiry_date",
             "passport_expiration_date",
         ):
-            user.passport_expiry = val_str
-            answers["passport_expiry"] = val_str
+            from torii_api.services.ocr_extractor import normalize_date_to_iso
+
+            iso_exp = normalize_date_to_iso(val_str)
+            user.passport_expiry = iso_exp
+            answers["passport_expiry"] = iso_exp
         elif norm_key in ("date_of_birth", "dob", "birth_date", "applicant_dob"):
-            user.date_of_birth = val_str
-            answers["date_of_birth"] = val_str
-        elif norm_key in ("current_country", "current_residence_country", "residence_country"):
-            user.current_country = val_str
-            answers["current_country"] = val_str
+            from torii_api.services.ocr_extractor import normalize_date_to_iso
+
+            iso_dob = normalize_date_to_iso(val_str)
+            user.date_of_birth = iso_dob
+            answers["date_of_birth"] = iso_dob
+        elif norm_key in (
+            "current_country",
+            "current_residence_country",
+            "residence_country",
+            "current_location_country",
+            "current_residence",
+            "current_residing",
+        ):
+            from torii_api.services.ocr_extractor import extract_country_from_text
+
+            ctry = extract_country_from_text(val_str)
+            user.current_country = ctry
+            answers["current_country"] = ctry
+            answers["current_location_country"] = ctry
+            answers["current_residence_country"] = ctry
+            answers["residence_country"] = ctry
+        elif norm_key in ("sex", "gender"):
+            s_val = val_str.strip().lower()
+            norm_s = (
+                "male"
+                if s_val in ("male", "m")
+                else "female"
+                if s_val in ("female", "f")
+                else s_val
+            )
+            answers["sex"] = norm_s
+            answers["gender"] = norm_s
+        elif norm_key in ("marital_status", "marital"):
+            answers["marital_status"] = val_str.strip().lower()
+        elif norm_key in ("occupation", "profession"):
+            answers["occupation"] = val_str
+        elif norm_key in ("phone_number", "phone", "mobile_number", "mobile", "contact_number"):
+            answers["phone_number"] = val_str
         elif norm_key in ("employer_name", "company_name", "sponsor_name"):
             answers["employer_name"] = val_str
             answers["company_name"] = val_str
             answers["sponsor_name"] = val_str
         elif norm_key in ("monthly_salary", "remuneration", "salary"):
             answers["monthly_salary"] = val_str
-        elif norm_key in ("residence_card_number", "card_number"):
-            answers["residence_card_number"] = val_str
+        elif norm_key in ("residence_card_number", "card_number", "zairyu_card_number"):
+            clean_rc = val_str.upper()
+            if (
+                clean_rc not in {"RESIDENCE", "ENGINEER", "MINISTRY", "NULL", "NONE"}
+                and any(c.isdigit() for c in clean_rc)
+                and len(clean_rc) >= 8
+            ):
+                answers["residence_card_number"] = val_str
+        elif norm_key in (
+            "status_of_residence",
+            "current_status_of_residence",
+            "visa_status",
+            "residence_status",
+        ):
+            answers["status_of_residence"] = val_str
+            answers["current_status_of_residence"] = val_str
+        elif norm_key in ("current_status_expiry_date", "residence_expiry_date"):
+            answers["current_status_expiry_date"] = val_str
+        elif norm_key in ("current_japan_address", "japan_address", "address", "residence_address"):
+            answers["current_japan_address"] = val_str
+            answers["address"] = val_str
+        elif norm_key in ("bank_name", "financial_institution", "bank"):
+            answers["bank_name"] = val_str
+        elif norm_key in ("account_number", "bank_account_number"):
+            answers["account_number"] = val_str
+        elif norm_key in (
+            "balance",
+            "current_balance",
+            "available_balance",
+            "proof_of_funds",
+            "funds_amount",
+        ):
+            answers["balance"] = val_str
+            answers["proof_of_funds"] = val_str
+        elif norm_key in ("account_holder", "account_name"):
+            answers["account_holder"] = val_str
+        elif norm_key in ("annual_income", "gross_income", "gross_salary", "total_income"):
+            answers["annual_income"] = val_str
+            answers["gross_income"] = val_str
+        elif norm_key in ("taxable_income", "taxable_amount"):
+            answers["taxable_income"] = val_str
+        elif norm_key in ("tax_paid", "paid_tax", "income_tax_paid"):
+            answers["tax_paid"] = val_str
+        elif norm_key in ("tax_year", "assessment_year"):
+            answers["tax_year"] = val_str
+        elif norm_key in ("position", "job_title", "designation"):
+            answers["position"] = val_str
+            answers["job_title"] = val_str
+        elif norm_key in ("departure_date",):
+            answers["departure_date"] = val_str
+        elif norm_key in ("issuing_country", "passport_issuing_country"):
+            answers["issuing_country"] = val_str
 
-    case.intake_answers = answers
-    case.review_flags_acknowledged = False
+    if case is not None:
+        case.intake_answers = answers
+        case.review_flags_acknowledged = False
+
     user.profile_complete = bool(
         user.full_name and user.nationality and user.passport_number and user.current_country
     )

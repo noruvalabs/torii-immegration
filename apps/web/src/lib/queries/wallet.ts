@@ -13,6 +13,8 @@ import {
   type DocumentVersion,
 } from "@/lib/api/wallet";
 
+import { caseKeys } from "./cases";
+
 export const walletKeys = {
   all: ["wallet"] as const,
   list: () => ["wallet", "list"] as const,
@@ -100,6 +102,8 @@ export function useUploadDocumentMutation(token: string | null) {
     }) => uploadDocument(token, file, docType, name, issuedDate, expiryDate, notes),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: walletKeys.all });
+      void queryClient.invalidateQueries({ queryKey: caseKeys.all });
+      void queryClient.invalidateQueries({ queryKey: ["auth"] });
     },
   });
 }

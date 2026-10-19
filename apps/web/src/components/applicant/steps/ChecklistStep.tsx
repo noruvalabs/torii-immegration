@@ -178,10 +178,13 @@ export function ChecklistStep({
             doc_type: match.doc_type,
             filename: match.filename,
             storage_key: `wallet/${match.id}`,
-            extracted_fields: {},
+            extracted_fields: match.extracted_fields || {},
             content_type: match.content_type,
           });
-          if (!cancelled) await onStatusChangeRef.current(item.id, "gathered");
+          if (!cancelled) {
+            await onStatusChangeRef.current(item.id, "gathered");
+            onRefresh();
+          }
         } catch {
           // Skip individual failures; user can attach manually.
         }
@@ -192,7 +195,7 @@ export function ChecklistStep({
     return () => {
       cancelled = true;
     };
-  }, [token, caseId, walletDocs, items, autoAttached]);
+  }, [token, caseId, walletDocs, items, autoAttached, onRefresh]);
 
   // Reset auto-attach when checklist is regenerated (item ids change).
   const itemKey = items.map((i) => i.id).join(",");
@@ -218,10 +221,11 @@ export function ChecklistStep({
         doc_type: walletDoc.doc_type,
         filename: walletDoc.filename,
         storage_key: `wallet/${walletDoc.id}`,
-        extracted_fields: {},
+        extracted_fields: walletDoc.extracted_fields || {},
         content_type: walletDoc.content_type,
       });
       await onStatusChange(itemId, "gathered");
+      onRefresh();
       setShowPicker(null);
     } catch {
       // surface via parent if needed
