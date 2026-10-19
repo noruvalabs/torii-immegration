@@ -76,7 +76,6 @@ function ScopePageInner() {
   const [selectedAppType, setSelectedAppType] = useState<ApplicationType | null>(null);
 
   const [submitting, setSubmitting] = useState(false);
-  const [createdCase, setCreatedCase] = useState<CaseResult | null>(null);
   const [visaFilter, setVisaFilter] = useState("");
 
   const { data: geoData = null, isLoading: geoLoading } = useGeoDataQuery(Boolean(token));
@@ -198,13 +197,11 @@ function ScopePageInner() {
         origin_country: nationality,
         residence_country: residenceCountry,
       });
-      setCreatedCase(result);
       void queryClient.invalidateQueries({ queryKey: caseKeys.list() });
       router.push(`/cases/${result.id}`);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to create case");
-    } finally {
       setSubmitting(false);
+      setError(e instanceof Error ? e.message : "Failed to create case");
     }
   }
 
@@ -220,125 +217,6 @@ function ScopePageInner() {
       <div className="mx-auto max-w-lg space-y-6 py-12 text-center">
         <Loader2 className="mx-auto size-8 animate-spin text-muted-foreground" />
         <p className="text-sm text-muted-foreground">Loading destinations...</p>
-      </div>
-    );
-  }
-
-  if (createdCase) {
-    const appTitle =
-      formatScopeLabel(
-        createdCase.scope_label ||
-        [selectedDestination?.name, selectedVisaType?.name, selectedAppType?.name]
-          .filter(Boolean)
-          .join(" · ")
-      ) || "New Visa Application";
-
-    const destName = selectedDestination?.name || createdCase.jurisdiction_code || "";
-    const visaName = formatScopeLabel(selectedVisaType?.name || createdCase.visa_category_code || "");
-    const actionName = selectedAppType?.name || createdCase.case_action_code || "";
-
-    return (
-      <div className="mx-auto max-w-xl space-y-6 py-8 text-center">
-        <div className="mx-auto flex size-16 items-center justify-center rounded-full bg-[var(--color-success)]/15 ring-8 ring-[var(--color-success)]/5">
-          <Check className="size-8 text-[var(--color-success)]" />
-        </div>
-
-        <div className="space-y-2">
-          <Badge tone="success" className="px-3 py-1 text-xs font-semibold uppercase tracking-wider">
-            Application Created
-          </Badge>
-          <h2 className="text-2xl font-bold tracking-tight sm:text-3xl text-foreground">
-            {appTitle}
-          </h2>
-          <p className="text-sm text-muted-foreground max-w-md mx-auto">
-            Your application is ready. We will guide you step-by-step through intake, eligibility, documents, and filing preparation.
-          </p>
-        </div>
-
-        <Card className="text-left border border-border/80 shadow-sm">
-          <CardContent className="space-y-4 pt-5">
-            <div className="flex items-center justify-between pb-3 border-b border-border/60">
-              <div>
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Case Reference</p>
-                <p className="font-mono text-sm sm:text-base font-bold text-foreground mt-0.5">
-                  {createdCase.reference}
-                </p>
-              </div>
-              <Badge tone="success" className="capitalize">
-                {createdCase.status}
-              </Badge>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3 text-xs sm:text-sm">
-              {destName && (
-                <div>
-                  <span className="text-muted-foreground block text-xs">Destination</span>
-                  <span className="font-medium text-foreground">
-                    {destName}
-                  </span>
-                </div>
-              )}
-              {visaName && (
-                <div>
-                  <span className="text-muted-foreground block text-xs">Visa Category</span>
-                  <span className="font-medium text-foreground">{visaName}</span>
-                </div>
-              )}
-              {actionName && (
-                <div>
-                  <span className="text-muted-foreground block text-xs">Application Type</span>
-                  <span className="font-medium text-foreground">{actionName}</span>
-                </div>
-              )}
-              {(residenceLabel || nationalityLabel) && (
-                <div>
-                  <span className="text-muted-foreground block text-xs">Applicant Context</span>
-                  <span className="font-medium text-foreground">
-                    {[
-                      nationalityLabel ? `Citizen of ${nationalityLabel}` : null,
-                      residenceLabel ? `Living in ${residenceLabel}` : null,
-                    ]
-                      .filter(Boolean)
-                      .join(" · ") || "—"}
-                  </span>
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
-        <div className="rounded-lg border border-border/60 bg-muted/30 p-4 text-left">
-          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
-            Next steps in your application
-          </p>
-          <ol className="space-y-2 text-xs sm:text-sm text-muted-foreground">
-            <li className="flex items-center gap-2">
-              <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-semibold text-primary">1</span>
-              <span>Quick 60-second eligibility screening &amp; approval likelihood score (100%)</span>
-            </li>
-            <li className="flex items-center gap-2">
-              <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-semibold text-primary">2</span>
-              <span>Pay service fee securely via bKash, Nagad, or Credit/Debit Card</span>
-            </li>
-            <li className="flex items-center gap-2">
-              <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-semibold text-primary">3</span>
-              <span>Fill out personal particulars &amp; upload required documents</span>
-            </li>
-            <li className="flex items-center gap-2">
-              <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-semibold text-primary">4</span>
-              <span>Torii staff submits on government portal &amp; issues appointment confirmation</span>
-            </li>
-          </ol>
-        </div>
-
-        <div>
-          <Link
-            href={`/cases/${createdCase.id}`}
-            className="inline-flex w-full sm:w-auto items-center justify-center gap-2 rounded-[var(--radius)] bg-primary px-6 py-3.5 text-sm font-bold text-primary-foreground shadow-md hover:opacity-90 transition-opacity"
-          >
-            Check Visa Eligibility &amp; Start (Free) <ArrowRight className="size-4" />
-          </Link>
-        </div>
       </div>
     );
   }
