@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useMemo } from "react";
+import { useEffect, useRef, useState, useMemo, useCallback } from "react";
 import {
   Check,
   ExternalLink,
@@ -16,6 +16,7 @@ import {
   ShieldCheck,
   Sparkles,
   RefreshCw,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -673,6 +674,8 @@ export function IntakeStep({
   onRefresh,
 }: IntakeStepProps) {
   const [drafts, setDrafts] = useState<Record<string, unknown>>({});
+  const [savingFields, setSavingFields] = useState<Record<string, boolean>>({});
+  const [isProceeding, setIsProceeding] = useState<boolean>(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string | null>>({});
   const [activeSection, setActiveSection] = useState<string | null>(null);
   const [enumSearch, setEnumSearch] = useState<Record<string, string>>({});
@@ -687,6 +690,15 @@ export function IntakeStep({
   const onAnswerRef = useRef(onAnswer);
   onAnswerRef.current = onAnswer;
   const autoSubmittedRef = useRef<Set<string>>(new Set());
+  const draftsRef = useRef<Record<string, unknown>>({});
+  draftsRef.current = drafts;
+  const debounceTimersRef = useRef<Record<string, NodeJS.Timeout>>({});
+
+  useEffect(() => {
+    return () => {
+      Object.values(debounceTimersRef.current).forEach(clearTimeout);
+    };
+  }, []);
 
   useEffect(() => {
     if (!token) return;
@@ -831,19 +843,39 @@ export function IntakeStep({
 
   const sectionKeys = useMemo(() => Array.from(sectionsMap.keys()), [sectionsMap]);
 
+  const isQuestionAnswered = useCallback(
+    (q: IntakeQuestion): boolean => {
+      const serverVal = state.answers[q.key];
+      if (serverVal !== undefined && serverVal !== null && serverVal !== "") {
+        return true;
+      }
+      const draftVal = drafts[q.key];
+      if (
+        draftVal !== undefined &&
+        draftVal !== null &&
+        draftVal !== "" &&
+        !fieldErrors[q.key]
+      ) {
+        return true;
+      }
+      return false;
+    },
+    [state.answers, drafts, fieldErrors]
+  );
+
   // Compute first incomplete section so users are automatically taken to unanswered fields
   const firstIncompleteSection = useMemo(() => {
     for (const sec of sectionKeys) {
       const qs = sectionsMap.get(sec) || [];
       const reqQuestions = qs.filter((q) => q.required !== false);
       const answered = reqQuestions.length > 0
-        ? reqQuestions.filter((q) => state.answers[q.key] !== undefined && state.answers[q.key] !== "" && state.answers[q.key] !== null).length
-        : qs.filter((q) => state.answers[q.key] !== undefined && state.answers[q.key] !== "" && state.answers[q.key] !== null).length;
+        ? reqQuestions.filter(isQuestionAnswered).length
+        : qs.filter(isQuestionAnswered).length;
       const targetCount = reqQuestions.length > 0 ? reqQuestions.length : qs.length;
       if (answered < targetCount) return sec;
     }
     return null;
-  }, [sectionKeys, sectionsMap, state.answers]);
+  }, [sectionKeys, sectionsMap, isQuestionAnswered]);
 
   // Switch to targetKey section, smoothly scroll to question, and highlight
   useEffect(() => {
@@ -891,53 +923,125 @@ export function IntakeStep({
 
   function handleChange(key: string, value: unknown) {
     setDrafts((prev) => ({ ...prev, [key]: value }));
-    if (fieldErrors[key]) {
-      const q = state.questions.find((item) => item.key === key);
-      if (q) {
-        const err = validateField(q, value);
-        setFieldErrors((prev) => ({ ...prev, [key]: err }));
+
+    if (debounceTimersRef.current[key]) {
+      clearTimeout(debounceTimersRef.current[key]);
+      delete debounceTimersRef.current[key];
+    }
+
+    const q = state.questions.find((item) => item.key === key);
+    if (q) {
+      let valToSend: unknown = value;
+      if (q.type === "integer" && typeof value === "string") {
+        if (value.trim() === "") {
+          valToSend = q.required === false ? null : "";
+        } else {
+          const parsed = Number.parseInt(value, 10);
+          valToSend = Number.isNaN(parsed) ? value : parsed;
+        }
+      } else if (typeof value === "string" && value.trim() === "") {
+        valToSend = q.required === false ? null : "";
+      }
+
+      const err = validateField(q, valToSend);
+      setFieldErrors((prev) => ({ ...prev, [key]: err }));
+
+      // Debounced auto-save (500ms) for responsive updates without manual blur
+      if (!err && valToSend !== "" && valToSend !== null && valToSend !== undefined) {
+        debounceTimersRef.current[key] = setTimeout(() => {
+          void handleSubmit(key);
+        }, 500);
       }
     }
   }
 
-  async function handleSubmit(key: string) {
-    if (drafts[key] !== undefined) {
-      const raw = drafts[key];
-      const q = state.questions.find((item) => item.key === key);
-      if (!q) return;
+  async function handleSubmit(key: string): Promise<boolean> {
+    if (debounceTimersRef.current[key]) {
+      clearTimeout(debounceTimersRef.current[key]);
+      delete debounceTimersRef.current[key];
+    }
 
-      let valToSend: unknown = raw;
-      if (q.type === "integer") {
-        if (typeof raw === "string") {
-          if (raw.trim() === "") {
-            valToSend = q.required === false ? null : "";
-          } else {
-            const parsed = Number.parseInt(raw, 10);
-            valToSend = Number.isNaN(parsed) ? raw : parsed;
-          }
+    const raw = draftsRef.current[key] !== undefined ? draftsRef.current[key] : drafts[key];
+    if (raw === undefined) return true;
+
+    const q = state.questions.find((item) => item.key === key);
+    if (!q) return true;
+
+    let valToSend: unknown = raw;
+    if (q.type === "integer") {
+      if (typeof raw === "string") {
+        if (raw.trim() === "") {
+          valToSend = q.required === false ? null : "";
+        } else {
+          const parsed = Number.parseInt(raw, 10);
+          valToSend = Number.isNaN(parsed) ? raw : parsed;
         }
-      } else if (typeof raw === "string" && raw.trim() === "") {
-        valToSend = q.required === false ? null : "";
       }
+    } else if (typeof raw === "string" && raw.trim() === "") {
+      valToSend = q.required === false ? null : "";
+    }
 
-      const clientError = validateField(q, valToSend);
-      if (clientError) {
-        setFieldErrors((prev) => ({ ...prev, [key]: clientError }));
-        return;
+    const clientError = validateField(q, valToSend);
+    if (clientError) {
+      setFieldErrors((prev) => ({ ...prev, [key]: clientError }));
+      return false;
+    }
+
+    setFieldErrors((prev) => ({ ...prev, [key]: null }));
+    setSavingFields((prev) => ({ ...prev, [key]: true }));
+
+    try {
+      await onAnswer(key, valToSend);
+      setDrafts((prev) => {
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      });
+      return true;
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Invalid answer provided.";
+      setFieldErrors((prev) => ({ ...prev, [key]: msg }));
+      return false;
+    } finally {
+      setSavingFields((prev) => ({ ...prev, [key]: false }));
+    }
+  }
+
+  async function flushAllDrafts(): Promise<boolean> {
+    Object.values(debounceTimersRef.current).forEach(clearTimeout);
+    debounceTimersRef.current = {};
+
+    const activeKeys = Object.keys(draftsRef.current).filter(
+      (k) => draftsRef.current[k] !== undefined && draftsRef.current[k] !== ""
+    );
+    if (activeKeys.length === 0) return true;
+
+    let allOk = true;
+    for (const k of activeKeys) {
+      const ok = await handleSubmit(k);
+      if (!ok) allOk = false;
+    }
+    return allOk;
+  }
+
+  async function handleProceed() {
+    if (isProceeding) return;
+    setIsProceeding(true);
+    try {
+      const ok = await flushAllDrafts();
+      if (ok && onProceedToEligibility) {
+        onProceedToEligibility();
       }
-
-      setFieldErrors((prev) => ({ ...prev, [key]: null }));
-
-      try {
-        await onAnswer(key, valToSend);
-      } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : "Invalid answer provided.";
-        setFieldErrors((prev) => ({ ...prev, [key]: msg }));
-      }
+    } finally {
+      setIsProceeding(false);
     }
   }
 
   async function handleDirectAnswer(key: string, value: unknown) {
+    if (debounceTimersRef.current[key]) {
+      clearTimeout(debounceTimersRef.current[key]);
+      delete debounceTimersRef.current[key];
+    }
     setDrafts((prev) => {
       const next = { ...prev };
       delete next[key];
@@ -958,7 +1062,10 @@ export function IntakeStep({
       let changed = false;
       const next = { ...prev };
       for (const k of Object.keys(next)) {
-        if (state.answers[k] !== undefined && state.answers[k] === next[k]) {
+        if (
+          state.answers[k] !== undefined &&
+          (state.answers[k] === next[k] || String(state.answers[k]) === String(next[k]))
+        ) {
           delete next[k];
           changed = true;
         }
@@ -967,17 +1074,36 @@ export function IntakeStep({
     });
   }, [state.answers]);
 
-  const pct = state.progress.total > 0
-    ? Math.round((state.progress.answered / state.progress.total) * 100)
+  const allRequiredQuestions = useMemo(
+    () => state.questions.filter((q) => q.required !== false),
+    [state.questions]
+  );
+  const totalAnsweredCount = useMemo(
+    () => state.questions.filter(isQuestionAnswered).length,
+    [state.questions, isQuestionAnswered]
+  );
+  const answeredRequiredCount = useMemo(
+    () => allRequiredQuestions.filter(isQuestionAnswered).length,
+    [allRequiredQuestions, isQuestionAnswered]
+  );
+  const isAllComplete = allRequiredQuestions.length > 0
+    ? answeredRequiredCount >= allRequiredQuestions.length
+    : totalAnsweredCount === state.questions.length;
+  const totalRemainingCount = allRequiredQuestions.length > 0
+    ? Math.max(0, allRequiredQuestions.length - answeredRequiredCount)
+    : Math.max(0, state.questions.length - totalAnsweredCount);
+
+  const pct = state.questions.length > 0
+    ? Math.round((totalAnsweredCount / state.questions.length) * 100)
     : 0;
 
   const currentQuestions = sectionsMap.get(currentSectionKey) || state.questions;
   const currentRequired = currentQuestions.filter((q) => q.required !== false);
-  const currentAnsweredCount = currentQuestions.filter((q) => state.answers[q.key] !== undefined && state.answers[q.key] !== "").length;
-  const currentAnsweredRequired = currentRequired.filter((q) => state.answers[q.key] !== undefined && state.answers[q.key] !== "").length;
+  const currentAnsweredCount = currentQuestions.filter(isQuestionAnswered).length;
+  const currentAnsweredRequired = currentRequired.filter(isQuestionAnswered).length;
   const isCurrentSectionComplete = currentRequired.length > 0
     ? currentAnsweredRequired >= currentRequired.length
-    : currentQuestions.every((q) => state.answers[q.key] !== undefined);
+    : currentAnsweredCount === currentQuestions.length;
   const remainingInCurrent = currentRequired.length > 0
     ? Math.max(0, currentRequired.length - currentAnsweredRequired)
     : Math.max(0, currentQuestions.length - currentAnsweredCount);
@@ -1305,6 +1431,9 @@ export function IntakeStep({
               <div className="pt-1">
                 <input
                   type={q.type === "integer" ? "number" : isDateInput ? "date" : "text"}
+                  min={q.type === "integer" && q.min_value !== undefined && q.min_value !== null ? q.min_value : undefined}
+                  max={q.type === "integer" && q.max_value !== undefined && q.max_value !== null ? q.max_value : undefined}
+                  step={q.type === "integer" ? "1" : undefined}
                   value={
                     isDateInput
                       ? (normalizeDateToISO(String(current ?? "")) || String(current ?? ""))
@@ -1346,12 +1475,17 @@ export function IntakeStep({
           </div>
         )}
 
-        {!fieldError && state.answers[q.key] !== undefined && (
+        {savingFields[q.key] ? (
+          <div className="flex items-center gap-1 text-[11px] text-primary font-medium pt-2">
+            <Loader2 className="size-3.5 animate-spin shrink-0" />
+            <span>Saving answer...</span>
+          </div>
+        ) : !fieldError && (state.answers[q.key] !== undefined || (drafts[q.key] !== undefined && drafts[q.key] !== "")) ? (
           <div className="flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-400 font-medium pt-2">
             <Check className="size-3.5 shrink-0" />
             <span>Answer Saved</span>
           </div>
-        )}
+        ) : null}
       </Card>
     );
   }
@@ -1364,8 +1498,8 @@ export function IntakeStep({
           <div>
             <h3 className="text-sm font-semibold text-foreground">Intake Questionnaire &amp; Screening</h3>
             <p className="mt-0.5 text-xs text-muted-foreground">
-              {state.progress.answered} of {state.progress.total} total fields completed ({pct}%)
-              {state.progress.complete ? " · Ready for Eligibility Evaluation" : ""}
+              {totalAnsweredCount} of {state.questions.length} total fields completed ({pct}%)
+              {isAllComplete ? " · Ready for Eligibility Evaluation" : ""}
             </p>
           </div>
 
@@ -1435,8 +1569,8 @@ export function IntakeStep({
           {sectionKeys.map((secName) => {
             const secQuestions = sectionsMap.get(secName) || [];
             const reqQuestions = secQuestions.filter((q) => q.required !== false);
-            const answeredInSec = secQuestions.filter((q) => state.answers[q.key] !== undefined && state.answers[q.key] !== "").length;
-            const answeredReqInSec = reqQuestions.filter((q) => state.answers[q.key] !== undefined && state.answers[q.key] !== "").length;
+            const answeredInSec = secQuestions.filter(isQuestionAnswered).length;
+            const answeredReqInSec = reqQuestions.filter(isQuestionAnswered).length;
             const isSecComplete = reqQuestions.length > 0
               ? answeredReqInSec >= reqQuestions.length
               : answeredInSec === secQuestions.length;
@@ -1445,7 +1579,10 @@ export function IntakeStep({
             return (
               <button
                 key={secName}
-                onClick={() => setActiveSection(secName)}
+                onClick={async () => {
+                  await flushAllDrafts();
+                  setActiveSection(secName);
+                }}
                 className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-all ${
                   isActive
                     ? "bg-primary text-primary-foreground shadow-sm font-semibold ring-2 ring-primary/30"
@@ -1478,8 +1615,8 @@ export function IntakeStep({
           {sectionKeys.map((secName) => {
             const secQuestions = sectionsMap.get(secName) || [];
             const reqQuestions = secQuestions.filter((q) => q.required !== false);
-            const secAnswered = secQuestions.filter((q) => state.answers[q.key] !== undefined && state.answers[q.key] !== "").length;
-            const secReqAnswered = reqQuestions.filter((q) => state.answers[q.key] !== undefined && state.answers[q.key] !== "").length;
+            const secAnswered = secQuestions.filter(isQuestionAnswered).length;
+            const secReqAnswered = reqQuestions.filter(isQuestionAnswered).length;
             const isComplete = reqQuestions.length > 0
               ? secReqAnswered >= reqQuestions.length
               : secAnswered === secQuestions.length;
@@ -1507,32 +1644,35 @@ export function IntakeStep({
           {/* View All Bottom Completion Banner */}
           <div className="rounded-[var(--radius)] border p-4 bg-muted/30 flex flex-col sm:flex-row items-center justify-between gap-3">
             <div className="text-xs text-muted-foreground flex items-center gap-2">
-              {!state.progress.complete && (
+              {!isAllComplete && (
                 <AlertTriangle className="size-4 text-amber-500 shrink-0" />
               )}
               <span>
-                {state.progress.complete
+                {isAllComplete
                   ? "All required questions answered across all modules."
-                  : `${state.progress.total - state.progress.answered} question(s) remaining. You may proceed to documents.`}
+                  : `${totalRemainingCount} question(s) remaining. You may proceed to documents.`}
               </span>
             </div>
             {onProceedToEligibility && (
               <Button
-                onClick={onProceedToEligibility}
+                onClick={handleProceed}
+                disabled={isProceeding}
                 className={`gap-2 text-xs font-semibold text-white shadow-sm ${
-                  state.progress.complete
+                  isAllComplete
                     ? "bg-emerald-600 hover:bg-emerald-700"
                     : "bg-primary hover:bg-primary/90"
                 }`}
               >
-                {state.progress.complete ? (
+                {isProceeding ? (
+                  <Loader2 className="size-3.5 animate-spin" />
+                ) : isAllComplete ? (
                   <CheckCircle2 className="size-4" />
                 ) : (
                   <AlertTriangle className="size-3.5 text-amber-300" />
                 )}
-                {state.progress.complete
+                {isAllComplete
                   ? "All Sections Complete — Continue to Documents"
-                  : `Proceed to Documents (${state.progress.total - state.progress.answered} incomplete)`}{" "}
+                  : `Proceed to Documents (${totalRemainingCount} incomplete)`}{" "}
                 <ArrowRight className="size-4" />
               </Button>
             )}
@@ -1561,7 +1701,10 @@ export function IntakeStep({
             {currentSectionIndex > 0 ? (
               <Button
                 variant="outline"
-                onClick={() => setActiveSection(sectionKeys[currentSectionIndex - 1])}
+                onClick={async () => {
+                  await flushAllDrafts();
+                  setActiveSection(sectionKeys[currentSectionIndex - 1]);
+                }}
                 className="h-9 text-xs gap-1.5 px-3 justify-center sm:justify-start"
               >
                 <ChevronLeft className="size-3.5" /> Previous: {sectionKeys[currentSectionIndex - 1]}
@@ -1578,7 +1721,10 @@ export function IntakeStep({
               {currentSectionIndex < sectionKeys.length - 1 ? (
                 <div className="flex flex-wrap items-center gap-2 justify-end">
                   <Button
-                    onClick={() => setActiveSection(sectionKeys[currentSectionIndex + 1])}
+                    onClick={async () => {
+                      await flushAllDrafts();
+                      setActiveSection(sectionKeys[currentSectionIndex + 1]);
+                    }}
                     className="h-9 text-xs gap-1.5 px-4 font-semibold shadow-sm justify-center sm:justify-start"
                   >
                     Continue to: {sectionKeys[currentSectionIndex + 1]} <ChevronRight className="size-3.5" />
@@ -1589,7 +1735,10 @@ export function IntakeStep({
                   {firstIncompleteSection && firstIncompleteSection !== currentSectionKey && (
                     <Button
                       variant="outline"
-                      onClick={() => setActiveSection(firstIncompleteSection)}
+                      onClick={async () => {
+                        await flushAllDrafts();
+                        setActiveSection(firstIncompleteSection);
+                      }}
                       className="h-9 text-xs gap-1.5 px-3 text-primary border-primary/30 hover:bg-primary/5"
                     >
                       Review Incomplete: {firstIncompleteSection}
@@ -1597,21 +1746,24 @@ export function IntakeStep({
                   )}
                   {onProceedToEligibility && (
                     <Button
-                      onClick={onProceedToEligibility}
+                      onClick={handleProceed}
+                      disabled={isProceeding}
                       className={`h-9 text-xs gap-1.5 px-4 font-semibold text-white shadow-sm ${
-                        state.progress.complete
+                        isAllComplete
                           ? "bg-emerald-600 hover:bg-emerald-700"
                           : "bg-primary hover:bg-primary/90"
                       }`}
                     >
-                      {state.progress.complete ? (
+                      {isProceeding ? (
+                        <Loader2 className="size-3.5 animate-spin" />
+                      ) : isAllComplete ? (
                         <CheckCircle2 className="size-4" />
                       ) : (
                         <AlertTriangle className="size-3.5 text-amber-300" />
                       )}
-                      {state.progress.complete
+                      {isAllComplete
                         ? "All Sections Complete — Continue to Documents"
-                        : `Proceed to Documents (${state.progress.total - state.progress.answered} incomplete)`}{" "}
+                        : `Proceed to Documents (${totalRemainingCount} incomplete)`}{" "}
                       <ArrowRight className="size-4" />
                     </Button>
                   )}
