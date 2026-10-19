@@ -16,6 +16,7 @@ import {
   PanelLeftOpen,
   Coins,
   BookOpen,
+  ShieldCheck,
 } from "lucide-react";
 
 import { useCredits } from "@/lib/credits-context";
@@ -143,6 +144,28 @@ export function ApplicantSidebar() {
             </Link>
           );
         })}
+
+        {(user?.role === "admin" || user?.role === "ops") && (
+          isCompact ? (
+            <Link
+              href="/admin"
+              onClick={onItemClick}
+              title="Admin Portal"
+              className="group relative flex size-11 items-center justify-center rounded-xl transition-all mx-auto border border-primary/30 bg-primary/10 text-primary hover:bg-primary/20"
+            >
+              <ShieldCheck className="size-5 shrink-0" />
+            </Link>
+          ) : (
+            <Link
+              href="/admin"
+              onClick={onItemClick}
+              className="flex items-center gap-3 rounded-lg px-3 py-2 text-xs font-bold transition-all border border-primary/30 bg-primary/10 text-primary hover:bg-primary/20"
+            >
+              <ShieldCheck className="size-4 shrink-0" />
+              <span>Admin Portal</span>
+            </Link>
+          )
+        )}
       </nav>
 
       {/* User Profile & Logout Menu */}

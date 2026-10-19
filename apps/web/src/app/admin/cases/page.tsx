@@ -20,6 +20,7 @@ import { useAdminCasesQuery } from "@/lib/queries/admin";
 
 const statusConfig: Record<string, { label: string; tone: "default" | "success" | "warning" | "danger" | "muted" }> = {
   draft: { label: "Draft", tone: "muted" },
+  payment_completed: { label: "Paid · Ready for Staff", tone: "success" },
   intake_complete: { label: "Intake complete", tone: "default" },
   checklist_ready: { label: "Checklist ready", tone: "default" },
   forms_generated: { label: "Forms generated", tone: "default" },
@@ -45,8 +46,11 @@ export default function CasesPage() {
 
   const filtered = useMemo(() => {
     return cases.filter((c) => {
-      if (search && c.reference && !c.reference.toLowerCase().includes(search.toLowerCase())) {
-        return false;
+      if (search) {
+        const q = search.toLowerCase();
+        const refMatch = c.reference && c.reference.toLowerCase().includes(q);
+        const emailMatch = c.applicant_email && c.applicant_email.toLowerCase().includes(q);
+        if (!refMatch && !emailMatch) return false;
       }
       return true;
     });
@@ -87,7 +91,7 @@ export default function CasesPage() {
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search by reference…"
+              placeholder="Search reference or applicant email…"
               className="h-9 w-full rounded-[var(--radius)] border bg-background pl-9 pr-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
             />
           </div>
@@ -98,6 +102,7 @@ export default function CasesPage() {
           >
             <option value="">All statuses</option>
             <option value="draft">Draft</option>
+            <option value="payment_completed">Paid · Ready for Staff</option>
             <option value="intake_complete">Intake complete</option>
             <option value="checklist_ready">Checklist ready</option>
             <option value="forms_generated">Forms generated</option>
@@ -128,6 +133,7 @@ export default function CasesPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead className="px-5">Reference</TableHead>
+                    <TableHead className="px-5">Applicant</TableHead>
                     <TableHead className="px-5">Status</TableHead>
                     <TableHead className="px-5">Locale</TableHead>
                     <TableHead className="px-5">Created</TableHead>
@@ -141,11 +147,14 @@ export default function CasesPage() {
                       <TableRow key={c.id}>
                         <TableCell className="px-5 font-mono text-sm font-semibold">
                           <Link
-                            href={`/cases/${c.id}`}
-                            className="hover:underline text-foreground"
+                            href={`/admin/cases/${c.id}`}
+                            className="hover:underline text-foreground font-bold"
                           >
                             {c.reference ?? `#${c.id}`}
                           </Link>
+                        </TableCell>
+                        <TableCell className="px-5 text-xs text-foreground font-medium truncate max-w-[200px]">
+                          {c.applicant_email || "—"}
                         </TableCell>
                         <TableCell className="px-5">
                           <Badge tone={sc.tone}>{sc.label}</Badge>
@@ -156,10 +165,10 @@ export default function CasesPage() {
                         </TableCell>
                         <TableCell className="px-5 text-right">
                           <Link
-                            href={`/cases/${c.id}`}
-                            className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+                            href={`/admin/cases/${c.id}`}
+                            className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
                           >
-                            View <ExternalLink className="size-3" />
+                            Open Filing Console <ExternalLink className="size-3" />
                           </Link>
                         </TableCell>
                       </TableRow>

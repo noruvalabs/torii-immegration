@@ -167,13 +167,24 @@ async def admin_list_cases(
     status_filter: str | None = Query(default=None, alias="status"),
     offset: int = Query(default=0, ge=0),
     limit: int = Query(default=50, ge=1, le=200),
-) -> list[Case]:
+) -> list[AdminCaseOut]:
     """List all cases across all users (admin only)."""
     stmt = select(Case).order_by(Case.created_at.desc()).offset(offset).limit(limit)
     if status_filter is not None:
         stmt = stmt.where(Case.status == status_filter)
     result = await session.execute(stmt)
-    return list(result.scalars().all())
+    cases = list(result.scalars().all())
+    user_ids = {c.user_id for c in cases if c.user_id}
+    users_by_id = {}
+    if user_ids:
+        user_rows = (await session.scalars(select(User).where(User.id.in_(user_ids)))).all()
+        users_by_id = {u.id: u.email for u in user_rows}
+    out: list[AdminCaseOut] = []
+    for c in cases:
+        email = c.applicant_email or (users_by_id.get(c.user_id) if c.user_id is not None else None)
+        base = AdminCaseOut.model_validate(c)
+        out.append(base.model_copy(update={"applicant_email": email}))
+    return out
 
 
 @router.get("/cases/count")
@@ -191,7 +202,7 @@ async def admin_get_case(
     case_id: int,
     session: SessionDep,
     _admin: AdminDep,
-) -> Case:
+) -> AdminCaseOut:
     """Get a specific case by ID (admin only)."""
     case = await session.get(Case, case_id)
     if case is None:
@@ -199,7 +210,13 @@ async def admin_get_case(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="case not found",
         )
-    return case
+    email = case.applicant_email
+    if not email and case.user_id:
+        owner = await session.get(User, case.user_id)
+        if owner:
+            email = owner.email
+    base = AdminCaseOut.model_validate(case)
+    return base.model_copy(update={"applicant_email": email})
 
 
 # ── Admin escalation list ───────────────────────────────────────────────────

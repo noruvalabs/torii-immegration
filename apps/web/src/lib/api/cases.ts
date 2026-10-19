@@ -300,6 +300,7 @@ export function patchCase(
     intake_answers?: Record<string, unknown>;
     intake_step?: string;
     notes?: string;
+    status?: string;
     submission_reference?: string | null;
   },
 ) {
@@ -349,6 +350,7 @@ export function registerDocument(token: string, caseId: number, data: {
   extracted_fields?: Record<string, unknown>;
   extraction_confidence?: number;
   content_type?: string;
+  checklist_item_id?: number;
 }) {
   return req<Document>(`/cases/${caseId}/documents`, token, {
     method: "POST",
@@ -358,6 +360,16 @@ export function registerDocument(token: string, caseId: number, data: {
 
 export function confirmDocument(token: string, caseId: number, docId: number) {
   return req<Document>(`/cases/${caseId}/documents/${docId}/confirm`, token, { method: "POST" });
+}
+
+export function getCaseDocumentFileUrl(caseId: number, docId: number, token?: string | null): string {
+  const base = `${API}/cases/${caseId}/documents/${docId}/file`;
+  return token ? `${base}?token=${encodeURIComponent(token)}` : base;
+}
+
+export function getChecklistItemFileUrl(caseId: number, itemId: number, token?: string | null): string {
+  const base = `${API}/cases/${caseId}/checklist/${itemId}/file`;
+  return token ? `${base}?token=${encodeURIComponent(token)}` : base;
 }
 
 // ── Forms ──────────────────────────────────────────────────────────────────────

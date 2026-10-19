@@ -9,6 +9,7 @@ import {
   getIntake,
   getEligibility,
   getChecklist,
+  getDocuments,
   getForms,
   getOfficialForms,
   getFiling,
@@ -23,6 +24,7 @@ import {
   type IntakeState,
   type EligibilityResult,
   type ChecklistItem,
+  type Document,
   type GeneratedForm,
   type OfficialFormsResponse,
   type FilingInfo,
@@ -36,6 +38,7 @@ export const caseKeys = {
   intake: (id: number) => ["cases", "intake", id] as const,
   eligibility: (id: number) => ["cases", "eligibility", id] as const,
   checklist: (id: number) => ["cases", "checklist", id] as const,
+  documents: (id: number) => ["cases", "documents", id] as const,
   forms: (id: number) => ["cases", "forms", id] as const,
   officialForms: (id: number) => ["cases", "officialForms", id] as const,
   filing: (id: number) => ["cases", "filing", id] as const,
@@ -156,6 +159,20 @@ export function useChecklistQuery(token: string | null, caseId: number, enabled 
     queryFn: async () => {
       try {
         return await getChecklist(token!, caseId);
+      } catch {
+        return [];
+      }
+    },
+    enabled: Boolean(token && caseId && enabled),
+  });
+}
+
+export function useDocumentsQuery(token: string | null, caseId: number, enabled = true) {
+  return useQuery<Document[]>({
+    queryKey: caseKeys.documents(caseId),
+    queryFn: async () => {
+      try {
+        return await getDocuments(token!, caseId);
       } catch {
         return [];
       }

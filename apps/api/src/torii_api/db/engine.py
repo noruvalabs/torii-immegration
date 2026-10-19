@@ -26,10 +26,25 @@ DEFAULT_POOL_RECYCLE_SECONDS = int(os.getenv("TORII_DB_POOL_RECYCLE", "1800"))
 
 
 def to_async_url(database_url: str) -> str:
-    """Coerce a database URL to its async driver form.
+    """Coerce a database URL to its async driver form and canonicalize relative SQLite paths.
 
     Already-qualified URLs (``sqlite+aiosqlite://``, ``postgresql+asyncpg://``) pass through.
     """
+    # Canonicalize relative SQLite paths so whether the process starts in root or apps/api,
+    # it always binds to apps/api/torii.db.
+    if "sqlite" in database_url and ":memory:" not in database_url:
+        prefix, rest = database_url.split("://", 1)
+        cleaned = rest.lstrip("/")
+        if cleaned.startswith("./"):
+            cleaned = cleaned[2:]
+        if not os.path.isabs(cleaned):
+            from pathlib import Path
+
+            api_dir = Path(__file__).resolve().parents[3]  # apps/api
+            canonical = (api_dir / cleaned).resolve().as_posix()
+            driver = "sqlite+aiosqlite" if "+" not in prefix else prefix
+            return f"{driver}:///{canonical}"
+
     if "+" in database_url.split("://", 1)[0]:
         return database_url
     if database_url.startswith("sqlite://"):

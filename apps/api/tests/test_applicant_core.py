@@ -206,3 +206,56 @@ async def test_visible_requirement_items_handles_partial_data() -> None:
     assert items[0].how_to_obtain == ""
     assert items[0].why_required == ""
     assert items[1].code == "schedule_of_stay"
+
+
+async def test_case_document_and_checklist_file_stream(
+    client: AsyncClient, engine: AsyncEngine
+) -> None:
+    await _seed(engine)
+    token, case_id = await _register_and_scope(client, "streamer@example.com")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # Refresh checklist
+    checklist_resp = await client.post(f"/v1/cases/{case_id}/checklist/refresh", headers=headers)
+    assert checklist_resp.status_code == 200
+    items = checklist_resp.json()
+    assert len(items) > 0
+    first_item = items[0]
+
+    # Stream checklist item file (should stream or synthesize fallback PDF)
+    file_resp = await client.get(
+        f"/v1/cases/{case_id}/checklist/{first_item['id']}/file",
+        headers=headers,
+    )
+    assert file_resp.status_code == 200
+    assert "application/pdf" in file_resp.headers["content-type"]
+    assert len(file_resp.content) > 0
+
+    # Also test query token auth parameter
+    query_auth_resp = await client.get(
+        f"/v1/cases/{case_id}/checklist/{first_item['id']}/file?token={token}"
+    )
+    assert query_auth_resp.status_code == 200
+    assert "application/pdf" in query_auth_resp.headers["content-type"]
+
+    # Register a document and test document file stream
+    doc_resp = await client.post(
+        f"/v1/cases/{case_id}/documents",
+        json={
+            "doc_type": "passport",
+            "filename": "passport_scan.pdf",
+            "storage_key": "upload/1/passport_scan.pdf",
+            "content_type": "application/pdf",
+        },
+        headers=headers,
+    )
+    assert doc_resp.status_code == 201
+    doc_id = doc_resp.json()["id"]
+
+    doc_file_resp = await client.get(
+        f"/v1/cases/{case_id}/documents/{doc_id}/file",
+        headers=headers,
+    )
+    assert doc_file_resp.status_code == 200
+    assert "application/pdf" in doc_file_resp.headers["content-type"]
+    assert len(doc_file_resp.content) > 0

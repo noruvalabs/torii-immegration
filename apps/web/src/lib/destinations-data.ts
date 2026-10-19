@@ -21,9 +21,11 @@ export type DestinationInfo = {
   bannerTag: string;
   tagline: string;
   shortDescription: string;
-  overview: string;
+  overview?: string;
   filingModeLabel: string;
   processingDays: string;
+  serviceModel?: "portal_payment_concierge" | "official_dossier_kit";
+  serviceHeadline?: string;
   visas: DestinationVisa[];
   requiredSummary: string[];
   faqs: { question: string; answer: string }[];
@@ -43,6 +45,8 @@ export const DESTINATIONS: Record<string, DestinationInfo> = {
       "Planning to visit Japan for tourism, cherry blossom season, or meeting family and friends? Torii prepares your official Ministry of Foreign Affairs (MOFA) 2-page application form, day-by-day Schedule of Stay (滞在予定表), and formal Consular Cover Letter. Print, sign, and submit at VFS Global / Embassy of Japan with zero hassle.",
     filingModeLabel: "Official MOFA Form & Dossier (VFS Submission)",
     processingDays: "5–7 Days",
+    serviceModel: "official_dossier_kit",
+    serviceHeadline: "Low Service Charge: Official typed MOFA form & itinerary kit. Pay embassy fee only on approval.",
     visas: [
       {
         id: "tourist-short",
@@ -123,6 +127,8 @@ export const DESTINATIONS: Record<string, DestinationInfo> = {
       "Applying for medical treatment in Kolkata, Chennai, Delhi, or touring India? Torii generates your formal Consular Embassy Cover Letter addressed to the Indian Mission, verifies all attendant and hospital invite requirements, and gives you the exact direct links to the official government registration and fee payment portals.",
     filingModeLabel: "Online Registration + IVAC Submission",
     processingDays: "3–5 Days",
+    serviceModel: "portal_payment_concierge",
+    serviceHeadline: "Full Portal Submission: We register your application on the official Indian portal and pay the IVAC statutory fee for you.",
     visas: [
       {
         id: "medical-new",
@@ -173,9 +179,9 @@ export const DESTINATIONS: Record<string, DestinationInfo> = {
     ],
     faqs: [
       {
-        question: "How do I fill the government form for an Indian Medical Visa?",
+        question: "Do I have to fill the government online form myself?",
         answer:
-          "Torii prepares your formal Consular Cover Letter and gives you the exact direct link to the government registration page (indianvisaonline.gov.in/visa/registration). On the government form, simply select 'Medical Visa' as Visa Type and 'For Medical Treatment' as Purpose.",
+          "No! You do not need to fill any government forms or visit foreign portals. Simply provide your basic details once on Torii, and our dedicated staff team submits your full application directly on the official Indian Visa Online portal, pays the embassy fee, and delivers your official IVAC appointment confirmation.",
       },
       {
         question: "Can attendants accompany a medical patient?",
@@ -203,6 +209,8 @@ export const DESTINATIONS: Record<string, DestinationInfo> = {
       "Travel to Makkah, Madinah, Riyadh, and Al-Ula with ease. Saudi Arabia offers streamlined 1-Year Multiple Entry Tourist eVisas that allow tourism and performing Umrah (outside Hajj season). Torii verifies your eligibility, formats your passport scan, and guides you through the official KSA visa portal.",
     filingModeLabel: "Instant Electronic Visa (KSA Portal)",
     processingDays: "24–48 Hours",
+    serviceModel: "portal_payment_concierge",
+    serviceHeadline: "Full Online e-Visa: We submit on the official KSA portal, handle foreign currency fee & mandatory medical insurance.",
     visas: [
       {
         id: "tourist-umrah-evisa",

@@ -1,5 +1,6 @@
 export { IntakeStep } from "./IntakeStep";
 export { EligibilityStep } from "./EligibilityStep";
+export { QuickEligibilityAndPayment } from "./QuickEligibilityAndPayment";
 export { ChecklistStep } from "./ChecklistStep";
 export { FormsStep } from "./FormsStep";
 export { ReviewStep } from "./ReviewStep";

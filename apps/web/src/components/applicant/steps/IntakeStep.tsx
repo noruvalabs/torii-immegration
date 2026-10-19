@@ -338,10 +338,14 @@ export function IntakeStep({
   const firstIncompleteSection = useMemo(() => {
     for (const sec of sectionKeys) {
       const qs = sectionsMap.get(sec) || [];
-      const answered = qs.filter((q) => state.answers[q.key] !== undefined).length;
-      if (answered < qs.length) return sec;
+      const reqQuestions = qs.filter((q) => q.required !== false);
+      const answered = reqQuestions.length > 0
+        ? reqQuestions.filter((q) => state.answers[q.key] !== undefined && state.answers[q.key] !== "" && state.answers[q.key] !== null).length
+        : qs.filter((q) => state.answers[q.key] !== undefined && state.answers[q.key] !== "" && state.answers[q.key] !== null).length;
+      const targetCount = reqQuestions.length > 0 ? reqQuestions.length : qs.length;
+      if (answered < targetCount) return sec;
     }
-    return sectionKeys[0] ?? null;
+    return null;
   }, [sectionKeys, sectionsMap, state.answers]);
 
   // Switch to targetKey section, smoothly scroll to question, and highlight
@@ -965,7 +969,7 @@ export function IntakeStep({
               <span>
                 {state.progress.complete
                   ? "All required questions answered across all modules."
-                  : `${state.progress.total - state.progress.answered} question(s) remaining. You may proceed to preview eligibility.`}
+                  : `${state.progress.total - state.progress.answered} question(s) remaining. You may proceed to documents.`}
               </span>
             </div>
             {onProceedToEligibility && (
@@ -983,8 +987,8 @@ export function IntakeStep({
                   <AlertTriangle className="size-3.5 text-amber-300" />
                 )}
                 {state.progress.complete
-                  ? "Proceed to Eligibility Screening"
-                  : `Proceed to Eligibility (${state.progress.total - state.progress.answered} incomplete)`}{" "}
+                  ? "All Sections Complete — Continue to Documents"
+                  : `Proceed to Documents (${state.progress.total - state.progress.answered} incomplete)`}{" "}
                 <ArrowRight className="size-4" />
               </Button>
             )}
@@ -1035,16 +1039,6 @@ export function IntakeStep({
                   >
                     Continue to: {sectionKeys[currentSectionIndex + 1]} <ChevronRight className="size-3.5" />
                   </Button>
-                  {onProceedToEligibility && (
-                    <Button
-                      variant="outline"
-                      onClick={onProceedToEligibility}
-                      className="h-9 text-xs gap-1.5 px-3 text-muted-foreground hover:text-foreground border-border/80"
-                      title="Preview Eligibility and subsequent steps"
-                    >
-                      Skip to Eligibility <ArrowRight className="size-3.5" />
-                    </Button>
-                  )}
                 </div>
               ) : (
                 <div className="flex flex-wrap items-center gap-2 justify-end">
@@ -1072,8 +1066,8 @@ export function IntakeStep({
                         <AlertTriangle className="size-3.5 text-amber-300" />
                       )}
                       {state.progress.complete
-                        ? "All Sections Complete — Proceed to Eligibility"
-                        : `Proceed to Eligibility (${state.progress.total - state.progress.answered} incomplete)`}{" "}
+                        ? "All Sections Complete — Continue to Documents"
+                        : `Proceed to Documents (${state.progress.total - state.progress.answered} incomplete)`}{" "}
                       <ArrowRight className="size-4" />
                     </Button>
                   )}

@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import delete, select
@@ -113,6 +113,7 @@ class DocumentIn(BaseModel):
     extracted_fields: dict[str, Any] = Field(default_factory=dict)
     extraction_confidence: float | None = Field(default=None, ge=0, le=1)
     content_type: str = Field(default="application/octet-stream", max_length=128)
+    checklist_item_id: int | None = None
 
 
 class DocumentOut(BaseModel):
@@ -672,14 +673,25 @@ async def register_document(
 ) -> CaseDocument:
     case = await _owned_case(session, case_id, user)
     has_extracted = bool(payload.extracted_fields)
-    document = CaseDocument(case_id=case.id, confirmed=has_extracted, **payload.model_dump())
+    data = payload.model_dump()
+    checklist_item_id = data.pop("checklist_item_id", None)
+    document = CaseDocument(case_id=case.id, confirmed=has_extracted, **data)
     session.add(document)
     await session.flush()
-    checklist_item = await session.scalar(
-        select(CaseChecklistItem).where(
-            CaseChecklistItem.case_id == case.id, CaseChecklistItem.code == payload.doc_type
+
+    checklist_item = None
+    if checklist_item_id is not None:
+        checklist_item = await session.scalar(
+            select(CaseChecklistItem).where(
+                CaseChecklistItem.case_id == case.id, CaseChecklistItem.id == checklist_item_id
+            )
         )
-    )
+    if checklist_item is None:
+        checklist_item = await session.scalar(
+            select(CaseChecklistItem).where(
+                CaseChecklistItem.case_id == case.id, CaseChecklistItem.code == payload.doc_type
+            )
+        )
     if checklist_item is not None:
         checklist_item.document_id = document.id
         checklist_item.status = "uploaded"
@@ -716,6 +728,183 @@ async def get_documents(
 ) -> list[CaseDocument]:
     await _owned_case(session, case_id, user)
     return await _documents(session, case_id)
+
+
+async def _stream_case_document_file(
+    session: AsyncSession,
+    case: Case,
+    doc: CaseDocument | None,
+    doc_type: str,
+    fallback_filename: str = "document.pdf",
+) -> Response:
+    from torii_api.db.models import DocumentWalletItem
+    from torii_api.services.dummy_generator import generate_dummy_pdf
+    from torii_api.services.wallet import get_document_content, save_document_content
+
+    filename = (doc.filename if doc and doc.filename else fallback_filename).strip()
+    storage_key = doc.storage_key if doc else None
+    content: bytes | None = None
+
+    if storage_key:
+        content = get_document_content(storage_key)
+        if not content and storage_key.startswith("wallet/"):
+            try:
+                wallet_id = int(storage_key.split("/", 1)[1])
+                w_item = await session.scalar(
+                    select(DocumentWalletItem).where(DocumentWalletItem.id == wallet_id)
+                )
+                if w_item and w_item.storage_key:
+                    content = get_document_content(w_item.storage_key)
+                    if w_item.filename:
+                        filename = w_item.filename
+            except Exception:
+                pass
+
+    if not content and case.user_id:
+        w_item = await session.scalar(
+            select(DocumentWalletItem)
+            .where(
+                DocumentWalletItem.user_id == case.user_id,
+                DocumentWalletItem.doc_type == doc_type,
+            )
+            .order_by(DocumentWalletItem.id.desc())
+        )
+        if w_item and w_item.storage_key:
+            content = get_document_content(w_item.storage_key)
+            if w_item.filename:
+                filename = w_item.filename
+
+    if not content:
+        answers = case.intake_answers or {}
+        applicant_name = (
+            answers.get("full_name")
+            or answers.get("given_names")
+            or answers.get("applicant_name")
+            or (case.applicant_email or "Applicant").split("@")[0].capitalize()
+        )
+        try:
+            content, gen_filename, _ = generate_dummy_pdf(doc_type, str(applicant_name))
+            if not filename or filename == "document.pdf":
+                filename = gen_filename
+            if storage_key:
+                try:
+                    save_document_content(storage_key, content)
+                except Exception:
+                    pass
+        except Exception:
+            content = b"%PDF-1.4\n1 0 obj\n<< /Title (Document) >>\nendobj\ntrailer\n<< >>\n%%EOF\n"
+
+    media_type = "application/pdf"
+    lower_name = filename.lower()
+    if lower_name.endswith(".png"):
+        media_type = "image/png"
+    elif lower_name.endswith((".jpg", ".jpeg")):
+        media_type = "image/jpeg"
+    elif lower_name.endswith(".webp"):
+        media_type = "image/webp"
+    elif doc and doc.content_type:
+        media_type = doc.content_type
+
+    return Response(
+        content=content,
+        media_type=media_type,
+        headers={
+            "Content-Disposition": f'inline; filename="{filename}"',
+            "Cache-Control": "public, max-age=3600",
+        },
+    )
+
+
+@router.get("/{case_id}/documents/{doc_id}/file")
+async def get_case_document_file(
+    case_id: int,
+    doc_id: int,
+    session: SessionDep,
+    token: str | None = None,
+    authorization: str | None = Header(default=None),
+) -> Response:
+    """Stream raw case document file for inline viewing or download."""
+    auth_token = token
+    if not auth_token and authorization and authorization.startswith("Bearer "):
+        auth_token = authorization.replace("Bearer ", "").strip()
+    if not auth_token:
+        raise HTTPException(status_code=401, detail="Authentication token required")
+
+    settings = get_settings()
+    try:
+        from torii_api.auth.security import decode_access_token
+
+        claims = decode_access_token(auth_token, settings)
+        user_id = int(claims["sub"])
+    except Exception as e:
+        raise HTTPException(status_code=401, detail=f"Invalid auth token: {e}") from e
+
+    user = await session.scalar(select(User).where(User.id == user_id))
+    if not user:
+        raise HTTPException(status_code=401, detail="User not found")
+
+    case = await _owned_case(session, case_id, user)
+    doc = await session.scalar(
+        select(CaseDocument).where(CaseDocument.id == doc_id, CaseDocument.case_id == case.id)
+    )
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    return await _stream_case_document_file(session, case, doc, doc.doc_type, doc.filename)
+
+
+@router.get("/{case_id}/checklist/{item_id}/file")
+async def get_checklist_item_file(
+    case_id: int,
+    item_id: int,
+    session: SessionDep,
+    token: str | None = None,
+    authorization: str | None = Header(default=None),
+) -> Response:
+    """Stream file associated with a checklist item for inline viewing or download."""
+    auth_token = token
+    if not auth_token and authorization and authorization.startswith("Bearer "):
+        auth_token = authorization.replace("Bearer ", "").strip()
+    if not auth_token:
+        raise HTTPException(status_code=401, detail="Authentication token required")
+
+    settings = get_settings()
+    try:
+        from torii_api.auth.security import decode_access_token
+
+        claims = decode_access_token(auth_token, settings)
+        user_id = int(claims["sub"])
+    except Exception as e:
+        raise HTTPException(status_code=401, detail=f"Invalid auth token: {e}") from e
+
+    user = await session.scalar(select(User).where(User.id == user_id))
+    if not user:
+        raise HTTPException(status_code=401, detail="User not found")
+
+    case = await _owned_case(session, case_id, user)
+    item = await session.scalar(
+        select(CaseChecklistItem).where(
+            CaseChecklistItem.id == item_id, CaseChecklistItem.case_id == case.id
+        )
+    )
+    if not item:
+        raise HTTPException(status_code=404, detail="Checklist item not found")
+
+    doc: CaseDocument | None = None
+    if item.document_id:
+        doc = await session.scalar(
+            select(CaseDocument).where(
+                CaseDocument.id == item.document_id, CaseDocument.case_id == case.id
+            )
+        )
+    if not doc:
+        doc = await session.scalar(
+            select(CaseDocument)
+            .where(CaseDocument.case_id == case.id, CaseDocument.doc_type == item.code)
+            .order_by(CaseDocument.id.desc())
+        )
+
+    return await _stream_case_document_file(session, case, doc, item.code, f"{item.code}.pdf")
 
 
 class MedicalValidationIn(BaseModel):

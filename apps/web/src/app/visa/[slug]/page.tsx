@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { SiteHeader } from "@/components/landing/site-header";
-import { SiteFooter } from "@/components/landing/site-footer";
+import { VisaFooter } from "@/components/visa/visa-footer";
 import { VisaDetailView } from "@/components/visa/visa-detail-view";
 import { LangProvider } from "@/components/landing/i18n";
 import { DESTINATIONS } from "@/lib/destinations-data";
@@ -43,7 +43,7 @@ export default async function VisaPage({
         <main className="flex-1">
           <VisaDetailView destination={destination} />
         </main>
-        <SiteFooter />
+        <VisaFooter />
       </div>
     </LangProvider>
   );

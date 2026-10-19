@@ -60,33 +60,47 @@ class PaymentListOut(BaseModel):
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
 
+@router.post("", response_model=PaymentOut, status_code=status.HTTP_201_CREATED)
 @router.post("/", response_model=PaymentOut, status_code=status.HTTP_201_CREATED)
 async def create_new_payment(
     current_user: CurrentUserDep,
     session: SessionDep,
     body: PaymentCreateIn,
 ) -> PaymentOut:
-    """Create a new payment record for a case."""
+    """Create a new payment record for a case, or return existing one if already present."""
     from sqlalchemy import select
 
-    from torii_api.db.models import Case
+    from torii_api.db.models import Case, PaymentStatus, UserRole
 
-    # Verify case belongs to user
-    result = await session.execute(
-        select(Case).where(
+    # Verify case belongs to user (or allow admin/ops)
+    if current_user.role in (UserRole.ADMIN, UserRole.OPS):
+        case_stmt = select(Case).where(Case.id == body.case_id)
+    else:
+        case_stmt = select(Case).where(
             Case.id == body.case_id,
             Case.user_id == current_user.id,
         )
-    )
+    result = await session.execute(case_stmt)
     case = result.scalar_one_or_none()
 
     if not case:
         raise HTTPException(status_code=404, detail="Case not found")
 
+    target_user_id = case.user_id if case.user_id is not None else current_user.id
+    # If case already has a pending or completed payment, return it idempotently
+    existing_payment = await get_payment_by_case(
+        db=session, case_id=body.case_id, user_id=target_user_id
+    )
+    if existing_payment and existing_payment.status in (
+        PaymentStatus.PENDING,
+        PaymentStatus.COMPLETED,
+    ):
+        return PaymentOut.model_validate(existing_payment)
+
     payment = await create_payment(
         db=session,
         case_id=body.case_id,
-        user_id=current_user.id,
+        user_id=target_user_id,
         destination_code=body.destination_code,
         visa_type=body.visa_type,
     )
@@ -94,6 +108,7 @@ async def create_new_payment(
     return PaymentOut.model_validate(payment)
 
 
+@router.get("", response_model=PaymentListOut)
 @router.get("/", response_model=PaymentListOut)
 async def list_payments(
     current_user: CurrentUserDep,
@@ -114,7 +129,10 @@ async def get_case_payment(
     case_id: int,
 ) -> PaymentOut:
     """Get payment for a specific case."""
-    payment = await get_payment_by_case(db=session, case_id=case_id, user_id=current_user.id)
+    from torii_api.db.models import UserRole
+
+    user_id = None if current_user.role in (UserRole.ADMIN, UserRole.OPS) else current_user.id
+    payment = await get_payment_by_case(db=session, case_id=case_id, user_id=user_id)
 
     if not payment:
         raise HTTPException(status_code=404, detail="No payment found for this case")
@@ -130,11 +148,20 @@ async def process_payment(
     body: PaymentProcessIn | None = None,
 ) -> PaymentOut:
     """Process a mock payment (always succeeds)."""
+    from torii_api.db.models import Payment, UserRole
+
+    target_user_id = current_user.id
+    if current_user.role in (UserRole.ADMIN, UserRole.OPS):
+        # Admin/ops can process on behalf of the case owner
+        p_row = await session.get(Payment, payment_id)
+        if p_row:
+            target_user_id = p_row.user_id
+
     try:
         payment = await process_mock_payment(
             db=session,
             payment_id=payment_id,
-            user_id=current_user.id,
+            user_id=target_user_id,
             payment_method=body.payment_method if body else "card",
         )
     except ValueError as e:

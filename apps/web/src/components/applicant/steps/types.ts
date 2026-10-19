@@ -31,34 +31,32 @@ export type {
   WalletDocument,
 };
 
-export type Step = "intake" | "eligibility" | "checklist" | "forms" | "review" | "packet" | "research";
+export type Step = "eligibility" | "intake" | "checklist" | "forms" | "review" | "packet" | "research";
 
 export const STEPS: { key: Step; label: string }[] = [
-  { key: "intake", label: "Intake" },
-  { key: "eligibility", label: "Eligibility" },
-  { key: "checklist", label: "Checklist" },
-  { key: "forms", label: "Forms" },
-  { key: "review", label: "Review" },
-  { key: "packet", label: "Packet" },
+  { key: "eligibility", label: "1. Eligibility & Payment" },
+  { key: "intake", label: "2. Application Form" },
+  { key: "checklist", label: "3. Documents" },
+  { key: "packet", label: "4. Official Submission" },
 ];
 
-/** Workflow order for phase gating (research is a pre-intake state). */
 export const STEP_ORDER: Step[] = [
   "research",
-  "intake",
   "eligibility",
+  "intake",
   "checklist",
-  "forms",
-  "review",
   "packet",
 ];
 
 export function phaseToStep(phase: string): Step {
   if (phase === "done") return "packet";
-  if (phase === "blocked") return "intake";
+  if (phase === "blocked") return "eligibility";
   if (phase === "research") return "research";
+  if (phase === "intake") return "intake";
+  if (phase === "checklist") return "checklist";
+  if (phase === "forms" || phase === "review" || phase === "packet") return "packet";
   if (STEPS.some((s) => s.key === phase)) return phase as Step;
-  return "intake";
+  return "eligibility";
 }
 
 /** Highest step the applicant may open, based on server guidance phase. */
@@ -75,8 +73,8 @@ export function stepIndex(step: Step): number {
 /** True when the step can be visited by the applicant. */
 export function canVisitStep(target: Step, guidancePhase: string): boolean {
   if (guidancePhase === "research") return target === "research";
-  if (guidancePhase === "blocked") return target === "intake";
-  return stepIndex(target) >= stepIndex("intake");
+  if (guidancePhase === "blocked") return target === "eligibility" || target === "intake";
+  return stepIndex(target) >= stepIndex("eligibility");
 }
 
 export function nextWorkflowStep(step: Step): Step | null {

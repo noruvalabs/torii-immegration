@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import {
-  ArrowLeft, ArrowRight, ChevronRight, Loader2, AlertTriangle,
+  ArrowLeft, ArrowRight, ChevronRight, Loader2, AlertTriangle, ExternalLink, CheckCircle2,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -14,7 +14,7 @@ import { formatScopeLabel } from "@/lib/utils";
 import { useAuth } from "@/lib/auth-context";
 import { getProfile, type User } from "@/lib/api/auth";
 import {
-  reviewCase, acknowledgeReview, buildPacket, recordCaseFiled,
+  reviewCase, acknowledgeReview, buildPacket, recordCaseFiled, patchCase,
   type ReviewResult,
 } from "@/lib/api/cases";
 import {
@@ -35,6 +35,7 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import {
   IntakeStep, EligibilityStep, ChecklistStep, FormsStep, ReviewStep, PacketStep, ResearchStep,
+  QuickEligibilityAndPayment,
   DeadlinesCard, PostSubmissionGuide,
   STEPS, phaseToStep, canVisitStep, nextWorkflowStep,
   type Step,
@@ -46,7 +47,7 @@ export default function CaseDetailPage() {
   const { token, user } = useAuth();
   const queryClient = useQueryClient();
 
-  const [activeStep, setActiveStep] = useState<Step>("intake");
+  const [activeStep, setActiveStep] = useState<Step>("eligibility");
   const [error, setError] = useState<string | null>(null);
   const [stepError, setStepError] = useState<string | null>(null);
   const [review, setReview] = useState<ReviewResult | null>(null);
@@ -83,13 +84,24 @@ export default function CaseDetailPage() {
     refreshChecklistMutation.isPending ||
     generateFormsMutation.isPending;
 
-  // Jump to guidance phase only on initial load
+  // Jump to appropriate phase on initial load
   useEffect(() => {
-    if (guidance && !stepInitializedRef.current) {
-      setActiveStep(phaseToStep(guidance.phase));
+    if (caseData && !stepInitializedRef.current) {
+      const isPaid =
+        caseData.status === "payment_completed" ||
+        caseData.status === "submitted" ||
+        Boolean(caseData.is_entitled);
+
+      if (!isPaid) {
+        setActiveStep("eligibility");
+      } else if (guidance && guidance.phase !== "blocked") {
+        setActiveStep(phaseToStep(guidance.phase));
+      } else {
+        setActiveStep("intake");
+      }
       stepInitializedRef.current = true;
     }
-  }, [guidance]);
+  }, [guidance, caseData]);
 
   useEffect(() => {
     if (token) {
@@ -97,12 +109,11 @@ export default function CaseDetailPage() {
     }
   }, [token]);
 
-  // Auto-evaluate if eligibility step opened and no result yet
   useEffect(() => {
-    if (activeStep === "eligibility" && token && caseId && eligibility === null && !evaluateMutation.isPending) {
-      void evaluateMutation.mutateAsync().catch(() => {});
+    if (activeStep === "forms" || activeStep === "review") {
+      setActiveStep("packet");
     }
-  }, [activeStep, token, caseId, eligibility, evaluateMutation]);
+  }, [activeStep]);
 
   const handleResearchPhaseChange = useCallback((phase: string) => {
     setActiveStep(phaseToStep(phase));
@@ -241,17 +252,29 @@ export default function CaseDetailPage() {
     }
   }
 
-  /** The applicant telling us they have filed it — not a request for Torii to file it. */
+  /** Submit the completed case to the database and Torii operations console */
   async function handleSubmit() {
     if (!token) return;
     setIsSubmitting(true);
     setError(null);
     try {
-      await recordCaseFiled(token, caseId);
+      try {
+        await buildPacket(token, caseId);
+      } catch {
+        // Continue if build packet has warnings
+      }
+      await patchCase(token, caseId, { status: "submitted" });
+      try {
+        await recordCaseFiled(token, caseId);
+      } catch {
+        // Fallback
+      }
       void queryClient.invalidateQueries({ queryKey: caseKeys.detail(caseId) });
       void queryClient.invalidateQueries({ queryKey: caseKeys.guidance(caseId) });
+      toast.success("Application successfully submitted to Torii Operations Concierge!");
+      setActiveStep("packet");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not record the application as filed");
+      setError(e instanceof Error ? e.message : "Could not record the application as submitted");
     } finally {
       setIsSubmitting(false);
     }
@@ -296,17 +319,43 @@ export default function CaseDetailPage() {
     );
   }
 
+  const isCasePaid =
+    caseData.status === "payment_completed" ||
+    caseData.status === "submitted" ||
+    Boolean(caseData.is_entitled);
+
   const showContinue =
     guidance &&
     guidance.phase !== "blocked" &&
     guidance.phase !== "done" &&
+    activeStep !== "eligibility" &&
     activeStep !== "intake" &&
     activeStep !== "research" &&
     activeStep !== "review" &&
     activeStep !== "packet";
 
   return (
-    <div className="w-full max-w-7xl mx-auto space-y-6">
+    <div className="w-full max-w-7xl mx-auto space-y-6 pb-16 sm:pb-24">
+      {(user?.role === "admin" || user?.role === "ops") && (
+        <div className="rounded-xl border border-primary/30 bg-primary/10 p-3.5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge tone="default" className="text-[10px] uppercase font-bold tracking-wider">
+              Staff Concierge Mode
+            </Badge>
+            <span className="text-foreground font-medium">
+              You are inspecting this case as Staff. All particulars are formatted for government portal filing.
+            </span>
+          </div>
+          <Link
+            href={`/admin/cases/${caseId}`}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground shadow-xs hover:bg-primary/90 transition-colors shrink-0"
+          >
+            <span>Open Government Filing Console</span>
+            <ExternalLink className="size-3.5" />
+          </Link>
+        </div>
+      )}
+
       <div className="flex items-start gap-4">
         <Link href="/cases" className="mt-1 text-muted-foreground hover:text-foreground">
           <ArrowLeft className="size-5" />
@@ -316,8 +365,19 @@ export default function CaseDetailPage() {
             <h1 className="text-xl font-semibold tracking-tight">
               {formatScopeLabel(caseData.scope_label) || caseData.reference}
             </h1>
-            <Badge tone={caseData.status === "submitted" ? "success" : "default"}>
-              {caseData.status}
+            <Badge
+              tone={
+                caseData.status === "payment_completed" || caseData.status === "submitted"
+                  ? "success"
+                  : "warning"
+              }
+              className="gap-1 font-semibold"
+            >
+              {caseData.status === "payment_completed"
+                ? "Paid · In Concierge Queue"
+                : caseData.status === "submitted"
+                  ? "Submitted to Embassy"
+                  : "Eligibility & Payment Pending"}
             </Badge>
           </div>
           <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
@@ -348,7 +408,7 @@ export default function CaseDetailPage() {
           />
         ) : null
       ) : (
-        guidance && guidance.phase !== "done" && (
+        isCasePaid && guidance && guidance.phase !== "done" && (
           <Card className="border-primary/30 bg-primary/5">
             <CardContent className="flex flex-col gap-3 pt-5 sm:flex-row sm:items-center sm:justify-between">
               <div>
@@ -401,7 +461,7 @@ export default function CaseDetailPage() {
         })}
       </div>
 
-      {intake && !intake.progress.complete && activeStep !== "intake" && activeStep !== "research" && caseData?.status !== "submitted" && (
+      {intake && !intake.progress.complete && activeStep !== "intake" && activeStep !== "research" && activeStep !== "eligibility" && caseData?.status !== "submitted" && (
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3.5 text-xs text-amber-900 dark:text-amber-200 shadow-xs">
           <div className="flex items-start sm:items-center gap-2.5 min-w-0">
             <AlertTriangle className="size-4 shrink-0 text-amber-600 dark:text-amber-400 mt-0.5 sm:mt-0" />
@@ -410,7 +470,7 @@ export default function CaseDetailPage() {
                 Intake Questionnaire has {intake.progress.total - intake.progress.answered} incomplete question(s).
               </p>
               <p className="text-[11px] text-amber-700 dark:text-amber-300 mt-0.5">
-                You can preview eligibility, checklists, and forms, but all required fields must be answered before final packet submission.
+                You can preview checklists and forms, but all required fields must be answered before final staff submission.
               </p>
             </div>
           </div>
@@ -443,6 +503,20 @@ export default function CaseDetailPage() {
               onPhaseChange={handleResearchPhaseChange}
             />
           )}
+          {!stepError && activeStep === "eligibility" && (
+            <QuickEligibilityAndPayment
+              caseData={caseData}
+              token={token}
+              onProceedToForm={() => {
+                setError(null);
+                setActiveStep("intake");
+              }}
+              onPaymentSuccess={() => {
+                void queryClient.invalidateQueries({ queryKey: caseKeys.detail(caseId) });
+                void queryClient.invalidateQueries({ queryKey: caseKeys.guidance(caseId) });
+              }}
+            />
+          )}
           {!stepError && activeStep === "intake" && intake && (
             <IntakeStep
               state={intake}
@@ -452,28 +526,17 @@ export default function CaseDetailPage() {
               targetTimestamp={intakeTargetTimestamp}
               onProceedToEligibility={() => {
                 setError(null);
-                setActiveStep("eligibility");
-                void handleEvaluateEligibility();
+                setActiveStep("checklist");
+                void handleRefreshChecklist();
                 if (!intake.progress.complete) {
                   const remaining = intake.progress.total - intake.progress.answered;
                   toast.warning("Incomplete Intake Questionnaire", {
                     id: "incomplete-intake-warning",
-                    description: `You have ${remaining} incomplete question(s). You can preview subsequent steps, but all required fields must be answered before final packet submission.`,
+                    description: `You have ${remaining} incomplete question(s). You can continue with documents, but ensure all fields are answered before final filing.`,
                     duration: 4500,
                   });
                 }
               }}
-            />
-          )}
-          {!stepError && activeStep === "eligibility" && (
-            <EligibilityStep
-              result={eligibility}
-              loading={submitting}
-              onEvaluate={handleEvaluateEligibility}
-              jurisdictionCode={caseData?.reference ? caseData.reference.split("-")[0] : "JP"}
-              jurisdictionName={caseData?.scope_label ? caseData.scope_label.split("·")[0]?.trim() : undefined}
-              visaCategoryName={caseData?.scope_label || caseData?.visa_category_code || ""}
-              onReturnToIntake={handleNavigateToIntakeQuestion}
             />
           )}
           {!stepError && activeStep === "checklist" && (
@@ -518,14 +581,33 @@ export default function CaseDetailPage() {
           {showContinue && (
             <div className="mt-6 flex flex-col gap-2 border-t pt-4 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-xs text-muted-foreground">
-                Steps only unlock when required work for the current phase is complete.
+                {activeStep === "checklist"
+                  ? "All required documents uploaded. Click Submit to hand over to Torii operations team."
+                  : "Steps only unlock when required work for the current phase is complete."}
               </p>
               <Button
-                onClick={continueNext}
-                disabled={!canAdvanceFromCurrent()}
+                onClick={activeStep === "checklist" ? handleSubmit : continueNext}
+                disabled={!canAdvanceFromCurrent() || isSubmitting}
+                className={activeStep === "checklist" ? "bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-sm gap-2" : "gap-2"}
               >
-                Continue to next step
-                <ArrowRight className="size-4" />
+                {activeStep === "checklist" ? (
+                  isSubmitting ? (
+                    <>
+                      <Loader2 className="size-4 animate-spin" />
+                      <span>Submitting...</span>
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="size-4" />
+                      <span>Submit to Operations</span>
+                    </>
+                  )
+                ) : (
+                  <>
+                    <span>Continue to next step</span>
+                    <ArrowRight className="size-4" />
+                  </>
+                )}
               </Button>
             </div>
           )}
