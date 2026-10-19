@@ -38,14 +38,30 @@ def to_async_url(database_url: str) -> str:
         clean_url = re.sub(r"[?&]sslmode=[^&]+", "", clean_url)
         clean_url = clean_url.replace("?&", "?").rstrip("?")
 
-    # Canonicalize relative SQLite paths so whether the process starts in root or apps/api,
-    # it always binds to apps/api/torii.db.
+    # Canonicalize relative SQLite paths (e.g. ./torii.db or torii.db) so whether the process
+    # starts in root or apps/api, it always binds to apps/api/torii.db without corrupting absolute
+    # temporary test paths on POSIX (e.g. sqlite:////tmp/...) or Windows (e.g. sqlite:///C:/...).
     if "sqlite" in clean_url and ":memory:" not in clean_url:
         prefix, rest = clean_url.split("://", 1)
-        cleaned = rest.lstrip("/")
-        if cleaned.startswith("./"):
-            cleaned = cleaned[2:]
-        if not os.path.isabs(cleaned):
+        # Check if the path is explicitly relative
+        stripped = rest.lstrip("/")
+        has_win_drive = len(stripped) >= 2 and stripped[1] == ":" and stripped[0].isalpha()
+        is_posix_abs = rest.startswith("//")
+        is_relative = (
+            not is_posix_abs
+            and not has_win_drive
+            and (
+                rest.startswith("/./")
+                or rest.startswith("./")
+                or not rest.startswith("/")
+                or stripped == "torii.db"
+                or stripped.startswith("./")
+            )
+        )
+        if is_relative:
+            cleaned = stripped
+            if cleaned.startswith("./"):
+                cleaned = cleaned[2:]
             from pathlib import Path
 
             api_dir = Path(__file__).resolve().parents[3]  # apps/api
