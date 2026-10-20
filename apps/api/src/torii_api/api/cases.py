@@ -1416,12 +1416,17 @@ async def save_case_progress(
     if "status" in data and data["status"]:
         if data["status"] == "submitted":
             checklist_items = (
-                await session.execute(
-                    select(CaseChecklistItem).where(CaseChecklistItem.case_id == case.id)
+                (
+                    await session.execute(
+                        select(CaseChecklistItem).where(CaseChecklistItem.case_id == case.id)
+                    )
                 )
-            ).scalars().all()
+                .scalars()
+                .all()
+            )
             missing_required = [
-                item for item in checklist_items
+                item
+                for item in checklist_items
                 if item.is_required and item.status not in ("uploaded", "gathered")
             ]
             if missing_required:
