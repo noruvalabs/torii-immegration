@@ -246,6 +246,7 @@ def next_status_for_phase(phase: GuidancePhase, current: str) -> str | None:
     order = [
         "draft",
         "intake_complete",
+        "payment_completed",
         "eligibility_checked",
         "checklist_ready",
         "forms_generated",
@@ -254,7 +255,7 @@ def next_status_for_phase(phase: GuidancePhase, current: str) -> str | None:
     ]
     targets: dict[GuidancePhase, str] = {
         "eligibility": "intake_complete",
-        "checklist": "eligibility_checked",
+        "checklist": "checklist_ready",
         "forms": "checklist_ready",
         "review": "forms_generated",
         "packet": "forms_generated",

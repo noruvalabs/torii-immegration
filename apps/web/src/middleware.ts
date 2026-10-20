@@ -8,7 +8,7 @@ export function middleware(request: NextRequest) {
     const apiBase =
       process.env.API_PROXY_TARGET ||
       process.env.API_INTERNAL_BASE_URL ||
-      "http://localhost:8000";
+      "http://127.0.0.1:8000";
     const subpath = pathname.replace(/^\/backend/, "");
     const dest = `${apiBase.replace(/\/$/, "")}${subpath}${search}`;
     return NextResponse.rewrite(new URL(dest));
@@ -19,7 +19,7 @@ export function middleware(request: NextRequest) {
       process.env.AI_PROXY_TARGET ||
       process.env.API_PROXY_TARGET ||
       process.env.API_INTERNAL_BASE_URL ||
-      "http://localhost:8000";
+      "http://127.0.0.1:8000";
     const subpath = pathname.replace(/^\/assistant/, "");
     const dest = `${aiBase.replace(/\/$/, "")}${subpath}${search}`;
     return NextResponse.rewrite(new URL(dest));

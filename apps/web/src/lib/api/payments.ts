@@ -30,22 +30,30 @@ export type PaymentList = {
 };
 
 async function request<T>(path: string, options: RequestInit): Promise<T> {
-  const token = localStorage.getItem("torii_token");
-  const res = await fetch(`${API}${path}`, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...options.headers,
-    },
-  });
+  const token = typeof window !== "undefined" ? localStorage.getItem("torii_token") : null;
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 6000);
+  try {
+    const res = await fetch(`${API}${path}`, {
+      ...options,
+      signal: options.signal || controller.signal,
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...options.headers,
+      },
+    });
+    clearTimeout(timeoutId);
 
-  if (!res.ok) {
-    const body = (await res.json().catch(() => null)) as { detail?: string } | null;
-    throw new Error(body?.detail ?? `Request failed (${res.status})`);
+    if (!res.ok) {
+      const body = (await res.json().catch(() => null)) as { detail?: string } | null;
+      throw new Error(body?.detail ?? `Request failed (${res.status})`);
+    }
+
+    return (await res.json()) as T;
+  } finally {
+    clearTimeout(timeoutId);
   }
-
-  return res.json() as Promise<T>;
 }
 
 export function createPayment(caseId: number, destinationCode: string, visaType: string) {

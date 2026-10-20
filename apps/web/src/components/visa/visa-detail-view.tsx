@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { type DestinationInfo, type DestinationVisa } from "@/lib/destinations-data";
+import { CountryFlag } from "@/components/landing/country-flag";
 import { cn } from "@/lib/utils";
 
 function cleanVisaName(name: string): string {
@@ -111,7 +112,7 @@ export function VisaDetailView({ destination }: { destination: DestinationInfo }
             {/* Left Hero Content */}
             <div className="lg:col-span-7 space-y-5">
               <div className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3.5 py-1 text-xs font-semibold backdrop-blur-md">
-                <span className="text-base">{destination.flag}</span>
+                <CountryFlag code={destination.code} className="size-4 shrink-0 shadow-xs" />
                 <span>
                   {isPortalConcierge
                     ? "✨ All-in-One: We Submit Online & Pay Gov Fees"
@@ -205,7 +206,7 @@ export function VisaDetailView({ destination }: { destination: DestinationInfo }
                 <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
                 <div className="absolute bottom-4 left-4 right-4 flex items-center justify-between text-white">
                   <div className="flex items-center gap-2">
-                    <span className="text-xl">{destination.flag}</span>
+                    <CountryFlag code={destination.code} className="size-5 shrink-0 shadow-xs" />
                     <span className="text-sm font-bold">{destination.name} Filing Service</span>
                   </div>
                   <span className="text-xs font-semibold bg-emerald-500/90 text-white px-2.5 py-1 rounded-full backdrop-blur-xs">
@@ -494,57 +495,7 @@ export function VisaDetailView({ destination }: { destination: DestinationInfo }
                 </p>
               </div>
 
-              {/* Transparent Fee Schedule */}
-              <div className="space-y-3 text-xs sm:text-sm">
-                {!isPortalConcierge && (
-                  <div className="flex items-center justify-between text-muted-foreground">
-                    <span>To Start Application</span>
-                    <span className="font-bold text-emerald-600 dark:text-emerald-400">Free (৳0)</span>
-                  </div>
-                )}
 
-                <div className="flex items-center justify-between text-muted-foreground">
-                  <span className="flex flex-col">
-                    <span>{isPortalConcierge ? "Torii Concierge Filing" : "Torii Dossier & Kit"}</span>
-                    <span className="text-[10px] text-muted-foreground">
-                      {isPortalConcierge ? "Portal submission & verification" : "Billed upon dossier generation"}
-                    </span>
-                  </span>
-                  <span className="font-semibold text-foreground">{selectedVisa.toriiFee}</span>
-                </div>
-
-                <div className="flex items-center justify-between text-muted-foreground">
-                  <span className="flex flex-col">
-                    <span>Government Consular Fee</span>
-                    <span className="text-[10px] text-muted-foreground">
-                      {isPortalConcierge
-                        ? "We pay directly on official portal"
-                        : destination.slug === "japan"
-                          ? "Paid at VFS only on visa approval"
-                          : "Statutory consular fee"}
-                    </span>
-                  </span>
-                  <span className="font-semibold text-foreground">
-                    {selectedVisa.governmentFee.split("—")[0].trim()}
-                  </span>
-                </div>
-
-                <div className="pt-2 border-t border-border flex items-center justify-between">
-                  <div className="flex flex-col">
-                    <span className="text-xs font-bold text-foreground">
-                      {isPortalConcierge ? "Total Payment to Torii" : "Total Budget"}
-                    </span>
-                    <span className="text-[10px] text-muted-foreground">
-                      {isPortalConcierge
-                        ? "All-in-one payment (Service + Gov fee)"
-                        : "Full service + official consular fee"}
-                    </span>
-                  </div>
-                  <span className="text-base sm:text-lg font-extrabold text-foreground">
-                    {selectedVisa.totalDisplay}
-                  </span>
-                </div>
-              </div>
 
               {/* Primary Call to Action Button */}
               <div className="space-y-2">

@@ -68,7 +68,6 @@ export function DestinationCards() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-7">
             {filteredDestinations.map((destination) => {
               const defaultVisa = destination.visas[0];
-              const govtFeeDisplay = defaultVisa?.governmentFee.split("—")[0]?.trim() || "Standard";
 
               return (
                 <Link
@@ -114,18 +113,9 @@ export function DestinationCards() {
                       </p>
                     </div>
 
-                    {/* Pricing & Call to Action Bar */}
-                    <div className="flex items-center justify-between pt-3 border-t border-white/15">
-                      <div className="flex flex-col">
-                        <span className="text-[10px] text-white/60 uppercase font-semibold tracking-wider">
-                          Govt Fee
-                        </span>
-                        <span className="text-sm font-bold text-white">
-                          {govtFeeDisplay}
-                        </span>
-                      </div>
-
-                      <span className="inline-flex items-center gap-1.5 rounded-xl bg-white px-4 py-2.5 text-xs font-bold text-black shadow-lg group-hover:bg-primary group-hover:text-primary-foreground transition-all">
+                    {/* Call to Action Bar */}
+                    <div className="pt-3 border-t border-white/15">
+                      <span className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-white px-4 py-2.5 text-xs font-bold text-black shadow-lg group-hover:bg-primary group-hover:text-primary-foreground transition-all">
                         <span>Apply for Visa</span>
                         <ArrowRight className="size-3.5 transition-transform group-hover:translate-x-0.5" />
                       </span>
