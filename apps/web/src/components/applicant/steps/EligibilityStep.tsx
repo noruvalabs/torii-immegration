@@ -368,23 +368,6 @@ export function EligibilityStep({
                               </button>
                             </div>
                           )}
-
-                          {url && (
-                            <div className="pt-1.5">
-                              <a
-                                href={url}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline"
-                              >
-                                <span>
-                                  {String(finding.citation?.authority || "Official regulation source")}
-                                  {version ? ` (${version})` : ""}
-                                </span>
-                                <ExternalLink className="size-3" />
-                              </a>
-                            </div>
-                          )}
                         </div>
                       </div>
                     </div>

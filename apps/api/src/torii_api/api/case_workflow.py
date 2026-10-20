@@ -1899,6 +1899,20 @@ async def record_case_filed(
             status_code=400,
             detail="assemble your filing kit before recording the application as filed",
         )
+    checklist_items = (
+        await session.execute(
+            select(CaseChecklistItem).where(CaseChecklistItem.case_id == case.id)
+        )
+    ).scalars().all()
+    missing_required = [
+        item for item in checklist_items
+        if item.is_required and item.status not in ("uploaded", "gathered")
+    ]
+    if missing_required:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot record as filed: {len(missing_required)} required document(s) must be uploaded first.",
+        )
     filed_at = datetime.now(UTC).isoformat()
     case.status = "submitted"
     case.packet_snapshot = {**case.packet_snapshot, "filed_at": filed_at}

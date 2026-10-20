@@ -10,6 +10,8 @@ import {
   Copy,
   Sparkles,
   CheckCircle2,
+  AlertTriangle,
+  Upload,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -28,6 +30,9 @@ type PacketStepProps = {
   loading: boolean;
   onBuild: () => void;
   onSubmit: () => void;
+  canSubmit?: boolean;
+  missingDocsCount?: number;
+  onGoToChecklist?: () => void;
 };
 
 // These are drafts the applicant completes and signs, not finished official documents.
@@ -306,7 +311,16 @@ const FORMAT_LABELS: Record<ExportFormat, string> = {
   docx: "Word (.docx)",
 };
 
-export function PacketStep({ packet, caseData, loading, onBuild, onSubmit }: PacketStepProps) {
+export function PacketStep({
+  packet,
+  caseData,
+  loading,
+  onBuild,
+  onSubmit,
+  canSubmit = true,
+  missingDocsCount = 0,
+  onGoToChecklist,
+}: PacketStepProps) {
   const { token } = useAuth();
   const { balance, unlockCase } = useCredits();
   const [activeDoc, setActiveDoc] = useState<DocType>("cover");
@@ -563,39 +577,63 @@ export function PacketStep({ packet, caseData, loading, onBuild, onSubmit }: Pac
   return (
     <div className="space-y-6">
       {/* Official Government Submission Action Banner */}
-      <Card className="border-2 border-emerald-500/40 bg-emerald-500/5 shadow-sm">
+      <Card
+        className={`border-2 shadow-sm ${
+          canSubmit
+            ? "border-emerald-500/40 bg-emerald-500/5"
+            : "border-amber-500/40 bg-amber-500/5"
+        }`}
+      >
         <CardContent className="p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="space-y-1">
             <div className="flex items-center gap-2">
-              <Badge tone="default" className="text-xs font-bold uppercase tracking-wider">
-                Final Step
+              <Badge
+                tone={canSubmit ? "default" : "warning"}
+                className="text-xs font-bold uppercase tracking-wider"
+              >
+                {canSubmit ? "Final Step" : "Documents Missing"}
               </Badge>
               <h3 className="text-base font-bold text-foreground">
-                Ready to Submit to Torii Operations &amp; Government Console
+                {canSubmit
+                  ? "Ready to Submit to Torii Operations & Government Console"
+                  : "Required Documents Must Be Uploaded"}
               </h3>
             </div>
             <p className="text-xs text-muted-foreground max-w-xl">
-              Your dossier, questionnaire particulars, and required documents are compiled. Click below to submit your application directly to the Torii concierge operations team for official embassy portal filing.
+              {canSubmit
+                ? "Your dossier, questionnaire particulars, and required documents are compiled. Click below to submit your application directly to the Torii concierge operations team for official embassy portal filing."
+                : `You cannot submit this application yet because ${missingDocsCount} required document(s) have not been uploaded. All required documents must be uploaded before final submission.`}
             </p>
           </div>
-          <Button
-            size="lg"
-            onClick={onSubmit}
-            disabled={loading}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-6 shrink-0 shadow-md gap-2"
-          >
-            {loading ? (
-              <>
-                <Loader2 className="size-4 animate-spin" />
-                <span>Submitting…</span>
-              </>
-            ) : (
-              <>
-                <Send className="size-4" />
-                <span>Submit Application</span>
-              </>
-            )}
-          </Button>
+          {canSubmit ? (
+            <Button
+              size="lg"
+              onClick={onSubmit}
+              disabled={loading}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-6 shrink-0 shadow-md gap-2"
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="size-4 animate-spin" />
+                  <span>Submitting…</span>
+                </>
+              ) : (
+                <>
+                  <Send className="size-4" />
+                  <span>Submit Application</span>
+                </>
+              )}
+            </Button>
+          ) : (
+            <Button
+              size="lg"
+              onClick={onGoToChecklist}
+              className="bg-amber-600 hover:bg-amber-700 text-white font-bold px-6 shrink-0 shadow-md gap-2"
+            >
+              <Upload className="size-4" />
+              <span>Upload Documents ({missingDocsCount} missing)</span>
+            </Button>
+          )}
         </CardContent>
       </Card>
 

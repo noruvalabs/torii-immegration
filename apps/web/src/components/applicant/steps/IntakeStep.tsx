@@ -22,6 +22,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ALL_COUNTRIES, matchCountry, searchCountries, type Country } from "@/lib/countries";
+import { CountryFlag } from "@/components/landing/country-flag";
 import { getWallet, syncProfileFromWallet, type WalletDocument } from "@/lib/api/wallet";
 import type { IntakeState, IntakeQuestion, User } from "./types";
 import { findQuestionByKey } from "./types";
@@ -603,64 +604,6 @@ function getAutofillValueForQuestion(
   return null;
 }
 
-function SectionSourceBanner({ questions }: { questions: IntakeState["questions"] }) {
-  const sources = useMemo(() => {
-    const map = new Map<string, { authority: string; title: string; url: string }>();
-    for (const q of questions) {
-      const cit = q.citation as { authority?: string; title?: string; url?: string } | null | undefined;
-      if (cit?.url) {
-        if (!map.has(cit.url)) {
-          map.set(cit.url, {
-            authority: cit.authority || "Official Government Authority",
-            title: cit.title || "Statutory Immigration Standard",
-            url: cit.url,
-          });
-        }
-      }
-    }
-    return Array.from(map.values());
-  }, [questions]);
-
-  if (sources.length === 0) return null;
-
-  return (
-    <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 text-xs shadow-2xs space-y-2">
-      <div className="flex items-center justify-between gap-2 flex-wrap">
-        <div className="flex items-center gap-2">
-          <ShieldCheck className="size-4 text-primary shrink-0" />
-          <div>
-            <span className="font-semibold text-foreground text-xs">
-              Official Statutory Authority &amp; Verified Legal Basis
-            </span>
-            <span className="text-[11px] text-muted-foreground ml-1.5 hidden sm:inline">
-              (Questions in this section are verified against statutory government standards)
-            </span>
-          </div>
-        </div>
-        <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 border border-emerald-500/30 px-2 py-0.5 rounded-full">
-          ✓ Verified Legal Source
-        </span>
-      </div>
-
-      <div className="flex items-center gap-2 flex-wrap pt-1 border-t border-border/40">
-        <span className="text-[11px] font-medium text-muted-foreground">Official Government Sources:</span>
-        {sources.map((src, i) => (
-          <a
-            key={i}
-            href={src.url}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center gap-1.5 rounded-md border border-border/80 bg-background hover:bg-accent px-2.5 py-1 text-[11px] font-medium text-foreground hover:text-primary transition-colors shadow-2xs"
-            title={`${src.title} — ${src.authority}`}
-          >
-            <span>{src.authority}</span>
-            <ExternalLink className="size-3 text-muted-foreground" />
-          </a>
-        ))}
-      </div>
-    </div>
-  );
-}
 
 export function IntakeStep({
   state,
@@ -675,9 +618,20 @@ export function IntakeStep({
 }: IntakeStepProps) {
   const [drafts, setDrafts] = useState<Record<string, unknown>>({});
   const [savingFields, setSavingFields] = useState<Record<string, boolean>>({});
-  const [isProceeding, setIsProceeding] = useState<boolean>(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string | null>>({});
-  const [activeSection, setActiveSection] = useState<string | null>(null);
+  const [activeSection, setActiveSection] = useState<string | null>(() => {
+    for (const q of state.questions) {
+      if (
+        q.required !== false &&
+        (state.answers[q.key] === undefined ||
+          state.answers[q.key] === null ||
+          state.answers[q.key] === "")
+      ) {
+        return q.section || null;
+      }
+    }
+    return state.questions[0]?.section || null;
+  });
   const [enumSearch, setEnumSearch] = useState<Record<string, string>>({});
   const [openSelectorKey, setOpenSelectorKey] = useState<string | null>(null);
   const [viewAll, setViewAll] = useState<boolean>(false);
@@ -686,6 +640,7 @@ export function IntakeStep({
   const [autofilledSources, setAutofilledSources] = useState<Record<string, string>>({});
   const [syncingWallet, setSyncingWallet] = useState<boolean>(false);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
+  const [isProceeding, setIsProceeding] = useState<boolean>(false);
 
   const onAnswerRef = useRef(onAnswer);
   onAnswerRef.current = onAnswer;
@@ -693,6 +648,7 @@ export function IntakeStep({
   const draftsRef = useRef<Record<string, unknown>>({});
   draftsRef.current = drafts;
   const debounceTimersRef = useRef<Record<string, NodeJS.Timeout>>({});
+  const initializedSectionRef = useRef(false);
 
   useEffect(() => {
     return () => {
@@ -877,6 +833,17 @@ export function IntakeStep({
     return null;
   }, [sectionKeys, sectionsMap, isQuestionAnswered]);
 
+  // One-time initialization of activeSection to first incomplete section once sections are loaded
+  useEffect(() => {
+    if (initializedSectionRef.current) return;
+    if (sectionKeys.length > 0) {
+      initializedSectionRef.current = true;
+      if (!activeSection || !sectionKeys.includes(activeSection)) {
+        setActiveSection(firstIncompleteSection || sectionKeys[0]);
+      }
+    }
+  }, [sectionKeys, activeSection, firstIncompleteSection]);
+
   // Switch to targetKey section, smoothly scroll to question, and highlight
   useEffect(() => {
     if (targetKey) {
@@ -916,8 +883,8 @@ export function IntakeStep({
     if (activeSection && sectionKeys.includes(activeSection)) {
       return activeSection;
     }
-    return firstIncompleteSection ?? sectionKeys[0] ?? "General Details";
-  }, [activeSection, sectionKeys, firstIncompleteSection]);
+    return sectionKeys[0] ?? "General Details";
+  }, [activeSection, sectionKeys]);
 
   const currentSectionIndex = sectionKeys.indexOf(currentSectionKey);
 
@@ -1147,57 +1114,75 @@ export function IntakeStep({
     const isOptional = q.required === false;
 
     const fieldError = fieldErrors[q.key];
+    const isAnswered =
+      state.answers[q.key] !== undefined || (drafts[q.key] !== undefined && drafts[q.key] !== "");
 
     return (
       <Card
         key={q.key}
         id={`question-${q.key}`}
-        className={`p-4 flex flex-col justify-between transition-all hover:border-primary/40 bg-card shadow-sm ${
+        className={`p-4 sm:p-5 flex flex-col justify-between rounded-xl border transition-all duration-150 bg-card shadow-xs ${
           isFullWidth ? "col-span-1 md:col-span-2" : "col-span-1"
         } ${
           fieldError
-            ? "border-rose-500 ring-2 ring-rose-500/20 bg-rose-500/[0.02] shadow-sm"
+            ? "border-rose-500/80 ring-2 ring-rose-500/20 bg-rose-500/[0.02]"
             : isHighlighted
-              ? "ring-2 ring-blue-500 border-blue-500 bg-blue-500/5 shadow-md"
-              : state.answers[q.key] === undefined && !isOptional
-                ? "border-amber-500/30 ring-1 ring-amber-500/10"
-                : ""
+              ? "ring-2 ring-primary/40 border-primary bg-primary/[0.03]"
+              : isAnswered
+                ? "border-border/90 dark:border-slate-800 hover:border-primary/40 dark:hover:border-slate-700"
+                : "border-border/90 dark:border-slate-800 hover:border-primary/40 dark:hover:border-slate-700"
         }`}
       >
-        <div className="space-y-2">
-          <div className="flex items-start justify-between gap-2">
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <label className={`text-xs font-semibold leading-snug ${fieldError ? "text-rose-700 dark:text-rose-400" : "text-foreground"}`}>
+        <div className="space-y-3">
+          {/* Card Header: Question prompt + status badge */}
+          <div className="flex items-start justify-between gap-3">
+            <div className="space-y-1 min-w-0">
+              <label
+                className={`block text-[13px] sm:text-sm font-medium tracking-tight leading-snug ${
+                  fieldError ? "text-rose-600 dark:text-rose-400" : "text-foreground"
+                }`}
+              >
                 {q.prompt}
-                {!isOptional && <span className="ml-1 text-[var(--color-danger)] font-bold">*</span>}
+                {!isOptional && <span className="text-rose-500 ml-0.5">*</span>}
               </label>
-              {isHighlighted && (
-                <span className="text-[10px] font-semibold text-blue-600 dark:text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded border border-blue-500/30 animate-pulse">
-                  Target Field
-                </span>
-              )}
-              {isOptional && !q.hint && (
-                <span className="text-[10px] font-medium text-muted-foreground bg-muted/80 px-1.5 py-0.5 rounded border border-border/50">
-                  Optional
-                </span>
-              )}
+
               {q.hint && (
-                <span className="text-[10px] font-medium text-primary bg-primary/10 px-1.5 py-0.5 rounded border border-primary/20">
-                  On your form
-                </span>
+                <p className="text-xs text-muted-foreground/80 leading-relaxed">{q.hint}</p>
               )}
-              {autofilledSources[q.key] && (
-                <span className="text-[10px] font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/30 inline-flex items-center gap-1">
-                  <Sparkles className="size-2.5" />
-                  Auto-filled from {autofilledSources[q.key]}
+
+              <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                {isOptional && (
+                  <span className="text-[10px] font-normal text-muted-foreground bg-muted/60 px-1.5 py-0.5 rounded border border-border/50">
+                    Optional
+                  </span>
+                )}
+                {autofilledSources[q.key] && (
+                  <span className="text-[10px] font-medium text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20 inline-flex items-center gap-1">
+                    <Sparkles className="size-2.5" />
+                    Auto-filled
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Status indicator on top right */}
+            <div className="shrink-0 pt-0.5">
+              {savingFields[q.key] ? (
+                <span className="inline-flex items-center gap-1 text-[11px] text-primary font-medium">
+                  <Loader2 className="size-3 animate-spin" />
                 </span>
-              )}
+              ) : isAnswered ? (
+                <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full">
+                  <Check className="size-3" />
+                  Answered
+                </span>
+              ) : isHighlighted ? (
+                <span className="text-[10px] font-semibold text-primary bg-primary/10 px-2 py-0.5 rounded border border-primary/20">
+                  Target
+                </span>
+              ) : null}
             </div>
           </div>
-
-          {/* Names the box this answer fills, so leaving it blank is a visible choice
-              rather than an invisible gap on a sheet the applicant signs. */}
-          {q.hint && <p className="text-[11px] leading-snug text-muted-foreground">{q.hint}</p>}
 
           {(() => {
             const isCountryQuestion =
@@ -1221,7 +1206,7 @@ export function IntakeStep({
             const hasSelected = current !== undefined && current !== "" && current !== null;
             const isEditing = openSelectorKey === q.key;
 
-            // ── 1. Genuine Country / Nationality Picker (Searches all 240+ countries) ──
+            // ── 1. Country / Nationality Picker ──
             if (isCountryQuestion) {
               if (hasSelected && !isEditing) {
                 const currentStr = String(current);
@@ -1230,13 +1215,13 @@ export function IntakeStep({
                   ? { flag: "🌐", name: "Other / Not Listed", code: "other" }
                   : matchCountry(currentStr);
                 return (
-                  <div className={`flex items-center justify-between rounded-lg border p-3 text-xs shadow-xs ${fieldError ? "border-rose-500 bg-rose-500/5" : "border-primary/30 bg-primary/5"}`}>
-                    <div className="flex items-center gap-3 min-w-0">
-                      <span className="text-2xl shrink-0">{cMeta.flag}</span>
+                  <div className={`flex items-center justify-between rounded-lg border p-2.5 text-xs ${fieldError ? "border-rose-500 bg-rose-500/5" : "border-border/90 dark:border-slate-800 bg-muted/20"}`}>
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <CountryFlag code={cMeta.code} className="size-5 shrink-0" />
                       <div className="min-w-0">
-                        <p className="font-bold text-sm text-foreground truncate">{cMeta.name}</p>
-                        <p className="text-[11px] text-muted-foreground font-mono">
-                          Selected Code: {cMeta.code || currentStr.toUpperCase()}
+                        <p className="font-semibold text-xs text-foreground truncate">{cMeta.name}</p>
+                        <p className="text-[10px] text-muted-foreground font-mono">
+                          {cMeta.code || currentStr.toUpperCase()}
                         </p>
                       </div>
                     </div>
@@ -1246,7 +1231,7 @@ export function IntakeStep({
                         setOpenSelectorKey(q.key);
                         setEnumSearch((prev) => ({ ...prev, [q.key]: "" }));
                       }}
-                      className="rounded-md border bg-background px-3 py-1.5 text-xs font-semibold text-primary hover:bg-accent shadow-xs transition-colors shrink-0"
+                      className="rounded-md border border-border/80 dark:border-slate-700 bg-background px-2.5 py-1 text-xs font-medium text-foreground hover:bg-accent transition-colors shrink-0"
                     >
                       Change
                     </button>
@@ -1261,18 +1246,18 @@ export function IntakeStep({
               return (
                 <div className="space-y-2 pt-1">
                   <div className="relative">
-                    <Search className="absolute left-2.5 top-2.5 size-3.5 text-muted-foreground" />
+                    <Search className="absolute left-2.5 top-2.5 size-3.5 text-muted-foreground/60" />
                     <input
                       type="text"
                       value={searchVal}
                       onChange={(e) => setEnumSearch((prev) => ({ ...prev, [q.key]: e.target.value }))}
-                      placeholder="Search any country name or code (e.g. Bangladesh, Japan, US, Canada)..."
+                      placeholder="Search country name or code..."
                       autoFocus={isEditing}
-                      className={`h-8 w-full rounded-md border bg-background pl-8 pr-3 text-xs outline-none focus-visible:ring-2 font-normal ${fieldError ? "border-rose-500 focus-visible:ring-rose-500/50" : "focus-visible:ring-ring"}`}
+                      className={`h-9 w-full rounded-lg border bg-background/90 pl-8 pr-3 text-xs outline-none transition-colors ${fieldError ? "border-rose-500 focus-visible:ring-rose-500/50" : "border-border/90 dark:border-slate-700 hover:dark:border-slate-600 focus:border-primary focus:ring-1 focus:ring-primary/20"}`}
                     />
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-56 overflow-y-auto pr-1">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-52 overflow-y-auto pr-1">
                     {countriesToDisplay.map((country) => {
                       const isSelected =
                         String(current).toUpperCase() === country.code.toUpperCase() ||
@@ -1290,43 +1275,37 @@ export function IntakeStep({
                             setOpenSelectorKey(null);
                             setEnumSearch((prev) => ({ ...prev, [q.key]: "" }));
                           }}
-                          className={`flex items-center gap-2 rounded-md border px-2.5 py-2 text-left text-xs transition-all ${
+                          className={`flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-left text-xs transition-all ${
                             isSelected
-                              ? "border-primary bg-primary/10 text-primary font-semibold ring-1 ring-primary/40"
-                              : "hover:bg-accent text-foreground bg-background"
+                              ? "border-primary bg-primary/10 text-primary font-semibold ring-1 ring-primary/30"
+                              : "border-border/80 dark:border-slate-800 hover:dark:border-slate-700 hover:bg-muted/60 text-foreground bg-background/50"
                           }`}
                         >
-                          <span className="text-base shrink-0">{country.flag}</span>
+                          <CountryFlag code={country.code} className="size-4 shrink-0" />
                           <span className="truncate flex-1 font-medium">{country.name}</span>
                           <span className="text-[10px] text-muted-foreground font-mono">{country.code}</span>
                         </button>
                       );
                     })}
-                    {countriesToDisplay.length === 0 && (
-                      <p className="col-span-2 text-center text-[11px] text-muted-foreground py-3">
-                        No countries match &ldquo;{searchVal}&rdquo;
-                      </p>
-                    )}
                   </div>
                 </div>
               );
             }
 
-            // ── 2. Standard Enum Questions ──────────────────────────────────────
+            // ── 2. Standard Enum Questions ──
             if (q.type === "enum" && q.options) {
-              // General small enum (<= 4 options, e.g. education_country, sex, etc.)
               if (optionsCount <= 4) {
                 return (
-                  <div className="flex flex-wrap gap-1.5 pt-1">
+                  <div className="flex flex-wrap gap-1.5 pt-0.5">
                     {q.options.map((opt) => (
                       <button
                         key={opt}
                         type="button"
                         onClick={() => void handleDirectAnswer(q.key, opt)}
-                        className={`rounded-md border px-3 py-1.5 text-xs transition-all ${
+                        className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-all ${
                           current === opt
-                            ? "border-primary bg-primary/10 text-primary font-semibold shadow-sm ring-1 ring-primary/40"
-                            : "hover:bg-accent text-muted-foreground bg-background"
+                            ? "border-primary bg-primary/10 text-primary font-semibold ring-1 ring-primary/30 shadow-xs"
+                            : "border-border/90 dark:border-slate-800 bg-background hover:bg-muted/60 hover:border-border dark:hover:border-slate-700 text-muted-foreground hover:text-foreground"
                         }`}
                       >
                         {optionLabel(q, opt)}
@@ -1336,18 +1315,20 @@ export function IntakeStep({
                 );
               }
 
-              // General large enum (> 4 options)
               if (hasSelected && !isEditing) {
                 return (
-                  <div className={`flex items-center justify-between rounded-lg border p-2.5 text-xs shadow-xs ${fieldError ? "border-rose-500 bg-rose-500/5" : "border-primary/30 bg-primary/5"}`}>
-                    <span className="font-semibold text-foreground truncate">{optionLabel(q, String(current))}</span>
+                  <div className={`flex items-center justify-between rounded-lg border p-2.5 text-xs ${fieldError ? "border-rose-500 bg-rose-500/5" : "border-border/90 dark:border-slate-800 bg-muted/20"}`}>
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="size-1.5 rounded-full bg-primary shrink-0" />
+                      <span className="font-medium text-foreground text-xs truncate">{optionLabel(q, String(current))}</span>
+                    </div>
                     <button
                       type="button"
                       onClick={() => {
                         setOpenSelectorKey(q.key);
                         setEnumSearch((prev) => ({ ...prev, [q.key]: "" }));
                       }}
-                      className="rounded-md border bg-background px-2.5 py-1 text-xs font-semibold text-primary hover:bg-accent shadow-xs transition-colors shrink-0"
+                      className="rounded-md border border-border/80 dark:border-slate-700 bg-background px-2.5 py-1 text-xs font-medium text-foreground hover:bg-accent transition-colors shrink-0"
                     >
                       Change
                     </button>
@@ -1358,14 +1339,14 @@ export function IntakeStep({
               return (
                 <div className="space-y-2 pt-1">
                   <div className="relative">
-                    <Search className="absolute left-2.5 top-2.5 size-3.5 text-muted-foreground" />
+                    <Search className="absolute left-2.5 top-2.5 size-3.5 text-muted-foreground/60" />
                     <input
                       type="text"
                       value={searchVal}
                       onChange={(e) => setEnumSearch((prev) => ({ ...prev, [q.key]: e.target.value }))}
                       placeholder={`Search ${optionsCount} options...`}
                       autoFocus={isEditing}
-                      className={`h-8 w-full rounded-md border bg-background pl-8 pr-3 text-xs outline-none focus-visible:ring-2 font-normal ${fieldError ? "border-rose-500 focus-visible:ring-rose-500/50" : "focus-visible:ring-ring"}`}
+                      className={`h-9 w-full rounded-lg border bg-background/90 pl-8 pr-3 text-xs outline-none transition-colors ${fieldError ? "border-rose-500 focus-visible:ring-rose-500/50" : "border-border/90 dark:border-slate-700 hover:dark:border-slate-600 focus:border-primary focus:ring-1 focus:ring-primary/20"}`}
                     />
                   </div>
 
@@ -1379,56 +1360,57 @@ export function IntakeStep({
                           setOpenSelectorKey(null);
                           setEnumSearch((prev) => ({ ...prev, [q.key]: "" }));
                         }}
-                        className={`rounded-md border px-2.5 py-1 text-xs transition-all ${
+                        className={`rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-all ${
                           current === opt
-                            ? "border-primary bg-primary/10 text-primary font-semibold shadow-sm ring-1 ring-primary/40"
-                            : "hover:bg-accent text-muted-foreground bg-background"
+                            ? "border-primary bg-primary/10 text-primary font-semibold ring-1 ring-primary/30 shadow-xs"
+                            : "border-border/90 dark:border-slate-800 bg-background/50 hover:bg-muted/70 hover:border-border dark:hover:border-slate-700 text-muted-foreground hover:text-foreground"
                         }`}
                       >
                         {optionLabel(q, opt)}
                       </button>
                     ))}
                     {filteredOptions.length === 0 && (
-                      <p className="text-[11px] text-muted-foreground py-1">No options match &quot;{searchVal}&quot;</p>
+                      <p className="text-xs text-muted-foreground py-1">No options match &quot;{searchVal}&quot;</p>
                     )}
                   </div>
                 </div>
               );
             }
 
-            // ── 3. Boolean Questions ────────────────────────────────────────────
+            // ── 3. Boolean Questions (Yes / No) ──
             if (q.type === "boolean") {
               return (
-                <div className="flex gap-2 pt-1">
+                <div className="grid grid-cols-2 gap-2 pt-1">
                   <button
                     type="button"
                     onClick={() => void handleDirectAnswer(q.key, true)}
-                    className={`flex-1 rounded-md border py-2 text-xs font-medium transition-all ${
+                    className={`h-9 rounded-lg border text-xs font-medium flex items-center justify-center gap-1.5 transition-all ${
                       current === true
-                        ? "border-emerald-500 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 font-bold shadow-sm ring-1 ring-emerald-500/40"
-                        : "hover:bg-accent text-muted-foreground bg-background"
+                        ? "border-emerald-500/70 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-semibold ring-1 ring-emerald-500/30 shadow-xs"
+                        : "border-border/90 dark:border-slate-700 bg-background hover:bg-muted/60 hover:border-border dark:hover:border-slate-600 text-muted-foreground hover:text-foreground"
                     }`}
                   >
-                    Yes
+                    <Check className="size-3.5" />
+                    <span>Yes</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => void handleDirectAnswer(q.key, false)}
-                    className={`flex-1 rounded-md border py-2 text-xs font-medium transition-all ${
+                    className={`h-9 rounded-lg border text-xs font-medium flex items-center justify-center gap-1.5 transition-all ${
                       current === false
-                        ? "border-rose-500 bg-rose-500/10 text-rose-700 dark:text-rose-300 font-bold shadow-sm ring-1 ring-rose-500/40"
-                        : "hover:bg-accent text-muted-foreground bg-background"
+                        ? "border-muted-foreground/50 bg-muted text-foreground font-semibold ring-1 ring-border shadow-xs"
+                        : "border-border/90 dark:border-slate-700 bg-background hover:bg-muted/60 hover:border-border dark:hover:border-slate-600 text-muted-foreground hover:text-foreground"
                     }`}
                   >
-                    No
+                    <span>No</span>
                   </button>
                 </div>
               );
             }
 
-            // ── 4. Inputs: text, number, date ───────────────────────────────────
+            // ── 4. Text, number, date inputs ──
             return (
-              <div className="pt-1">
+              <div className="pt-0.5">
                 <input
                   type={q.type === "integer" ? "number" : isDateInput ? "date" : "text"}
                   min={q.type === "integer" && q.min_value !== undefined && q.min_value !== null ? q.min_value : undefined}
@@ -1457,10 +1439,10 @@ export function IntakeStep({
                     }
                   }}
                   placeholder={`Enter ${q.key.replaceAll("_", " ")}...`}
-                  className={`h-9 w-full rounded-md border bg-background px-3 text-xs outline-none focus-visible:ring-2 font-normal transition-colors ${
+                  className={`h-10 w-full rounded-lg border bg-background/80 px-3.5 text-sm outline-none transition-all placeholder:text-muted-foreground/40 ${
                     fieldError
-                      ? "border-rose-500 focus-visible:ring-rose-500/50 bg-rose-500/[0.02]"
-                      : "focus-visible:ring-ring"
+                      ? "border-rose-500 focus:ring-2 focus:ring-rose-500/25 bg-rose-500/[0.02]"
+                      : "border-border/90 dark:border-slate-700 hover:border-muted-foreground/50 dark:hover:border-slate-600 focus:border-primary dark:focus:border-primary focus:ring-2 focus:ring-primary/20 shadow-2xs"
                   }`}
                 />
               </div>
@@ -1474,18 +1456,6 @@ export function IntakeStep({
             <span>{fieldError}</span>
           </div>
         )}
-
-        {savingFields[q.key] ? (
-          <div className="flex items-center gap-1 text-[11px] text-primary font-medium pt-2">
-            <Loader2 className="size-3.5 animate-spin shrink-0" />
-            <span>Saving answer...</span>
-          </div>
-        ) : !fieldError && (state.answers[q.key] !== undefined || (drafts[q.key] !== undefined && drafts[q.key] !== "")) ? (
-          <div className="flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-400 font-medium pt-2">
-            <Check className="size-3.5 shrink-0" />
-            <span>Answer Saved</span>
-          </div>
-        ) : null}
       </Card>
     );
   }
@@ -1623,16 +1593,15 @@ export function IntakeStep({
 
             return (
               <div key={secName} className="space-y-3">
-                <div className="flex items-center justify-between border-b pb-2">
-                  <h4 className="text-sm font-bold text-foreground flex items-center gap-2">
+                <div className="flex items-center justify-between border-b pb-2.5">
+                  <h4 className="text-sm sm:text-base font-semibold text-foreground flex items-center gap-2.5">
                     <span>{secName}</span>
-                    <Badge tone={isComplete ? "success" : "warning"} className="text-[10px]">
+                    <Badge tone={isComplete ? "success" : "default"} className="text-[11px] font-medium">
                       {secAnswered} / {secQuestions.length} answered
                     </Badge>
                   </h4>
                 </div>
 
-                <SectionSourceBanner questions={secQuestions} />
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {secQuestions.map(renderQuestion)}
@@ -1681,16 +1650,15 @@ export function IntakeStep({
       ) : (
         /* Tabbed Active Section Mode */
         <div className="space-y-4">
-          <div className="flex items-center justify-between pb-1">
-            <h4 className="text-sm font-semibold text-foreground flex items-center gap-2">
+          <div className="flex items-center justify-between pb-1.5">
+            <h4 className="text-sm sm:text-base font-semibold text-foreground flex items-center gap-2.5">
               <span>{currentSectionKey}</span>
-              <Badge tone={isCurrentSectionComplete ? "success" : "warning"} className="text-[10px] font-normal">
+              <Badge tone={isCurrentSectionComplete ? "success" : "default"} className="text-[11px] font-medium">
                 {currentAnsweredCount} / {currentQuestions.length} answered
               </Badge>
             </h4>
           </div>
 
-          <SectionSourceBanner questions={currentQuestions} />
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {currentQuestions.map(renderQuestion)}

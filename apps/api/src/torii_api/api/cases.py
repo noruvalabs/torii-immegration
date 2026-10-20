@@ -1414,6 +1414,21 @@ async def save_case_progress(
     if "submission_reference" in data:
         case.submission_reference = data["submission_reference"]
     if "status" in data and data["status"]:
+        if data["status"] == "submitted":
+            checklist_items = (
+                await session.execute(
+                    select(CaseChecklistItem).where(CaseChecklistItem.case_id == case.id)
+                )
+            ).scalars().all()
+            missing_required = [
+                item for item in checklist_items
+                if item.is_required and item.status not in ("uploaded", "gathered")
+            ]
+            if missing_required:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Cannot submit application: {len(missing_required)} required document(s) must be uploaded first.",
+                )
         case.status = data["status"]
     await session.flush()
     await session.refresh(case)

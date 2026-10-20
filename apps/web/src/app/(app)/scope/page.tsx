@@ -25,6 +25,7 @@ import {
   scopeCase,
 } from "@/lib/api/cases";
 import { CountrySelector } from "@/components/ui/country-selector";
+import { CountryFlag } from "@/components/landing/country-flag";
 import { matchCountry } from "@/lib/countries";
 import { formatScopeLabel } from "@/lib/utils";
 
@@ -398,14 +399,13 @@ function ScopePageInner() {
             </p>
           ) : (
             destinations.map((d) => {
-              const flag = d.flag || matchCountry(d.code).flag || "🌐";
               return (
                 <button
                   key={d.code}
                   onClick={() => selectDestination(d)}
                   className="flex w-full items-center gap-4 rounded-[var(--radius)] border bg-card p-4 text-left transition-colors hover:bg-accent"
                 >
-                  <span className="text-2xl">{flag}</span>
+                  <CountryFlag code={d.code} className="size-8 shrink-0 shadow-xs" />
                   <div className="flex-1">
                     <p className="font-medium">{d.name}</p>
                     <p className="text-xs text-muted-foreground">{d.currency}</p>
@@ -423,8 +423,12 @@ function ScopePageInner() {
           <button onClick={goBack} className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
             <ArrowLeft className="size-3.5" /> Back
           </button>
-          <h3 className="text-sm font-medium text-muted-foreground">
-            Visa type for <strong>{destinationFlag} {selectedDestination?.name}</strong>
+          <h3 className="text-sm font-medium text-muted-foreground flex items-center gap-1.5 flex-wrap">
+            <span>Visa type for</span>
+            {selectedDestination?.code && (
+              <CountryFlag code={selectedDestination.code} className="size-4 shrink-0 inline-block" />
+            )}
+            <strong className="text-foreground">{selectedDestination?.name}</strong>
           </h3>
           {/* A fully-discovered country can publish dozens of routes, which is more than
               anyone wants to scroll. The box appears only once the list earns it. */}
@@ -536,81 +540,109 @@ function ScopePageInner() {
       )}
 
       {step === "review" && (
-        <div className="space-y-4">
-          <button onClick={goBack} className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+        <div className="space-y-5">
+          <button
+            onClick={goBack}
+            className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+          >
             <ArrowLeft className="size-3.5" /> Back
           </button>
-          
+
           <div className="space-y-1">
-            <h3 className="text-base font-bold text-foreground">
-              Confirm your application details
+            <h3 className="text-lg font-bold tracking-tight text-foreground">
+              Confirm application details
             </h3>
             <p className="text-xs text-muted-foreground">
-              Review your selection. Next, you will complete a quick 60-second eligibility screening.
+              Review your selection before screening your visa eligibility.
             </p>
           </div>
 
-          <Card className="border border-border/80 shadow-xs">
-            <CardContent className="space-y-3 pt-5">
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Residence</span>
-                <span className="font-medium text-foreground">{residenceLabel}</span>
+          {/* Details Card */}
+          <Card className="rounded-xl border border-border/90 dark:border-slate-800 bg-card shadow-xs overflow-hidden">
+            <CardContent className="p-4 sm:p-5 divide-y divide-border/60">
+              <div className="flex items-center justify-between py-2.5 first:pt-0">
+                <span className="text-xs text-muted-foreground">Residence</span>
+                <span className="text-xs sm:text-sm font-semibold text-foreground">{residenceLabel}</span>
               </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Nationality</span>
-                <span className="font-medium text-foreground">{nationalityLabel}</span>
+              <div className="flex items-center justify-between py-2.5">
+                <span className="text-xs text-muted-foreground">Nationality</span>
+                <span className="text-xs sm:text-sm font-semibold text-foreground">{nationalityLabel}</span>
               </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">To</span>
-                <span className="font-medium text-foreground">{destinationFlag} {selectedDestination?.name}</span>
+              <div className="flex items-center justify-between py-2.5">
+                <span className="text-xs text-muted-foreground">Destination</span>
+                <span className="text-xs sm:text-sm font-semibold text-foreground inline-flex items-center gap-1.5">
+                  <span>{destinationFlag}</span>
+                  <span>{selectedDestination?.name}</span>
+                </span>
               </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Visa type</span>
-                <span className="font-medium text-foreground">{selectedVisaType?.name}</span>
+              <div className="flex items-center justify-between py-2.5">
+                <span className="text-xs text-muted-foreground">Visa Type</span>
+                <span className="text-xs sm:text-sm font-semibold text-primary">{selectedVisaType?.name}</span>
               </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Application</span>
-                <span className="font-medium text-foreground">{selectedAppType?.name}</span>
+              <div className="flex items-center justify-between py-2.5 last:pb-0">
+                <span className="text-xs text-muted-foreground">Application Category</span>
+                <span className="text-xs sm:text-sm font-semibold text-foreground">{selectedAppType?.name}</span>
               </div>
             </CardContent>
           </Card>
 
-          <div className="rounded-lg border border-border/60 bg-muted/30 p-4 text-left">
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
-              Next steps in your application
+          {/* Next Steps List */}
+          <div className="rounded-xl border border-border/80 dark:border-slate-800 bg-muted/20 p-4 sm:p-5 text-left space-y-3">
+            <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+              What happens next
             </p>
-            <ol className="space-y-2 text-xs sm:text-sm text-muted-foreground">
-              <li className="flex items-center gap-2">
-                <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-semibold text-primary">1</span>
-                <span>Quick 60-second eligibility screening &amp; approval likelihood score (100%)</span>
-              </li>
-              <li className="flex items-center gap-2">
-                <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-semibold text-primary">2</span>
-                <span>Pay service fee securely via bKash, Nagad, or Credit/Debit Card</span>
-              </li>
-              <li className="flex items-center gap-2">
-                <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-semibold text-primary">3</span>
-                <span>Fill out personal particulars &amp; upload required documents</span>
-              </li>
-              <li className="flex items-center gap-2">
-                <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-semibold text-primary">4</span>
-                <span>Torii staff submits on government portal &amp; issues appointment confirmation</span>
-              </li>
-            </ol>
+            <div className="space-y-2.5">
+              <div className="flex items-start gap-3">
+                <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-bold text-primary mt-0.5">
+                  1
+                </span>
+                <div>
+                  <p className="text-xs font-semibold text-foreground">Eligibility Screening</p>
+                  <p className="text-[11px] text-muted-foreground">Answer 5 essential criteria questions to compute your approval likelihood.</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3">
+                <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-bold text-primary mt-0.5">
+                  2
+                </span>
+                <div>
+                  <p className="text-xs font-semibold text-foreground">Secure Payment</p>
+                  <p className="text-[11px] text-muted-foreground">Pay consular service fee via bKash, Nagad, or Debit/Credit Card.</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3">
+                <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-bold text-primary mt-0.5">
+                  3
+                </span>
+                <div>
+                  <p className="text-xs font-semibold text-foreground">Intake &amp; Document Checklist</p>
+                  <p className="text-[11px] text-muted-foreground">Fill in questionnaire details and upload required supporting proofs.</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3">
+                <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-bold text-primary mt-0.5">
+                  4
+                </span>
+                <div>
+                  <p className="text-xs font-semibold text-foreground">Consular Submission &amp; Filing</p>
+                  <p className="text-[11px] text-muted-foreground">Our team registers your dossier and books your IVAC appointment.</p>
+                </div>
+              </div>
+            </div>
           </div>
 
           <button
             onClick={() => void createCase()}
             disabled={submitting}
-            className="inline-flex w-full items-center justify-center gap-2 rounded-[var(--radius)] bg-primary px-5 py-3.5 text-sm font-bold text-primary-foreground shadow-md transition-opacity hover:opacity-90 disabled:pointer-events-none disabled:opacity-50"
+            className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-5 py-3.5 text-sm font-semibold text-primary-foreground shadow-sm transition-all hover:opacity-95 disabled:pointer-events-none disabled:opacity-50"
           >
             {submitting ? (
               <>
-                <Loader2 className="size-4 animate-spin" /> Starting application &amp; loading eligibility…
+                <Loader2 className="size-4 animate-spin" /> Starting application…
               </>
             ) : (
               <>
-                Check Visa Eligibility &amp; Start (Free) <ArrowRight className="size-4" />
+                Check Visa Eligibility &amp; Start <ArrowRight className="size-4" />
               </>
             )}
           </button>

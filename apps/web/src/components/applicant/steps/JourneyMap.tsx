@@ -215,16 +215,6 @@ function ExternalTaskRow({ task }: { task: JourneyExternalTask }) {
                     <span key={option.label}>{option.label}</span>
                   ),
                 )}
-                {task.official_citation_url && (
-                  <a
-                    href={task.official_citation_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="hover:text-foreground"
-                  >
-                    Official source ↗
-                  </a>
-                )}
               </div>
             </div>
           </Disclosure>
@@ -262,30 +252,6 @@ function StageList({ stages }: { stages: JourneyStage[] }) {
             <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">
               {stage.detail}
             </p>
-            {(stage.portal_url || stage.official_citation_url) && (
-              <div className="mt-1 flex flex-wrap items-center gap-x-3 text-[10px]">
-                {stage.portal_url && (
-                  <a
-                    href={stage.portal_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 font-semibold text-primary hover:underline"
-                  >
-                    <ExternalLink className="size-2.5" /> Official portal
-                  </a>
-                )}
-                {stage.official_citation_url && (
-                  <a
-                    href={stage.official_citation_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-muted-foreground hover:text-foreground"
-                  >
-                    Source ↗
-                  </a>
-                )}
-              </div>
-            )}
           </div>
         </li>
       ))}

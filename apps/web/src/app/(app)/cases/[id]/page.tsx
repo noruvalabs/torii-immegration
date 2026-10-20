@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import {
@@ -69,6 +69,17 @@ export default function CaseDetailPage() {
 
   const packet = packetFromQuery || (caseData?.packet_snapshot as Record<string, unknown> | null) || null;
 
+  const requiredChecklistItems = useMemo(
+    () => checklist.filter((item) => item.is_required),
+    [checklist]
+  );
+  const missingRequiredDocs = useMemo(
+    () => requiredChecklistItems.filter((item) => item.status === "needed"),
+    [requiredChecklistItems]
+  );
+  const areAllRequiredDocsUploaded =
+    checklist.length > 0 && missingRequiredDocs.length === 0;
+
   // Mutations
   const answerMutation = useAnswerIntakeMutation(token, caseId);
   const evaluateMutation = useEvaluateEligibilityMutation(token, caseId);
@@ -84,15 +95,27 @@ export default function CaseDetailPage() {
     refreshChecklistMutation.isPending ||
     generateFormsMutation.isPending;
 
+  // Determine if payment & eligibility screening are complete
+  const isCasePaid = useMemo(() => {
+    if (!caseData) return false;
+    const ia = (caseData.intake_answers || {}) as Record<string, unknown>;
+    return (
+      caseData.status === "payment_completed" ||
+      caseData.status === "submitted" ||
+      caseData.status === "eligibility_checked" ||
+      caseData.status === "checklist_ready" ||
+      caseData.status === "forms_generated" ||
+      caseData.status === "packet_ready" ||
+      ia.payment_status === "completed" ||
+      Boolean(ia.payment_txn_id) ||
+      Boolean(caseData.is_entitled)
+    );
+  }, [caseData]);
+
   // Jump to appropriate phase on initial load
   useEffect(() => {
     if (caseData && !stepInitializedRef.current) {
-      const isPaid =
-        caseData.status === "payment_completed" ||
-        caseData.status === "submitted" ||
-        Boolean(caseData.is_entitled);
-
-      if (!isPaid) {
+      if (!isCasePaid) {
         setActiveStep("eligibility");
       } else if (guidance && guidance.phase !== "blocked") {
         setActiveStep(phaseToStep(guidance.phase));
@@ -101,7 +124,7 @@ export default function CaseDetailPage() {
       }
       stepInitializedRef.current = true;
     }
-  }, [guidance, caseData]);
+  }, [guidance, caseData, isCasePaid]);
 
   useEffect(() => {
     if (token) {
@@ -126,6 +149,14 @@ export default function CaseDetailPage() {
       toast.error("Requirements research is currently in progress. Please wait a moment.", {
         id: "research-in-progress",
       });
+      return;
+    }
+    if (step === "packet" && !areAllRequiredDocsUploaded && caseData?.status !== "submitted") {
+      toast.error(
+        `Please upload all required documents (${missingRequiredDocs.length} remaining) before moving to submission.`,
+        { id: "missing-docs-packet-blocked" }
+      );
+      setActiveStep("checklist");
       return;
     }
     setError(null);
@@ -255,6 +286,14 @@ export default function CaseDetailPage() {
   /** Submit the completed case to the database and Torii operations console */
   async function handleSubmit() {
     if (!token) return;
+    if (!areAllRequiredDocsUploaded && caseData?.status !== "submitted") {
+      toast.error(
+        `Cannot submit application: Please upload all ${missingRequiredDocs.length} remaining required document(s) before submitting.`,
+        { id: "missing-docs-submit-blocked" }
+      );
+      setActiveStep("checklist");
+      return;
+    }
     setIsSubmitting(true);
     setError(null);
     try {
@@ -282,6 +321,9 @@ export default function CaseDetailPage() {
 
   /** Whether the current view is complete enough to move to the server next phase. */
   function canAdvanceFromCurrent(): boolean {
+    if (activeStep === "checklist") {
+      return areAllRequiredDocsUploaded;
+    }
     return true;
   }
 
@@ -318,11 +360,6 @@ export default function CaseDetailPage() {
       </div>
     );
   }
-
-  const isCasePaid =
-    caseData.status === "payment_completed" ||
-    caseData.status === "submitted" ||
-    Boolean(caseData.is_entitled);
 
   const showContinue =
     guidance &&
@@ -366,17 +403,13 @@ export default function CaseDetailPage() {
               {formatScopeLabel(caseData.scope_label) || caseData.reference}
             </h1>
             <Badge
-              tone={
-                caseData.status === "payment_completed" || caseData.status === "submitted"
-                  ? "success"
-                  : "warning"
-              }
+              tone={isCasePaid ? "success" : "warning"}
               className="gap-1 font-semibold"
             >
-              {caseData.status === "payment_completed"
-                ? "Paid · In Concierge Queue"
-                : caseData.status === "submitted"
-                  ? "Submitted to Embassy"
+              {caseData.status === "submitted"
+                ? "Submitted to Embassy"
+                : isCasePaid
+                  ? "Paid · In Concierge Queue"
                   : "Eligibility & Payment Pending"}
             </Badge>
           </div>
@@ -438,14 +471,21 @@ export default function CaseDetailPage() {
       <div className="flex items-center gap-1 overflow-x-auto pb-2">
         {STEPS.map((s, i) => {
           const isActive = s.key === activeStep;
-          const allowed = !guidance || canVisitStep(s.key, guidance.phase);
+          const isPacketLocked = s.key === "packet" && !areAllRequiredDocsUploaded && caseData?.status !== "submitted";
+          const allowed = (!guidance || canVisitStep(s.key, guidance.phase)) && !isPacketLocked;
           return (
             <div key={s.key} className="flex items-center">
               {i > 0 && <ChevronRight className="mx-1 size-3.5 shrink-0 text-muted-foreground" />}
               <button
                 onClick={() => trySetStep(s.key)}
                 disabled={!allowed}
-                title={allowed ? s.label : "Complete earlier required steps first"}
+                title={
+                  isPacketLocked
+                    ? `Upload all required documents (${missingRequiredDocs.length} remaining) to unlock submission`
+                    : allowed
+                      ? s.label
+                      : "Complete earlier required steps first"
+                }
                 className={`whitespace-nowrap rounded-[var(--radius)] px-3 py-1.5 text-sm font-medium transition-colors ${
                   isActive
                     ? "bg-primary text-primary-foreground"
@@ -582,20 +622,49 @@ export default function CaseDetailPage() {
               loading={submitting}
               onBuild={handleBuildPacket}
               onSubmit={handleSubmit}
+              canSubmit={areAllRequiredDocsUploaded || caseData?.status === "submitted"}
+              missingDocsCount={missingRequiredDocs.length}
+              onGoToChecklist={() => setActiveStep("checklist")}
             />
           )}
 
           {showContinue && (
             <div className="mt-6 flex flex-col gap-2 border-t pt-4 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-xs text-muted-foreground">
-                {activeStep === "checklist"
-                  ? "All required documents uploaded. Click Submit to hand over to Torii operations team."
-                  : "Steps only unlock when required work for the current phase is complete."}
-              </p>
+              <div className="space-y-0.5">
+                <p className="text-xs text-muted-foreground">
+                  {activeStep === "checklist" ? (
+                    areAllRequiredDocsUploaded ? (
+                      <span className="text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-1.5">
+                        <CheckCircle2 className="size-3.5" />
+                        All required documents uploaded ({requiredChecklistItems.length}/{requiredChecklistItems.length}). Ready to submit.
+                      </span>
+                    ) : (
+                      <span className="text-amber-600 dark:text-amber-400 font-semibold flex items-center gap-1.5">
+                        <AlertTriangle className="size-3.5" />
+                        {missingRequiredDocs.length} required document{missingRequiredDocs.length > 1 ? "s" : ""} must be uploaded before submitting.
+                      </span>
+                    )
+                  ) : (
+                    "Steps only unlock when required work for the current phase is complete."
+                  )}
+                </p>
+                {activeStep === "checklist" && !areAllRequiredDocsUploaded && missingRequiredDocs.length > 0 && (
+                  <p className="text-[11px] text-muted-foreground">
+                    Required: {missingRequiredDocs.slice(0, 3).map((d) => d.name).join(", ")}
+                    {missingRequiredDocs.length > 3 ? ` +${missingRequiredDocs.length - 3} more` : ""}
+                  </p>
+                )}
+              </div>
               <Button
                 onClick={activeStep === "checklist" ? handleSubmit : continueNext}
                 disabled={!canAdvanceFromCurrent() || isSubmitting}
-                className={activeStep === "checklist" ? "bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-sm gap-2" : "gap-2"}
+                className={
+                  activeStep === "checklist"
+                    ? areAllRequiredDocsUploaded
+                      ? "bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-sm gap-2"
+                      : "bg-muted text-muted-foreground cursor-not-allowed opacity-60 gap-2 border"
+                    : "gap-2"
+                }
               >
                 {activeStep === "checklist" ? (
                   isSubmitting ? (
