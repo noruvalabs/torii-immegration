@@ -932,16 +932,6 @@ export function FormsStep({
               </span>
               <h4 className="text-sm font-semibold text-foreground mt-0.5">{portalPack.scope_label}</h4>
             </div>
-            {filing?.apply_url && (
-              <a
-                href={filing.apply_url}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-1.5 rounded-md bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary hover:bg-primary/20 transition-colors"
-              >
-                Open Official Portal <ExternalLink className="size-3" />
-              </a>
-            )}
           </div>
 
           <div className="space-y-3">
@@ -1059,17 +1049,6 @@ export function FormsStep({
                       )}
                       Download Filled PDF
                     </Button>
-                    {form.sourceUrl && (
-                      <a
-                        href={form.sourceUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex items-center gap-1 rounded-md border px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-                        title="View official government specifications"
-                      >
-                        Official Specs <ExternalLink className="size-3" />
-                      </a>
-                    )}
                   </div>
                 </div>
 

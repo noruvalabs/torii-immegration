@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   CheckCircle2,
   Clock,
@@ -13,7 +13,10 @@ import {
   RefreshCw,
   Copy,
   Check,
-  Lock,
+  Download,
+  Loader2,
+  ArrowRight,
+  ExternalLink,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -26,15 +29,20 @@ type PostSubmissionGuideProps = {
   token: string | null;
   caseData: Case;
   onRefresh?: () => void;
+  onDownloadPdf?: () => void;
+  isExportingPdf?: boolean;
 };
 
 export function PostSubmissionGuide({
   token,
   caseData,
   onRefresh,
+  onDownloadPdf,
+  isExportingPdf = false,
 }: PostSubmissionGuideProps) {
   const [copiedRef, setCopiedRef] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isDownloadingDirect, setIsDownloadingDirect] = useState(false);
 
   const isIndia =
     caseData.reference.startsWith("IN-") ||
@@ -48,9 +56,9 @@ export function PostSubmissionGuide({
     !caseData.submission_reference?.startsWith("EFILE-");
 
   const handleCopyRef = () => {
-    navigator.clipboard.writeText(caseData.reference);
+    void navigator.clipboard.writeText(caseData.reference);
     setCopiedRef(true);
-    toast.success("Case reference copied to clipboard");
+    toast.success("Tracking reference copied to clipboard");
     setTimeout(() => setCopiedRef(false), 2000);
   };
 
@@ -65,235 +73,330 @@ export function PostSubmissionGuide({
     }, 600);
   };
 
+  const handleDownload = async () => {
+    if (onDownloadPdf) {
+      onDownloadPdf();
+      return;
+    }
+
+    const activeToken =
+      token || (typeof window !== "undefined" ? localStorage.getItem("torii_token") : null);
+    if (!activeToken) {
+      toast.error("Please sign in again to download documents.");
+      return;
+    }
+
+    setIsDownloadingDirect(true);
+    try {
+      const res = await fetch(
+        `/backend/v1/cases/${caseData.id}/export/cover-letter?format=base64`,
+        {
+          headers: {
+            Authorization: `Bearer ${activeToken}`,
+            Accept: "application/json",
+          },
+        }
+      );
+      if (!res.ok) {
+        throw new Error(`Export failed (${res.status})`);
+      }
+      const data = await res.json();
+      if (!data?.data_base64) {
+        throw new Error("Missing PDF file data.");
+      }
+      const binaryString = atob(data.data_base64);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      const blob = new Blob([bytes], { type: "application/pdf" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = data.filename || `${caseData.reference}-application-packet.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      toast.success("Application packet downloaded successfully!");
+      setTimeout(() => {
+        link.remove();
+        URL.revokeObjectURL(url);
+      }, 10000);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Download failed. Please try again.");
+    } finally {
+      setIsDownloadingDirect(false);
+    }
+  };
+
+  const downloading = isExportingPdf || isDownloadingDirect;
+
   return (
-    <Card className="border-2 border-emerald-500/30 bg-gradient-to-b from-card via-card to-emerald-500/[0.03] shadow-md overflow-hidden">
-      <CardContent className="p-5 sm:p-7 space-y-6">
-        {/* Top Celebration & Staff Queue Banner */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/80 pb-6">
-          <div className="space-y-1.5">
-            <div className="flex flex-wrap items-center gap-2.5">
-              <span className="flex size-8 items-center justify-center rounded-xl bg-emerald-500 text-white shadow-md shadow-emerald-500/20">
-                <CheckCircle2 className="size-5" />
-              </span>
-              <h3 className="text-lg sm:text-xl font-extrabold text-foreground tracking-tight">
-                Visa Application Request Successful!
-              </h3>
-              <Badge tone="success" className="text-[11px] font-bold px-2.5 py-0.5 uppercase tracking-wide">
-                Assigned to Staff
-              </Badge>
-            </div>
-            <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed pl-10 sm:max-w-2xl">
-              All your information has been received. Our dedicated operations team is now handling your official government visa submission and fee payment on your behalf.
-            </p>
-          </div>
+    <div className="space-y-6">
+      {/* ── BIG HERO CARD: APPLICATION SUCCESSFUL ── */}
+      <Card className="relative overflow-hidden border-2 border-emerald-500/30 bg-gradient-to-b from-emerald-500/10 via-card to-card shadow-xl rounded-2xl">
+        {/* Subtle decorative glow */}
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-3/4 h-32 bg-emerald-500/15 blur-3xl pointer-events-none rounded-full" />
 
-          <div className="flex items-center gap-2 shrink-0 pl-10 sm:pl-0">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleRefreshClick}
-              disabled={isRefreshing}
-              className="text-xs h-9 gap-1.5 font-medium"
-            >
-              <RefreshCw className={`size-3.5 ${isRefreshing ? "animate-spin" : ""}`} />
-              Refresh Status
-            </Button>
-          </div>
-        </div>
-
-        {/* 3 Concierge Process Stages */}
-        <div className="grid gap-4 sm:gap-5 md:grid-cols-3">
-          {/* ── Stage 1: Info & Payment Received (Completed) ── */}
-          <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-5 flex flex-col justify-between space-y-4">
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="flex size-8 items-center justify-center rounded-lg bg-emerald-500 text-white font-bold text-xs shadow-xs">
-                  ✓
-                </span>
-                <Badge tone="success" className="text-[10px] font-bold">
-                  Completed
-                </Badge>
-              </div>
-
-              <div>
-                <h4 className="text-sm sm:text-base font-bold text-foreground">
-                  1. Information &amp; Payment Received
-                </h4>
-                <p className="mt-1.5 text-xs text-muted-foreground leading-relaxed">
-                  Your personal particulars, passport information, and service charge are confirmed and verified.
-                </p>
+        <CardContent className="relative p-6 sm:p-10 space-y-8">
+          {/* Hero Celebration Badge & Headline */}
+          <div className="text-center space-y-3">
+            <div className="relative mx-auto flex size-20 items-center justify-center rounded-full bg-emerald-500/15 border-2 border-emerald-500/40 text-emerald-500 shadow-xl shadow-emerald-500/20">
+              <CheckCircle2 className="size-10 text-emerald-500 animate-in zoom-in-75 duration-300" />
+              <div className="absolute -top-1 -right-1 flex size-6 items-center justify-center rounded-full bg-emerald-500 text-white shadow-xs">
+                <Sparkles className="size-3.5" />
               </div>
             </div>
 
-            <div className="pt-2 border-t border-emerald-500/20 flex items-center justify-between text-[11px] text-muted-foreground">
-              <span>Status:</span>
-              <span className="font-semibold text-emerald-600 dark:text-emerald-400">Verified &amp; Locked</span>
-            </div>
-          </div>
-
-          {/* ── Stage 2: Staff Submitting on Gov Portal (Active In Progress) ── */}
-          <div className="rounded-xl border-2 border-primary bg-primary/[0.04] p-5 flex flex-col justify-between space-y-4 shadow-sm relative ring-2 ring-primary/20">
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground font-bold text-xs shadow-xs">
-                  2
-                </span>
-                <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold text-primary animate-pulse">
-                  <Clock className="size-3" /> In Progress
-                </span>
+            <div className="space-y-1.5 max-w-2xl mx-auto">
+              <div className="inline-flex items-center gap-2 rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-bold text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 mb-1">
+                <span className="flex size-2 rounded-full bg-emerald-500 animate-pulse" />
+                OFFICIAL VISA FILING QUEUE
               </div>
-
-              <div>
-                <h4 className="text-sm sm:text-base font-bold text-foreground flex items-center gap-1.5">
-                  <ShieldCheck className="size-4.5 text-primary shrink-0" />
-                  Staff Government Portal Filing
-                </h4>
-                <p className="mt-1.5 text-xs text-muted-foreground leading-relaxed">
-                  Our operations staff is logging into the official {destinationName} visa portal, entering your full dossier, and paying the government fee on your behalf.
-                </p>
-              </div>
-            </div>
-
-            <div className="pt-2 border-t border-primary/20 flex items-center justify-between text-[11px]">
-              <span className="text-muted-foreground">Action required by you:</span>
-              <span className="font-bold text-primary">None (Please wait)</span>
-            </div>
-          </div>
-
-          {/* ── Stage 3: Official Appointment & Stamped Slip (Next) ── */}
-          <div className="rounded-xl border border-border/80 bg-muted/20 p-5 flex flex-col justify-between space-y-4">
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="flex size-8 items-center justify-center rounded-lg bg-muted text-muted-foreground font-bold text-xs">
-                  3
-                </span>
-                <Badge tone="default" className="text-[10px] font-semibold">
-                  Upcoming
-                </Badge>
-              </div>
-
-              <div>
-                <h4 className="text-sm sm:text-base font-bold text-foreground flex items-center gap-1.5">
-                  <Calendar className="size-4 text-muted-foreground shrink-0" />
-                  Appointment Slip &amp; Dossier
-                </h4>
-                <p className="mt-1.5 text-xs text-muted-foreground leading-relaxed">
-                  As soon as staff filing completes, you will receive your official government Web File / ARN #, biometric appointment slip, and stamped PDF packet.
-                </p>
-              </div>
-            </div>
-
-            <div className="pt-2 border-t border-border/50 flex items-center justify-between text-[11px] text-muted-foreground">
-              <span>Delivery mode:</span>
-              <span className="font-semibold text-foreground">Online &amp; WhatsApp</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Staff Filing Status / Official ARN Banner */}
-        <div className="rounded-xl border bg-card p-4 sm:p-5 space-y-3">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-border/70">
-            <div>
-              <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                Torii Concierge Case Reference
+              <h2 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-foreground tracking-tight">
+                Application Submitted Successfully!
+              </h2>
+              <p className="text-sm sm:text-base text-muted-foreground leading-relaxed">
+                Your visa application has been received and registered in our concierge queue.
+                Our dedicated operations team is now handling your official government submission and fee payment.
               </p>
-              <div className="flex items-center gap-2 mt-0.5">
-                <span className="font-mono text-base font-black text-foreground">
+            </div>
+
+            {/* Tracking Reference Pill */}
+            <div className="pt-2">
+              <div className="inline-flex items-center gap-2 rounded-full border border-border/80 bg-muted/40 px-4 py-1.5 text-xs shadow-2xs">
+                <span className="text-muted-foreground font-medium">Tracking Reference:</span>
+                <span className="font-mono font-bold text-foreground text-sm tracking-wide">
                   {caseData.reference}
                 </span>
                 <button
                   type="button"
                   onClick={handleCopyRef}
-                  className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-                  title="Copy Reference"
+                  className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                  title="Copy Tracking ID"
                 >
-                  {copiedRef ? <Check className="size-3.5 text-emerald-500" /> : <Copy className="size-3.5" />}
+                  {copiedRef ? (
+                    <Check className="size-3.5 text-emerald-500" />
+                  ) : (
+                    <Copy className="size-3.5" />
+                  )}
                 </button>
               </div>
             </div>
+          </div>
 
-            <div className="text-left sm:text-right">
-              <span className="text-xs text-muted-foreground block">Estimated Completion Time</span>
-              <span className="text-xs sm:text-sm font-bold text-emerald-600 dark:text-emerald-400">
-                Within 2 – 6 Business Hours
+          {/* ── 3 HIGH-SIGNAL METRIC TILES ── */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
+            <div className="rounded-xl border border-border/70 bg-card/80 p-4 text-center sm:text-left space-y-1 shadow-2xs">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center justify-center sm:justify-start gap-1.5">
+                <span className="flex size-2 rounded-full bg-emerald-500" /> Current Status
               </span>
+              <p className="text-sm font-bold text-foreground">
+                {hasStaffFilingRef ? "Officially Filed" : "Assigned to Staff"}
+              </p>
+              <p className="text-[11px] text-muted-foreground">In Embassy Operations Queue</p>
+            </div>
+
+            <div className="rounded-xl border border-border/70 bg-card/80 p-4 text-center sm:text-left space-y-1 shadow-2xs">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center justify-center sm:justify-start gap-1.5">
+                <Clock className="size-3 text-primary" /> Estimated Turnaround
+              </span>
+              <p className="text-sm font-bold text-emerald-600 dark:text-emerald-400">
+                2 – 6 Business Hours
+              </p>
+              <p className="text-[11px] text-muted-foreground">Prompt processing guaranteed</p>
+            </div>
+
+            <div className="rounded-xl border border-border/70 bg-card/80 p-4 text-center sm:text-left space-y-1 shadow-2xs">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center justify-center sm:justify-start gap-1.5">
+                <MessageCircle className="size-3 text-emerald-500" /> Delivery Channels
+              </span>
+              <p className="text-sm font-bold text-foreground">SMS &amp; WhatsApp</p>
+              <p className="text-[11px] text-muted-foreground">Real-time alerts on your phone</p>
             </div>
           </div>
 
-          {hasStaffFilingRef ? (
-            <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/30 p-3.5 flex items-center justify-between gap-3 text-xs sm:text-sm">
-              <div className="flex items-center gap-2.5">
+          {/* ── MINIMAL 3-STEP ROADMAP (WHAT HAPPENS NEXT) ── */}
+          <div className="space-y-3 pt-2">
+            <div className="flex items-center justify-between border-b pb-2">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                What Happens Next
+              </h4>
+              <span className="text-[11px] text-muted-foreground font-medium">
+                Step 2 of 3 in progress
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              {/* Step 1 */}
+              <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="flex size-7 items-center justify-center rounded-lg bg-emerald-500 text-white font-bold text-xs shadow-xs">
+                    ✓
+                  </span>
+                  <Badge tone="success" className="text-[10px] font-bold">
+                    Completed
+                  </Badge>
+                </div>
+                <div>
+                  <h5 className="text-xs sm:text-sm font-bold text-foreground">
+                    1. Information &amp; Payment
+                  </h5>
+                  <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">
+                    Your personal particulars, medical details, and service charge are confirmed.
+                  </p>
+                </div>
+              </div>
+
+              {/* Step 2 */}
+              <div className="rounded-xl border-2 border-primary bg-primary/[0.04] p-4 space-y-2 ring-2 ring-primary/20 shadow-xs">
+                <div className="flex items-center justify-between">
+                  <span className="flex size-7 items-center justify-center rounded-lg bg-primary text-primary-foreground font-bold text-xs shadow-xs">
+                    2
+                  </span>
+                  <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold text-primary animate-pulse">
+                    <Clock className="size-3" /> In Progress
+                  </span>
+                </div>
+                <div>
+                  <h5 className="text-xs sm:text-sm font-bold text-foreground flex items-center gap-1">
+                    <ShieldCheck className="size-3.5 text-primary shrink-0" />
+                    2. Official Portal Filing
+                  </h5>
+                  <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">
+                    Our operations officer is entering your dossier into the {destinationName} portal &amp; paying consular fees.
+                  </p>
+                </div>
+              </div>
+
+              {/* Step 3 */}
+              <div className="rounded-xl border border-border/80 bg-muted/20 p-4 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="flex size-7 items-center justify-center rounded-lg bg-muted text-muted-foreground font-bold text-xs">
+                    3
+                  </span>
+                  <Badge tone="default" className="text-[10px] font-semibold">
+                    Upcoming
+                  </Badge>
+                </div>
+                <div>
+                  <h5 className="text-xs sm:text-sm font-bold text-foreground flex items-center gap-1">
+                    <Calendar className="size-3.5 text-muted-foreground shrink-0" />
+                    3. Appointment &amp; Web File
+                  </h5>
+                  <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">
+                    Your official appointment slip and government ARN/Web File # will be delivered to your WhatsApp.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Reassuring Zero-Action Callout */}
+            <div className="rounded-lg bg-muted/40 p-3.5 flex items-start sm:items-center gap-3 text-xs text-muted-foreground border">
+              <Sparkles className="size-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5 sm:mt-0" />
+              <div>
+                <span className="font-semibold text-foreground">No further action is required from you. </span>
+                <span>
+                  You do not need to visit any other website. We will notify you via SMS &amp; WhatsApp the moment your government appointment slip is ready.
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Official ARN Banner (when assigned) */}
+          {hasStaffFilingRef && (
+            <div className="rounded-xl bg-emerald-500/10 border border-emerald-500/30 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs sm:text-sm">
+              <div className="flex items-center gap-3">
                 <CheckCircle2 className="size-5 text-emerald-600 dark:text-emerald-400 shrink-0" />
                 <div>
                   <span className="font-bold text-emerald-950 dark:text-emerald-100 block">
                     Official Government Submission Number:
                   </span>
-                  <span className="font-mono font-black text-emerald-700 dark:text-emerald-300 text-sm sm:text-base">
+                  <span className="font-mono font-black text-emerald-700 dark:text-emerald-300 text-base sm:text-lg">
                     {caseData.submission_reference}
                   </span>
                 </div>
               </div>
-              <Badge tone="success" className="shrink-0 font-bold">
-                Officially Filed
+              <Badge tone="success" className="shrink-0 font-bold px-3 py-1 text-xs">
+                ✓ Officially Registered
               </Badge>
             </div>
-          ) : (
-            <div className="rounded-lg bg-muted/40 p-3.5 flex items-start sm:items-center gap-3 text-xs text-muted-foreground">
-              <Sparkles className="size-4 text-primary shrink-0 mt-0.5 sm:mt-0" />
+          )}
+
+          {/* ── ACTIONS BAR ── */}
+          <div className="pt-2 border-t flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto">
+              <Button
+                onClick={handleDownload}
+                disabled={downloading}
+                className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold px-5 h-10 text-xs gap-2 shadow-md w-full sm:w-auto"
+              >
+                {downloading ? (
+                  <>
+                    <Loader2 className="size-4 animate-spin" />
+                    <span>Preparing Document...</span>
+                  </>
+                ) : (
+                  <>
+                    <Download className="size-4" />
+                    <span>Download Application Copy (PDF)</span>
+                  </>
+                )}
+              </Button>
+
+              <Button
+                variant="outline"
+                onClick={handleRefreshClick}
+                disabled={isRefreshing}
+                className="h-10 text-xs font-semibold gap-1.5 w-full sm:w-auto text-muted-foreground hover:text-foreground"
+              >
+                <RefreshCw className={`size-3.5 ${isRefreshing ? "animate-spin" : ""}`} />
+                <span>Refresh Status</span>
+              </Button>
+            </div>
+
+            <div className="text-xs text-muted-foreground text-center sm:text-right">
+              <span>Status updates automatically in real-time</span>
+            </div>
+          </div>
+
+          {/* ── MINIMAL HELPLINE / SUPPORT BAR ── */}
+          <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+            <div className="flex items-center gap-2.5 text-center sm:text-left">
+              <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/20 text-primary">
+                <Phone className="size-4" />
+              </div>
               <div>
-                <span className="font-semibold text-foreground">You do not need to visit any other website. </span>
-                <span>Our staff is processing your official portal filing. We will notify you via SMS and WhatsApp as soon as your government appointment slip is ready.</span>
+                <span className="font-bold text-foreground block">
+                  Have questions about your appointment or visa?
+                </span>
+                <span className="text-muted-foreground text-[11px]">
+                  Our visa operations team is available {SUPPORT_CONFIG.hours}
+                </span>
               </div>
             </div>
-          )}
-        </div>
 
-        {/* Direct Contact & Call Helpline Section */}
-        <div className="rounded-xl border-2 border-primary/20 bg-gradient-to-r from-primary/10 via-card to-background p-4 sm:p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <span className="flex size-7 items-center justify-center rounded-lg bg-primary/20 text-primary">
-                <Phone className="size-4" />
-              </span>
-              <h4 className="text-sm sm:text-base font-bold text-foreground">
-                Have a Query? Call Our Visa Team Directly
-              </h4>
-            </div>
-            <p className="text-xs text-muted-foreground pl-9 max-w-xl">
-              Our operations officers are ready to answer any questions regarding hospital referrals, urgent processing, or appointment dates.
-            </p>
-            <div className="flex flex-wrap items-center gap-3 pl-9 pt-0.5 text-[11px] text-muted-foreground">
-              <span className="flex items-center gap-1 font-medium">
-                <Clock className="size-3 text-primary" /> {SUPPORT_CONFIG.hours}
-              </span>
-              <span>·</span>
-              <span className="text-emerald-600 dark:text-emerald-400 font-semibold">
-                {SUPPORT_CONFIG.emergencySupport}
-              </span>
+            <div className="flex items-center gap-2 w-full sm:w-auto shrink-0 justify-center">
+              <a
+                href={SUPPORT_CONFIG.telLink}
+                className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-background border px-3 py-1.5 text-xs font-semibold text-foreground hover:bg-accent transition-colors shadow-2xs"
+              >
+                <Phone className="size-3 text-primary" />
+                <span>{SUPPORT_CONFIG.phoneDisplay}</span>
+              </a>
+
+              <a
+                href={SUPPORT_CONFIG.whatsappLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-[#25D366] hover:bg-[#20ba5a] text-white px-3 py-1.5 text-xs font-bold transition-colors shadow-2xs"
+              >
+                <MessageCircle className="size-3" />
+                <span>WhatsApp</span>
+              </a>
             </div>
           </div>
-
-          <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto shrink-0 pl-9 md:pl-0">
-            <a
-              href={SUPPORT_CONFIG.telLink}
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-xs font-bold text-primary-foreground shadow-md hover:bg-primary/90 transition-all flex-1 md:flex-initial"
-            >
-              <Phone className="size-4" />
-              <span>Call: {SUPPORT_CONFIG.phoneDisplay}</span>
-            </a>
-
-            <a
-              href={SUPPORT_CONFIG.whatsappLink}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#25D366] hover:bg-[#20ba5a] text-white px-4 py-2.5 text-xs font-bold shadow-md transition-all flex-1 md:flex-initial"
-            >
-              <MessageCircle className="size-4" />
-              <span>WhatsApp Us</span>
-            </a>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
+        </CardContent>
+      </Card>
+    </div>
   );
 }

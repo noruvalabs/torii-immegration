@@ -491,17 +491,17 @@ export function ChecklistStep({
             return (
               <div
                 key={item.id}
-                className="rounded-2xl border border-border/80 bg-card p-5 flex flex-col justify-between transition-all hover:border-primary/50 hover:shadow-sm gap-4"
+                className="rounded-2xl border border-border/90 dark:border-slate-800 bg-card p-5 flex flex-col justify-between transition-all hover:border-border dark:hover:border-slate-700 shadow-xs gap-4"
               >
                 {/* Top Section: Title & Details */}
-                <div className="space-y-3.5">
+                <div className="space-y-3">
                   {/* Card Header Row */}
-                  <div className="flex items-start gap-3">
+                  <div className="flex items-start gap-3.5">
                     <div
-                      className={`p-2.5 rounded-xl shrink-0 mt-0.5 ${
+                      className={`size-9 rounded-xl flex items-center justify-center shrink-0 mt-0.5 ${
                         isGathered
-                          ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20"
-                          : "bg-muted text-muted-foreground border border-border/50"
+                          ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20"
+                          : "bg-muted/60 text-muted-foreground border border-border/70 dark:border-slate-800"
                       }`}
                     >
                       {isGathered ? (
@@ -511,35 +511,37 @@ export function ChecklistStep({
                       )}
                     </div>
                     <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-1.5 mb-1.5">
-                        {item.is_required && (
-                          <Badge tone="danger" className="text-[10px] py-0 px-2 font-medium">
-                            Required
-                          </Badge>
-                        )}
-                        {isGathered ? (
-                          <Badge tone="success" className="text-[10px] py-0 px-2 font-medium">
-                            Uploaded &amp; Ready
-                          </Badge>
-                        ) : matchingDocs.length > 0 ? (
-                          <Badge tone="default" className="text-[10px] py-0 px-2 font-medium">
-                            In your documents ({matchingDocs.length})
-                          </Badge>
-                        ) : (
-                          <Badge tone="muted" className="text-[10px] py-0 px-2 font-medium">
-                            Pending
-                          </Badge>
-                        )}
+                      <div className="flex items-center justify-between gap-2">
+                        <h4 className="text-sm font-semibold text-foreground tracking-tight leading-snug">
+                          {item.name}
+                        </h4>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {item.is_required ? (
+                            <span className="text-[10px] font-semibold text-rose-600 dark:text-rose-400 bg-rose-500/10 border border-rose-500/20 px-2 py-0.5 rounded-full">
+                              Required
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-normal text-muted-foreground bg-muted/60 border border-border/50 px-2 py-0.5 rounded-full">
+                              Optional
+                            </span>
+                          )}
+                          {isGathered ? (
+                            <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full">
+                              ✓ Ready
+                            </span>
+                          ) : matchingDocs.length > 0 ? (
+                            <span className="text-[10px] font-medium text-primary bg-primary/10 border border-primary/20 px-2 py-0.5 rounded-full">
+                              {matchingDocs.length} in wallet
+                            </span>
+                          ) : null}
+                        </div>
                       </div>
-                      <h4 className="text-sm font-semibold text-foreground leading-snug">
-                        {item.name}
-                      </h4>
                     </div>
                   </div>
 
                   {/* Attached Document Pill (if uploaded) */}
                   {isGathered && (
-                    <div className="flex items-center justify-between gap-2.5 px-3 py-2 rounded-xl bg-muted/40 border border-border/60 text-xs">
+                    <div className="flex items-center justify-between gap-2.5 px-3 py-2 rounded-xl bg-muted/30 border border-border/70 dark:border-slate-800 text-xs">
                       <div className="flex items-center gap-2 min-w-0 flex-1">
                         <FileText className="size-3.5 text-primary shrink-0" />
                         <span
@@ -558,45 +560,29 @@ export function ChecklistStep({
                     </div>
                   )}
 
-                  {/* Explanatory Body */}
-                  <div className="space-y-1.5 text-xs text-muted-foreground bg-muted/20 rounded-xl p-3 border border-border/40">
+                  {/* Explanatory Guidance */}
+                  <div className="space-y-1.5 text-xs leading-relaxed pt-0.5">
                     {item.how_to_obtain && (
-                      <p className="leading-relaxed">
-                        <span className="font-semibold text-foreground">How: </span>
-                        {item.how_to_obtain}
-                      </p>
+                      <div className="flex items-start gap-1.5">
+                        <span className="text-[11px] font-semibold text-foreground shrink-0">
+                          How:
+                        </span>
+                        <span className="text-muted-foreground/90">{item.how_to_obtain}</span>
+                      </div>
                     )}
                     {item.why_required && (
-                      <p className="leading-relaxed">
-                        <span className="font-semibold text-foreground">Why: </span>
-                        {item.why_required}
-                      </p>
-                    )}
-                    {url && (
-                      <div className="pt-0.5">
-                        <a
-                          href={url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline font-medium"
-                        >
-                          <span>
-                            {String(
-                              item.citation?.authority ||
-                                item.citation?.title ||
-                                "Official authority source"
-                            )}
-                            {version ? ` (${version})` : ""}
-                          </span>
-                          <ExternalLink className="size-3" />
-                        </a>
+                      <div className="flex items-start gap-1.5 text-[11px] text-muted-foreground/80">
+                        <span className="font-semibold text-foreground/80 shrink-0">
+                          Why:
+                        </span>
+                        <span>{item.why_required}</span>
                       </div>
                     )}
                   </div>
                 </div>
 
                 {/* Dedicated Card Footer Toolbar */}
-                <div className="pt-3 border-t border-border/60 flex flex-wrap items-center justify-between gap-2">
+                <div className="pt-3 border-t border-border/70 dark:border-slate-800/80 flex flex-wrap items-center justify-between gap-2">
                   {isGathered ? (
                     <div className="flex flex-wrap items-center justify-between gap-2 w-full">
                       <div className="flex items-center gap-2 flex-wrap">
@@ -710,7 +696,7 @@ export function ChecklistStep({
                               input.click();
                             }
                           }}
-                          className="h-8 text-xs gap-1.5 px-3.5 font-medium cursor-pointer"
+                          className="h-8 text-xs gap-1.5 px-3.5 font-semibold rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 shadow-2xs cursor-pointer"
                         >
                           {busy ? (
                             <Loader2 className="size-3.5 animate-spin" />
@@ -727,10 +713,10 @@ export function ChecklistStep({
                             onClick={() =>
                               setShowPicker(showPicker === item.id ? null : item.id)
                             }
-                            className="h-8 text-xs gap-1.5 px-2.5 text-primary border-primary/30 hover:bg-primary/5 cursor-pointer"
+                            className="h-8 text-xs gap-1.5 px-2.5 rounded-lg border-border/90 dark:border-slate-700 bg-background/60 hover:bg-muted/60 text-foreground cursor-pointer"
                           >
-                            <FolderOpen className="size-3.5" />
-                            Saved ({matchingDocs.length})
+                            <FolderOpen className="size-3.5 text-primary" />
+                            <span>Saved ({matchingDocs.length})</span>
                           </Button>
                         )}
                       </div>
@@ -738,7 +724,7 @@ export function ChecklistStep({
                       <button
                         type="button"
                         onClick={() => onStatusChange(item.id, "gathered")}
-                        className="text-[11px] text-muted-foreground hover:text-foreground px-2 py-1 transition-colors cursor-pointer"
+                        className="text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded-md transition-colors cursor-pointer"
                       >
                         Mark done
                       </button>

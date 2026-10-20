@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useMemo } from "react";
 import { Search, ChevronDown, Check, X } from "lucide-react";
 import { ALL_COUNTRIES, matchCountry, type Country } from "@/lib/countries";
+import { CountryFlag } from "@/components/landing/country-flag";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
@@ -199,12 +200,10 @@ export function CountrySelector({
                       : "bg-card hover:bg-accent text-foreground",
                   )}
                 >
-                  <span
-                    className="inline-flex size-7 shrink-0 items-center justify-center rounded bg-muted/60 text-xs font-semibold"
-                    aria-hidden
-                  >
-                    {c.flag}
-                  </span>
+                  <CountryFlag
+                    code={c.code}
+                    className="size-5 shrink-0"
+                  />
                   <span className="min-w-0 flex-1 truncate font-medium">
                     {c.name}
                   </span>
@@ -240,12 +239,10 @@ export function CountrySelector({
         <span className="flex items-center gap-2.5 truncate">
           {selectedCountry ? (
             <>
-              <span
-                className="inline-flex size-6 shrink-0 items-center justify-center rounded bg-muted/70 text-xs font-semibold"
-                aria-hidden
-              >
-                {selectedCountry.flag}
-              </span>
+              <CountryFlag
+                code={selectedCountry.code}
+                className="size-5 shrink-0"
+              />
               <span className="font-medium text-foreground">
                 {selectedCountry.name}
               </span>
@@ -320,17 +317,10 @@ export function CountrySelector({
                         : "hover:bg-accent hover:text-accent-foreground text-foreground",
                     )}
                   >
-                    <span
-                      className={cn(
-                        "inline-flex size-6 shrink-0 items-center justify-center rounded text-xs font-semibold",
-                        isSelected
-                          ? "bg-primary-foreground/20 text-primary-foreground"
-                          : "bg-muted/70 text-foreground",
-                      )}
-                      aria-hidden
-                    >
-                      {c.flag}
-                    </span>
+                    <CountryFlag
+                      code={c.code}
+                      className="size-5 shrink-0"
+                    />
                     <span className="min-w-0 flex-1 truncate">{c.name}</span>
                     <span
                       className={cn(
