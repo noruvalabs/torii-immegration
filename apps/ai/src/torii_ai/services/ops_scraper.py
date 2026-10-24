@@ -17,6 +17,7 @@ from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
+from urllib.parse import urlparse
 
 import httpx
 import structlog
@@ -28,8 +29,6 @@ from torii_ai.services.web_fetch import fetch_govuk_text, scrape_pages
 from torii_ai.tools.tavily import SearchClient
 
 log = structlog.get_logger()
-
-from urllib.parse import urlparse
 
 # Official domains to constrain search to, per destination country. Search is restricted to
 # these so every extracted requirement traces to a government source (NF-2).
@@ -77,7 +76,13 @@ MISSION_DOMAIN_PATTERNS: dict[str, list[str]] = {
     "GB": ["gov.uk"],
     "CA": ["international.gc.ca"],
     "AU": ["{cc}.embassy.gov.au"],
-    "IN": ["indianvisaonline.gov.in", "mea.gov.in", "boi.gov.in", "hcinairobi.gov.in", "hcinairobi.gov.ke"],
+    "IN": [
+        "indianvisaonline.gov.in",
+        "mea.gov.in",
+        "boi.gov.in",
+        "hcinairobi.gov.in",
+        "hcinairobi.gov.ke",
+    ],
     "FR": ["{cc}.ambafrance.org"],
     "DE": ["{cc}.diplo.de"],
     "IT": ["amb{cc}.esteri.it"],

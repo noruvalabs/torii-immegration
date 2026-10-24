@@ -126,9 +126,7 @@ async def test_check_corridor_prevents_duplicate_outbox_when_already_queued(
     assert len(await _outbox_topics(engine)) == outbox_count
 
 
-async def test_check_corridor_force_refresh(
-    client: AsyncClient, engine: AsyncEngine
-) -> None:
+async def test_check_corridor_force_refresh(client: AsyncClient, engine: AsyncEngine) -> None:
     first = await client.post("/v1/corridors/check", json=BD_JP_TOURIST)
     corridor_id = first.json()["id"]
 
@@ -208,7 +206,7 @@ async def test_check_corridor_failed_research_observability(
             text(
                 "UPDATE case_stage_research SET status = 'failed', "
                 "error = 'Official source pages were inaccessible (HTTP 403 / timeout / no readable content)', "
-                "payload = '{\"_meta\": {\"review_required\": true, \"verification_status\": \"failed\", \"retrieval_status\": \"failed\", \"source_domains\": [], \"error_diagnostics\": \"Official source pages were inaccessible\"}}' "
+                'payload = \'{"_meta": {"review_required": true, "verification_status": "failed", "retrieval_status": "failed", "source_domains": [], "error_diagnostics": "Official source pages were inaccessible"}}\' '
                 "WHERE id = :id"
             ),
             {"id": corridor_id},
@@ -241,7 +239,7 @@ async def test_check_corridor_anonymous_sanitized_diagnostics(
             text(
                 "UPDATE case_stage_research SET status = 'failed', "
                 "error = :err, "
-                "payload = '{\"_meta\": {\"review_required\": true, \"verification_status\": \"failed\", \"retrieval_status\": \"failed\", \"source_domains\": []}}' "
+                'payload = \'{"_meta": {"review_required": true, "verification_status": "failed", "retrieval_status": "failed", "source_domains": []}}\' '
                 "WHERE id = :id"
             ),
             {"err": raw_sensitive_error, "id": corridor_id},
@@ -271,13 +269,6 @@ async def test_check_corridor_failed_refresh_preserves_cached_record(
     first = await client.post("/v1/corridors/check", json=BD_JP_TOURIST)
     corridor_id = first.json()["id"]
     now = datetime.now(UTC)
-    valid_payload = {
-        "admission": {
-            "visa_required": True,
-            "route": "consular_visa",
-            "citation": {"authority": "ISA", "url": "https://www.isa.go.jp/visa"},
-        }
-    }
     async with engine.begin() as conn:
         await conn.execute(
             text(
@@ -412,6 +403,3 @@ async def test_concurrency_guard_superseded_older_job_cannot_overwrite_newer_suc
     assert data["verification_status"] == "verified"
     assert data["review_required"] is False
     assert data["items"]["admission"]["visa_required"] is True
-
-
-

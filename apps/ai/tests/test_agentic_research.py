@@ -274,7 +274,10 @@ async def test_research_stage_no_search_hits_still_returns_shaped_payload(
 def test_is_official_source_domain_accepts_official_and_blocks_commercial() -> None:
     # Official government domains
     assert is_official_source_domain("https://www.isa.go.jp/en/index.html", "JP") is True
-    assert is_official_source_domain("https://www.bd.emb-japan.go.jp/itpr_en/visa.html", "JP", "BD") is True
+    assert (
+        is_official_source_domain("https://www.bd.emb-japan.go.jp/itpr_en/visa.html", "JP", "BD")
+        is True
+    )
     assert is_official_source_domain("https://www.gov.uk/standard-visitor", "GB") is True
     assert is_official_source_domain("https://travel.state.gov/content/travel.html", "US") is True
     assert is_official_source_domain("https://immi.homeaffairs.gov.au/visas", "AU") is True
@@ -323,7 +326,9 @@ async def test_research_stage_rejects_commercial_search_hits(
     # Scraped URLs should only contain the official MOFA domain, not ivisa.com
     assert "https://www.mofa.go.jp/j_info/visit/visa/index.html" in scraped_urls
     assert "https://www.ivisa.com/japan-tourist-visa" not in scraped_urls
-    assert [p["url"] for p in result.source_pages] == ["https://www.mofa.go.jp/j_info/visit/visa/index.html"]
+    assert [p["url"] for p in result.source_pages] == [
+        "https://www.mofa.go.jp/j_info/visit/visa/index.html"
+    ]
 
 
 @pytest.mark.asyncio
@@ -338,7 +343,12 @@ async def test_research_stage_direct_scrape_success_with_provenance(
     researcher = AgenticStageResearcher(search=search, chat=chat, settings=Settings())
 
     async def fake_scrape_pages(urls, *, timeout_seconds, page_chars):
-        return [{"url": urls[0], "text": "Official Japan tourist visa requirements for foreign nationals. Permitted stay up to 90 days. Consular visa required for entry."}]
+        return [
+            {
+                "url": urls[0],
+                "text": "Official Japan tourist visa requirements for foreign nationals. Permitted stay up to 90 days. Consular visa required for entry.",
+            }
+        ]
 
     monkeypatch.setattr(ar, "scrape_pages", fake_scrape_pages)
 
@@ -588,7 +598,9 @@ def test_is_official_source_domain_strict_validation_and_spoof_defense() -> None
 
     # Legitimate domains, subdomains, ports, case-insensitivity and trailing dots must be accepted
     assert is_official_source_domain("https://travel.state.gov/content/visas.html", "US") is True
-    assert is_official_source_domain("https://TRAVEL.STATE.GOV:443/content/visas.html", "US") is True
+    assert (
+        is_official_source_domain("https://TRAVEL.STATE.GOV:443/content/visas.html", "US") is True
+    )
     assert is_official_source_domain("https://www.mofa.go.jp./itpr_en/visa.html", "JP") is True
     assert is_official_source_domain("https://sub.immigration.gov.sg/visa", "SG") is True
     assert is_official_source_domain("https://visa.gov.bd/apply", "BD") is True
@@ -771,7 +783,3 @@ async def test_irrelevant_corridor_evidence_triggers_needs_review(
     assert result.review_required is True
     assert result.verification_status == "needs_review"
     assert "relevance" in (result.error_diagnostics or "").lower()
-
-
-
-

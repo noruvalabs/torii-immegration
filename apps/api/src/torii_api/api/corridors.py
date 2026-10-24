@@ -10,10 +10,9 @@ applicant on the same corridor until the cache expires
 
 from __future__ import annotations
 
+import re
 from datetime import UTC, datetime
 from typing import Annotated, Any
-
-import re
 from urllib.parse import urlparse
 
 from fastapi import APIRouter, HTTPException, status
@@ -62,7 +61,9 @@ def _sanitize_diagnostics(error: str | None, is_anonymous: bool = False) -> str 
         return None
     err_lower = error.lower()
     # Mask stack traces, sql, secrets
-    if any(k in err_lower for k in ("traceback", "file \"", "select ", "insert ", "update ", "delete ")):
+    if any(
+        k in err_lower for k in ("traceback", 'file "', "select ", "insert ", "update ", "delete ")
+    ):
         return "Internal retrieval diagnostic error (sanitized)"
     if any(k in err_lower for k in ("api_key", "secret", "token", "password", "bearer")):
         return "Authentication or authorization failure on external provider"
@@ -134,7 +135,9 @@ def _out(research: CaseStageResearch, user: OptionalUserDep = None) -> CorridorC
     return CorridorCheckOut(
         id=research.id,
         status=effective_status,
-        items=clean_items if (research.status == ScopeResearchStatus.COMPLETED and not is_stale) else {},
+        items=clean_items
+        if (research.status == ScopeResearchStatus.COMPLETED and not is_stale)
+        else {},
         source_pages=source_pages,
         researched_at=research.researched_at.isoformat() if research.researched_at else None,
         expires_at=research.expires_at.isoformat() if research.expires_at else None,
@@ -239,4 +242,3 @@ async def get_corridor(
             status_code=status.HTTP_404_NOT_FOUND, detail="corridor check not found"
         )
     return _out(research, user=user)
-

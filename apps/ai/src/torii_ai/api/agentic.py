@@ -56,7 +56,6 @@ class StageResearchOut(BaseModel):
     failure_reason: str | None = None
 
 
-
 class AIEvaluateEligibilityIn(BaseModel):
     destination_code: str = Field(min_length=2, max_length=16, examples=["JP"])
     purpose_code: str = Field(min_length=1, max_length=32, examples=["tourist"])
@@ -225,7 +224,6 @@ async def research_stage(payload: StageResearchIn, settings: SettingsDep) -> Sta
         error_diagnostics=result.error_diagnostics,
         failure_reason=result.failure_reason,
     )
-
 
 
 @router.post("/evaluate-eligibility", response_model=AIEvaluateEligibilityOut)

@@ -140,15 +140,26 @@ async def test_a_failed_request_is_empty_not_an_exception() -> None:
 @pytest.mark.asyncio
 async def test_redirect_to_official_destination_accepted_with_updated_provenance() -> None:
     """Official-to-official redirects are followed and provenance records the final URL."""
+
     async def handler(request: httpx.Request) -> httpx.Response:
         if request.url == "https://mofa.go.jp/visa":
-            return httpx.Response(301, headers={"location": "https://www.mofa.go.jp/j_info/visit/visa/index.html"})
+            return httpx.Response(
+                301, headers={"location": "https://www.mofa.go.jp/j_info/visit/visa/index.html"}
+            )
         if request.url == "https://www.mofa.go.jp/j_info/visit/visa/index.html":
-            return httpx.Response(200, text="<main><p>Official Japanese Visa Requirements.</p></main>", headers={"content-type": "text/html"})
+            return httpx.Response(
+                200,
+                text="<main><p>Official Japanese Visa Requirements.</p></main>",
+                headers={"content-type": "text/html"},
+            )
         return httpx.Response(404)
 
-    async with httpx.AsyncClient(transport=httpx.MockTransport(handler), follow_redirects=True) as client:
-        final_url, text = await fetch_page_details(client, "https://mofa.go.jp/visa", destination="JP")
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(handler), follow_redirects=True
+    ) as client:
+        final_url, text = await fetch_page_details(
+            client, "https://mofa.go.jp/visa", destination="JP"
+        )
 
     assert final_url == "https://www.mofa.go.jp/j_info/visit/visa/index.html"
     assert "Official Japanese Visa Requirements." in text
@@ -157,15 +168,26 @@ async def test_redirect_to_official_destination_accepted_with_updated_provenance
 @pytest.mark.asyncio
 async def test_redirect_to_untrusted_destination_is_rejected() -> None:
     """Official-to-untrusted redirects are blocked and return empty content."""
+
     async def handler(request: httpx.Request) -> httpx.Response:
         if request.url == "https://travel.state.gov/visa":
-            return httpx.Response(302, headers={"location": "https://visa.gov.scamportal.com/harvest"})
+            return httpx.Response(
+                302, headers={"location": "https://visa.gov.scamportal.com/harvest"}
+            )
         if request.url == "https://visa.gov.scamportal.com/harvest":
-            return httpx.Response(200, text="<p>Malicious phishing page content</p>", headers={"content-type": "text/html"})
+            return httpx.Response(
+                200,
+                text="<p>Malicious phishing page content</p>",
+                headers={"content-type": "text/html"},
+            )
         return httpx.Response(404)
 
-    async with httpx.AsyncClient(transport=httpx.MockTransport(handler), follow_redirects=True) as client:
-        final_url, text = await fetch_page_details(client, "https://travel.state.gov/visa", destination="US")
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(handler), follow_redirects=True
+    ) as client:
+        final_url, text = await fetch_page_details(
+            client, "https://travel.state.gov/visa", destination="US"
+        )
 
     assert final_url == ""
     assert text == ""
@@ -174,17 +196,26 @@ async def test_redirect_to_untrusted_destination_is_rejected() -> None:
 @pytest.mark.asyncio
 async def test_redirect_chain_allowed_when_all_targets_official() -> None:
     """Redirect chains are allowed provided the final target is an authenticated official domain."""
+
     async def handler(request: httpx.Request) -> httpx.Response:
         if request.url == "http://state.gov/visas":
             return httpx.Response(301, headers={"location": "https://state.gov/visas"})
         if request.url == "https://state.gov/visas":
-            return httpx.Response(302, headers={"location": "https://travel.state.gov/content/visas.html"})
+            return httpx.Response(
+                302, headers={"location": "https://travel.state.gov/content/visas.html"}
+            )
         if request.url == "https://travel.state.gov/content/visas.html":
-            return httpx.Response(200, text="<p>US Visa Information</p>", headers={"content-type": "text/html"})
+            return httpx.Response(
+                200, text="<p>US Visa Information</p>", headers={"content-type": "text/html"}
+            )
         return httpx.Response(404)
 
-    async with httpx.AsyncClient(transport=httpx.MockTransport(handler), follow_redirects=True) as client:
-        final_url, text = await fetch_page_details(client, "http://state.gov/visas", destination="US")
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(handler), follow_redirects=True
+    ) as client:
+        final_url, text = await fetch_page_details(
+            client, "http://state.gov/visas", destination="US"
+        )
 
     assert final_url == "https://travel.state.gov/content/visas.html"
     assert "US Visa Information" in text
@@ -193,13 +224,20 @@ async def test_redirect_chain_allowed_when_all_targets_official() -> None:
 @pytest.mark.asyncio
 async def test_redirect_loop_handled_gracefully() -> None:
     """Redirect loops are caught by TooManyRedirects handling without raising uncaught exceptions."""
+
     async def handler(request: httpx.Request) -> httpx.Response:
         if "loop1" in str(request.url):
-            return httpx.Response(302, headers={"location": "https://immi.homeaffairs.gov.au/loop2"})
+            return httpx.Response(
+                302, headers={"location": "https://immi.homeaffairs.gov.au/loop2"}
+            )
         return httpx.Response(302, headers={"location": "https://immi.homeaffairs.gov.au/loop1"})
 
-    async with httpx.AsyncClient(transport=httpx.MockTransport(handler), follow_redirects=True, max_redirects=3) as client:
-        final_url, text = await fetch_page_details(client, "https://immi.homeaffairs.gov.au/loop1", destination="AU")
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(handler), follow_redirects=True, max_redirects=3
+    ) as client:
+        final_url, text = await fetch_page_details(
+            client, "https://immi.homeaffairs.gov.au/loop1", destination="AU"
+        )
 
     assert final_url == ""
     assert text == ""
@@ -216,7 +254,9 @@ async def test_untrusted_initial_url_rejected_without_network_io() -> None:
         return httpx.Response(200, text="Should not be fetched")
 
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
-        final_url, text = await fetch_page_details(client, "https://scam-visa.com/fake", destination="JP")
+        final_url, text = await fetch_page_details(
+            client, "https://scam-visa.com/fake", destination="JP"
+        )
 
     assert final_url == ""
     assert text == ""
@@ -255,16 +295,22 @@ async def test_private_ip_and_internal_target_blocked_ssrf() -> None:
 @pytest.mark.asyncio
 async def test_redirect_to_private_ip_is_blocked() -> None:
     """Redirects targeting private/link-local cloud metadata are intercepted and blocked."""
+
     async def handler(request: httpx.Request) -> httpx.Response:
         if str(request.url) == "https://travel.state.gov/visa":
-            return httpx.Response(302, headers={"location": "http://169.254.169.254/latest/meta-data/"})
+            return httpx.Response(
+                302, headers={"location": "http://169.254.169.254/latest/meta-data/"}
+            )
         if "169.254" in str(request.url):
             return httpx.Response(200, text="ami-id: ami-12345678")
         return httpx.Response(404)
 
-    async with httpx.AsyncClient(transport=httpx.MockTransport(handler), follow_redirects=True) as client:
-        final_url, text = await fetch_page_details(client, "https://travel.state.gov/visa", destination="US")
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(handler), follow_redirects=True
+    ) as client:
+        final_url, text = await fetch_page_details(
+            client, "https://travel.state.gov/visa", destination="US"
+        )
 
     assert final_url == ""
     assert text == ""
-

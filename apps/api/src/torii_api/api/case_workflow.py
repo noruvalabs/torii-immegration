@@ -31,7 +31,13 @@ from torii_api.db.models import (
     User,
 )
 from torii_api.db.session import get_session
-from torii_api.services.agentic import find_admissibility, scope_key, stage_is_usable
+from torii_api.services.agentic import (
+    find_admissibility,
+    find_case_stage,
+    scope_key,
+    stage_is_usable,
+    stage_items,
+)
 from torii_api.services.case_plan import build_payload, request_plan
 from torii_api.services.checklist import ChecklistStatus, update_status, visible_requirement_items
 from torii_api.services.citations import resolve_official_citation
@@ -64,7 +70,6 @@ from torii_api.services.pack_overrides import (
 from torii_api.services.packet import assemble_packet
 from torii_api.services.payment import case_has_packet_entitlement
 from torii_api.services.portal_pack import build_portal_pack
-from torii_api.services.agentic import find_case_stage, stage_is_usable, stage_items
 from torii_api.services.research import (
     research_documents,
     research_forms,

@@ -35,6 +35,7 @@ from torii_api.db.models import (
     VisaCategory,
 )
 from torii_api.db.session import get_session
+from torii_api.services.agentic import find_case_stage, stage_is_usable, stage_items
 from torii_api.services.deadlines import compute_deadlines
 from torii_api.services.guidance import compute_guidance, next_status_for_phase
 from torii_api.services.intake import (
@@ -48,7 +49,6 @@ from torii_api.services.intake import (
     validate_answer,
     visible_questions,
 )
-from torii_api.services.agentic import find_case_stage, stage_is_usable, stage_items
 from torii_api.services.jp_official_forms import merge_form_questions
 from torii_api.services.pack_overrides import SECTION_INTAKE, apply_overrides
 from torii_api.services.research import (

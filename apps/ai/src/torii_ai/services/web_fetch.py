@@ -270,4 +270,3 @@ async def scrape_pages(
                 content.append({"url": final_u, "text": text[:page_chars]})
                 log.info("web_fetch.page_scraped", url=final_u, chars=len(text))
     return content
-

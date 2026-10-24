@@ -328,13 +328,16 @@ async def run_stage_research(ctx: dict[str, Any], event: OutboxEvent) -> None:
         # the handler below and leave the row stuck in RUNNING forever.
         async with session_factory() as session:
             research = await session.get(CaseStageResearch, research_id)
-            if research is not None and not _is_research_superseded(research, event_generation, queued_at_str):
+            if research is not None and not _is_research_superseded(
+                research, event_generation, queued_at_str
+            ):
                 prev_items = {k: v for k, v in (research.payload or {}).items() if k != "_meta"}
                 if prev_items and stage_is_valid(stage, prev_items):
                     research.status = ScopeResearchStatus.COMPLETED
                     new_payload = dict(research.payload or {})
                     new_payload["_meta"] = {
-                        "generation": event_generation or ((research.payload or {}).get("_meta") or {}).get("generation", 1),
+                        "generation": event_generation
+                        or ((research.payload or {}).get("_meta") or {}).get("generation", 1),
                         "review_required": True,
                         "verification_status": "needs_review",
                         "retrieval_status": "failed",
@@ -365,7 +368,8 @@ async def run_stage_research(ctx: dict[str, Any], event: OutboxEvent) -> None:
                     research.status = ScopeResearchStatus.COMPLETED
                     new_payload = dict(research.payload or {})
                     new_payload["_meta"] = {
-                        "generation": event_generation or ((research.payload or {}).get("_meta") or {}).get("generation", 1),
+                        "generation": event_generation
+                        or ((research.payload or {}).get("_meta") or {}).get("generation", 1),
                         "review_required": True,
                         "verification_status": "needs_review",
                         "retrieval_status": "failed",
@@ -396,7 +400,9 @@ async def run_stage_research(ctx: dict[str, Any], event: OutboxEvent) -> None:
             log.info("stage_research.completion_superseded_ignored", research_id=research_id)
             return
 
-        effective_gen = event_generation or ((research.payload or {}).get("_meta") or {}).get("generation", 1)
+        effective_gen = event_generation or ((research.payload or {}).get("_meta") or {}).get(
+            "generation", 1
+        )
 
         if valid:
             research.status = ScopeResearchStatus.COMPLETED
@@ -436,7 +442,9 @@ async def run_stage_research(ctx: dict[str, Any], event: OutboxEvent) -> None:
                     "refresh_failed": True,
                 }
                 research.payload = new_payload
-                research.error = f"Refresh failed ({fail_reason}); preserved prior valid requirements"
+                research.error = (
+                    f"Refresh failed ({fail_reason}); preserved prior valid requirements"
+                )
             else:
                 research.status = ScopeResearchStatus.FAILED
                 research.payload = {

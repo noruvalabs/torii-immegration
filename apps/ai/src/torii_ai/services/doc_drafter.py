@@ -169,6 +169,7 @@ Please generate the complete, ready-to-file text of the {title}.
         arrival_date: str,
     ) -> str:
         date_str = datetime.now(UTC).strftime("%B %d, %Y")
+        answers = req.intake_answers or {}
         checklist_items = [
             f"   {i + 1}. {c.get('name', 'Document')} (Verified & Attached)"
             for i, c in enumerate(req.checklist)
@@ -409,10 +410,22 @@ ________________________________________
 {employer}
 Date: {date_str}
 """
-        elif "medical" in doc_type or req.jurisdiction_code == "IN" or "medical" in req.scope_label.lower():
-            hospital = str(answers.get("destination_hospital") or answers.get("hospital_name") or "Recognized Medical Institution in India")
+        elif (
+            "medical" in doc_type
+            or req.jurisdiction_code == "IN"
+            or "medical" in req.scope_label.lower()
+        ):
+            hospital = str(
+                answers.get("destination_hospital")
+                or answers.get("hospital_name")
+                or "Recognized Medical Institution in India"
+            )
             hospital_city = str(answers.get("hospital_city") or "India")
-            illness = str(answers.get("illness_treatment_category") or answers.get("treatment_nature") or "Specialized Medical Treatment")
+            illness = str(
+                answers.get("illness_treatment_category")
+                or answers.get("treatment_nature")
+                or "Specialized Medical Treatment"
+            )
             doctor = str(answers.get("doctor_in_charge") or "Senior Consultant / Specialist")
             attendants_count = str(answers.get("accompanying_attendants_count") or "0")
             attendant_info = ""
@@ -456,7 +469,7 @@ All expenses associated with the medical treatment, surgery, hospitalization, ac
 4. ENCLOSED STATUTORY DOCUMENTS:
 {doc_list_str}
 
-We respectfully request your favorable consideration and expeditious grant of the Medical Visa (MED-1) for the patient{f' and Medical Attendant Visas (MED-2) for the accompanying caregiver(s)' if attendants_count != '0' else ''}.
+We respectfully request your favorable consideration and expeditious grant of the Medical Visa (MED-1) for the patient{" and Medical Attendant Visas (MED-2) for the accompanying caregiver(s)" if attendants_count != "0" else ""}.
 
 Respectfully submitted,
 
