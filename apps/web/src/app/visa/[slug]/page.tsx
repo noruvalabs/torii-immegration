@@ -6,20 +6,35 @@ import { VisaDetailView } from "@/components/visa/visa-detail-view";
 import { LangProvider } from "@/components/landing/i18n";
 import { DESTINATIONS } from "@/lib/destinations-data";
 
+import { ALL_COUNTRIES } from "@/lib/countries";
+
 export function generateStaticParams() {
   return Object.keys(DESTINATIONS).map((slug) => ({ slug }));
 }
 
 export async function generateMetadata({
   params,
+  searchParams,
 }: {
   params: Promise<{ slug: string }>;
+  searchParams: Promise<{ from?: string; passport?: string }>;
 }): Promise<Metadata> {
   const { slug } = await params;
+  const resolvedSearchParams = await searchParams;
   const dest = DESTINATIONS[slug];
   if (!dest) return {};
+
+  const originCode = resolvedSearchParams?.from || resolvedSearchParams?.passport;
+  const matchedCountry = originCode
+    ? ALL_COUNTRIES.find((c) => c.code.toUpperCase() === originCode.toUpperCase())
+    : null;
+
+  const title = matchedCountry
+    ? `${dest.name} Visa for ${matchedCountry.name} Citizens | Torii`
+    : `${dest.name} Visa Application & Concierge | Torii`;
+
   return {
-    title: `${dest.name} Visa for Bangladeshi Citizens | Torii`,
+    title,
     description: dest.shortDescription,
   };
 }

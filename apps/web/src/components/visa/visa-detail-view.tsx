@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   Clock,
   ShieldCheck,
@@ -23,11 +23,24 @@ import {
   CreditCard,
   Send,
   UserCheck,
+  Search,
+  Globe,
+  ExternalLink,
+  Loader2,
+  AlertTriangle,
+  AlertCircle,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
+import { useCorridorCheckQuery } from "@/lib/queries/corridors";
 import { type DestinationInfo, type DestinationVisa } from "@/lib/destinations-data";
+import { ALL_COUNTRIES, type Country } from "@/lib/countries";
 import { CountryFlag } from "@/components/landing/country-flag";
 import { cn } from "@/lib/utils";
+
+const POPULAR_PASSPORT_CODES = ["US", "GB", "CA", "AU", "IN", "BD", "PH", "PK", "SG", "AE", "DE", "FR"];
+const POPULAR_PASSPORTS: Country[] = POPULAR_PASSPORT_CODES.map(
+  (code) => ALL_COUNTRIES.find((c) => c.code === code)!,
+).filter(Boolean);
 
 function cleanVisaName(name: string): string {
   // Strip parenthetical non-English characters like (短期滞在) or (知人訪問) for a clean display
@@ -36,19 +49,131 @@ function cleanVisaName(name: string): string {
 
 export function VisaDetailView({ destination }: { destination: DestinationInfo }) {
   const router = useRouter();
-  const { user } = useAuth();
+  const searchParams = useSearchParams();
+  const { user, token } = useAuth();
   const [selectedVisaId, setSelectedVisaId] = useState<string>(
     destination.visas[0]?.id || "",
   );
   const [openFaq, setOpenFaq] = useState<number | null>(0);
 
+  const [passportCountry, setPassportCountry] = useState<Country | null>(null);
+  const [passportSelectorOpen, setPassportSelectorOpen] = useState(false);
+  const [passportSearch, setPassportSearch] = useState("");
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Initialize passport from URL param, localStorage, or null for first-time visitors
+  useEffect(() => {
+    const fromParam = searchParams.get("from") || searchParams.get("passport");
+    if (fromParam) {
+      const matched = ALL_COUNTRIES.find((c) => c.code.toUpperCase() === fromParam.toUpperCase());
+      if (matched) {
+        setPassportCountry(matched);
+        if (typeof window !== "undefined") {
+          localStorage.setItem("torii_user_passport", matched.code);
+        }
+        return;
+      }
+    }
+
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("torii_user_passport");
+      if (saved) {
+        const matched = ALL_COUNTRIES.find((c) => c.code.toUpperCase() === saved.toUpperCase());
+        if (matched) {
+          setPassportCountry(matched);
+          return;
+        }
+      }
+    }
+  }, [searchParams]);
+
+  // Click outside listener for dropdown
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setPassportSelectorOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  function handleSelectPassport(country: Country) {
+    setPassportCountry(country);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("torii_user_passport", country.code);
+    }
+    setPassportSelectorOpen(false);
+    setPassportSearch("");
+    router.replace(`/visa/${destination.slug}?from=${country.code}`, { scroll: false });
+  }
+
+  const filteredPassports = passportSearch.trim()
+    ? ALL_COUNTRIES.filter((p) => {
+        const q = passportSearch.toLowerCase().trim();
+        return p.name.toLowerCase().includes(q) || p.code.toLowerCase().includes(q);
+      })
+    : POPULAR_PASSPORTS;
+
   const selectedVisa: DestinationVisa =
     destination.visas.find((v) => v.id === selectedVisaId) || destination.visas[0];
+
+  const categoryCode = selectedVisa.id.includes("medical")
+    ? "medical"
+    : selectedVisa.id.includes("student")
+      ? "student"
+      : selectedVisa.id.includes("work")
+        ? "work"
+        : "tourist";
+
+  const { data: corridorData, isLoading: corridorLoading } = useCorridorCheckQuery(
+    passportCountry
+      ? {
+          destination_code: destination.code,
+          purpose_code: categoryCode,
+          action_code: "new_application",
+          nationality: passportCountry.code,
+          residence_country: passportCountry.code,
+        }
+      : null,
+    token,
+  );
+
+  const isVerifiedCurrent =
+    corridorData?.status === "completed" &&
+    corridorData?.verification_status === "verified" &&
+    !corridorData?.review_required;
+
+  const verifiedFee = isVerifiedCurrent ? corridorData?.items?.fees?.[0] : null;
+  const verifiedProcessing =
+    isVerifiedCurrent &&
+    corridorData?.items?.process?.processing_time_days_min != null &&
+    corridorData?.items?.process?.processing_time_days_max != null
+      ? `${corridorData.items.process.processing_time_days_min}–${corridorData.items.process.processing_time_days_max} Working Days`
+      : null;
+  const verifiedMission = isVerifiedCurrent
+    ? (corridorData?.items?.filing_channel?.mission_name ||
+       corridorData?.items?.filing_channel?.channel)
+    : null;
+  const verifiedMaxStay =
+    isVerifiedCurrent && corridorData?.items?.admission?.max_stay_days
+      ? `${corridorData.items.admission.max_stay_days} Days max stay`
+      : null;
+  const sourcePages = isVerifiedCurrent ? (corridorData?.source_pages || []) : [];
 
   const isPortalConcierge = destination.serviceModel === "portal_payment_concierge";
 
   function handleStartApplication() {
-    const targetUrl = `/scope?destination=${destination.code}`;
+    const originParam = passportCountry?.code ? `&origin=${passportCountry.code}` : "";
+    const categoryCode = selectedVisa.id.includes("medical")
+      ? "medical"
+      : selectedVisa.id.includes("tourist")
+        ? "tourist"
+        : selectedVisa.id.includes("student")
+          ? "student"
+          : "";
+    const categoryParam = categoryCode ? `&category=${categoryCode}` : "";
+    const targetUrl = `/scope?destination=${destination.code}${originParam}${categoryParam}`;
     if (user) {
       router.push(targetUrl);
     } else {
@@ -111,23 +236,99 @@ export function VisaDetailView({ destination }: { destination: DestinationInfo }
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
             {/* Left Hero Content */}
             <div className="lg:col-span-7 space-y-5">
-              <div className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3.5 py-1 text-xs font-semibold backdrop-blur-md">
-                <CountryFlag code={destination.code} className="size-4 shrink-0 shadow-xs" />
-                <span>
-                  {isPortalConcierge
-                    ? "✨ All-in-One: We Submit Online & Pay Gov Fees"
-                    : destination.bannerTag || `${destination.name} Embassy Dossier`}
-                </span>
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3.5 py-1 text-xs font-semibold backdrop-blur-md">
+                  <CountryFlag code={destination.code} className="size-4 shrink-0 shadow-xs" />
+                  <span>
+                    {isPortalConcierge
+                      ? "✨ All-in-One: We Submit Online & Pay Gov Fees"
+                      : destination.bannerTag || `${destination.name} Embassy Dossier`}
+                  </span>
+                </div>
+
+                {/* Interactive Passport Country Selector */}
+                <div ref={dropdownRef} className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setPassportSelectorOpen((prev) => !prev)}
+                    className="inline-flex items-center gap-2 rounded-full border border-white/25 bg-white/10 hover:bg-white/20 px-3 py-1 text-xs font-semibold backdrop-blur-md transition-all cursor-pointer shadow-xs"
+                    title="Click to select or change your passport citizenship"
+                  >
+                    <span className="text-white/60">Passport:</span>
+                    {passportCountry ? (
+                      <span className="flex items-center gap-1.5 font-bold text-white">
+                        <CountryFlag code={passportCountry.code} className="size-3.5 shrink-0 shadow-xs" />
+                        {passportCountry.name}
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-1 font-bold text-primary-foreground bg-primary px-2 py-0.5 rounded-full text-[11px]">
+                        <Globe className="size-3" /> Select nationality
+                      </span>
+                    )}
+                    <ChevronDown className={cn("size-3 text-white/70 transition-transform duration-200", passportSelectorOpen && "rotate-180")} />
+                  </button>
+
+                  {passportSelectorOpen && (
+                    <div className="absolute left-0 sm:left-auto sm:right-0 top-full mt-2 z-50 w-72 rounded-xl border border-white/20 bg-[#121627] p-2 shadow-2xl backdrop-blur-2xl text-left">
+                      <div className="relative mb-2">
+                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-white/40" />
+                        <input
+                          type="text"
+                          value={passportSearch}
+                          onChange={(e) => setPassportSearch(e.target.value)}
+                          placeholder="Search passport country..."
+                          className="w-full rounded-lg bg-white/5 pl-8 pr-3 py-1.5 text-xs text-white placeholder:text-white/40 border border-white/10 outline-none focus:border-primary"
+                          autoFocus
+                        />
+                      </div>
+
+                      <div className="px-2 py-1 text-[10px] font-semibold uppercase text-white/40 tracking-wider">
+                        {passportSearch.trim() ? "Search Results" : "Popular Passports"}
+                      </div>
+
+                      <div className="max-h-56 overflow-y-auto space-y-0.5 pr-1">
+                        {filteredPassports.map((p) => {
+                          const isSelected = passportCountry?.code === p.code;
+                          return (
+                            <button
+                              key={p.code}
+                              type="button"
+                              onClick={() => handleSelectPassport(p)}
+                              className={cn(
+                                "w-full flex items-center justify-between px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer",
+                                isSelected
+                                  ? "bg-primary text-primary-foreground font-bold"
+                                  : "text-white/90 hover:bg-white/10",
+                              )}
+                            >
+                              <div className="flex items-center gap-2">
+                                <CountryFlag code={p.code} className="size-4 shrink-0" />
+                                <span className="truncate">{p.name}</span>
+                              </div>
+                              {isSelected && <Check className="size-3.5 shrink-0" />}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
 
               <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight text-white leading-tight">
-                {destination.name} Visa for Bangladeshi Citizens
+                {passportCountry
+                  ? `${destination.name} Visa for ${passportCountry.name} Citizens`
+                  : `${destination.name} Visa Application & Concierge`}
               </h1>
 
               <p className="text-sm sm:text-base text-white/80 max-w-xl leading-relaxed">
-                {isPortalConcierge
-                  ? "Fill your details once on Torii. You never have to deal with complicated government portals or foreign currency payment roadblocks — our operations team files online, pays the government fee, and delivers your confirmed barcode & invoice."
-                  : `${destination.shortDescription} Torii prepares your official typed embassy forms, cover letter, and itinerary so you can submit with zero errors.`}
+                {passportCountry
+                  ? (isPortalConcierge
+                      ? `Fill your details once on Torii. Seamless online visa concierge and government portal filing for ${passportCountry.name} citizens traveling to ${destination.name}. Our operations team files online, pays the government fee, and delivers your confirmed barcode & invoice.`
+                      : `${destination.shortDescription} Torii prepares your official typed embassy forms, cover letter, and verified itinerary for ${passportCountry.name} passport holders so you can submit with zero errors.`)
+                  : (isPortalConcierge
+                      ? `Fill your details once on Torii. Seamless online visa concierge and government portal filing for international travelers visiting ${destination.name}. Our operations team files online, pays the government fee, and delivers your confirmed barcode & invoice.`
+                      : `${destination.shortDescription} Torii prepares your official typed embassy forms, cover letter, and itinerary so you can submit with zero errors.`)}
               </p>
 
               {/* Direct Hero Call To Action */}
@@ -169,7 +370,9 @@ export function VisaDetailView({ destination }: { destination: DestinationInfo }
                   <Clock className="size-4 text-emerald-400 shrink-0" />
                   <div className="flex flex-col">
                     <span className="text-[10px] text-white/60 uppercase font-medium">Processing Time</span>
-                    <span className="text-xs sm:text-sm font-bold text-white">{destination.processingDays}</span>
+                    <span className="text-xs sm:text-sm font-bold text-white">
+                      {verifiedProcessing || destination.processingDays}
+                    </span>
                   </div>
                 </div>
 
@@ -177,20 +380,56 @@ export function VisaDetailView({ destination }: { destination: DestinationInfo }
                   <Calendar className="size-4 text-blue-400 shrink-0" />
                   <div className="flex flex-col">
                     <span className="text-[10px] text-white/60 uppercase font-medium">Stay Duration</span>
-                    <span className="text-xs sm:text-sm font-bold text-white">{selectedVisa.duration}</span>
+                    <span className="text-xs sm:text-sm font-bold text-white">
+                      {verifiedMaxStay || selectedVisa.duration}
+                    </span>
                   </div>
                 </div>
 
                 <div className="flex items-center gap-2.5 rounded-xl bg-white/5 border border-white/10 p-3 backdrop-blur-sm col-span-2 sm:col-span-1">
                   <Building2 className="size-4 text-purple-400 shrink-0" />
                   <div className="flex flex-col">
-                    <span className="text-[10px] text-white/60 uppercase font-medium">Service Model</span>
-                    <span className="text-xs sm:text-sm font-bold text-white truncate" title={destination.filingModeLabel}>
-                      {isPortalConcierge ? "We File & Pay Online" : "Official Form & Dossier"}
+                    <span className="text-[10px] text-white/60 uppercase font-medium">Filing Channel</span>
+                    <span className="text-xs sm:text-sm font-bold text-white truncate" title={verifiedMission || destination.filingModeLabel}>
+                      {verifiedMission || (isPortalConcierge ? "We File & Pay Online" : "Official Form & Dossier")}
                     </span>
                   </div>
                 </div>
               </div>
+
+              {/* Live Research / Verification Status Banner */}
+              {passportCountry && (
+                <div className="pt-2">
+                  {isVerifiedCurrent ? (
+                    <div className="flex items-center gap-2 rounded-xl bg-emerald-500/15 border border-emerald-500/30 px-3.5 py-2 text-xs text-emerald-200">
+                      <CheckCircle2 className="size-4 text-emerald-400 shrink-0" />
+                      <span>
+                        Route verified via official government portal ({passportCountry.name} → {destination.name})
+                      </span>
+                    </div>
+                  ) : corridorData?.status === "stale" ? (
+                    <div className="flex items-center gap-2.5 rounded-xl bg-amber-500/15 border border-amber-500/30 px-3.5 py-2 text-xs text-amber-200">
+                      <AlertTriangle className="size-4 text-amber-400 shrink-0" />
+                      <span>Requirements verification expired — refreshing from official sources...</span>
+                    </div>
+                  ) : corridorData?.verification_status === "needs_review" || corridorData?.review_required ? (
+                    <div className="flex items-center gap-2.5 rounded-xl bg-amber-500/15 border border-amber-500/30 px-3.5 py-2 text-xs text-amber-200">
+                      <AlertTriangle className="size-4 text-amber-400 shrink-0" />
+                      <span>Verification required: statutory details under manual consular review</span>
+                    </div>
+                  ) : corridorData?.status === "queued" || corridorData?.status === "running" || corridorLoading ? (
+                    <div className="flex items-center gap-2.5 rounded-xl bg-amber-500/15 border border-amber-500/30 px-3.5 py-2 text-xs text-amber-200">
+                      <Loader2 className="size-4 animate-spin text-amber-400 shrink-0" />
+                      <span>Checking official embassy databases &amp; latest statutory rules...</span>
+                    </div>
+                  ) : corridorData?.status === "failed" ? (
+                    <div className="flex items-center gap-2.5 rounded-xl bg-red-500/15 border border-red-500/30 px-3.5 py-2 text-xs text-red-200">
+                      <AlertCircle className="size-4 text-red-400 shrink-0" />
+                      <span>Unable to verify requirements from official government sources</span>
+                    </div>
+                  ) : null}
+                </div>
+              )}
             </div>
 
             {/* Right Hero Visual Card */}
@@ -436,8 +675,41 @@ export function VisaDetailView({ destination }: { destination: DestinationInfo }
                     ))}
                   </div>
                 </div>
-              </div>
+              {/* Official Sources & Citations Section */}
+              {sourcePages.length > 0 && (
+                <div className="space-y-3 rounded-2xl border border-border bg-card p-5 shadow-xs">
+                  <div className="flex items-center justify-between pb-2 border-b border-border">
+                    <div className="flex items-center gap-2">
+                      <ShieldCheck className="size-4.5 text-emerald-500" />
+                      <h3 className="text-sm font-bold text-foreground">Verified Official Sources</h3>
+                    </div>
+                    <span className="text-[10px] font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-2 py-0.5 rounded-full">
+                      Grounded Citations
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    This route&apos;s requirements, filing channels, and statutory fees are grounded directly in official embassy and ministry sources:
+                  </p>
+                  <div className="space-y-2">
+                    {sourcePages.map((src, idx) => (
+                      <a
+                        key={idx}
+                        href={src.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center justify-between gap-3 p-2.5 rounded-lg border border-border/60 hover:border-primary/40 hover:bg-muted/30 transition-colors text-xs group"
+                      >
+                        <span className="font-mono text-[11px] text-primary truncate max-w-md group-hover:underline">
+                          {src.url}
+                        </span>
+                        <ExternalLink className="size-3.5 text-muted-foreground shrink-0 group-hover:text-primary transition-colors" />
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
+          </div>
 
             {/* FAQs Accordion */}
             <div className="space-y-4 pt-2">
@@ -493,6 +765,23 @@ export function VisaDetailView({ destination }: { destination: DestinationInfo }
                     ? "Provide your details once on Torii. Our team completes official portal submission and pays the government fee on your behalf."
                     : "Start your online questionnaire now. No payment is required to check requirements and fill your details."}
                 </p>
+                {verifiedFee && (
+                  <div className="rounded-xl bg-muted/40 p-3 border border-border/60 space-y-1">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-muted-foreground">Official Government Fee:</span>
+                      <span className="font-bold text-foreground">
+                        {verifiedFee.amount != null
+                          ? `${verifiedFee.amount} ${verifiedFee.currency || ""}`
+                          : "Included / Exempt"}
+                      </span>
+                    </div>
+                    {verifiedFee.citation?.authority && (
+                      <p className="text-[10px] text-muted-foreground truncate">
+                        Authority: {verifiedFee.citation.authority}
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
 
 

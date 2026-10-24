@@ -243,6 +243,34 @@ async def run_case_research(ctx: dict[str, Any], event: OutboxEvent) -> None:
     )
 
 
+def _is_research_superseded(
+    research: CaseStageResearch,
+    event_generation: int | None,
+    event_queued_at_str: str | None,
+) -> bool:
+    """Check if this research job has been superseded by a newer job."""
+    meta = (research.payload or {}).get("_meta") or {}
+    current_gen = meta.get("generation")
+    if event_generation is not None and current_gen is not None:
+        if int(current_gen) > int(event_generation):
+            return True
+
+    if event_queued_at_str and research.researched_at is not None:
+        try:
+            event_queued_at = datetime.fromisoformat(event_queued_at_str)
+            researched = research.researched_at
+            if researched.tzinfo is None and event_queued_at.tzinfo is not None:
+                researched = researched.replace(tzinfo=UTC)
+            elif researched.tzinfo is not None and event_queued_at.tzinfo is None:
+                event_queued_at = event_queued_at.replace(tzinfo=UTC)
+            if researched > event_queued_at:
+                return True
+        except Exception:
+            pass
+
+    return False
+
+
 async def run_stage_research(ctx: dict[str, Any], event: OutboxEvent) -> None:
     """Run one agentic per-stage research job (docs/plan/03_corridor_bd_jp.md, Decisions §2).
 
@@ -260,12 +288,17 @@ async def run_stage_research(ctx: dict[str, Any], event: OutboxEvent) -> None:
     payload = dict(event.payload or {})
     research_id = payload.get("stage_research_id")
     stage = payload.get("stage")
+    event_generation = payload.get("job_generation")
+    queued_at_str = payload.get("queued_at")
     if research_id is None or stage is None:
         return
 
     async with session_factory() as session:
         research = await session.get(CaseStageResearch, research_id)
         if research is None:
+            return
+        if _is_research_superseded(research, event_generation, queued_at_str):
+            log.info("stage_research.start_superseded_ignored", research_id=research_id)
             return
         research.status = ScopeResearchStatus.RUNNING
         await session.commit()
@@ -295,20 +328,58 @@ async def run_stage_research(ctx: dict[str, Any], event: OutboxEvent) -> None:
         # the handler below and leave the row stuck in RUNNING forever.
         async with session_factory() as session:
             research = await session.get(CaseStageResearch, research_id)
-            if research is not None:
-                research.status = ScopeResearchStatus.FAILED
-                research.error = "stage research job timed out"
-            await session.commit()
+            if research is not None and not _is_research_superseded(research, event_generation, queued_at_str):
+                prev_items = {k: v for k, v in (research.payload or {}).items() if k != "_meta"}
+                if prev_items and stage_is_valid(stage, prev_items):
+                    research.status = ScopeResearchStatus.COMPLETED
+                    new_payload = dict(research.payload or {})
+                    new_payload["_meta"] = {
+                        "generation": event_generation or ((research.payload or {}).get("_meta") or {}).get("generation", 1),
+                        "review_required": True,
+                        "verification_status": "needs_review",
+                        "retrieval_status": "failed",
+                        "source_domains": [],
+                        "error_diagnostics": "stage research job timed out",
+                        "failure_reason": "stage research job timed out",
+                        "refresh_failed": True,
+                    }
+                    research.payload = new_payload
+                    research.error = "Refresh timed out; preserved prior valid requirements"
+                else:
+                    research.status = ScopeResearchStatus.FAILED
+                    research.error = "stage research job timed out"
+                await session.commit()
         log.warning("stage_research.failed", research_id=research_id, error="cancelled/timed out")
         raise
     except Exception as exc:  # noqa: BLE001 - a failed stage research must never crash the drain
         error_message = str(exc) or type(exc).__name__
         async with session_factory() as session:
             research = await session.get(CaseStageResearch, research_id)
+
             if research is not None:
-                research.status = ScopeResearchStatus.FAILED
-                research.error = error_message[:1000]
-            await session.commit()
+                if _is_research_superseded(research, event_generation, queued_at_str):
+                    log.info("stage_research.failure_superseded_ignored", research_id=research_id)
+                    return
+                prev_items = {k: v for k, v in (research.payload or {}).items() if k != "_meta"}
+                if prev_items and stage_is_valid(stage, prev_items):
+                    research.status = ScopeResearchStatus.COMPLETED
+                    new_payload = dict(research.payload or {})
+                    new_payload["_meta"] = {
+                        "generation": event_generation or ((research.payload or {}).get("_meta") or {}).get("generation", 1),
+                        "review_required": True,
+                        "verification_status": "needs_review",
+                        "retrieval_status": "failed",
+                        "source_domains": [],
+                        "error_diagnostics": error_message[:1000],
+                        "failure_reason": error_message[:1000],
+                        "refresh_failed": True,
+                    }
+                    research.payload = new_payload
+                    research.error = f"Refresh failed ({error_message[:200]}); preserved prior valid requirements"
+                else:
+                    research.status = ScopeResearchStatus.FAILED
+                    research.error = error_message[:1000]
+                await session.commit()
         log.warning(
             "stage_research.failed", research_id=research_id, stage=stage, error=error_message
         )
@@ -321,19 +392,76 @@ async def run_stage_research(ctx: dict[str, Any], event: OutboxEvent) -> None:
         research = await session.get(CaseStageResearch, research_id)
         if research is None:
             return
+        if _is_research_superseded(research, event_generation, queued_at_str):
+            log.info("stage_research.completion_superseded_ignored", research_id=research_id)
+            return
+
+        effective_gen = event_generation or ((research.payload or {}).get("_meta") or {}).get("generation", 1)
+
         if valid:
             research.status = ScopeResearchStatus.COMPLETED
+            items["_meta"] = {
+                "generation": effective_gen,
+                "review_required": data.get("review_required", False),
+                "verification_status": data.get("verification_status", "verified"),
+                "retrieval_status": data.get("retrieval_status", "direct_scrape"),
+                "source_domains": data.get("source_domains", []),
+                "error_diagnostics": data.get("error_diagnostics"),
+                "failure_reason": data.get("error_diagnostics") or data.get("failure_reason"),
+            }
             research.payload = items
             research.source_pages = list(data.get("source_pages") or [])
             research.researched_at = now
             research.expires_at = stage_expiry(stage)
             research.error = None
         else:
-            research.status = ScopeResearchStatus.FAILED
-            research.error = "stage research payload failed the citation/schema gate"
+            fail_reason = (
+                data.get("error_diagnostics")
+                or data.get("failure_reason")
+                or "stage research payload failed the citation/schema gate"
+            )
+            # If research already has a valid payload (e.g. from prior successful run), preserve it!
+            prev_items = {k: v for k, v in (research.payload or {}).items() if k != "_meta"}
+            if prev_items and stage_is_valid(stage, prev_items):
+                research.status = ScopeResearchStatus.COMPLETED
+                new_payload = dict(research.payload or {})
+                new_payload["_meta"] = {
+                    "generation": effective_gen,
+                    "review_required": True,
+                    "verification_status": "needs_review",
+                    "retrieval_status": data.get("retrieval_status", "failed"),
+                    "source_domains": data.get("source_domains", []),
+                    "error_diagnostics": fail_reason,
+                    "failure_reason": fail_reason,
+                    "refresh_failed": True,
+                }
+                research.payload = new_payload
+                research.error = f"Refresh failed ({fail_reason}); preserved prior valid requirements"
+            else:
+                research.status = ScopeResearchStatus.FAILED
+                research.payload = {
+                    "_meta": {
+                        "generation": effective_gen,
+                        "review_required": True,
+                        "verification_status": "failed",
+                        "retrieval_status": data.get("retrieval_status", "failed"),
+                        "source_domains": data.get("source_domains", []),
+                        "error_diagnostics": fail_reason,
+                        "failure_reason": fail_reason,
+                    }
+                }
+                research.source_pages = list(data.get("source_pages") or [])
+                research.error = fail_reason
         await session.commit()
 
-    log.info("stage_research.done", research_id=research_id, stage=stage, valid=valid)
+    log.info(
+        "stage_research.done",
+        research_id=research_id,
+        stage=stage,
+        valid=valid,
+        retrieval_status=data.get("retrieval_status"),
+        review_required=data.get("review_required"),
+    )
 
 
 async def run_email_dispatch(ctx: dict[str, Any], event: OutboxEvent) -> None:

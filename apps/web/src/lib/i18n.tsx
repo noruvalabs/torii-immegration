@@ -232,62 +232,21 @@ const I18nContext = createContext<I18nContextType>({
 });
 
 export function I18nProvider({ children }: { children: ReactNode }) {
-  const [lang, setLangState] = useState<Lang>("en");
-  const [isJapanUser, setIsJapanUser] = useState(false);
+  const [lang] = useState<Lang>("en");
+  const isJapanUser = false;
 
   useEffect(() => {
-    // 1. Check user explicitly saved preference
-    const saved = typeof window !== "undefined" ? localStorage.getItem(STORAGE_KEY) : null;
-    if (saved === "en" || saved === "ja") {
-      setLangState(saved);
-      if (saved === "ja") setIsJapanUser(true);
-      return;
+    if (typeof window !== "undefined") {
+      localStorage.setItem(STORAGE_KEY, "en");
+      localStorage.removeItem("torii-landing-lang");
     }
-
-    // 2. Check browser locale or IP geolocation
-    const browserLang = typeof navigator !== "undefined" ? navigator.language?.toLowerCase() ?? "" : "";
-    const isBrowserJa = browserLang.startsWith("ja");
-
-    // Fetch geo-detection from backend
-    fetch("/backend/v1/geo/detect")
-      .then((res) => (res.ok ? res.json() : null))
-      .then((geo) => {
-        if (geo?.is_japan || geo?.country_code === "JP" || isBrowserJa) {
-          setIsJapanUser(true);
-          setLangState("ja");
-          if (typeof window !== "undefined") {
-            localStorage.setItem(STORAGE_KEY, "ja");
-          }
-        } else {
-          setLangState("en");
-          if (typeof window !== "undefined") {
-            localStorage.setItem(STORAGE_KEY, "en");
-          }
-        }
-      })
-      .catch(() => {
-        if (isBrowserJa) {
-          setIsJapanUser(true);
-          setLangState("ja");
-        } else {
-          setLangState("en");
-        }
-      });
   }, []);
 
-  const setLang = (next: Lang) => {
-    setLangState(next);
-    if (typeof window !== "undefined") {
-      localStorage.setItem(STORAGE_KEY, next);
-      localStorage.setItem("torii-landing-lang", next);
-    }
+  const setLang = (_next: Lang) => {
+    // English only - international platform
   };
 
   const t = (key: DictionaryKey | string, fallback?: string): string => {
-    const dict = DICTIONARY[lang] as Record<string, string>;
-    if (dict && dict[key]) {
-      return dict[key];
-    }
     const enDict = DICTIONARY.en as Record<string, string>;
     if (enDict && enDict[key]) {
       return enDict[key];
@@ -296,7 +255,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <I18nContext.Provider value={{ lang, setLang, t, isJapanUser }}>
+    <I18nContext.Provider value={{ lang: "en", setLang, t, isJapanUser: false }}>
       {children}
     </I18nContext.Provider>
   );
@@ -307,40 +266,6 @@ export function useI18n() {
 }
 
 export function LanguageSwitcher({ className = "" }: { className?: string }) {
-  const { lang, setLang } = useI18n();
-
-  return (
-    <div
-      className={`inline-flex items-center rounded-lg border bg-card/90 p-0.5 shadow-xs text-xs backdrop-blur ${className}`}
-      role="group"
-      aria-label="Language selection"
-    >
-      <button
-        type="button"
-        onClick={() => setLang("en")}
-        className={`flex items-center gap-1 rounded-md px-2.5 py-1 font-medium transition-all ${
-          lang === "en"
-            ? "bg-primary text-primary-foreground shadow-xs font-semibold"
-            : "text-muted-foreground hover:text-foreground"
-        }`}
-        title="English"
-      >
-        <span className="text-[12px]">🇺🇸</span>
-        <span>EN</span>
-      </button>
-      <button
-        type="button"
-        onClick={() => setLang("ja")}
-        className={`flex items-center gap-1 rounded-md px-2.5 py-1 font-medium transition-all ${
-          lang === "ja"
-            ? "bg-primary text-primary-foreground shadow-xs font-semibold"
-            : "text-muted-foreground hover:text-foreground"
-        }`}
-        title="日本語 (Japanese)"
-      >
-        <span className="text-[12px]">🇯🇵</span>
-        <span>日本語</span>
-      </button>
-    </div>
-  );
+  return null;
 }
+

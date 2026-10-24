@@ -394,116 +394,67 @@ export default function ProfilePage() {
 
         {/* Right Column: Informational Sidebar Cards & Preferences */}
         <div className="space-y-6">
-          {/* Card 0: Language & Region Preferences */}
+          {/* Card 0: Theme & Appearance Preferences */}
           <Card className="border-primary/20 bg-gradient-to-br from-primary/5 via-card to-card shadow-xs">
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-sm font-bold text-foreground flex items-center gap-2">
-                  <Globe className="size-4 text-primary" />
-                  {lang === "ja" ? "言語・地域設定" : "Language & Region"}
+                  <Sun className="size-4 text-primary" />
+                  Theme & Appearance
                 </CardTitle>
-                <Badge tone="default" className="text-[10px]">
-                  {lang === "ja" ? "🇯🇵 日本語" : "🇺🇸 English"}
+                <Badge tone="default" className="text-[10px] capitalize">
+                  {theme}
                 </Badge>
               </div>
             </CardHeader>
             <CardContent className="space-y-3 text-xs pt-0">
               <p className="text-muted-foreground text-[11px] leading-relaxed">
-                {lang === "ja"
-                  ? "システム全体の表示言語、案内文、申請書式の出力プレビュー言語を選択します。"
-                  : "Choose your preferred display language for guidance instructions, questionnaires, and form previews."}
+                Choose your preferred interface theme for application forms and dashboards.
               </p>
 
-              <div className="grid grid-cols-2 gap-2 pt-1">
+              <div className="grid grid-cols-3 gap-1.5 pt-0.5">
                 <button
                   type="button"
-                  onClick={() => setLang("en")}
-                  className={`flex flex-col items-center justify-center p-2.5 rounded-lg border text-center transition-all ${
-                    lang === "en"
+                  onClick={() => setTheme("light")}
+                  className={`flex items-center justify-center gap-1.5 py-2 px-2 rounded-lg border text-center transition-all ${
+                    theme === "light"
                       ? "border-primary bg-primary/10 text-primary font-bold shadow-xs ring-1 ring-primary"
                       : "border-border bg-background text-muted-foreground hover:bg-muted"
                   }`}
+                  title="Light mode"
                 >
-                  <span className="text-lg mb-0.5">🇺🇸</span>
-                  <span className="text-xs font-semibold">English</span>
-                  <span className="text-[10px] text-muted-foreground mt-0.5">Global</span>
+                  <Sun className="size-3.5" />
+                  <span className="text-[11px]">Light</span>
                 </button>
 
                 <button
                   type="button"
-                  onClick={() => setLang("ja")}
-                  className={`flex flex-col items-center justify-center p-2.5 rounded-lg border text-center transition-all ${
-                    lang === "ja"
+                  onClick={() => setTheme("dark")}
+                  className={`flex items-center justify-center gap-1.5 py-2 px-2 rounded-lg border text-center transition-all ${
+                    theme === "dark"
                       ? "border-primary bg-primary/10 text-primary font-bold shadow-xs ring-1 ring-primary"
                       : "border-border bg-background text-muted-foreground hover:bg-muted"
                   }`}
+                  title="Dark mode"
                 >
-                  <span className="text-lg mb-0.5">🇯🇵</span>
-                  <span className="text-xs font-semibold">日本語</span>
-                  <span className="text-[10px] text-muted-foreground mt-0.5">Japan / 日本</span>
+                  <Moon className="size-3.5" />
+                  <span className="text-[11px]">Dark</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setTheme("system")}
+                  className={`flex items-center justify-center gap-1.5 py-2 px-2 rounded-lg border text-center transition-all ${
+                    theme === "system"
+                      ? "border-primary bg-primary/10 text-primary font-bold shadow-xs ring-1 ring-primary"
+                      : "border-border bg-background text-muted-foreground hover:bg-muted"
+                  }`}
+                  title="System default"
+                >
+                  <Laptop className="size-3.5" />
+                  <span className="text-[11px]">System</span>
                 </button>
               </div>
-
-              {/* Theme & Appearance (Light / Dark / System) */}
-              <div className="pt-2 border-t space-y-1.5">
-                <span className="text-[11px] font-semibold text-foreground flex items-center gap-1.5">
-                  {lang === "ja" ? "テーマ・外観設定" : "Theme & Appearance"}
-                </span>
-                <div className="grid grid-cols-3 gap-1.5 pt-0.5">
-                  <button
-                    type="button"
-                    onClick={() => setTheme("light")}
-                    className={`flex items-center justify-center gap-1.5 py-2 px-2 rounded-lg border text-center transition-all ${
-                      theme === "light"
-                        ? "border-primary bg-primary/10 text-primary font-bold shadow-xs ring-1 ring-primary"
-                        : "border-border bg-background text-muted-foreground hover:bg-muted"
-                    }`}
-                    title="Light mode"
-                  >
-                    <Sun className="size-3.5" />
-                    <span className="text-[11px]">{lang === "ja" ? "ライト" : "Light"}</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setTheme("dark")}
-                    className={`flex items-center justify-center gap-1.5 py-2 px-2 rounded-lg border text-center transition-all ${
-                      theme === "dark"
-                        ? "border-primary bg-primary/10 text-primary font-bold shadow-xs ring-1 ring-primary"
-                        : "border-border bg-background text-muted-foreground hover:bg-muted"
-                    }`}
-                    title="Dark mode"
-                  >
-                    <Moon className="size-3.5" />
-                    <span className="text-[11px]">{lang === "ja" ? "ダーク" : "Dark"}</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setTheme("system")}
-                    className={`flex items-center justify-center gap-1.5 py-2 px-2 rounded-lg border text-center transition-all ${
-                      theme === "system"
-                        ? "border-primary bg-primary/10 text-primary font-bold shadow-xs ring-1 ring-primary"
-                        : "border-border bg-background text-muted-foreground hover:bg-muted"
-                    }`}
-                    title="System default"
-                  >
-                    <Laptop className="size-3.5" />
-                    <span className="text-[11px]">{lang === "ja" ? "自動" : "System"}</span>
-                  </button>
-                </div>
-              </div>
-
-              {isJapanUser && (
-                <div className="rounded border border-primary/20 bg-primary/5 p-2 text-[10px] text-primary flex items-center gap-1.5">
-                  <span className="size-1.5 rounded-full bg-primary animate-pulse" />
-                  <span>
-                    {lang === "ja"
-                      ? "日本国内の接続として自動検出されました"
-                      : "Auto-detected connection from Japan"}
-                  </span>
-                </div>
-              )}
             </CardContent>
           </Card>
 

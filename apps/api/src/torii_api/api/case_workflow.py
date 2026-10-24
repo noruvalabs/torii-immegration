@@ -64,6 +64,7 @@ from torii_api.services.pack_overrides import (
 from torii_api.services.packet import assemble_packet
 from torii_api.services.payment import case_has_packet_entitlement
 from torii_api.services.portal_pack import build_portal_pack
+from torii_api.services.agentic import find_case_stage, stage_is_usable, stage_items
 from torii_api.services.research import (
     research_documents,
     research_forms,
@@ -250,6 +251,13 @@ async def _effective_rules(session: AsyncSession, case: Case) -> list[dict[str, 
                 section=SECTION_RULES,
             )
 
+    # Check CaseStageResearch (newer agentic pipeline)
+    stage_res = await find_case_stage(session, case.id, "eligibility")
+    if stage_res is not None and stage_is_usable(stage_res):
+        rules = stage_items(stage_res, "eligibility")
+        if rules:
+            return rules
+
     research = await _research_for_case(session, case)
     if research is not None and research_is_usable(research):
         rules = research_rules(research.payload)
@@ -276,6 +284,13 @@ async def _effective_documents(session: AsyncSession, case: Case) -> list[dict[s
                 await _overrides_for_case(session, case),
                 section=SECTION_DOCUMENTS,
             )
+
+    # Check CaseStageResearch (newer agentic pipeline)
+    stage_res = await find_case_stage(session, case.id, "documents")
+    if stage_res is not None and stage_is_usable(stage_res):
+        docs = stage_items(stage_res, "documents")
+        if docs:
+            return docs
 
     research = await _research_for_case(session, case)
     if research is not None and research_is_usable(research):
@@ -318,6 +333,24 @@ async def _effective_templates(session: AsyncSession, case: Case) -> list[_FormD
                 )
                 for t in unique_live
             ]
+
+    # Check CaseStageResearch (newer agentic pipeline)
+    stage_res = await find_case_stage(session, case.id, "forms")
+    if stage_res is not None and stage_is_usable(stage_res):
+        forms = [
+            _FormDescriptor(
+                code=str(form.get("code") or "form"),
+                version=str(form.get("version") or ""),
+                official_title=str(form.get("official_title") or form.get("code") or "form"),
+                citation=dict(form.get("citation") or {}),
+                field_mappings=list(form.get("field_mappings") or []),
+                research_id=None,
+            )
+            for form in stage_items(stage_res, "forms")
+            if isinstance(form, dict)
+        ]
+        if forms:
+            return forms
 
     research = await _research_for_case(session, case)
     if research is not None and research_is_usable(research):
@@ -496,7 +529,16 @@ async def refresh_checklist(
     await session.execute(delete(CaseChecklistItem).where(CaseChecklistItem.case_id == case.id))
     new_items: list[CaseChecklistItem] = []
     j_code, v_code, _, _ = await _scope_label(session, case)
-    for item in visible_requirement_items(items, dict(case.intake_answers or {})):
+    answers_ctx = dict(case.intake_answers or {})
+    if case.origin_country:
+        answers_ctx.setdefault("origin_country", case.origin_country.upper())
+        answers_ctx.setdefault("nationality", case.origin_country.upper())
+        answers_ctx.setdefault("passport_country", case.origin_country.upper())
+    if case.residence_country:
+        answers_ctx.setdefault("residence_country", case.residence_country.upper())
+        answers_ctx.setdefault("current_residence_country", case.residence_country.upper())
+
+    for item in visible_requirement_items(items, answers_ctx):
         old = old_items.get(item.code)
         doc_name = localized(item.name, case.locale) or item.code or "Document"
         how = localized(item.how_to_obtain, case.locale) if item.how_to_obtain else ""

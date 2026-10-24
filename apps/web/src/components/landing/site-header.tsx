@@ -6,7 +6,6 @@ import { useEffect, useState } from "react";
 import { Menu, X } from "lucide-react";
 import { LandingAuthLink } from "@/components/landing-auth-link";
 import { ThemeToggle } from "@/components/admin/theme-toggle";
-import { LanguageToggle } from "./language-toggle";
 import { StartCaseButton } from "./start-case-button";
 import { useActiveSection } from "./use-active-section";
 import { SECTION_IDS, useHeaderNav, type NavLink } from "./nav";
@@ -104,7 +103,6 @@ export function SiteHeader() {
         </nav>
 
         <div className="ml-auto flex items-center gap-2 sm:gap-3">
-          <LanguageToggle className="hidden border-border/70 sm:inline-flex" />
           <ThemeToggle className="size-9 rounded-full border-transparent transition-colors hover:bg-accent" />
           <LandingAuthLink className="hidden sm:inline-flex" />
           <StartCaseButton
@@ -159,8 +157,7 @@ export function SiteHeader() {
           })}
         </nav>
 
-        <div className="flex items-center justify-between gap-3 border-t border-border/60 p-3">
-          <LanguageToggle className="border-border/70" />
+        <div className="flex items-center justify-end gap-3 border-t border-border/60 p-3">
           <LandingAuthLink />
         </div>
 

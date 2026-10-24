@@ -102,9 +102,9 @@ export const DESTINATIONS: Record<string, DestinationInfo> = {
           "Yes! The Ministry of Foreign Affairs (MOFA) strongly prefers typed forms to prevent handwriting errors. Torii generates a clean, typed PDF form where you only need to add your handwritten pen signature on the final page.",
       },
       {
-        question: "When is the government visa fee paid for Japan in Bangladesh?",
+        question: "When is the government visa fee paid for Japan?",
         answer:
-          "Japan operates on a unique 'No Visa, No Fee' principle! You pay the VFS service fee on the day you submit your documents, but the Japanese government visa fee (approx. ৳2,700) is ONLY paid when your visa is approved and you collect your passport.",
+          "Japan operates on a unique 'No Visa, No Fee' principle! You pay the consular or VAC appointment service fee upon document submission, but the Japanese government visa fee is only collected once your visa is approved and issued.",
       },
       {
         question: "What is the 'Schedule of Stay' (滞在予定表)?",
@@ -137,9 +137,9 @@ export const DESTINATIONS: Record<string, DestinationInfo> = {
         entries: "Triple / Multiple Entry",
         validity: "Up to 1 Year",
         processingTime: "3–5 Working Days",
-        governmentFee: "৳800 (Statutory consular fee at IVAC)",
-        toriiFee: "৳1,200",
-        totalDisplay: "৳2,000",
+        governmentFee: "$10 (Statutory consular fee at IVAC / Mission)",
+        toriiFee: "$15",
+        totalDisplay: "$25",
         requiredDocuments: [
           "Original Passport with 6+ months validity",
           "Official Indian Hospital Invitation Letter with treatment department",
@@ -157,9 +157,9 @@ export const DESTINATIONS: Record<string, DestinationInfo> = {
         entries: "Single / Double Entry",
         validity: "Up to 1 Year",
         processingTime: "3–7 Working Days",
-        governmentFee: "৳800 (Statutory fee at IVAC)",
-        toriiFee: "৳1,200",
-        totalDisplay: "৳2,000",
+        governmentFee: "$10 (Statutory fee at IVAC / Mission)",
+        toriiFee: "$15",
+        totalDisplay: "$25",
         requiredDocuments: [
           "Original Passport with 6+ months validity",
           "2 Recent 2x2 inch (50mm × 50mm) Photos on White Background",
@@ -189,9 +189,9 @@ export const DESTINATIONS: Record<string, DestinationInfo> = {
           "Yes! Up to two medical attendants can travel under the Medical Attendant Visa (MED-2) category alongside the primary patient (MED-1). Torii includes attendant declarations right in your cover letter.",
       },
       {
-        question: "Where do I submit the Indian visa in Bangladesh?",
+        question: "Where do I submit my Indian visa application?",
         answer:
-          "Applications are submitted at your nearest Indian Visa Application Centre (IVAC) located in Dhaka (Jamuna Future Park), Chittagong, Rajshahi, Sylhet, Khulna, etc.",
+          "Applications are submitted at your nearest authorized Indian Visa Application Centre (IVAC / VFS) or Indian diplomatic mission in your country of residence.",
       },
     ],
   },
@@ -267,8 +267,8 @@ export const DESTINATIONS: Record<string, DestinationInfo> = {
     tagline: "Explore America from Coast to Coast",
     shortDescription: "Complete DS-160 electronic filing preparation, consular cover letter, and embassy interview binder.",
     overview:
-      "Applying for a US B1/B2 Visitor Visa from Bangladesh? Torii helps you prepare your DS-160 application form without errors, generates your formal travel plan, and structures your interview documentation to establish strong economic and familial ties to your home country.",
-    filingModeLabel: "DS-160 Form + US Embassy Dhaka Interview",
+      "Applying for a US B1/B2 Visitor Visa? Torii helps you prepare your DS-160 application form without errors, generates your formal travel plan, and structures your interview documentation to establish strong economic and familial ties to your home country.",
+    filingModeLabel: "DS-160 Form + Consular Interview",
     processingDays: "Interview Appointment",
     visas: [
       {
@@ -306,9 +306,9 @@ export const DESTINATIONS: Record<string, DestinationInfo> = {
           "Torii prepares your full DS-160 application package and consular interview folder. You then book your preferred interview date directly via the official ustraveldocs / US Embassy appointment system.",
       },
       {
-        question: "How long is the US B1/B2 visa valid for Bangladeshi citizens?",
+        question: "How long is the US B1/B2 visa valid for international travelers?",
         answer:
-          "Bangladeshi nationals are typically issued a 5-year multiple-entry visa. Upon entry, the US CBP officer generally stamps permission to stay for up to 6 months per visit.",
+          "Depending on reciprocity with your country of citizenship, US visitor visas are commonly issued for 1 to 10 years multiple-entry. Upon arrival, the US CBP officer generally stamps permission to stay for up to 6 months per visit.",
       },
     ],
   },
@@ -358,7 +358,7 @@ export const DESTINATIONS: Record<string, DestinationInfo> = {
       {
         question: "Do I need to submit biometrics for a Canadian visa?",
         answer:
-          "Yes, most Bangladeshi applicants are required to give fingerprints and a photo at the VFS Global Canada Visa Application Centre in Dhaka after submitting the online application.",
+          "Yes, most international applicants are required to give biometrics (fingerprints and photo) at an authorized Visa Application Centre (VAC) in their country of residence after submitting the online application.",
       },
       {
         question: "Can I get a 10-year Canadian visitor visa?",
@@ -468,9 +468,9 @@ export const DESTINATIONS: Record<string, DestinationInfo> = {
     ],
     faqs: [
       {
-        question: "Where do I submit my Spain visa in Bangladesh?",
+        question: "Where do I submit my Spain Schengen visa?",
         answer:
-          "Spain visa applications are processed via BLS International Visa Application Centre located in Gulshan, Dhaka.",
+          "Schengen visa applications for Spain are officially submitted through authorized VAC centers (such as BLS International) or the Spanish consular mission in your region.",
       },
       {
         question: "How long before travel should I apply for Spain?",

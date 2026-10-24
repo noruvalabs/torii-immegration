@@ -287,6 +287,114 @@ documents:
       title: Photograph Specifications
       url: https://indianvisaonline.gov.in/
       source_version: 2026-04
+  - code: yellow_fever_certificate
+    name:
+      en: Yellow Fever Vaccination Certificate
+    how_to_obtain:
+      en: Official international certificate of vaccination issued by an authorized center at least 10 days prior to arrival.
+    why_required:
+      en: Mandatory statutory requirement under Ministry of Health & Family Welfare for travelers from Yellow Fever endemic countries (including Kenya, Nigeria, Uganda, Ethiopia, Ghana). Failure to produce this card results in mandatory 6-day quarantine.
+    is_required: true
+    show_when:
+      key: origin_country
+      one_of:
+      - KE
+      - NG
+      - UG
+      - ET
+      - GH
+      - AO
+      - BJ
+      - BF
+      - BI
+      - CM
+      - CF
+      - TD
+      - CG
+      - CD
+      - CI
+      - GQ
+      - GA
+      - GM
+      - GN
+      - GW
+      - LR
+      - ML
+      - MR
+      - NE
+      - RW
+      - SN
+      - SL
+      - SS
+      - SD
+      - TG
+      - AR
+      - BO
+      - BR
+      - CO
+      - EC
+      - GF
+      - GY
+      - PA
+      - PE
+      - SR
+      - TT
+      - VE
+      - Kenya
+      - Nigeria
+      - Uganda
+      - Ethiopia
+      - Ghana
+    citation:
+      authority: Ministry of Health and Family Welfare, Government of India
+      title: Yellow Fever Vaccination Requirements for International Travelers to India
+      url: https://mohfw.gov.in/
+      source_version: 2026-04
+  - code: polio_vaccine_certificate
+    name:
+      en: Oral Polio Vaccine (OPV) Certificate
+    how_to_obtain:
+      en: Official vaccination certificate administered at least 4 weeks prior to departure.
+    why_required:
+      en: Mandatory public health regulation for residents and citizens arriving from polio-affected countries (including Kenya, Nigeria, Pakistan, Afghanistan, Somalia, Ethiopia, Syria).
+    is_required: true
+    show_when:
+      key: origin_country
+      one_of:
+      - KE
+      - NG
+      - PK
+      - AF
+      - SO
+      - ET
+      - SY
+      - Kenya
+      - Nigeria
+      - Pakistan
+      - Afghanistan
+    citation:
+      authority: Ministry of Health and Family Welfare, Government of India
+      title: Guidelines for Polio Vaccination for Travelers to India
+      url: https://mohfw.gov.in/
+      source_version: 2026-04
+  - code: utility_bill_address_proof
+    name:
+      en: Local Residential Address Proof (Electricity / Gas / Water Bill)
+    how_to_obtain:
+      en: Recent original utility bill (not older than 3 months) matching the applicant's current residential address.
+    why_required:
+      en: Mandatory requirement for Bangladeshi applicants submitting physical dossiers at authorized Indian Visa Application Centres (IVAC) to verify consular territorial jurisdiction.
+    is_required: true
+    show_when:
+      key: origin_country
+      one_of:
+      - BD
+      - Bangladesh
+    citation:
+      authority: Indian Visa Application Centre (IVAC), Bangladesh
+      title: Mandatory Document Checklist - Proof of Residence
+      url: https://www.ivacbd.com/
+      source_version: 2026-04
 forms:
 - code: indian_medical_visa_application
   version: 2026-04

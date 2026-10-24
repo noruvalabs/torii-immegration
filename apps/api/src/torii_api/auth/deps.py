@@ -61,6 +61,29 @@ async def get_current_user(
 CurrentUserDep = Annotated[User, Depends(get_current_user)]
 
 
+async def get_optional_user(
+    session: SessionDep,
+    settings: SettingsDep,
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)],
+) -> User | None:
+    """Resolve the signed-in user if a valid Bearer token is provided, else return None."""
+    if credentials is None or credentials.scheme.lower() != "bearer":
+        return None
+    try:
+        payload = decode_access_token(credentials.credentials, settings)
+        user_id = int(payload["sub"])
+    except (jwt.PyJWTError, KeyError, TypeError, ValueError):
+        return None
+
+    user = await session.scalar(select(User).where(User.id == user_id))
+    if user is None or not user.is_active:
+        return None
+    return user
+
+
+OptionalUserDep = Annotated[User | None, Depends(get_optional_user)]
+
+
 def require_roles(*roles: str):
     """Factory for a dependency that enforces one of ``roles`` (US-30.2)."""
 
