@@ -19,8 +19,16 @@ Navigating official government immigration websites is notoriously complex, slow
 
 In short, **Torii takes over all the complex online work** so travelers never get stuck or confused.
 
+### Global Corridor Matrix & Proprietary AI Agent Engine (195 × 195 Routes)
+Torii supports global immigration workflows across all 195+ origin and destination countries ($195 \times 195$ corridors) without combinatorial bloat or expensive third-party license fees:
+
+1. **Destination Reciprocity Tiers**: Destination policies group all 195 passports into standard reciprocity tiers (Visa-Free / Exemption, eVisa, or Consular Paper Dossier), collapsing 38,000 potential combinations into ~300 maintainable rules.
+2. **Proprietary AI Research Agent (`apps/ai`)**: Rather than relying on generic third-party travel APIs (which only provide simple yes/no answers and no application form fields), Torii utilizes its own autonomous AI agent (Tavily + Groq/LLM) in the background to scrape official ministry portals, extract exact form fields, and build complete document checklists.
+3. **Database Caching & 30-Day TTL**: AI research runs asynchronously in the background and is cached in PostgreSQL (`CaseStageResearch`) with a 30-day Time-To-Live (TTL). Visitors experience instant sub-10ms page loads, and AI API costs remain negligible (~$10–$30/month) at scale.
+4. **Automated Rule Drift & Embassy Change Detection**: A scheduled background worker checks official government citation URLs for updates, re-scraping changed pages and invalidating stale caches automatically.
+
 > "Torii" (⛩️ — the gate one passes through to enter) is a working codename. Product truth lives
-> in [`docs/specs/`](docs/specs/); read [`00_overview.md`](docs/specs/00_overview.md) first.
+> in [`docs/specs/`](docs/specs/); read [`00_overview.md`](docs/specs/00_overview.md) first. See also [`docs/decisions/0002-global-corridors-and-ai-agent-engine.md`](docs/decisions/0002-global-corridors-and-ai-agent-engine.md).
 
 ## Stack
 

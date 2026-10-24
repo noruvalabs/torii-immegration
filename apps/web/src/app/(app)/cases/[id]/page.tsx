@@ -56,6 +56,7 @@ export default function CaseDetailPage() {
   const [intakeTargetKey, setIntakeTargetKey] = useState<string | null>(null);
   const [intakeTargetTimestamp, setIntakeTargetTimestamp] = useState<number>(0);
   const stepInitializedRef = useRef(false);
+  const checklistAutoTriggeredRef = useRef(false);
 
   // Cached React Query data
   const { data: caseData, isLoading: caseLoading, isError: caseError } = useCaseQuery(token, caseId);
@@ -138,6 +139,44 @@ export default function CaseDetailPage() {
     }
   }, [activeStep]);
 
+  useEffect(() => {
+    if (
+      activeStep === "checklist" &&
+      checklist.length === 0 &&
+      !refreshChecklistMutation.isPending &&
+      token &&
+      !checklistAutoTriggeredRef.current
+    ) {
+      checklistAutoTriggeredRef.current = true;
+      void handleRefreshChecklist();
+    }
+  }, [activeStep, checklist.length, refreshChecklistMutation.isPending, token]);
+
+  // Poll silently in background every 3 seconds while research is running
+  useEffect(() => {
+    if (guidance?.phase !== "research") return;
+    const interval = setInterval(() => {
+      void queryClient.invalidateQueries({ queryKey: caseKeys.guidance(caseId) });
+      void queryClient.invalidateQueries({ queryKey: caseKeys.intake(caseId) });
+      void queryClient.invalidateQueries({ queryKey: caseKeys.checklist(caseId) });
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [guidance?.phase, caseId, queryClient]);
+
+  // Toast notification when AI background research finishes
+  const prevPhaseRef = useRef(guidance?.phase);
+  useEffect(() => {
+    if (prevPhaseRef.current === "research" && guidance?.phase && guidance.phase !== "research") {
+      toast.success("✨ Embassy requirements successfully tailored to your profile!", {
+        id: "research-complete-toast",
+        duration: 4500,
+      });
+      void queryClient.invalidateQueries({ queryKey: caseKeys.intake(caseId) });
+      void queryClient.invalidateQueries({ queryKey: caseKeys.checklist(caseId) });
+    }
+    prevPhaseRef.current = guidance?.phase;
+  }, [guidance?.phase, caseId, queryClient]);
+
   const handleResearchPhaseChange = useCallback((phase: string) => {
     setActiveStep(phaseToStep(phase));
     void queryClient.invalidateQueries({ queryKey: caseKeys.guidance(caseId) });
@@ -145,10 +184,11 @@ export default function CaseDetailPage() {
   }, [caseId, queryClient]);
 
   function trySetStep(step: Step) {
-    if (guidance?.phase === "research" && step !== "research") {
-      toast.error("Requirements research is currently in progress. Please wait a moment.", {
+    if (guidance?.phase === "research" && (step === "checklist" || step === "packet")) {
+      toast.info("Torii AI is currently finalizing your custom document checklist. Please continue filling out your application form below!", {
         id: "research-in-progress",
       });
+      setActiveStep("intake");
       return;
     }
     if (step === "packet" && !areAllRequiredDocsUploaded && caseData?.status !== "submitted") {
@@ -164,6 +204,9 @@ export default function CaseDetailPage() {
     setActiveStep(step);
     if (step === "eligibility" && !eligibility) {
       void handleEvaluateEligibility();
+    }
+    if (step === "checklist" && checklist.length === 0 && !refreshChecklistMutation.isPending) {
+      void handleRefreshChecklist();
     }
   }
 
@@ -500,6 +543,25 @@ export default function CaseDetailPage() {
           );
         })}
       </div>
+
+      {guidance?.phase === "research" && activeStep !== "research" && (
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 rounded-lg border border-primary/30 bg-primary/10 p-3.5 text-xs text-primary shadow-xs">
+          <div className="flex items-start sm:items-center gap-2.5 min-w-0">
+            <Loader2 className="size-4 animate-spin text-primary shrink-0 mt-0.5 sm:mt-0" />
+            <div>
+              <p className="font-semibold text-primary-900 dark:text-primary-100">
+                Torii AI is analyzing official embassy requirements in the background...
+              </p>
+              <p className="text-[11px] text-primary-700 dark:text-primary-300 mt-0.5">
+                Go ahead and fill out your personal & passport information below. Your customized document checklist will be ready by the time you finish!
+              </p>
+            </div>
+          </div>
+          <span className="inline-flex items-center rounded-full bg-primary/20 px-2.5 py-0.5 text-[11px] font-medium text-primary shrink-0">
+            Auto-syncing
+          </span>
+        </div>
+      )}
 
       {intake && !intake.progress.complete && activeStep !== "intake" && activeStep !== "research" && activeStep !== "eligibility" && caseData?.status !== "submitted" && (
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3.5 text-xs text-amber-900 dark:text-amber-200 shadow-xs">

@@ -129,57 +129,21 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
 
-        {/* Language & Localizations */}
+        {/* Jurisdiction & Submission Settings */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Globe className="size-4" /> {lang === "ja" ? "言語・地域設定" : "Language & Regional Localization"}
+              <Globe className="size-4" /> Jurisdiction & Submission Controls
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex flex-col gap-2">
-              <span className="text-xs font-semibold text-muted-foreground">
-                {lang === "ja" ? "管理画面およびシステム言語" : "Interface Display Language"}
-              </span>
-              <div className="flex items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => setLang("en")}
-                  className={`flex items-center gap-2 px-3.5 py-2 rounded-lg border text-xs font-semibold transition-all ${
-                    lang === "en"
-                      ? "border-primary bg-primary text-primary-foreground shadow-xs"
-                      : "border-border bg-card text-muted-foreground hover:bg-muted"
-                  }`}
-                >
-                  <span>🇺🇸</span>
-                  <span>English (Global)</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setLang("ja")}
-                  className={`flex items-center gap-2 px-3.5 py-2 rounded-lg border text-xs font-semibold transition-all ${
-                    lang === "ja"
-                      ? "border-primary bg-primary text-primary-foreground shadow-xs"
-                      : "border-border bg-card text-muted-foreground hover:bg-muted"
-                  }`}
-                >
-                  <span>🇯🇵</span>
-                  <span>日本語 (Japanese)</span>
-                </button>
-              </div>
-            </div>
-
             <label className="flex items-center gap-3 text-sm pt-2">
               <input type="checkbox" defaultChecked className="size-4" />
-              {lang === "ja" ? "IPジオロケーションに基づく言語自動判定を有効化" : "Auto-detect language by visitor IP geolocation (Japan = JP)"}
-            </label>
-            <label className="flex items-center gap-3 text-sm">
-              <input type="checkbox" defaultChecked className="size-4" />
-              {lang === "ja" ? "公開法域のみを申請者に表示 (US-01.3)" : "Only show live jurisdictions to applicants (US-01.3)"}
+              Only show live jurisdictions to applicants (US-01.3)
             </label>
             <label className="flex items-center gap-3 text-sm">
               <input type="checkbox" className="size-4" />
-              {lang === "ja" ? "電子申請受付を有効化 (US-10.3)" : "Enable e-file submission where available (US-10.3)"}
+              Enable e-file submission where available (US-10.3)
             </label>
           </CardContent>
         </Card>

@@ -12,26 +12,20 @@ const LangContext = createContext<{ lang: Lang; setLang: (lang: Lang) => void }>
 });
 
 export function LangProvider({ children }: { children: ReactNode }) {
-  const [lang, setLangState] = useState<Lang>("en");
+  const [lang] = useState<Lang>("en");
 
   useEffect(() => {
-    const stored = window.localStorage.getItem("torii_lang") || window.localStorage.getItem(STORAGE_KEY);
-    if (stored === "en" || stored === "ja") {
-      setLangState(stored);
-      return;
-    }
-    if (navigator.language?.toLowerCase().startsWith("ja")) {
-      setLangState("ja");
+    if (typeof window !== "undefined") {
+      window.localStorage.removeItem(STORAGE_KEY);
+      window.localStorage.setItem("torii_lang", "en");
     }
   }, []);
 
-  const setLang = (next: Lang) => {
-    setLangState(next);
-    window.localStorage.setItem(STORAGE_KEY, next);
-    window.localStorage.setItem("torii_lang", next);
+  const setLang = (_next: Lang) => {
+    // English only - no-op
   };
 
-  return <LangContext.Provider value={{ lang, setLang }}>{children}</LangContext.Provider>;
+  return <LangContext.Provider value={{ lang: "en", setLang }}>{children}</LangContext.Provider>;
 }
 
 export function useLang() {

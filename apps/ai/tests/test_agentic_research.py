@@ -15,7 +15,11 @@ from torii_ai.services.agentic_research import (
     StageResearchRequest,
     build_stage_queries,
 )
-from torii_ai.services.ops_scraper import mission_domains_for, official_domains_for
+from torii_ai.services.ops_scraper import (
+    is_official_source_domain,
+    mission_domains_for,
+    official_domains_for,
+)
 from torii_ai.tools.tavily import FakeSearchClient, TavilySearchResult
 
 ADMISSIBILITY_REPLY = """{
@@ -265,3 +269,517 @@ async def test_research_stage_no_search_hits_still_returns_shaped_payload(
 
     assert result.items == {"documents": []}
     assert result.source_pages == []
+
+
+def test_is_official_source_domain_accepts_official_and_blocks_commercial() -> None:
+    # Official government domains
+    assert is_official_source_domain("https://www.isa.go.jp/en/index.html", "JP") is True
+    assert (
+        is_official_source_domain("https://www.bd.emb-japan.go.jp/itpr_en/visa.html", "JP", "BD")
+        is True
+    )
+    assert is_official_source_domain("https://www.gov.uk/standard-visitor", "GB") is True
+    assert is_official_source_domain("https://travel.state.gov/content/travel.html", "US") is True
+    assert is_official_source_domain("https://immi.homeaffairs.gov.au/visas", "AU") is True
+
+    # Authorized concessionaires
+    assert is_official_source_domain("https://visa.vfsglobal.com/bgd/en/jpn", "JP", "BD") is True
+    assert is_official_source_domain("https://www.tlscontact.com/fr", "FR") is True
+
+    # Commercial visa intermediaries and blogs must be rejected
+    assert is_official_source_domain("https://www.ivisa.com/japan-visa", "JP") is False
+    assert is_official_source_domain("https://visaguide.world/asia/japan-visa/", "JP") is False
+    assert is_official_source_domain("https://atlys.com/country/japan", "JP") is False
+    assert is_official_source_domain("https://travelvisapro.com/", "JP") is False
+    assert is_official_source_domain("https://random-scam-blog.org/visa", "JP") is False
+
+
+@pytest.mark.asyncio
+async def test_research_stage_rejects_commercial_search_hits(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Fake search returns one commercial blog hit and one official hit
+    commercial_hit = _hit("https://www.ivisa.com/japan-tourist-visa")
+    official_hit = _hit("https://www.mofa.go.jp/j_info/visit/visa/index.html")
+    search = FakeSearchClient([commercial_hit, official_hit])
+    chat = FakeChatClient(reply=ADMISSIBILITY_REPLY)
+    researcher = AgenticStageResearcher(search=search, chat=chat, settings=Settings())
+
+    scraped_urls: list[str] = []
+
+    async def fake_scrape_pages(urls, *, timeout_seconds, page_chars):
+        scraped_urls.extend(urls)
+        return [{"url": u, "text": "Content"} for u in urls]
+
+    monkeypatch.setattr(ar, "scrape_pages", fake_scrape_pages)
+
+    request = StageResearchRequest(
+        stage="admissibility",
+        destination_code="JP",
+        purpose_code="tourist",
+        action_code="new_application",
+        nationality="BD",
+        residence_country="BD",
+    )
+    result = await researcher.research_stage(request)
+
+    # Scraped URLs should only contain the official MOFA domain, not ivisa.com
+    assert "https://www.mofa.go.jp/j_info/visit/visa/index.html" in scraped_urls
+    assert "https://www.ivisa.com/japan-tourist-visa" not in scraped_urls
+    assert [p["url"] for p in result.source_pages] == [
+        "https://www.mofa.go.jp/j_info/visit/visa/index.html"
+    ]
+
+
+@pytest.mark.asyncio
+async def test_research_stage_direct_scrape_success_with_provenance(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """When direct scrape succeeds, returns verified status and explicit evidence provenance."""
+    official_url = "https://www.mofa.go.jp/j_info/visit/visa/index.html"
+    official_hit = _hit(official_url)
+    search = FakeSearchClient([official_hit])
+    chat = FakeChatClient(reply=ADMISSIBILITY_REPLY)
+    researcher = AgenticStageResearcher(search=search, chat=chat, settings=Settings())
+
+    async def fake_scrape_pages(urls, *, timeout_seconds, page_chars):
+        return [
+            {
+                "url": urls[0],
+                "text": "Official Japan tourist visa requirements for foreign nationals. Permitted stay up to 90 days. Consular visa required for entry.",
+            }
+        ]
+
+    monkeypatch.setattr(ar, "scrape_pages", fake_scrape_pages)
+
+    request = StageResearchRequest(
+        stage="admissibility",
+        destination_code="JP",
+        purpose_code="tourist",
+        action_code="new_application",
+        nationality="BD",
+        residence_country="BD",
+    )
+    result = await researcher.research_stage(request)
+
+    assert result.retrieval_status == "direct_scrape"
+    assert result.verification_status == "verified"
+    assert result.review_required is False
+    assert len(result.source_pages) == 1
+    page = result.source_pages[0]
+    assert page["url"] == official_url
+    assert page["retrieval_method"] == "direct_scrape"
+    assert page["domain"] == "www.mofa.go.jp"
+    assert "retrieved_at" in page
+    assert page["source_metadata"]["authority"] == "test"
+
+
+@pytest.mark.asyncio
+async def test_research_stage_inaccessible_sources_graceful_handling(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """When government websites return 403/timeout and no snippet is available, safely flag review_required."""
+    official_hit = _hit("https://www.bd.emb-japan.go.jp/itpr_en/visa.html")
+    official_hit.content = ""  # No search snippet available either
+    search = FakeSearchClient([official_hit])
+    chat = FakeChatClient(reply=ADMISSIBILITY_REPLY)
+    researcher = AgenticStageResearcher(search=search, chat=chat, settings=Settings())
+
+    # Simulate scrape failure (e.g. 403 Forbidden or timeout)
+    async def fake_scrape_pages(urls, *, timeout_seconds, page_chars):
+        return []
+
+    monkeypatch.setattr(ar, "scrape_pages", fake_scrape_pages)
+
+    request = StageResearchRequest(
+        stage="admissibility",
+        destination_code="JP",
+        purpose_code="tourist",
+        action_code="new_application",
+        nationality="BD",
+        residence_country="BD",
+    )
+    result = await researcher.research_stage(request)
+
+    assert result.insufficient is True
+    assert result.review_required is True
+    assert result.retrieval_status == "failed"
+    assert result.verification_status == "failed"
+    assert result.source_pages == []
+    assert result.error_diagnostics is not None
+    # No fabricated data
+    assert result.items["admission"] == {}
+
+
+@pytest.mark.asyncio
+async def test_research_stage_alternative_official_sources_snippet_fallback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """When direct scrape fails on 403, fallback to authentic official search hit content with provenance."""
+    official_url = "https://www.bd.emb-japan.go.jp/itpr_en/visa.html"
+    commercial_url = "https://visaguide.world/asia/japan-visa/"
+
+    official_hit = _hit(official_url)
+    official_hit.content = (
+        "Embassy of Japan in Bangladesh: Visa required for tourist entry. "
+        "Permitted stay up to 90 days. Standard processing time is 5 to 7 working days. Official fee applies."
+    )
+    commercial_hit = _hit(commercial_url)
+    commercial_hit.content = "Commercial blog content."
+
+    search = FakeSearchClient([official_hit, commercial_hit])
+    chat = FakeChatClient(reply=ADMISSIBILITY_REPLY)
+    researcher = AgenticStageResearcher(search=search, chat=chat, settings=Settings())
+
+    # Direct scrape fails (returns empty)
+    async def fake_scrape_pages(urls, *, timeout_seconds, page_chars):
+        return []
+
+    monkeypatch.setattr(ar, "scrape_pages", fake_scrape_pages)
+
+    request = StageResearchRequest(
+        stage="admissibility",
+        destination_code="JP",
+        purpose_code="tourist",
+        action_code="new_application",
+        nationality="BD",
+        residence_country="BD",
+    )
+    result = await researcher.research_stage(request)
+
+    assert result.insufficient is False
+    assert result.review_required is False
+    assert result.retrieval_status == "search_snippet_fallback"
+    assert result.verification_status == "verified"
+    assert len(result.source_pages) == 1
+    page = result.source_pages[0]
+    assert page["url"] == official_url
+    assert page["retrieval_method"] == "official_snippet_fallback"
+    assert page["domain"] == "www.bd.emb-japan.go.jp"
+    assert page["source_metadata"]["authority"] == "test"
+    assert result.items["admission"]["visa_required"] is True
+
+
+@pytest.mark.asyncio
+async def test_research_stage_incomplete_official_snippet_triggers_review(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A search snippet from an official domain that is too incomplete to support claims triggers review."""
+    official_url = "https://www.bd.emb-japan.go.jp/itpr_en/visa.html"
+    official_hit = _hit(official_url)
+    # Truncated, incomplete snippet under 80 chars
+    official_hit.content = "Embassy visa notice."
+
+    search = FakeSearchClient([official_hit])
+    # The model extraction returns partial or empty admission
+    partial_reply = """{
+      "admission": {},
+      "filing_channel": {},
+      "process": {},
+      "fees": [],
+      "faq": [],
+      "insufficient": false,
+      "followup_queries": []
+    }"""
+    chat = FakeChatClient(reply=partial_reply)
+    researcher = AgenticStageResearcher(search=search, chat=chat, settings=Settings())
+
+    async def fake_scrape_pages(urls, *, timeout_seconds, page_chars):
+        return []
+
+    monkeypatch.setattr(ar, "scrape_pages", fake_scrape_pages)
+
+    request = StageResearchRequest(
+        stage="admissibility",
+        destination_code="JP",
+        purpose_code="tourist",
+        action_code="new_application",
+        nationality="BD",
+    )
+    result = await researcher.research_stage(request)
+
+    assert result.retrieval_status == "search_snippet_fallback"
+    assert result.verification_status == "needs_review"
+    assert result.review_required is True
+    assert "incomplete" in (result.error_diagnostics or "").lower()
+
+
+@pytest.mark.asyncio
+async def test_research_stage_conflicting_requirements(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """When official sources report conflicting requirements, system flags review_required."""
+    conflicting_reply = """{
+      "admission": {},
+      "filing_channel": {},
+      "process": {},
+      "fees": [],
+      "faq": [],
+      "conflicting_requirements": true,
+      "insufficient": true,
+      "followup_queries": []
+    }"""
+    official_hit = _hit("https://www.mofa.go.jp/visa.html")
+    search = FakeSearchClient([official_hit])
+    chat = FakeChatClient(reply=conflicting_reply)
+    researcher = AgenticStageResearcher(search=search, chat=chat, settings=Settings())
+
+    async def fake_scrape_pages(urls, *, timeout_seconds, page_chars):
+        return [{"url": urls[0], "text": "Page A says 30 days; Page B says 90 days."}]
+
+    monkeypatch.setattr(ar, "scrape_pages", fake_scrape_pages)
+
+    request = StageResearchRequest(
+        stage="admissibility",
+        destination_code="JP",
+        purpose_code="tourist",
+        action_code="new_application",
+        nationality="BD",
+    )
+    result = await researcher.research_stage(request)
+
+    assert result.insufficient is True
+    assert result.review_required is True
+    assert result.verification_status == "unverified"
+    assert result.retrieval_status == "insufficient"
+    assert "Conflicting requirements" in (result.error_diagnostics or "")
+
+
+@pytest.mark.asyncio
+async def test_research_stage_insufficient_evidence(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """When retrieved pages do not contain sufficient evidence, flag review_required without hallucinating."""
+    insufficient_reply = """{
+      "admission": {},
+      "filing_channel": {},
+      "process": {},
+      "fees": [],
+      "faq": [],
+      "insufficient": true,
+      "followup_queries": ["official visa requirements"]
+    }"""
+    official_hit = _hit("https://www.mofa.go.jp/under-construction.html")
+    search = FakeSearchClient([official_hit])
+    chat = FakeChatClient(reply=insufficient_reply)
+    researcher = AgenticStageResearcher(search=search, chat=chat, settings=Settings())
+
+    async def fake_scrape_pages(urls, *, timeout_seconds, page_chars):
+        return [{"url": urls[0], "text": "Under construction. Check back later."}]
+
+    monkeypatch.setattr(ar, "scrape_pages", fake_scrape_pages)
+
+    request = StageResearchRequest(
+        stage="admissibility",
+        destination_code="JP",
+        purpose_code="tourist",
+        action_code="new_application",
+        nationality="BD",
+    )
+    result = await researcher.research_stage(request)
+
+    assert result.insufficient is True
+    assert result.review_required is True
+    assert result.verification_status == "unverified"
+    assert result.retrieval_status == "insufficient"
+    assert "Insufficient evidence" in (result.error_diagnostics or "")
+
+
+def test_is_official_source_domain_strict_validation_and_spoof_defense() -> None:
+    """Validate that lookalike, spoofed, and deceptive hostnames are strictly rejected."""
+    # Spoofed and deceptive domains must be rejected
+    assert is_official_source_domain("https://visa.gov.scamportal.com/japan", "JP") is False
+    assert is_official_source_domain("https://apply-japan-gov.org/form", "JP") is False
+    assert is_official_source_domain("https://phishing.gov.xyz/login", "JP") is False
+    assert is_official_source_domain("https://gov.com/fake", "US") is False
+    assert is_official_source_domain("https://evil.gov.attacker.net/us", "US") is False
+    assert is_official_source_domain("https://fake.gov.uk.phishing.org/visas", "GB") is False
+    assert is_official_source_domain("https://embassy-gov.info/apply", "JP") is False
+
+    # Legitimate domains, subdomains, ports, case-insensitivity and trailing dots must be accepted
+    assert is_official_source_domain("https://travel.state.gov/content/visas.html", "US") is True
+    assert (
+        is_official_source_domain("https://TRAVEL.STATE.GOV:443/content/visas.html", "US") is True
+    )
+    assert is_official_source_domain("https://www.mofa.go.jp./itpr_en/visa.html", "JP") is True
+    assert is_official_source_domain("https://sub.immigration.gov.sg/visa", "SG") is True
+    assert is_official_source_domain("https://visa.gov.bd/apply", "BD") is True
+    assert is_official_source_domain("https://www.service.govt.nz/visas", "NZ") is True
+    assert is_official_source_domain("https://visas.gouv.fr/entry", "FR") is True
+    assert is_official_source_domain("https://www.inm.gob.mx/visa", "MX") is True
+    assert is_official_source_domain("https://www.sem.admin.ch/sem/en/home.html", "CH") is True
+    assert is_official_source_domain("https://www.canada.ca/en/immigration.html", "CA") is True
+
+    # Malformed inputs
+    assert is_official_source_domain("") is False
+    assert is_official_source_domain("not-a-url") is False
+    assert is_official_source_domain("ftp://travel.state.gov/visas") is False
+    assert is_official_source_domain("http://") is False
+    assert is_official_source_domain("https://   /test") is False
+
+
+@pytest.mark.asyncio
+async def test_snippet_fallback_unsupported_fee_and_processing_triggers_needs_review(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """When fallback snippet supports visa requirement but lacks evidence for fees/processing, review is required."""
+    reply_with_unsupported_claims = """{
+      "admission": {"visa_required": true, "route": "consular_visa", "max_stay_days": null,
+        "citation": {"authority": "Embassy of Japan", "title": "Visa",
+                     "url": "https://www.bd.emb-japan.go.jp/itpr_en/visa.html",
+                     "source_version": "2026-04"}},
+      "filing_channel": {"channel": "embassy", "filer": "applicant",
+        "mission_name": "Embassy of Japan", "mission_url": null, "directory_url": null,
+        "citation": {"authority": "Embassy of Japan", "title": "Visa",
+                     "url": "https://www.bd.emb-japan.go.jp/itpr_en/visa.html",
+                     "source_version": "2026-04"}},
+      "process": {"steps": [], "processing_time_days_min": 5, "processing_time_days_max": 10,
+        "citation": {"authority": "Embassy of Japan", "title": "Visa",
+                     "url": "https://www.bd.emb-japan.go.jp/itpr_en/visa.html",
+                     "source_version": "2026-04"}},
+      "fees": [{"code": "single_entry", "amount": 3000, "currency": "JPY",
+                "citation": {"authority": "Embassy of Japan", "title": "Visa",
+                             "url": "https://www.bd.emb-japan.go.jp/itpr_en/visa.html",
+                             "source_version": "2026-04"}}],
+      "faq": [],
+      "insufficient": false,
+      "followup_queries": []
+    }"""
+    official_url = "https://www.bd.emb-japan.go.jp/itpr_en/visa.html"
+    official_hit = _hit(official_url)
+    # The snippet only supports the visa requirement, but mentions NO fee numbers or processing times
+    official_hit.content = (
+        "Embassy of Japan in Bangladesh: Japanese visa requirements for foreign nationals. "
+        "Citizens of Bangladesh must obtain an entry visa before traveling to Japan."
+    )
+    search = FakeSearchClient([official_hit])
+    chat = FakeChatClient(reply=reply_with_unsupported_claims)
+    researcher = AgenticStageResearcher(search=search, chat=chat, settings=Settings())
+
+    async def fake_scrape_pages(urls, *, timeout_seconds, page_chars):
+        return []
+
+    monkeypatch.setattr(ar, "scrape_pages", fake_scrape_pages)
+
+    request = StageResearchRequest(
+        stage="admissibility",
+        destination_code="JP",
+        purpose_code="tourist",
+        action_code="new_application",
+        nationality="BD",
+        residence_country="BD",
+    )
+    result = await researcher.research_stage(request)
+
+    assert result.insufficient is False
+    assert result.retrieval_status == "search_snippet_fallback"
+    # Review must be required and verification_status must be 'needs_review'
+    assert result.review_required is True
+    assert result.verification_status == "needs_review"
+    assert "unsupported fee" in (result.error_diagnostics or "").lower()
+    # Ungrounded fee and processing time claims must be dropped from payload
+    assert result.items["fees"] == []
+    assert result.items["process"]["processing_time_days_min"] is None
+    # Grounded visa_required remains verified
+    assert result.items["admission"]["visa_required"] is True
+
+
+@pytest.mark.asyncio
+async def test_numeric_matching_alone_does_not_establish_claim_validity(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Isolated numbers in text (e.g. Article 30, 90 applicants, Section 5) must not validate statutory claims."""
+    reply_with_numeric_claims = """{
+      "admission": {"visa_required": true, "route": "consular_visa", "max_stay_days": 90,
+        "citation": {"authority": "Embassy of Japan", "title": "Visa",
+                     "url": "https://www.bd.emb-japan.go.jp/itpr_en/visa.html",
+                     "source_version": "2026-04"}},
+      "filing_channel": {"channel": "embassy", "filer": "applicant",
+        "mission_name": "Embassy of Japan", "mission_url": null, "directory_url": null,
+        "citation": {"authority": "Embassy of Japan", "title": "Visa",
+                     "url": "https://www.bd.emb-japan.go.jp/itpr_en/visa.html",
+                     "source_version": "2026-04"}},
+      "process": {"steps": [], "processing_time_days_min": 5, "processing_time_days_max": 10,
+        "citation": {"authority": "Embassy of Japan", "title": "Visa",
+                     "url": "https://www.bd.emb-japan.go.jp/itpr_en/visa.html",
+                     "source_version": "2026-04"}},
+      "fees": [{"code": "single_entry", "amount": 30, "currency": "USD",
+                "citation": {"authority": "Embassy of Japan", "title": "Visa",
+                             "url": "https://www.bd.emb-japan.go.jp/itpr_en/visa.html",
+                             "source_version": "2026-04"}}],
+      "faq": [],
+      "insufficient": false,
+      "followup_queries": []
+    }"""
+    official_url = "https://www.bd.emb-japan.go.jp/itpr_en/visa.html"
+    official_hit = _hit(official_url)
+    search = FakeSearchClient([official_hit])
+    chat = FakeChatClient(reply=reply_with_numeric_claims)
+    researcher = AgenticStageResearcher(search=search, chat=chat, settings=Settings())
+
+    # Text contains isolated numbers 30, 90, 5 but entirely without fee, stay, or processing context
+    text_with_isolated_numbers = (
+        "Official visa portal for foreign nationals applying to Japan. "
+        "Refer to Article 30 of the 2024 Immigration Act. "
+        "A total of 90 applicants were recorded last quarter. "
+        "Section 5 describes procedural formalities for submission."
+    )
+
+    async def fake_scrape_pages(urls, *, timeout_seconds, page_chars):
+        return [{"url": urls[0], "text": text_with_isolated_numbers}]
+
+    monkeypatch.setattr(ar, "scrape_pages", fake_scrape_pages)
+
+    request = StageResearchRequest(
+        stage="admissibility",
+        destination_code="JP",
+        purpose_code="tourist",
+        action_code="new_application",
+        nationality="BD",
+        residence_country="BD",
+    )
+    result = await researcher.research_stage(request)
+
+    # Isolated numbers must be rejected and flagged for review
+    assert result.review_required is True
+    assert result.verification_status == "needs_review"
+    assert result.items["fees"] == []
+    assert result.items["admission"]["max_stay_days"] is None
+    assert result.items["process"]["processing_time_days_min"] is None
+    assert "unsupported" in (result.error_diagnostics or "").lower()
+
+
+@pytest.mark.asyncio
+async def test_irrelevant_corridor_evidence_triggers_needs_review(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Source text discussing entirely unrelated nationality/corridor must flag review_required."""
+    official_url = "https://www.bd.emb-japan.go.jp/itpr_en/visa.html"
+    official_hit = _hit(official_url)
+    search = FakeSearchClient([official_hit])
+    chat = FakeChatClient(reply=ADMISSIBILITY_REPLY)
+    researcher = AgenticStageResearcher(search=search, chat=chat, settings=Settings())
+
+    # Text discusses only US citizens visiting Mexico, completely irrelevant to BD -> JP tourist
+    irrelevant_text = (
+        "Official portal. United States citizens traveling to Mexico do not require a tourist card."
+    )
+
+    async def fake_scrape_pages(urls, *, timeout_seconds, page_chars):
+        return [{"url": urls[0], "text": irrelevant_text}]
+
+    monkeypatch.setattr(ar, "scrape_pages", fake_scrape_pages)
+
+    request = StageResearchRequest(
+        stage="admissibility",
+        destination_code="JP",
+        purpose_code="tourist",
+        action_code="new_application",
+        nationality="BD",
+        residence_country="BD",
+    )
+    result = await researcher.research_stage(request)
+
+    assert result.review_required is True
+    assert result.verification_status == "needs_review"
+    assert "relevance" in (result.error_diagnostics or "").lower()

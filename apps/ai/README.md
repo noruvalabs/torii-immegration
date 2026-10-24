@@ -1,12 +1,32 @@
 # torii-ai
 
 Torii's **model-facing service** (FastAPI). Conversational assistant with citations,
-intake narration, RAG (later), guardrails, and OCR (later). Rule-governed truth stays in
+intake narration, RAG, guardrails, OCR, and **autonomous visa research agent**. Rule-governed truth stays in
 [`apps/api`](../api) — this service proposes; the API validates and persists
 ([`docs/specs/03_architecture.md`](../../docs/specs/03_architecture.md)).
 
 Standalone [uv](https://docs.astral.sh/uv/) project. LLM: **Groq** (OpenAI-compatible).
-Live search: **Tavily** (not a sole legal citation source).
+Live search: **Tavily** (with strict citation anchoring to official government portals).
+
+---
+
+## 🤖 Strategic Decision: Proprietary AI Agent vs. Third-Party APIs
+
+Torii chose to build and maintain its **own autonomous AI research agent** rather than licensing expensive third-party travel APIs (e.g. Sherpa, IATA Timatic).
+
+### Key Advantages:
+1. **Deeper Form & Document Intelligence**:
+   - *Third-Party APIs* ($1,000–$5,000/mo) only return binary answers: *"Visa Required: Yes/No"*, validity length, and high-level health notices. They **cannot** supply official embassy PDF form field mappings, intake questionnaire schemas, or custom consular document templates (e.g., Japan Schedule of Stay, Bangladesh bank solvency formats).
+   - *Torii AI Agent* autonomously searches official ministries of foreign affairs, extracts the exact required form fields into dynamic JSON schemas, and compiles precise document checklists.
+2. **Extreme Cost Efficiency (~$10–$30 / month)**:
+   - With PostgreSQL caching (`CaseStageResearch`) and a 30-day Time-To-Live (TTL), repeated corridor queries hit database cache in `< 10ms` with **$0 AI cost**.
+   - Running Tavily search + Groq Llama/Qwen structured inference only incurs costs on fresh or expired corridor inquiries, keeping monthly operations under ~$30/mo.
+3. **Automated Embassy Policy Drift Detection**:
+   - A scheduled background worker monitors official government source URLs for changes (HTTP ETag / Last-Modified / content hash). When an embassy updates its rules or fee schedules, the agent re-scrapes the source, alerts ops staff, and invalidates stale caches.
+
+*See full Architecture Decision Record: [`docs/decisions/0002-global-corridors-and-ai-agent-engine.md`](../../docs/decisions/0002-global-corridors-and-ai-agent-engine.md).*
+
+---
 
 ## Run
 

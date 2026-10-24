@@ -29,6 +29,7 @@ import { toast } from "sonner";
 import { createPayment, processPayment, getCasePayment, type Payment } from "@/lib/api/payments";
 import { patchCase } from "@/lib/api/cases";
 import { SUPPORT_CONFIG } from "@/lib/support";
+import { ALL_COUNTRIES } from "@/lib/countries";
 import type { Case } from "./types";
 
 type QuickEligibilityAndPaymentProps = {
@@ -112,8 +113,20 @@ export function QuickEligibilityAndPayment({
     return {};
   });
 
-  const [paymentMethod, setPaymentMethod] = useState<"bkash" | "nagad" | "card">("bkash");
-  const [mobileNumber, setMobileNumber] = useState("017");
+  // Origin & Nationality Context
+  const originCode = (caseData.origin_country || caseData.residence_country || "").toUpperCase();
+  const applicantCountryObj = ALL_COUNTRIES.find((c) => c.code === originCode);
+  const applicantCountryName =
+    applicantCountryObj?.name ||
+    (typeof intakeAnswers.nationality === "string" ? intakeAnswers.nationality : null) ||
+    (typeof intakeAnswers.country_of_citizenship === "string" ? intakeAnswers.country_of_citizenship : null) ||
+    "your home country";
+  const isBangladesh = originCode === "BD" || applicantCountryName.toLowerCase() === "bangladesh";
+
+  const [paymentMethod, setPaymentMethod] = useState<"bkash" | "nagad" | "card">(() => {
+    return isBangladesh ? "bkash" : "card";
+  });
+  const [mobileNumber, setMobileNumber] = useState(() => (isBangladesh ? "017" : ""));
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [paymentReceipt, setPaymentReceipt] = useState<Payment | null>(null);
 
@@ -210,7 +223,9 @@ export function QuickEligibilityAndPayment({
       id: "finances",
       category: "Financial Solvency",
       question: "Can you provide a 3 to 6-month bank statement (or sponsor bank statement)?",
-      helper: "Showing regular balance (recommended BDT 50,000 to 1,50,000+ or equivalent).",
+      helper: isBangladesh
+        ? "Showing regular balance (recommended BDT 50,000 to 1,50,000+ or equivalent)."
+        : "Showing regular balance (recommended $500 to $1,500+ USD or local currency equivalent).",
       options: [
         {
           label: "Yes, from my personal bank account",
@@ -232,9 +247,13 @@ export function QuickEligibilityAndPayment({
     },
     {
       id: "ties",
-      category: "Home Ties & Occupation in Bangladesh",
-      question: "What is your primary status or occupation in Bangladesh?",
-      helper: "Demonstrates legitimate social or economic ties to return after treatment/visit.",
+      category: isBangladesh
+        ? "Home Ties & Occupation in Bangladesh"
+        : `Home Ties & Occupation in ${applicantCountryName}`,
+      question: isBangladesh
+        ? "What is your primary status or occupation in Bangladesh?"
+        : `What is your primary status or occupation in ${applicantCountryName}?`,
+      helper: "Demonstrates legitimate social, economic, or medical ties to return after treatment/visit.",
       options: [
         {
           label: "Salaried Employee (Govt / Private NOC available)",
@@ -242,8 +261,10 @@ export function QuickEligibilityAndPayment({
           points: 20,
         },
         {
-          label: "Business Owner / Self-Employed (Trade License)",
-          description: "Verified commercial establishment in Bangladesh.",
+          label: "Business Owner / Self-Employed (Trade License / Registration)",
+          description: isBangladesh
+            ? "Verified commercial establishment in Bangladesh."
+            : `Verified commercial establishment or self-employment in ${applicantCountryName}.`,
           points: 20,
         },
         {
@@ -274,7 +295,7 @@ export function QuickEligibilityAndPayment({
         },
       ],
     },
-  ], [isMedical, isStudent, isBusiness]);
+  ], [isMedical, isStudent, isBusiness, isBangladesh, applicantCountryName]);
 
   // Reconcile answers with caseData.intake_answers if state is empty or caseData updates later
   useEffect(() => {
@@ -327,11 +348,20 @@ export function QuickEligibilityAndPayment({
   // Scaled percentage: 100% when all requirements pass, or 95-98% if minor flags exist
   const probabilityPercentage = answeredCount === 0 ? 100 : Math.min(100, Math.max(90, totalScore));
 
-  const fees = {
-    govFee: destinationCode === "IN" ? 800 : destinationCode === "JP" ? 3000 : 2500,
-    serviceFee: 1200,
-    currency: destinationCode === "IN" ? "BDT" : "BDT",
-  };
+  const fees = useMemo(() => {
+    if (isBangladesh) {
+      return {
+        govFee: destinationCode === "IN" ? 800 : destinationCode === "JP" ? 3000 : 2500,
+        serviceFee: 1200,
+        currency: "BDT",
+      };
+    }
+    return {
+      govFee: destinationCode === "IN" ? 10 : destinationCode === "JP" ? 25 : 20,
+      serviceFee: 15,
+      currency: "USD",
+    };
+  }, [isBangladesh, destinationCode]);
   const totalAmount = fees.govFee + fees.serviceFee;
 
   const syncAnswersToDatabase = async (
@@ -720,12 +750,31 @@ export function QuickEligibilityAndPayment({
                   </Badge>
                 </CardTitle>
                 <CardDescription className="text-xs">
-                  Pay securely using Bangladesh mobile banking or credit/debit card.
+                  {isBangladesh
+                    ? "Pay securely using Bangladesh mobile banking or credit/debit card."
+                    : "Pay securely using international credit/debit card (Visa, Mastercard, Amex, Apple Pay) or local banking."}
                 </CardDescription>
               </CardHeader>
 
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-3 gap-3">
+                  {/* Card / Stripe */}
+                  <button
+                    type="button"
+                    onClick={() => setPaymentMethod("card")}
+                    className={`flex flex-col items-center justify-center p-3.5 rounded-xl border-2 transition-all ${
+                      !isBangladesh ? "order-first " : "order-last "
+                    }${
+                      paymentMethod === "card"
+                        ? "border-primary bg-primary/10 text-foreground font-bold shadow-xs"
+                        : "border-border hover:bg-muted/50 text-muted-foreground"
+                    }`}
+                  >
+                    <CreditCard className="size-5 text-primary mb-1.5" />
+                    <span className="text-xs font-extrabold text-foreground">Card / Stripe</span>
+                    <span className="text-[10px] text-muted-foreground">Visa / Master</span>
+                  </button>
+
                   {/* bKash */}
                   <button
                     type="button"
@@ -754,21 +803,6 @@ export function QuickEligibilityAndPayment({
                     <Wallet className="size-5 text-[#F7941D] mb-1.5" />
                     <span className="text-xs font-extrabold text-[#F7941D]">Nagad</span>
                     <span className="text-[10px] text-muted-foreground">Mobile Banking</span>
-                  </button>
-
-                  {/* Card / Stripe */}
-                  <button
-                    type="button"
-                    onClick={() => setPaymentMethod("card")}
-                    className={`flex flex-col items-center justify-center p-3.5 rounded-xl border-2 transition-all ${
-                      paymentMethod === "card"
-                        ? "border-primary bg-primary/10 text-foreground font-bold shadow-xs"
-                        : "border-border hover:bg-muted/50 text-muted-foreground"
-                    }`}
-                  >
-                    <CreditCard className="size-5 text-primary mb-1.5" />
-                    <span className="text-xs font-extrabold text-foreground">Card / Stripe</span>
-                    <span className="text-[10px] text-muted-foreground">Visa / Master</span>
                   </button>
                 </div>
 

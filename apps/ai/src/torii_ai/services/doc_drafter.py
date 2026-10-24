@@ -38,6 +38,8 @@ DOC_TITLES: dict[str, str] = {
     "financial_solvency": "Financial Solvency & Sponsor Guarantee Declaration",
     "financial": "Financial Solvency & Sponsor Guarantee Declaration",
     "invitation_letter": "Formal Letter of Guarantee & Invitation (招へい理由書 / 身元保証書)",
+    "medical_cover_letter": "Official Medical Visa Consular Application Letter (High Commission of India / IVAC)",
+    "medical_attendant_declaration": "Medical Attendant (MED-2) Declaration & Caregiver Undertaking",
 }
 
 
@@ -167,6 +169,7 @@ Please generate the complete, ready-to-file text of the {title}.
         arrival_date: str,
     ) -> str:
         date_str = datetime.now(UTC).strftime("%B %d, %Y")
+        answers = req.intake_answers or {}
         checklist_items = [
             f"   {i + 1}. {c.get('name', 'Document')} (Verified & Attached)"
             for i, c in enumerate(req.checklist)
@@ -405,6 +408,75 @@ The employee's academic background and past professional experience directly cor
 Employer / Authorized Representative Signature:
 ________________________________________
 {employer}
+Date: {date_str}
+"""
+        elif (
+            "medical" in doc_type
+            or req.jurisdiction_code == "IN"
+            or "medical" in req.scope_label.lower()
+        ):
+            hospital = str(
+                answers.get("destination_hospital")
+                or answers.get("hospital_name")
+                or "Recognized Medical Institution in India"
+            )
+            hospital_city = str(answers.get("hospital_city") or "India")
+            illness = str(
+                answers.get("illness_treatment_category")
+                or answers.get("treatment_nature")
+                or "Specialized Medical Treatment"
+            )
+            doctor = str(answers.get("doctor_in_charge") or "Senior Consultant / Specialist")
+            attendants_count = str(answers.get("accompanying_attendants_count") or "0")
+            attendant_info = ""
+            if attendants_count != "0":
+                attendant_info = f"\nACCOMPANYING ATTENDANTS (MED-2):\n- Total Attendants: {attendants_count}\n- Attendant Details: Declared in application and verified via relationship documents."
+
+            return f"""================================================================================
+OFFICIAL MEDICAL VISA (MED-1) APPLICATION COVER LETTER
+High Commission of India / Embassy of India / IVAC Consular Wing
+Case Reference: {req.case_reference} | Scope: Indian Medical Visa (MED-1)
+Date: {date_str}
+================================================================================
+
+TO:
+The Visa Attaché / Consular Officer
+High Commission / Embassy of India
+
+SUBJECT: APPLICATION FOR INDIAN MEDICAL VISA (MED-1) & ATTENDANT VISA (MED-2)
+Patient Name: {full_name}
+Passport Number: {passport_no}
+Nationality: {nationality}
+Country of Residence: {current_country}
+
+Respected Consular Officer,
+
+I have the honor to submit this formal visa application for an Indian Medical Visa (MED-1) to undertake specialized medical treatment in India, pursuant to the guidelines of the Ministry of Home Affairs and Bureau of Immigration, Government of India.
+
+1. MEDICAL DIAGNOSIS & TREATMENT FACILITY:
+- Destination Hospital: {hospital}, {hospital_city}, India
+- Treatment Nature / Specialty: {illness}
+- Treating Consultant / Department: {doctor}
+- Hospital Invitation Letter: Verified and attached to this dossier.
+
+2. PRELIMINARY MEDICAL REFERRAL:
+The patient has undergone initial medical investigations in {current_country}. Based on the diagnosis and the specialized therapeutic technology available in India, our attending physician has advised specialized treatment at {hospital}.
+{attendant_info}
+
+3. FINANCIAL SOLVENCY & RECOVERY GUARANTEE:
+All expenses associated with the medical treatment, surgery, hospitalization, accommodation, and return travel will be borne entirely by the patient/sponsor ({salary}). Sufficient liquid funds and bank solvency certificates are enclosed. The patient will return to {current_country} upon completion of treatment.
+
+4. ENCLOSED STATUTORY DOCUMENTS:
+{doc_list_str}
+
+We respectfully request your favorable consideration and expeditious grant of the Medical Visa (MED-1) for the patient{" and Medical Attendant Visas (MED-2) for the accompanying caregiver(s)" if attendants_count != "0" else ""}.
+
+Respectfully submitted,
+
+________________________________________
+{full_name}
+Patient / Primary Applicant
+Passport No: {passport_no}
 Date: {date_str}
 """
         else:

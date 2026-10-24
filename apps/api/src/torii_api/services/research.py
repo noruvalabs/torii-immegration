@@ -18,8 +18,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from torii_api.db.models import ScopeResearch, ScopeResearchStatus
 
 # A completed research snapshot is reused for new cases of the same scope+origin+residence
-# until this TTL elapses; past it, the scope endpoint enqueues a fresh run.
-RESEARCH_TTL_DAYS = 7
+# until this TTL elapses (30 days); past it, the scope endpoint enqueues a fresh run.
+RESEARCH_TTL_DAYS = 30
 
 # Payload slices — same vocabulary as the seeded definition tables.
 PAYLOAD_QUESTIONS = "intake_questions"

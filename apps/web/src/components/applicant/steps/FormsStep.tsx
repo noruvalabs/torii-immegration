@@ -71,8 +71,8 @@ function getFieldControlSpec(key: string): FieldControlSpec {
     return {
       type: "select",
       options: [
-        { label: "Male (男)", value: "male" },
-        { label: "Female (女)", value: "female" },
+        { label: "Male", value: "male" },
+        { label: "Female", value: "female" },
       ],
     };
   }
@@ -82,10 +82,10 @@ function getFieldControlSpec(key: string): FieldControlSpec {
     return {
       type: "select",
       options: [
-        { label: "Single (未婚)", value: "single" },
-        { label: "Married (有配偶)", value: "married" },
-        { label: "Divorced (死別・離別)", value: "divorced" },
-        { label: "Widowed (死別)", value: "widowed" },
+        { label: "Single", value: "single" },
+        { label: "Married", value: "married" },
+        { label: "Divorced", value: "divorced" },
+        { label: "Widowed", value: "widowed" },
       ],
     };
   }
@@ -454,20 +454,38 @@ function categorizeFields(filledFields: Record<string, unknown>): FormFieldGroup
       ],
     },
     {
-      title: "Address & Contact in Japan",
+      title: "Medical Treatment & Hospital (MED-1 / MED-2)",
       keys: [
-        { key: "current_japan_address", label: "Address in Japan", aliases: ["registered_address_japan", "address_in_japan", "residential_address_japan", "residence.address"] },
-        { key: "telephone_japan", label: "Telephone Number", aliases: ["phone_number", "contact_phone", "phone_japan", "telephone_number"] },
+        { key: "destination_hospital", label: "Recognized Hospital Name", aliases: ["hospital_name", "hospital", "medical.destination_hospital"] },
+        { key: "hospital_city", label: "Hospital City in India", aliases: ["city_of_hospital", "medical.hospital_city"] },
+        { key: "illness_treatment_category", label: "Treatment Specialty / Condition", aliases: ["illness_nature", "treatment_category", "medical.illness_category"] },
+        { key: "doctor_in_charge", label: "Treating Doctor / Specialist", aliases: ["consultant_doctor", "physician_name"] },
+        { key: "has_indian_hospital_invitation", label: "Hospital Invitation Letter Received", aliases: ["hospital_invitation", "has_hospital_letter"] },
+        { key: "has_local_medical_referral", label: "Home Country Medical Referral", aliases: ["doctor_referral", "medical_referral"] },
+        { key: "accompanying_attendants_count", label: "Accompanying Attendants Count", aliases: ["attendants_count", "attendants.count"] },
+        { key: "attendant_1_name", label: "Attendant 1 Legal Name", aliases: ["attendant_name", "caregiver_name"] },
+        { key: "attendant_1_relationship", label: "Attendant 1 Relationship", aliases: ["attendant_relationship"] },
+        { key: "attendant_1_passport", label: "Attendant 1 Passport Number", aliases: ["attendant_passport"] },
+        { key: "attendant_2_name", label: "Attendant 2 Legal Name" },
+        { key: "attendant_2_relationship", label: "Attendant 2 Relationship" },
+        { key: "attendant_2_passport", label: "Attendant 2 Passport Number" },
+      ],
+    },
+    {
+      title: "Address & Contact in Destination Country",
+      keys: [
+        { key: "current_destination_address", label: "Address in Destination", aliases: ["address_in_destination", "registered_address_japan", "current_japan_address", "address_in_japan", "residential_address_japan", "residence.address"] },
+        { key: "telephone_destination", label: "Destination Contact Phone", aliases: ["telephone_japan", "phone_number", "contact_phone", "phone_japan", "telephone_number"] },
         { key: "mobile_phone", label: "Cellular / Mobile Phone", aliases: ["mobile_phone_japan", "cell_phone"] },
       ],
     },
     {
       title: "Application Details",
       keys: [
-        { key: "desired_period_of_stay", label: "Desired Length of Extension", aliases: ["desired_period", "desired_extension_days"] },
-        { key: "reason_for_extension", label: "Reason for Application", aliases: ["extension_explanation_details", "reason_for_change"] },
+        { key: "desired_period_of_stay", label: "Desired Length of Stay / Extension", aliases: ["desired_period", "desired_extension_days", "treatment_duration_days"] },
+        { key: "reason_for_extension", label: "Reason for Application", aliases: ["extension_explanation_details", "reason_for_change", "main_purpose"] },
         { key: "criminal_record", label: "Criminal Record Disclosures", aliases: ["criminal_record_any", "criminal_disclosures"] },
-        { key: "has_family_in_japan", label: "Family in Japan", aliases: ["family_in_japan", "relatives_in_japan"] },
+        { key: "has_family_in_destination", label: "Family in Destination Country", aliases: ["has_family_in_japan", "family_in_japan", "relatives_in_japan"] },
       ],
     },
     {

@@ -35,6 +35,7 @@ from torii_api.db.models import (
     VisaCategory,
 )
 from torii_api.db.session import get_session
+from torii_api.services.agentic import find_case_stage, stage_is_usable, stage_items
 from torii_api.services.deadlines import compute_deadlines
 from torii_api.services.guidance import compute_guidance, next_status_for_phase
 from torii_api.services.intake import (
@@ -573,6 +574,120 @@ async def _owned_case(session: AsyncSession, case_id: int, user: User) -> Case:
     return case
 
 
+UNIVERSAL_BASELINE_QUESTIONS: list[dict[str, Any]] = [
+    {
+        "key": "applicant.full_name",
+        "prompt": "Full Legal Name (as printed in passport)",
+        "type": "string",
+        "required": True,
+        "section": "1. Personal Information",
+        "hint": "Given name(s) and surname exactly as shown in your passport machine-readable zone.",
+    },
+    {
+        "key": "date_of_birth",
+        "prompt": "Date of Birth",
+        "type": "date",
+        "required": True,
+        "section": "1. Personal Information",
+    },
+    {
+        "key": "gender",
+        "prompt": "Gender",
+        "type": "enum",
+        "options": ["Male", "Female", "Other"],
+        "required": True,
+        "section": "1. Personal Information",
+    },
+    {
+        "key": "marital_status",
+        "prompt": "Marital Status",
+        "type": "enum",
+        "options": ["Single", "Married", "Divorced", "Widowed"],
+        "required": False,
+        "section": "1. Personal Information",
+    },
+    {
+        "key": "nationality",
+        "prompt": "Current Nationality / Citizenship",
+        "type": "string",
+        "required": True,
+        "section": "2. Passport & Nationality",
+    },
+    {
+        "key": "passport_number",
+        "prompt": "Passport Number",
+        "type": "string",
+        "required": True,
+        "section": "2. Passport & Nationality",
+        "hint": "Primary international travel passport number.",
+    },
+    {
+        "key": "passport_country",
+        "prompt": "Passport Issuing Country",
+        "type": "string",
+        "required": True,
+        "section": "2. Passport & Nationality",
+    },
+    {
+        "key": "passport_issue_date",
+        "prompt": "Passport Date of Issue",
+        "type": "date",
+        "required": True,
+        "section": "2. Passport & Nationality",
+    },
+    {
+        "key": "passport_expiry_date",
+        "prompt": "Passport Expiry Date",
+        "type": "date",
+        "required": True,
+        "section": "2. Passport & Nationality",
+        "hint": "Must be valid for at least 6 months after intended arrival.",
+    },
+    {
+        "key": "email",
+        "prompt": "Contact Email Address",
+        "type": "string",
+        "required": True,
+        "section": "3. Contact & Address",
+    },
+    {
+        "key": "phone",
+        "prompt": "Primary Mobile Phone Number (with country code)",
+        "type": "string",
+        "required": True,
+        "section": "3. Contact & Address",
+    },
+    {
+        "key": "home_address",
+        "prompt": "Permanent Residential Address",
+        "type": "string",
+        "required": True,
+        "section": "3. Contact & Address",
+    },
+    {
+        "key": "arrival_date",
+        "prompt": "Intended Date of Arrival",
+        "type": "date",
+        "required": True,
+        "section": "4. Planned Travel",
+    },
+    {
+        "key": "stay_duration_days",
+        "prompt": "Intended Duration of Stay (in days)",
+        "type": "integer",
+        "required": True,
+        "section": "4. Planned Travel",
+    },
+    {
+        "key": "arrival_city",
+        "prompt": "Port of Entry / Destination City",
+        "type": "string",
+        "required": False,
+        "section": "4. Planned Travel",
+    },
+]
+
+
 async def _intake_questions_for_case(session: AsyncSession, case: Case) -> list[dict[str, Any]]:
     """Resolve intake questions for the case: live definition if available, else research snapshot fallback."""
     if case.visa_category_id is None or case.case_action_id is None:
@@ -614,16 +729,23 @@ async def _intake_questions_for_case(session: AsyncSession, case: Case) -> list[
         )
         return await _with_official_form_questions(session, case, questions)
 
+    # Next check CaseStageResearch (newer agentic pipeline) for this specific case
+    stage_res = await find_case_stage(session, case.id, "intake")
+    if stage_res is not None and stage_is_usable(stage_res):
+        questions = stage_items(stage_res, "intake")
+        if questions:
+            return await _with_official_form_questions(session, case, questions)
+
     research = await _research_for_case(session, case)
     if research is not None and _effective_research_status(research) == "completed":
         questions = research_questions(research.payload)
         if questions:
             return await _with_official_form_questions(session, case, questions)
 
-    raise HTTPException(
-        status_code=status.HTTP_404_NOT_FOUND,
-        detail="no intake definition for this case scope",
-    )
+    # When research is running in the background or no specific pack exists yet,
+    # provide the universal baseline questionnaire so the user can immediately fill out
+    # personal & passport data with zero perceived delay!
+    return list(UNIVERSAL_BASELINE_QUESTIONS)
 
 
 async def _pack_overrides_for_case(
@@ -868,6 +990,11 @@ async def _case_guidance(session: AsyncSession, case: Case) -> GuidanceOut:
             intake_questions = list(definition.questions)
         elif research is not None and research_questions(research.payload):
             intake_questions = research_questions(research.payload)
+        else:
+            intake_questions = list(UNIVERSAL_BASELINE_QUESTIONS)
+    else:
+        has_intake = True
+        intake_questions = list(UNIVERSAL_BASELINE_QUESTIONS)
 
     checklist = (
         (

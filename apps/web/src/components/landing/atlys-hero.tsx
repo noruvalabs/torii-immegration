@@ -12,32 +12,77 @@ import {
   Check,
 } from "lucide-react";
 import { POPULAR_DESTINATIONS } from "@/lib/destinations-data";
+import { ALL_COUNTRIES } from "@/lib/countries";
 import { CountryFlag } from "./country-flag";
 import { cn } from "@/lib/utils";
 
-const PASSPORT_OPTIONS = [
-  { code: "BD", name: "Bangladesh" },
-  { code: "IN", name: "India" },
+const POPULAR_PASSPORTS = [
   { code: "US", name: "United States" },
   { code: "GB", name: "United Kingdom" },
   { code: "CA", name: "Canada" },
+  { code: "AU", name: "Australia" },
+  { code: "IN", name: "India" },
+  { code: "BD", name: "Bangladesh" },
+  { code: "PH", name: "Philippines" },
+  { code: "PK", name: "Pakistan" },
+  { code: "SG", name: "Singapore" },
+  { code: "AE", name: "United Arab Emirates" },
+  { code: "DE", name: "Germany" },
+  { code: "FR", name: "France" },
 ];
 
 export function AtlysHero() {
   const router = useRouter();
-  const [selectedPassport, setSelectedPassport] = useState("BD");
+  const [selectedPassport, setSelectedPassport] = useState("US");
   const [selectedDestination, setSelectedDestination] = useState("japan");
 
   const [passportOpen, setPassportOpen] = useState(false);
   const [destinationOpen, setDestinationOpen] = useState(false);
+  const [passportSearch, setPassportSearch] = useState("");
   const [destinationSearch, setDestinationSearch] = useState("");
 
   const containerRef = useRef<HTMLDivElement>(null);
 
+  // Load saved passport preference or auto-detect by visitor IP
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const saved = localStorage.getItem("torii_user_passport");
+    if (saved) {
+      const match = ALL_COUNTRIES.find((c) => c.code.toUpperCase() === saved.toUpperCase());
+      if (match) {
+        setSelectedPassport(match.code);
+        return;
+      }
+    }
+
+    // Try detecting visitor country
+    fetch("/backend/v1/geo/detect")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((geo) => {
+        if (geo?.country_code) {
+          const match = ALL_COUNTRIES.find((c) => c.code.toUpperCase() === geo.country_code.toUpperCase());
+          if (match) {
+            setSelectedPassport(match.code);
+            localStorage.setItem("torii_user_passport", match.code);
+          }
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   const activePassport =
-    PASSPORT_OPTIONS.find((p) => p.code === selectedPassport) || PASSPORT_OPTIONS[0];
+    ALL_COUNTRIES.find((p) => p.code === selectedPassport) ||
+    POPULAR_PASSPORTS[0];
+
   const activeDestination =
     POPULAR_DESTINATIONS.find((d) => d.slug === selectedDestination) || POPULAR_DESTINATIONS[0];
+
+  const filteredPassports = passportSearch.trim()
+    ? ALL_COUNTRIES.filter((p) => {
+        const q = passportSearch.toLowerCase().trim();
+        return p.name.toLowerCase().includes(q) || p.code.toLowerCase().includes(q);
+      })
+    : POPULAR_PASSPORTS;
 
   const filteredDestinations = POPULAR_DESTINATIONS.filter((d) => {
     const q = destinationSearch.toLowerCase().trim();
@@ -48,7 +93,12 @@ export function AtlysHero() {
   function handleApplyForVisa(e?: React.FormEvent) {
     if (e) e.preventDefault();
     if (selectedDestination) {
-      router.push(`/visa/${selectedDestination}`);
+      if (selectedPassport) {
+        localStorage.setItem("torii_user_passport", selectedPassport);
+        router.push(`/visa/${selectedDestination}?from=${selectedPassport}`);
+      } else {
+        router.push(`/visa/${selectedDestination}`);
+      }
     }
   }
 
@@ -65,7 +115,7 @@ export function AtlysHero() {
   }, []);
 
   return (
-    <section className="relative overflow-hidden bg-[#0A0D18] pt-20 pb-8 lg:pt-24 lg:pb-10 text-white">
+    <section className="relative overflow-visible bg-[#0A0D18] pt-20 pb-12 lg:pt-24 lg:pb-16 text-white z-20">
       {/* Background Ambient Glow */}
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
         <div className="absolute -top-40 left-1/2 -translate-x-1/2 size-[650px] rounded-full bg-primary/20 blur-[140px]" />
@@ -77,11 +127,11 @@ export function AtlysHero() {
         {/* Route Selector Box */}
         <div
           ref={containerRef}
-          className="relative w-full max-w-3xl rounded-2xl border border-white/20 bg-white/10 p-1.5 backdrop-blur-2xl shadow-2xl transition-all"
+          className="relative z-30 w-full max-w-3xl rounded-2xl border border-white/20 bg-white/10 p-1.5 backdrop-blur-2xl shadow-2xl transition-all"
         >
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[1fr_auto_1fr_auto] gap-2 items-center bg-[#101424] rounded-xl py-1.5 px-2.5 sm:px-3 border border-white/10">
             {/* Passport Selector Custom Menu */}
-            <div className="relative">
+            <div className="relative z-40">
               <button
                 type="button"
                 onClick={() => {
@@ -116,12 +166,26 @@ export function AtlysHero() {
 
               {/* Passport Dropdown Menu */}
               {passportOpen && (
-                <div className="absolute left-0 right-0 top-full mt-2 z-50 rounded-xl border border-white/15 bg-[#141829] p-1.5 shadow-2xl backdrop-blur-2xl animate-in fade-in slide-in-from-top-1 duration-150 text-left">
-                  <div className="px-3 py-1.5 text-[10px] font-semibold uppercase text-white/40 tracking-wider">
-                    Select Your Passport
+                <div className="absolute left-0 right-0 sm:left-0 sm:w-80 top-full mt-2 z-50 rounded-xl border border-white/15 bg-[#141829] p-2 shadow-2xl backdrop-blur-2xl animate-in fade-in slide-in-from-top-1 duration-150 text-left">
+                  {/* Search filter input */}
+                  <div className="relative mb-2">
+                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-white/40" />
+                    <input
+                      type="text"
+                      value={passportSearch}
+                      onChange={(e) => setPassportSearch(e.target.value)}
+                      placeholder="Search passport country..."
+                      className="w-full rounded-lg bg-white/5 pl-8 pr-3 py-1.5 text-xs text-white placeholder:text-white/40 border border-white/10 outline-none focus:border-primary"
+                      autoFocus
+                    />
                   </div>
-                  <div className="space-y-0.5">
-                    {PASSPORT_OPTIONS.map((p) => {
+
+                  <div className="px-2 py-1 text-[10px] font-semibold uppercase text-white/40 tracking-wider">
+                    {passportSearch.trim() ? "Search Results" : "Popular Passports"}
+                  </div>
+
+                  <div className="max-h-60 overflow-y-auto space-y-0.5 pr-1">
+                    {filteredPassports.map((p) => {
                       const isSelected = p.code === selectedPassport;
                       return (
                         <button
@@ -129,7 +193,9 @@ export function AtlysHero() {
                           type="button"
                           onClick={() => {
                             setSelectedPassport(p.code);
+                            localStorage.setItem("torii_user_passport", p.code);
                             setPassportOpen(false);
+                            setPassportSearch("");
                           }}
                           className={cn(
                             "w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold transition-colors cursor-pointer",
@@ -155,7 +221,7 @@ export function AtlysHero() {
             <div className="hidden lg:block h-7 w-px bg-white/10" />
 
             {/* Destination Selector Custom Menu */}
-            <div className="relative">
+            <div className="relative z-40">
               <button
                 type="button"
                 onClick={() => {

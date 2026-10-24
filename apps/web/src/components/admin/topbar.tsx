@@ -2,7 +2,7 @@
 
 import { Menu, Search } from "lucide-react";
 import { ThemeToggle } from "./theme-toggle";
-import { useI18n, LanguageSwitcher } from "@/lib/i18n";
+import { useI18n } from "@/lib/i18n";
 import { useAdminSidebar } from "./admin-sidebar-context";
 
 export function Topbar({ title }: { title: string }) {
@@ -31,9 +31,6 @@ export function Topbar({ title }: { title: string }) {
             className="h-8.5 w-64 rounded-lg border bg-background/80 pl-8.5 pr-3 text-xs outline-none focus-visible:ring-1 focus-visible:ring-ring"
           />
         </div>
-
-        {/* Global Language Switcher EN / JP */}
-        <LanguageSwitcher />
 
         <ThemeToggle />
       </div>

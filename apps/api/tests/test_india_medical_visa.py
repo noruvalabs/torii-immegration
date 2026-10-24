@@ -100,6 +100,60 @@ def test_india_checklist_visible_items_show_all_required() -> None:
     codes = {item.code for item in items}
     assert "passport" in codes
     assert "indian_hospital_letter" in codes
+    assert "local_medical_referral" in codes
+    assert "proof_of_funds" in codes
+
+
+def test_kenya_origin_requires_yellow_fever_and_polio_certificates() -> None:
+    kenya_answers = {
+        "full_name": "Amina Ochieng",
+        "origin_country": "KE",
+        "destination_hospital": "Fortis Memorial Research Institute",
+    }
+    items = visible_requirement_items(
+        IN_MEDICAL_NEW_APPLICATION_DOCUMENT_REQUIREMENTS, kenya_answers
+    )
+    codes = {item.code for item in items}
+    assert "yellow_fever_certificate" in codes, (
+        "Kenyan applicant must be asked for Yellow Fever Card"
+    )
+    assert "polio_vaccine_certificate" in codes, (
+        "Kenyan applicant must be asked for Polio Certificate"
+    )
+    assert "utility_bill_address_proof" not in codes, (
+        "Kenyan applicant does not use Bangladesh IVAC utility bill"
+    )
+
+
+def test_bangladesh_origin_requires_ivac_utility_bill_no_yellow_fever() -> None:
+    bd_answers = {
+        "full_name": "Rahim Ahmed",
+        "origin_country": "BD",
+        "destination_hospital": "Apollo Gleneagles Kolkata",
+    }
+    items = visible_requirement_items(IN_MEDICAL_NEW_APPLICATION_DOCUMENT_REQUIREMENTS, bd_answers)
+    codes = {item.code for item in items}
+    assert "utility_bill_address_proof" in codes, (
+        "Bangladeshi applicant must provide IVAC utility bill"
+    )
+    assert "yellow_fever_certificate" not in codes, (
+        "Bangladeshi applicant does not need Yellow Fever"
+    )
+    assert "polio_vaccine_certificate" not in codes
+
+
+def test_us_origin_requires_standard_docs_only() -> None:
+    us_answers = {
+        "full_name": "Sarah Connor",
+        "origin_country": "US",
+        "destination_hospital": "Medanta The Medicity",
+    }
+    items = visible_requirement_items(IN_MEDICAL_NEW_APPLICATION_DOCUMENT_REQUIREMENTS, us_answers)
+    codes = {item.code for item in items}
+    assert "passport" in codes
+    assert "indian_hospital_letter" in codes
+    assert "yellow_fever_certificate" not in codes
+    assert "utility_bill_address_proof" not in codes
 
 
 # ── Passport validity checks ──────────────────────────────────────────────────

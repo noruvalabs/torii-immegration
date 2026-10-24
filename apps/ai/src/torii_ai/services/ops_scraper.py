@@ -10,12 +10,14 @@ changes, and flags them for human review before anything goes live (NF-9).
 
 from __future__ import annotations
 
+import ipaddress
 import json
 import re
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
+from urllib.parse import urlparse
 
 import httpx
 import structlog
@@ -29,32 +31,44 @@ from torii_ai.tools.tavily import SearchClient
 log = structlog.get_logger()
 
 # Official domains to constrain search to, per destination country. Search is restricted to
-# these so every extracted requirement traces to a government source (NF-2). Unknown
-# destinations fall back to the settings-level allowlist.
+# these so every extracted requirement traces to a government source (NF-2).
 OFFICIAL_DOMAINS: dict[str, list[str]] = {
     "JP": ["isa.go.jp", "moj.go.jp", "mofa.go.jp"],
     "US": ["uscis.gov", "travel.state.gov", "state.gov", "cbp.gov", "ice.gov"],
     "UK": ["gov.uk", "homeoffice.gov.uk"],
     "GB": ["gov.uk", "homeoffice.gov.uk"],
-    "CA": ["canada.ca", "cic.gc.ca"],
-    "AU": ["homeaffairs.gov.au", "gov.au"],
+    "CA": ["canada.ca", "cic.gc.ca", "international.gc.ca"],
+    "AU": ["homeaffairs.gov.au", "gov.au", "dfat.gov.au"],
     "NZ": ["immigration.govt.nz", "govt.nz"],
     "DE": ["bmi.bund.de", "auswaertiges-amt.de", "bund.de"],
-    "FR": ["france-visas.gouv.fr", "gouv.fr"],
-    "SG": ["ica.gov.sg"],
-    "KR": ["visa.go.kr", "hikorea.go.kr"],
-    "IN": ["indianvisaonline.gov.in", "mea.gov.in"],
-    "TH": ["immigration.go.th"],
-    "MY": ["imi.gov.my"],
-    "VN": ["vietnamvisa.govt.vn", "gov.vn"],
-    "PH": ["immigration.gov.ph"],
-    "ID": ["imigrasi.go.id"],
+    "FR": ["france-visas.gouv.fr", "gouv.fr", "diplomatie.gouv.fr"],
+    "SG": ["ica.gov.sg", "mfa.gov.sg"],
+    "KR": ["visa.go.kr", "hikorea.go.kr", "mofa.go.kr"],
+    "IN": ["indianvisaonline.gov.in", "mea.gov.in", "boi.gov.in", "mha.gov.in"],
+    "TH": ["immigration.go.th", "mfa.go.th"],
+    "MY": ["imi.gov.my", "kln.gov.my"],
+    "VN": ["vietnamvisa.govt.vn", "gov.vn", "mofa.gov.vn"],
+    "PH": ["immigration.gov.ph", "dfa.gov.ph"],
+    "ID": ["imigrasi.go.id", "kemlu.go.id"],
+    "AE": ["gdrfad.gov.ae", "icp.gov.ae", "mofa.gov.ae"],
+    "SA": ["visa.visitsaudi.com", "mofa.gov.sa"],
+    "CN": ["visaforchina.cn", "mfa.gov.cn", "nia.gov.cn"],
+    "TR": ["evisa.gov.tr", "mfa.gov.tr", "goc.gov.tr"],
+    "IT": ["esteri.it", "poliziadistato.it"],
+    "ES": ["exteriores.gob.es", "sede.administracionespublicas.gob.es"],
+    "NL": ["netherlandsworldwide.nl", "ind.nl"],
+    "CH": ["eda.admin.ch", "sem.admin.ch"],
+    "BR": ["gov.br"],
+    "MX": ["inm.gob.mx", "sre.gob.mx"],
+    "ZA": ["dha.gov.za", "dirco.gov.za"],
+    "IE": ["irishimmigration.ie", "dfa.ie"],
+    "EG": ["visa2egypt.gov.eg"],
+    "KE": ["evisa.go.ke"],
+    "BD": ["dip.gov.bd", "mofa.gov.bd", "visa.gov.bd"],
 }
 
 # Diplomatic-mission domain patterns, keyed by destination country. ``{cc}`` is filled with
-# the applicant's nationality's lowercase ISO-2 code, so a Bangladeshi applicant to Japan
-# reaches ``bd.emb-japan.go.jp`` — the page that actually states the origin-country filing
-# channel, document list, and fee, which the destination-only domains above never surface.
+# the applicant's nationality's lowercase ISO-2 code.
 MISSION_DOMAIN_PATTERNS: dict[str, list[str]] = {
     "JP": ["{cc}.emb-japan.go.jp"],
     "US": ["{cc}.usembassy.gov"],
@@ -62,7 +76,244 @@ MISSION_DOMAIN_PATTERNS: dict[str, list[str]] = {
     "GB": ["gov.uk"],
     "CA": ["international.gc.ca"],
     "AU": ["{cc}.embassy.gov.au"],
+    "IN": [
+        "indianvisaonline.gov.in",
+        "mea.gov.in",
+        "boi.gov.in",
+        "hcinairobi.gov.in",
+        "hcinairobi.gov.ke",
+    ],
+    "FR": ["{cc}.ambafrance.org"],
+    "DE": ["{cc}.diplo.de"],
+    "IT": ["amb{cc}.esteri.it"],
 }
+
+# Authorized global concessionaires that embassies officially mandate for biometrics and document submission
+AUTHORIZED_CONCESSIONAIRES: tuple[str, ...] = (
+    "vfsglobal.com",
+    "tlscontact.com",
+    "blsspainvisa.com",
+    "blsinternational.com",
+)
+
+# Known commercial visa middlemen, SEO blogs, and forums that must NEVER be accepted as official authority
+COMMERCIAL_BLOG_BLOCKLIST: tuple[str, ...] = (
+    "ivisa.com",
+    "visaguide.world",
+    "travelvisapro.com",
+    "schengenvisainfo.com",
+    "atlys.com",
+    "wikipedia.org",
+    "tripadvisor.com",
+    "reddit.com",
+    "quora.com",
+    "flyertalk.com",
+    "nomadcapitalist.com",
+    "makemytrip.com",
+    "easemytrip.com",
+    "traveltriangle.com",
+    "tourradar.com",
+    "lonelyplanet.com",
+    "thepointsguy.com",
+    "nerdwallet.com",
+    "wikivoyage.org",
+)
+
+# Government second-level / TLD patterns that identify authentic public authority domains worldwide
+GOV_TLD_PATTERNS: tuple[str, ...] = (
+    ".gov",
+    ".gob.",
+    ".gov.",
+    ".go.",
+    ".gouv.",
+    ".govt.",
+    ".admin.ch",
+    ".bund.de",
+    ".diplo.de",
+    ".europa.eu",
+    ".nic.in",
+    ".gov.uk",
+    ".gov.au",
+    ".gc.ca",
+    ".gov.sg",
+    ".gov.my",
+    ".go.kr",
+    ".go.jp",
+    ".go.th",
+    ".gov.vn",
+    ".gov.ph",
+    ".go.id",
+    ".gov.bd",
+    ".gov.ae",
+    ".gov.sa",
+)
+
+
+def _is_private_or_internal_target(host: str) -> bool:
+    """Check whether a host is a private, loopback, link-local, multicast IP or internal name."""
+    if not host:
+        return True
+    clean_host = host.strip("[]")
+    try:
+        ip = ipaddress.ip_address(clean_host)
+        return (
+            ip.is_private
+            or ip.is_loopback
+            or ip.is_link_local
+            or ip.is_multicast
+            or ip.is_reserved
+            or ip.is_unspecified
+        )
+    except ValueError:
+        pass
+
+    # Check for numeric IP-like strings (e.g. 127.0.0.1, 0177.0.0.1, etc.)
+    if all(p.isdigit() for p in clean_host.split(".") if p):
+        return True
+
+    # Hostnames indicating internal infrastructure, clouds, or non-public domains
+    internal_names = (
+        "localhost",
+        "local",
+        "internal",
+        "metadata",
+        "metadata.google.internal",
+        "instance-data",
+    )
+    if clean_host in internal_names:
+        return True
+    internal_suffixes = (
+        ".localhost",
+        ".local",
+        ".internal",
+        ".lan",
+        ".home",
+        ".corp",
+        ".localdomain",
+    )
+    for suffix in internal_suffixes:
+        if clean_host.endswith(suffix):
+            return True
+
+    return False
+
+
+def _normalize_hostname(url: str) -> str | None:
+    """Safely extract, normalize, and validate a hostname from a URL."""
+    if not url or not isinstance(url, str) or not url.startswith(("http://", "https://")):
+        return None
+    try:
+        parsed = urlparse(url)
+        raw_host = (parsed.hostname or "").strip().rstrip(".").lower()
+        if not raw_host or " " in raw_host or "\t" in raw_host:
+            return None
+        # Reject private/internal targets immediately
+        if _is_private_or_internal_target(raw_host):
+            return None
+        # Reject any raw IP address (official government sources are domain names, not IP addresses)
+        try:
+            ipaddress.ip_address(raw_host.strip("[]"))
+            return None
+        except ValueError:
+            pass
+        # Normalize internationalized domain names (IDN / punycode)
+        try:
+            raw_host = raw_host.encode("idna").decode("ascii")
+        except Exception:
+            pass
+        return raw_host
+    except Exception:
+        return None
+
+
+def _is_gov_tld_or_sld(host: str) -> bool:
+    """Strictly verify if a host belongs to a legitimate government TLD or second-level domain."""
+    labels = host.split(".")
+    if len(labels) < 2:
+        return False
+
+    # Top-level .gov (US Federal/State/Local)
+    if labels[-1] == "gov":
+        return True
+
+    # Specific authoritative multi-label government domains
+    specific_trusted = (
+        "admin.ch",
+        "bund.de",
+        "diplo.de",
+        "europa.eu",
+        "nic.in",
+        "gc.ca",
+    )
+    for s in specific_trusted:
+        if host == s or host.endswith("." + s):
+            return True
+
+    # Standard ccTLDs with second-level gov domain (.gov.<cc>, .gob.<cc>, .go.<cc>, .gouv.<cc>, .govt.<cc>)
+    if len(labels) >= 3:
+        sld = labels[-2]
+        tld = labels[-1]
+        # Valid country code TLDs are exactly 2 alphabetical characters
+        if len(tld) == 2 and tld.isalpha():
+            if sld in ("gov", "gob", "go", "gouv", "govt"):
+                return True
+
+    return False
+
+
+def is_official_source_domain(
+    url: str,
+    destination: str | None = None,
+    nationality: str | None = None,
+    residence: str | None = None,
+) -> bool:
+    """Validate whether a URL belongs to an authentic official government source or authorized concessionaire."""
+    host = _normalize_hostname(url)
+    if not host:
+        return False
+
+    # 1. Reject any known commercial middleman / SEO blog
+    for blocked in COMMERCIAL_BLOG_BLOCKLIST:
+        if host == blocked or host.endswith("." + blocked):
+            return False
+
+    # 2. Check destination-specific configured domains and mission domains
+    if destination:
+        dest_upper = destination.upper()
+        if dest_upper in OFFICIAL_DOMAINS:
+            for d in OFFICIAL_DOMAINS[dest_upper]:
+                if host == d or host.endswith("." + d):
+                    return True
+        if dest_upper in MISSION_DOMAIN_PATTERNS:
+            for pattern in MISSION_DOMAIN_PATTERNS[dest_upper]:
+                suffix = pattern.replace("{cc}.", "")
+                if host == suffix or host.endswith("." + suffix):
+                    return True
+        if nationality:
+            for m_domain in mission_domains_for(dest_upper, nationality):
+                if host == m_domain or host.endswith("." + m_domain):
+                    return True
+        if residence:
+            for m_domain in mission_domains_for(dest_upper, residence):
+                if host == m_domain or host.endswith("." + m_domain):
+                    return True
+
+    # 3. Check any destination in OFFICIAL_DOMAINS
+    for d_list in OFFICIAL_DOMAINS.values():
+        for d in d_list:
+            if host == d or host.endswith("." + d):
+                return True
+
+    # 4. Check authorized concessionaires
+    for c in AUTHORIZED_CONCESSIONAIRES:
+        if host == c or host.endswith("." + c):
+            return True
+
+    # 5. Check recognized government TLD and second-level domain patterns
+    if _is_gov_tld_or_sld(host):
+        return True
+
+    return False
 
 
 def mission_domains_for(destination: str, nationality: str | None) -> list[str]:
@@ -143,13 +394,21 @@ def build_queries(
     return queries
 
 
-def official_domains_for(destination: str, nationality: str | None = None) -> list[str] | None:
-    """Official-domain allowlist for a destination, unioned with mission-in-origin domains
-    for ``nationality`` when known. ``None`` (only when nothing at all matches) tells the
-    caller to fall back to the settings-level base allowlist.
+def official_domains_for(
+    destination: str,
+    nationality: str | None = None,
+    residence: str | None = None,
+) -> list[str] | None:
+    """Official-domain allowlist for a destination, unioned with mission domains
+    for ``nationality`` and ``residence`` when known. ``None`` (only when nothing at all matches)
+    tells the caller to fall back to the settings-level base allowlist.
     """
     dest_domains = OFFICIAL_DOMAINS.get(destination.upper())
     mission = mission_domains_for(destination, nationality)
+    if residence and residence != nationality:
+        for m in mission_domains_for(destination, residence):
+            if m not in mission:
+                mission.append(m)
     if not dest_domains and not mission:
         return None
     combined = list(dest_domains or [])
@@ -507,10 +766,10 @@ Scraped content from official government sources:
 
 {content_block}
 
-Extract the structured immigration data from these sources. Focus on:
+Extract the structured immigration data based on the official sources provided. Synthesize a complete and robust set of:
 1. Eligibility rules for {visa_category} visa {action} in {jurisdiction_code}
-2. Required documents for this process
-3. Intake questions needed from the applicant
+2. Required documents for this process (including corridor-specific mandates such as health, vaccination, financial, and travel requirements)
+3. Intake questions needed from the applicant (categorized into sections)
 4. Official forms that need to be filled out
 
 Return JSON only."""

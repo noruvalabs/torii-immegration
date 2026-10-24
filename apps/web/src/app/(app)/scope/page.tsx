@@ -18,6 +18,7 @@ import {
   useApplicationTypesQuery,
 } from "@/lib/queries/geo";
 import { caseKeys } from "@/lib/queries/cases";
+import { useCorridorCheckQuery } from "@/lib/queries/corridors";
 import { useQueryClient } from "@tanstack/react-query";
 import { updateProfile } from "@/lib/api/auth";
 import {
@@ -88,6 +89,19 @@ function ScopePageInner() {
     selectedVisaType?.code,
   );
 
+  const { data: corridorReview } = useCorridorCheckQuery(
+    step === "review" && selectedDestination && selectedVisaType && selectedAppType
+      ? {
+          destination_code: selectedDestination.code,
+          purpose_code: selectedVisaType.code,
+          action_code: selectedAppType.code,
+          nationality: nationality || null,
+          residence_country: residenceCountry || null,
+        }
+      : null,
+    token,
+  );
+
   const loading = geoLoading && !geoData;
 
   // Auto-select from profile if saved in profile.
@@ -112,6 +126,21 @@ function ScopePageInner() {
     }
   }, [user]);
 
+  const originParam = searchParams.get("origin") || searchParams.get("from") || searchParams.get("passport");
+  const seededOriginRef = useRef(false);
+
+  // Pre-seed nationality / residence if passed via URL (e.g. ?origin=US or ?from=US)
+  useEffect(() => {
+    if (!seededOriginRef.current && originParam) {
+      const matched = matchCountry(originParam);
+      if (matched?.code) {
+        setNationality((prev) => prev || matched.code);
+        setResidenceCountry((prev) => prev || matched.code);
+        seededOriginRef.current = true;
+      }
+    }
+  }, [originParam]);
+
   // Pre-seed destination if passed via URL (e.g., ?destination=JP or ?destination=IN)
   useEffect(() => {
     if (!seededDestinationRef.current && destinationParam && geoData?.destinations) {
@@ -126,6 +155,24 @@ function ScopePageInner() {
       }
     }
   }, [destinationParam, geoData]);
+
+  const categoryParam = searchParams.get("category") || searchParams.get("visa");
+  const seededCategoryRef = useRef(false);
+
+  // Pre-seed visa category if passed via URL (e.g. ?category=medical)
+  useEffect(() => {
+    if (!seededCategoryRef.current && categoryParam && dynamicVisaTypes?.length) {
+      const matched = dynamicVisaTypes.find(
+        (v) =>
+          v.code.toLowerCase() === categoryParam.toLowerCase() ||
+          v.name.toLowerCase().includes(categoryParam.toLowerCase()),
+      );
+      if (matched) {
+        setSelectedVisaType(matched);
+        seededCategoryRef.current = true;
+      }
+    }
+  }, [categoryParam, dynamicVisaTypes]);
 
   function goBack() {
     const i = STEP_ORDER.indexOf(step);
@@ -579,10 +626,18 @@ function ScopePageInner() {
                 <span className="text-xs text-muted-foreground">Visa Type</span>
                 <span className="text-xs sm:text-sm font-semibold text-primary">{selectedVisaType?.name}</span>
               </div>
-              <div className="flex items-center justify-between py-2.5 last:pb-0">
+              <div className="flex items-center justify-between py-2.5">
                 <span className="text-xs text-muted-foreground">Application Category</span>
                 <span className="text-xs sm:text-sm font-semibold text-foreground">{selectedAppType?.name}</span>
               </div>
+              {corridorReview?.status === "completed" && (
+                <div className="flex items-center justify-between py-2.5 last:pb-0 bg-emerald-500/5 -mx-4 sm:-mx-5 px-4 sm:px-5">
+                  <span className="text-xs text-muted-foreground">Official Verification</span>
+                  <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 inline-flex items-center gap-1">
+                    <Check className="size-3.5" /> Verified by Official Embassy Sources
+                  </span>
+                </div>
+              )}
             </CardContent>
           </Card>
 

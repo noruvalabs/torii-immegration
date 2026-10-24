@@ -51,7 +51,7 @@ export const STEP_ORDER: Step[] = [
 export function phaseToStep(phase: string): Step {
   if (phase === "done") return "packet";
   if (phase === "blocked") return "eligibility";
-  if (phase === "research") return "research";
+  if (phase === "research") return "intake"; // Progressive disclosure: fill common questions while AI researches
   if (phase === "intake") return "intake";
   if (phase === "checklist") return "checklist";
   if (phase === "forms" || phase === "review" || phase === "packet") return "packet";
@@ -72,7 +72,7 @@ export function stepIndex(step: Step): number {
 
 /** True when the step can be visited by the applicant. */
 export function canVisitStep(target: Step, guidancePhase: string): boolean {
-  if (guidancePhase === "research") return target === "research";
+  if (guidancePhase === "research") return target === "eligibility" || target === "intake" || target === "research";
   if (guidancePhase === "blocked") return target === "eligibility" || target === "intake";
   return stepIndex(target) >= stepIndex("eligibility");
 }

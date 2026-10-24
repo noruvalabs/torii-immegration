@@ -93,6 +93,12 @@ function matchWalletToChecklist(walletDoc: WalletDocument, checklistCode: string
       combined.includes("prescription")
     );
   }
+  if (code.includes("yellow_fever") || code.includes("polio") || code.includes("vaccin")) {
+    return combined.includes("yellow") || combined.includes("fever") || combined.includes("polio") || combined.includes("vaccin") || combined.includes("immun");
+  }
+  if (code.includes("utility") || code.includes("bill") || code.includes("address_proof")) {
+    return combined.includes("utility") || combined.includes("bill") || combined.includes("electricity") || combined.includes("gas") || combined.includes("address");
+  }
   if (code.includes("i20") || code.includes("i-20")) {
     return combined.includes("i20") || combined.includes("i-20") || combined.includes("eligibility");
   }

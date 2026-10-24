@@ -48,6 +48,12 @@ class StageResearchOut(BaseModel):
     source_pages: list[dict[str, Any]]
     insufficient: bool
     researched_at: str
+    review_required: bool = False
+    verification_status: str = "verified"
+    retrieval_status: str = "direct_scrape"
+    source_domains: list[str] = Field(default_factory=list)
+    error_diagnostics: str | None = None
+    failure_reason: str | None = None
 
 
 class AIEvaluateEligibilityIn(BaseModel):
@@ -211,6 +217,12 @@ async def research_stage(payload: StageResearchIn, settings: SettingsDep) -> Sta
         source_pages=result.source_pages,
         insufficient=result.insufficient,
         researched_at=result.researched_at,
+        review_required=result.review_required,
+        verification_status=result.verification_status,
+        retrieval_status=result.retrieval_status,
+        source_domains=result.source_domains,
+        error_diagnostics=result.error_diagnostics,
+        failure_reason=result.failure_reason,
     )
 
 
