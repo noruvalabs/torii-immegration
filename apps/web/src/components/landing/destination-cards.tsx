@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import Image from "next/image";
 import { ArrowRight, Clock, Search, X } from "lucide-react";
+import { DestinationImage } from "@/components/ui/destination-image";
 import { POPULAR_DESTINATIONS } from "@/lib/destinations-data";
 import { CountryFlag } from "./country-flag";
 
@@ -77,10 +77,9 @@ export function DestinationCards() {
                 >
                   {/* Full Background Country Photo */}
                   <div className="absolute inset-0 z-0">
-                    <Image
+                    <DestinationImage
                       src={destination.heroImage}
                       alt={destination.name}
-                      fill
                       sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
                       className="object-cover transition-transform duration-700 ease-out group-hover:scale-105"
                       priority
