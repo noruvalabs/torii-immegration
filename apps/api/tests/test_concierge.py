@@ -4,12 +4,10 @@ from __future__ import annotations
 
 import pytest
 import pytest_asyncio
-from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from torii_api.db.engine import create_session_factory
 from torii_api.services.concierge import _code_matches_pattern
-
 
 # ---------------------------------------------------------------------------
 # Unit tests for code matching

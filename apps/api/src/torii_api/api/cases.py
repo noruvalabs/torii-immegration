@@ -38,7 +38,6 @@ from torii_api.db.session import get_session
 from torii_api.services.agentic import find_case_stage, stage_is_usable, stage_items
 from torii_api.services.deadlines import compute_deadlines
 from torii_api.services.guidance import compute_guidance, next_status_for_phase
-from torii_api.services.submission_track import resolve_submission_track
 from torii_api.services.intake import (
     IntakeProgress,
     IntakeQuestion,
@@ -63,6 +62,7 @@ from torii_api.services.research import (
     research_rules,
 )
 from torii_api.services.scope_availability import scope_is_available
+from torii_api.services.submission_track import resolve_submission_track
 
 router = APIRouter(prefix="/v1/cases", tags=["cases"])
 

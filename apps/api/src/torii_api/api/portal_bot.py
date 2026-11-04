@@ -16,7 +16,7 @@ from pydantic import BaseModel, ConfigDict
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from torii_api.auth.deps import CurrentUserDep
-from torii_api.db.models import Case, PortalSubmissionJob, UserRole
+from torii_api.db.models import Case, UserRole
 from torii_api.db.session import get_session
 from torii_api.services.portal_bot import (
     create_submission_job,

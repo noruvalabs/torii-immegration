@@ -6,7 +6,7 @@ that Torii can help procure, this service resolves the matching product and pric
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import select
@@ -254,7 +254,7 @@ async def auto_fulfill_order(
         extracted_fields={
             "document_name": prod_name,
             "verification_reference": f"TORII-DOC-{order.id:06d}",
-            "issued_at": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+            "issued_at": datetime.now(UTC).strftime("%Y-%m-%d"),
             "compliance_status": "Consulate Verified & Guaranteed",
         },
     )

@@ -2,14 +2,11 @@
 
 from __future__ import annotations
 
-import pytest
-
+from torii_api.services.content_packs import load_jurisdiction_meta
 from torii_api.services.submission_track import (
     SubmissionTrack,
-    build_track_summary,
     resolve_submission_track,
 )
-from torii_api.services.content_packs import load_jurisdiction_meta
 
 
 def test_india_medical_resolves_to_hybrid() -> None:

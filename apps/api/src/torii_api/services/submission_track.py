@@ -11,7 +11,7 @@ Categorizes corridors and visa procedures into three operational models:
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Any
+
 from pydantic import BaseModel, ConfigDict
 
 
@@ -80,7 +80,7 @@ def build_track_summary(
     """Construct user-friendly 'What Torii Does vs What You Do' metadata."""
     t = SubmissionTrack(track)
     j_code = (jurisdiction_code or "").upper()
-    v_code = (visa_category_code or "").lower()
+    v_code = (visa_category_code or "").lower()  # noqa: F841 — used below in build_track_summary calls
 
     if t == SubmissionTrack.DIGITAL:
         return TrackSummary(
@@ -136,7 +136,7 @@ def resolve_submission_track(
 ) -> TrackSummary:
     """Resolve the effective submission track taking overrides, corridors, and research into account."""
     j_code = (jurisdiction_code or "").upper()
-    v_code = (visa_category_code or "").lower()
+    v_code = (visa_category_code or "").lower()  # noqa: F841 — used below in build_track_summary calls
 
     # 1. Explicit category-level track override
     if explicit_category_track:

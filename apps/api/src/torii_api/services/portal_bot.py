@@ -8,8 +8,7 @@ stored only when extracted from the portal page — never generated here.
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
-from datetime import datetime, timezone
-from typing import Any
+from datetime import UTC, datetime
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -52,7 +51,7 @@ DEFAULT_CONFIG: dict[str, str] = {
 
 
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def get_portal_config(jurisdiction_code: str) -> dict[str, str]:
@@ -95,7 +94,7 @@ async def create_submission_job(
                 "timestamp": _now_iso(),
             }
         ],
-        dispatched_at=datetime.now(timezone.utc),
+        dispatched_at=datetime.now(UTC),
         captcha_solved=False,
     )
     session.add(job)
@@ -134,7 +133,7 @@ async def _finish(
     error: str | None = None,
 ) -> PortalSubmissionJob:
     job.error_message = error
-    job.completed_at = datetime.now(timezone.utc)
+    job.completed_at = datetime.now(UTC)
     await _add_step(job, session, status, label, detail)
     return job
 

@@ -10,7 +10,7 @@ Endpoints:
 
 from __future__ import annotations
 
-from typing import Annotated, Any
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, ConfigDict
@@ -18,7 +18,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from torii_api.auth.deps import CurrentUserDep
-from torii_api.db.models import Case, ConciergeOrder, ConciergeProduct, UserRole
+from torii_api.db.models import Case, ConciergeOrder, UserRole
 from torii_api.db.session import get_session
 from torii_api.services.concierge import (
     auto_fulfill_order,
