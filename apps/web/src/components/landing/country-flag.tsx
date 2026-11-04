@@ -161,6 +161,38 @@ export function CountryFlag({ code, className }: { code: string; className?: str
           <rect y="26.7" width="32" height="5.3" fill="#A51931" />
         </svg>
       );
+    case "TR":
+      return (
+        <svg viewBox="0 0 32 32" className={cn("size-5 shrink-0 rounded-full overflow-hidden shadow-xs", className)}>
+          <rect width="32" height="32" fill="#E30A17" />
+          <circle cx="14" cy="16" r="6.5" fill="#FFFFFF" />
+          <circle cx="15.5" cy="16" r="5.2" fill="#E30A17" />
+          <path d="M21.5 12.5l1 2.1 2.3.3-1.7 1.6.4 2.3-2-1.1-2 1.1.4-2.3-1.7-1.6 2.3-.3z" fill="#FFFFFF" />
+        </svg>
+      );
+    case "VN":
+      return (
+        <svg viewBox="0 0 32 32" className={cn("size-5 shrink-0 rounded-full overflow-hidden shadow-xs", className)}>
+          <rect width="32" height="32" fill="#DA251D" />
+          <path d="M16 8l2.4 5.2 5.7.6-4.2 3.9 1.1 5.6-5-2.8-5 2.8 1.1-5.6-4.2-3.9 5.7-.6z" fill="#FFDE00" />
+        </svg>
+      );
+    case "EG":
+      return (
+        <svg viewBox="0 0 32 32" className={cn("size-5 shrink-0 rounded-full overflow-hidden shadow-xs", className)}>
+          <rect y="0" width="32" height="10.6" fill="#CE1126" />
+          <rect y="10.6" width="32" height="10.6" fill="#FFFFFF" />
+          <rect y="21.2" width="32" height="10.8" fill="#000000" />
+          <rect x="14" y="13" width="4" height="6" fill="#C09300" rx="1" />
+        </svg>
+      );
+    case "BH":
+      return (
+        <svg viewBox="0 0 32 32" className={cn("size-5 shrink-0 rounded-full overflow-hidden shadow-xs", className)}>
+          <rect width="32" height="32" fill="#CE1126" />
+          <path d="M0 0h13l-3.5 3.2L13 6.4l-3.5 3.2L13 12.8l-3.5 3.2L13 19.2l-3.5 3.2L13 25.6l-3.5 3.2L13 32H0z" fill="#FFFFFF" />
+        </svg>
+      );
     default:
       if (!imgError && lower && lower.length === 2) {
         return (

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import Image from "next/image";
+import { DestinationImage } from "@/components/ui/destination-image";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
@@ -435,10 +435,9 @@ export function VisaDetailView({ destination }: { destination: DestinationInfo }
             {/* Right Hero Visual Card */}
             <div className="lg:col-span-5">
               <div className="relative aspect-[4/3] sm:aspect-[16/10] lg:aspect-[4/3] rounded-2xl overflow-hidden border border-white/20 shadow-2xl">
-                <Image
+                <DestinationImage
                   src={destination.heroImage}
                   alt={destination.name}
-                  fill
                   priority
                   className="object-cover"
                 />
