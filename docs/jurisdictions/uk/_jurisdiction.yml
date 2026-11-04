@@ -7,6 +7,7 @@ self_filing_allowed: true
 # UKVI publishes no downloadable application form; every route is completed on
 # gov.uk and biometrics are given at a visa application centre.
 filing_mode: online_portal
+submission_track: consular
 apply_url: https://www.gov.uk/browse/visas-immigration
 notes: Official UK Visas and Immigration (UKVI / Home Office) immigration workflows.
 categories:

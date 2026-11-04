@@ -33,6 +33,11 @@ dependencies = [
     "openai>=1.60",
 ]
 
+[project.optional-dependencies]
+portal-bot = [
+    "playwright>=1.49",
+]
+
 [project.scripts]
 torii-createadmin = "torii_api.management.createadmin:main"
 torii-seed = "torii_api.management.seed:main"

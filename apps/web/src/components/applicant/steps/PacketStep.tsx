@@ -12,6 +12,7 @@ import {
   CheckCircle2,
   AlertTriangle,
   Upload,
+  Bot,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -20,6 +21,8 @@ import { useAuth } from "@/lib/auth-context";
 import { useCredits } from "@/lib/credits-context";
 import { draftDocument } from "@/lib/api/ai";
 import { exportCaseDocuments, type ExportFormat } from "@/lib/api/cases";
+import { dispatchPortalBot, type PortalJob } from "@/lib/api/portal-bot";
+import { PortalBotConsole } from "@/components/applicant/PortalBotConsole";
 import { toast } from "@/components/ui/sonner";
 import { PostSubmissionGuide } from "./PostSubmissionGuide";
 import type { Case } from "./types";
@@ -337,6 +340,39 @@ export function PacketStep({
   const [customInstructions, setCustomInstructions] = useState("");
   const [showPromptInput, setShowPromptInput] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
+  const [botJob, setBotJob] = useState<PortalJob | null>(null);
+  const [botConsoleOpen, setBotConsoleOpen] = useState(false);
+  const [botRunning, setBotRunning] = useState(false);
+
+  const isDigitalTrack = caseData.submission_track === "digital";
+  const isVietnamDigital =
+    isDigitalTrack &&
+    (caseData.jurisdiction_code?.toUpperCase() === "VN" ||
+      caseData.reference.toUpperCase().startsWith("VN-"));
+
+  async function handleLaunchPortalBot() {
+    if (!token) return;
+    setBotRunning(true);
+    setBotConsoleOpen(true);
+    try {
+      const job = await dispatchPortalBot(token, caseData.id);
+      setBotJob(job);
+      if (job.status === "succeeded" && job.portal_reference) {
+        toast.success(`Vietnam eVisa registration captured: ${job.portal_reference}`);
+        onSubmit();
+      } else if (job.status === "manual_takeover") {
+        toast.warning(
+          "The bot filled what it could on evisa.gov.vn. Captcha and the government fee still need a person.",
+        );
+      } else if (job.status === "failed") {
+        toast.error(job.error_message || "Vietnam eVisa worker could not complete.");
+      }
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Portal bot submission encountered an issue");
+    } finally {
+      setBotRunning(false);
+    }
+  }
 
   useEffect(() => {
     if (caseData.is_entitled || caseData.status === "submitted") {
@@ -595,27 +631,36 @@ export function PacketStep({
               </Badge>
               <h3 className="text-base font-bold text-foreground">
                 {canSubmit
-                  ? "Ready to Submit to Torii Operations & Government Console"
+                  ? isVietnamDigital
+                    ? "Vietnam eVisa — fill evisa.gov.vn from this case"
+                    : "Ready to Submit to Torii Operations & Government Console"
                   : "Required Documents Must Be Uploaded"}
               </h3>
             </div>
             <p className="text-xs text-muted-foreground max-w-xl">
               {canSubmit
-                ? "Your dossier, questionnaire particulars, and required documents are compiled. Click below to submit your application directly to the Torii concierge operations team for official embassy portal filing."
+                ? isVietnamDigital
+                  ? "This opens the official Vietnam portal (evisa.gov.vn) and fills matching fields from your case. Captcha and the government card payment are not automated. A visa is filed only if the portal shows a real registration code."
+                  : "Your dossier, questionnaire particulars, and required documents are compiled. Click below to submit your application directly to the Torii concierge operations team for official embassy portal filing."
                 : `You cannot submit this application yet because ${missingDocsCount} required document(s) have not been uploaded. All required documents must be uploaded before final submission.`}
             </p>
           </div>
           {canSubmit ? (
             <Button
               size="lg"
-              onClick={onSubmit}
-              disabled={loading}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-6 shrink-0 shadow-md gap-2"
+              onClick={isVietnamDigital ? handleLaunchPortalBot : onSubmit}
+              disabled={loading || botRunning}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-6 shrink-0 shadow-md gap-2 cursor-pointer"
             >
-              {loading ? (
+              {loading || botRunning ? (
                 <>
                   <Loader2 className="size-4 animate-spin" />
-                  <span>Submitting…</span>
+                  <span>{botRunning ? "Opening evisa.gov.vn…" : "Submitting…"}</span>
+                </>
+              ) : isVietnamDigital ? (
+                <>
+                  <Bot className="size-4" />
+                  <span>Fill Vietnam eVisa form</span>
                 </>
               ) : (
                 <>
@@ -677,6 +722,19 @@ export function PacketStep({
           </div>
         </CardContent>
       </Card>
+
+      {/* Thing 3: Live eVisa Submission Bot Console */}
+      <PortalBotConsole
+        isOpen={botConsoleOpen}
+        onClose={() => {
+          setBotConsoleOpen(false);
+          if (botJob?.status === "succeeded" && botJob.portal_reference) {
+            onSubmit();
+          }
+        }}
+        job={botJob}
+        loading={botRunning}
+      />
     </div>
   );
 }

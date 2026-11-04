@@ -38,6 +38,7 @@ from torii_api.db.session import get_session
 from torii_api.services.agentic import find_case_stage, stage_is_usable, stage_items
 from torii_api.services.deadlines import compute_deadlines
 from torii_api.services.guidance import compute_guidance, next_status_for_phase
+from torii_api.services.submission_track import resolve_submission_track
 from torii_api.services.intake import (
     IntakeProgress,
     IntakeQuestion,
@@ -211,6 +212,8 @@ class CaseOut(BaseModel):
     is_archived: bool = False
     is_entitled: bool = False
     packet_snapshot: dict[str, Any] | None = None
+    submission_track: str = "consular"
+    track_summary: dict[str, Any] | None = None
 
 
 class IntakeAnswerIn(BaseModel):
@@ -244,6 +247,8 @@ class GuidanceOut(BaseModel):
     research_status: str | None = None
     research_steps: list[ResearchStepOut] = []
     deadlines: dict[str, Any] | None = None
+    submission_track: str = "consular"
+    track_summary: dict[str, Any] | None = None
 
 
 # ── Visa categories & actions ─────────────────────────────────────────────────
@@ -434,6 +439,12 @@ async def scope_case(
     await session.refresh(case)
 
     _, _, _, label = await _scope_label(session, case)
+    track_meta = resolve_submission_track(
+        jurisdiction_code=jurisdiction.code,
+        visa_category_code=visa_category.code,
+        explicit_category_track=getattr(visa_category, "submission_track", None),
+        explicit_jurisdiction_track=getattr(jurisdiction, "submission_track", None),
+    )
     base = CaseOut.model_validate(case)
     return base.model_copy(
         update={
@@ -441,6 +452,8 @@ async def scope_case(
             "visa_category_code": visa_category.code,
             "case_action_code": case_action.code,
             "scope_label": label,
+            "submission_track": track_meta.track.value,
+            "track_summary": track_meta.model_dump(),
         }
     )
 
@@ -1045,11 +1058,22 @@ async def _case_guidance(session: AsyncSession, case: Case) -> GuidanceOut:
     )
     steps = research_progress_steps(research.payload if research is not None else None)
     _ = (j_code, v_code, a_code)
+    track_meta = resolve_submission_track(
+        jurisdiction_code=j_code,
+        visa_category_code=v_code,
+        research_route=(
+            (research.payload or {}).get("admission", {}).get("route")
+            if research and research.payload
+            else None
+        ),
+    )
     return GuidanceOut.model_validate(
         {
             **guidance.model_dump(),
             "research_status": research_status,
             "research_steps": steps,
+            "submission_track": track_meta.track.value,
+            "track_summary": track_meta.model_dump(),
         }
     )
 
@@ -1072,6 +1096,8 @@ async def _enrich_case(session: AsyncSession, case: Case) -> CaseOut:
             "next_phase": guidance.phase,
             "next_title": guidance.title,
             "applicant_email": email,
+            "submission_track": guidance.submission_track,
+            "track_summary": guidance.track_summary,
         }
     )
 
@@ -1173,6 +1199,10 @@ async def list_cases(
             next_phase = "intake"
             next_title = "Continue intake"
 
+        track_meta = resolve_submission_track(
+            jurisdiction_code=j_code,
+            visa_category_code=v_code,
+        )
         base = CaseOut.model_validate(case)
         out.append(
             base.model_copy(
@@ -1183,6 +1213,8 @@ async def list_cases(
                     "scope_label": label,
                     "next_phase": next_phase,
                     "next_title": next_title,
+                    "submission_track": track_meta.track.value,
+                    "track_summary": track_meta.model_dump(),
                 }
             )
         )

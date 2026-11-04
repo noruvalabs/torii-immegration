@@ -54,6 +54,19 @@ export type Jurisdiction = { id: number; code: string; name: string; is_live: bo
 export type VisaCategory = { id: number; jurisdiction_id: number; code: string; name: string; is_live: boolean };
 export type CaseAction = { id: number; jurisdiction_id: number; code: string; name: string; is_live: boolean };
 
+export type SubmissionTrack = "digital" | "hybrid" | "consular";
+
+export type TrackSummary = {
+  track: SubmissionTrack;
+  badge_label: string;
+  title: string;
+  headline: string;
+  torii_role: string;
+  applicant_role: string;
+  submission_center: string;
+  requires_in_person: boolean;
+};
+
 export type Case = {
   id: number;
   reference: string;
@@ -84,6 +97,8 @@ export type Case = {
   is_archived?: boolean;
   packet_snapshot?: Record<string, unknown> | null;
   eligibility_snapshot?: Record<string, unknown> | null;
+  submission_track?: SubmissionTrack | string;
+  track_summary?: TrackSummary | null;
 };
 
 export type IntakeQuestion = {
@@ -191,6 +206,8 @@ export type CaseGuidance = {
   research_status?: string | null;
   research_steps?: ResearchStepLog[];
   deadlines?: CaseDeadlines | null;
+  submission_track?: SubmissionTrack | string;
+  track_summary?: TrackSummary | null;
 };
 
 // Computed filing deadlines for a case, derived from the residence-card expiry

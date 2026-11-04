@@ -26,6 +26,7 @@ from torii_api.db.base import Base
 from torii_api.db.engine import create_engine, create_session_factory, to_async_url
 from torii_api.db.models import (
     CaseAction,
+    ConciergeProduct,
     DocumentRequirementSet,
     EligibilityRuleSet,
     FormTemplate,
@@ -75,8 +76,21 @@ SEED_USERS = [
     },
 ]
 
-# Extra markets without full content packs (empty for now — only JP, US, UK live).
-SEED_EXTRA_JURISDICTIONS: list[dict[str, Any]] = []
+# Extra markets without full content packs.
+SEED_EXTRA_JURISDICTIONS: list[dict[str, Any]] = [
+    {"code": "SA", "name": "Saudi Arabia", "is_live": True, "submission_track": "digital"},
+    {"code": "MY", "name": "Malaysia", "is_live": True, "submission_track": "digital"},
+    {"code": "TR", "name": "Turkey", "is_live": True, "submission_track": "digital"},
+    {"code": "VN", "name": "Vietnam", "is_live": True, "submission_track": "digital"},
+    {"code": "EG", "name": "Egypt", "is_live": True, "submission_track": "digital"},
+    {"code": "BH", "name": "Bahrain", "is_live": True, "submission_track": "digital"},
+    {"code": "US", "name": "United States", "is_live": True, "submission_track": "consular"},
+    {"code": "CA", "name": "Canada", "is_live": True, "submission_track": "hybrid"},
+    {"code": "KR", "name": "South Korea", "is_live": True, "submission_track": "consular"},
+    {"code": "FR", "name": "France", "is_live": True, "submission_track": "consular"},
+    {"code": "DE", "name": "Germany", "is_live": True, "submission_track": "consular"},
+    {"code": "ES", "name": "Spain", "is_live": True, "submission_track": "consular"},
+]
 
 SEED_EXTRA_CATEGORIES = [
     {"code": "tourist", "name": "Tourist / Visitor", "is_live": True},
@@ -333,15 +347,19 @@ async def _ensure_jurisdiction(
     code: str,
     name: str,
     is_live: bool,
+    submission_track: str = "consular",
     jurisdiction_ids: dict[str, int],
 ) -> int:
     existing = await session.scalar(select(Jurisdiction).where(Jurisdiction.code == code))
     if existing is not None:
         existing.is_live = is_live
         existing.name = name
+        existing.submission_track = submission_track
         jurisdiction_ids[code] = existing.id
         return 0
-    jurisdiction = Jurisdiction(code=code, name=name, is_live=is_live)
+    jurisdiction = Jurisdiction(
+        code=code, name=name, is_live=is_live, submission_track=submission_track
+    )
     session.add(jurisdiction)
     await session.flush()
     jurisdiction_ids[code] = jurisdiction.id
@@ -358,6 +376,7 @@ async def _ensure_category(
     is_live: bool,
     research_enabled: bool = False,
     description: str = "",
+    submission_track: str | None = None,
     category_ids: dict[tuple[str, str], int],
 ) -> int:
     existing = await session.scalar(
@@ -373,6 +392,8 @@ async def _ensure_category(
         existing.source = SOURCE_PACK
         if description:
             existing.description = description
+        if submission_track is not None:
+            existing.submission_track = submission_track
         # ``is_enabled`` is untouched on purpose: it is the admin's switch, and a reseed
         # putting a route an admin turned off back on is the failure it exists to avoid.
         category_ids[(j_code, code)] = existing.id
@@ -385,6 +406,7 @@ async def _ensure_category(
         research_enabled=research_enabled,
         description=description,
         source=SOURCE_PACK,
+        submission_track=submission_track,
     )
     session.add(vc)
     await session.flush()
@@ -433,6 +455,75 @@ async def _ensure_action(
     await session.flush()
     action_ids[(j_code, code)] = ca.id
     return 1
+
+
+CONCIERGE_PRODUCTS = [
+    {
+        "code": "dummy_flight",
+        "name": "Dummy Flight Reservation",
+        "description": "A verifiable flight reservation PDF valid for 14 days — accepted by all major consulates. No actual ticket purchase needed.",
+        "product_type": "dummy_flight",
+        "price_cents": 1200,
+        "currency": "USD",
+        "checklist_code_pattern": "flight,itinerary,booking,ticket,air_ticket,flight_ticket,travel_itinerary,flight_reservation,flight_booking",
+        "is_active": True,
+    },
+    {
+        "code": "travel_insurance",
+        "name": "Travel Insurance Certificate",
+        "description": "Travel medical insurance certificate covering your trip dates with minimum required coverage. Instant PDF delivery.",
+        "product_type": "travel_insurance",
+        "price_cents": 1500,
+        "currency": "USD",
+        "checklist_code_pattern": "insurance,travel_insurance,medical_insurance,health_insurance",
+        "is_active": True,
+    },
+    {
+        "code": "doctor_referral",
+        "name": "Doctor Referral Letter",
+        "description": "AI-generated medical referral letter template customised to your visa requirements. Review and get signed by your physician.",
+        "product_type": "doctor_referral",
+        "price_cents": 1900,
+        "currency": "USD",
+        "checklist_code_pattern": "referral,doctor,medical_referral,doctor_letter,medical_letter",
+        "is_active": True,
+    },
+    {
+        "code": "hotel_reservation",
+        "name": "Hotel Confirmation Letter",
+        "description": "Free hotel confirmation letter via our Booking.com partner. Shows proof of accommodation for your visa application.",
+        "product_type": "hotel_reservation",
+        "price_cents": 0,
+        "currency": "USD",
+        "checklist_code_pattern": "hotel,accommodation,hotel_booking,hotel_reservation,lodging,accommodation_proof",
+        "is_active": True,
+    },
+    {
+        "code": "invitation_letter",
+        "name": "Invitation Letter",
+        "description": "AI-generated invitation letter from your host, formatted to meet consulate requirements. Editable before download.",
+        "product_type": "invitation_letter",
+        "price_cents": 1400,
+        "currency": "USD",
+        "checklist_code_pattern": "invitation,host_letter,invitation_letter,sponsor_letter",
+        "is_active": True,
+    },
+]
+
+
+async def _seed_concierge_products(session: AsyncSession) -> int:
+    created = 0
+    for p in CONCIERGE_PRODUCTS:
+        existing = await session.scalar(
+            select(ConciergeProduct).where(ConciergeProduct.code == p["code"])
+        )
+        if existing is None:
+            session.add(ConciergeProduct(**p))
+            created += 1
+        else:
+            for k, v in p.items():
+                setattr(existing, k, v)
+    return created
 
 
 async def seed(
@@ -504,6 +595,7 @@ async def seed(
                 code=meta.code.upper(),
                 name=meta.name,
                 is_live=meta.is_live,
+                submission_track=getattr(meta, "submission_track", "consular"),
                 jurisdiction_ids=jurisdiction_ids,
             )
             jid = jurisdiction_ids[meta.code.upper()]
@@ -517,6 +609,7 @@ async def seed(
                     is_live=bool(cat.get("is_live", True)),
                     research_enabled=True,
                     description=str(cat.get("description") or ""),
+                    submission_track=cat.get("submission_track"),
                     category_ids=category_ids,
                 )
             for action in meta.actions:
@@ -538,6 +631,7 @@ async def seed(
                 code=data["code"],
                 name=data["name"],
                 is_live=bool(data["is_live"]),
+                submission_track=data.get("submission_track", "consular"),
                 jurisdiction_ids=jurisdiction_ids,
             )
             jid = jurisdiction_ids[data["code"]]
@@ -563,6 +657,21 @@ async def seed(
                     research_enabled=True,
                     action_ids=action_ids,
                 )
+            # Seed generic workflows for extra jurisdictions
+            for cat in SEED_EXTRA_CATEGORIES:
+                cid = category_ids.get((data["code"], cat["code"]))
+                for action in SEED_EXTRA_ACTIONS:
+                    aid = action_ids.get((data["code"], action["code"]))
+                    if jid and cid and aid:
+                        await _seed_workflow(
+                            session,
+                            jurisdiction_id=jid,
+                            visa_category_id=cid,
+                            case_action_id=aid,
+                            questions=GENERIC_QUESTIONS,
+                            rules=GENERIC_RULES,
+                            documents=GENERIC_DOCUMENTS,
+                        )
 
         created_workflow_definitions = 0
         workflow_rows = workflow_rows_from_packs(packs)
@@ -595,6 +704,7 @@ async def seed(
                         forms=row.get("forms"),
                     )
 
+        created_concierge = await _seed_concierge_products(session)
         await session.commit()
 
     if owns_engine and engine is not None:
@@ -602,7 +712,8 @@ async def seed(
     print(
         f"Seeded {created_users} users, {created_jurisdictions} jurisdictions, "
         f"{created_categories} visa categories, {created_actions} case actions, "
-        f"{created_workflow_definitions} applicant workflow definitions "
+        f"{created_workflow_definitions} applicant workflow definitions, "
+        f"{created_concierge} concierge products "
         f"from {len(packs)} content packs"
     )
 

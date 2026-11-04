@@ -15,6 +15,7 @@ import {
   X,
   FileText,
   Sparkles,
+  Clock,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -30,6 +31,13 @@ import {
 import { caseKeys, useDocumentsQuery } from "@/lib/queries/cases";
 import { extractFromFile, type OCRResult, type DocumentType } from "@/lib/api/ocr";
 import { getWallet, uploadDocument, type WalletDocument } from "@/lib/api/wallet";
+import {
+  getAvailableConcierge,
+  orderConcierge,
+  type ConciergeMatch,
+  type MatchedProduct,
+} from "@/lib/api/concierge";
+import { ConciergeModal } from "@/components/applicant/ConciergeModal";
 import type { ChecklistItem } from "./types";
 import { citationUrl, citationVersion } from "./types";
 
@@ -194,6 +202,11 @@ export function ChecklistStep({
   } | null>(null);
   const queryClient = useQueryClient();
   const [walletDocs, setWalletDocs] = useState<WalletDocument[]>([]);
+  const [conciergeMatches, setConciergeMatches] = useState<ConciergeMatch[]>([]);
+  const [conciergeModalState, setConciergeModalState] = useState<{
+    item: ChecklistItem;
+    product: MatchedProduct;
+  } | null>(null);
   const [attaching, setAttaching] = useState<number | null>(null);
   const [showPicker, setShowPicker] = useState<number | null>(null);
   const [uploading, setUploading] = useState<number | null>(null);
@@ -209,8 +222,25 @@ export function ChecklistStep({
 
   useEffect(() => {
     if (!token) return;
-    getWallet(token).then(setWalletDocs).catch(() => {});
+    getWallet(token).then(setWalletDocs).catch(() => { });
   }, [token]);
+
+  useEffect(() => {
+    if (!token || !caseId) return;
+    getAvailableConcierge(token, caseId)
+      .then(setConciergeMatches)
+      .catch(() => { });
+  }, [token, caseId]);
+
+  async function handleConciergeConfirm(item: ChecklistItem, product: MatchedProduct) {
+    if (!token) return;
+    const order = await orderConcierge(token, caseId, item.id, product.id);
+    const updated = await getAvailableConcierge(token, caseId);
+    setConciergeMatches(updated);
+    await queryClient.invalidateQueries({ queryKey: caseKeys.documents(caseId) });
+    setSuccessNotice(`Document procured successfully! ${product.name} delivered.`);
+    onRefresh();
+  }
 
   function getMatchingWalletDocs(checklistCode: string): WalletDocument[] {
     return walletDocs.filter(
@@ -493,6 +523,11 @@ export function ChecklistStep({
               ? getCaseDocumentFileUrl(caseId, matchedDoc.id, token)
               : getChecklistItemFileUrl(caseId, item.id, token);
             const fileName = matchedDoc?.filename || `${item.name}.pdf`;
+            const conciergeMatch = conciergeMatches.find(
+              (m) => m.checklist_item_id === item.id,
+            );
+            const primaryProduct = conciergeMatch?.products?.[0];
+            const existingOrder = conciergeMatch?.existing_order;
 
             return (
               <div
@@ -504,11 +539,10 @@ export function ChecklistStep({
                   {/* Card Header Row */}
                   <div className="flex items-start gap-3.5">
                     <div
-                      className={`size-9 rounded-xl flex items-center justify-center shrink-0 mt-0.5 ${
-                        isGathered
+                      className={`size-9 rounded-xl flex items-center justify-center shrink-0 mt-0.5 ${isGathered
                           ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20"
                           : "bg-muted/60 text-muted-foreground border border-border/70 dark:border-slate-800"
-                      }`}
+                        }`}
                     >
                       {isGathered ? (
                         <Check className="size-4 stroke-[2.5]" />
@@ -585,6 +619,37 @@ export function ChecklistStep({
                       </div>
                     )}
                   </div>
+
+                  {/* Concierge Order Status (Thing 2) */}
+                  {existingOrder && (
+                    <div className="flex items-center justify-between gap-2.5 px-3 py-2 rounded-xl bg-muted/40 border border-border/80 text-xs">
+                      <div className="flex items-center gap-2 min-w-0">
+                        {existingOrder.status === "fulfilled" ? (
+                          <ShieldCheck className="size-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                        ) : (
+                          <Clock className="size-4 text-amber-500 shrink-0" />
+                        )}
+                        <div className="min-w-0">
+                          <p className="font-semibold text-foreground truncate">
+                            {existingOrder.status === "fulfilled"
+                              ? "Delivered via Concierge"
+                              : "Document Procurement Coming Soon"}
+                          </p>
+                          <p className="text-[11px] text-muted-foreground truncate">
+                            {existingOrder.status === "fulfilled"
+                              ? "Official verifiable document ready"
+                              : "Automated generation is currently in development"}
+                          </p>
+                        </div>
+                      </div>
+                      <Badge
+                        tone={existingOrder.status === "fulfilled" ? "success" : "warning"}
+                        className="text-[10px] shrink-0"
+                      >
+                        {existingOrder.status === "fulfilled" ? "✅ Delivered" : "Coming Soon"}
+                      </Badge>
+                    </div>
+                  )}
                 </div>
 
                 {/* Dedicated Card Footer Toolbar */}
@@ -723,6 +788,26 @@ export function ChecklistStep({
                           >
                             <FolderOpen className="size-3.5 text-primary" />
                             <span>Saved ({matchingDocs.length})</span>
+                          </Button>
+                        )}
+
+                        {/* Thing 2: Concierge procurement button */}
+                        {primaryProduct && !existingOrder && (
+                          <Button
+                            type="button"
+                            size="sm"
+                            onClick={() =>
+                              setConciergeModalState({ item, product: primaryProduct })
+                            }
+                            className="h-8 text-xs gap-1.5 px-3 font-semibold rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs cursor-pointer"
+                          >
+                            <Sparkles className="size-3.5" />
+                            <span>
+                              Get This —{" "}
+                              {primaryProduct.price_cents === 0
+                                ? "Free"
+                                : `$${(primaryProduct.price_cents / 100).toFixed(0)}`}
+                            </span>
                           </Button>
                         )}
                       </div>
@@ -1004,6 +1089,15 @@ export function ChecklistStep({
           </div>
         </div>
       )}
+
+      {/* Thing 2: Document Concierge Purchase Modal */}
+      <ConciergeModal
+        isOpen={Boolean(conciergeModalState)}
+        onClose={() => setConciergeModalState(null)}
+        item={conciergeModalState?.item ?? null}
+        product={conciergeModalState?.product ?? null}
+        onConfirm={handleConciergeConfirm}
+      />
     </div>
   );
 }
