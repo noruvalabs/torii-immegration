@@ -1,0 +1,679 @@
+scope:
+  jurisdiction: SA
+  visa_category: tourist
+  action: new_application
+  is_live: true
+  name: Saudi Arabia Tourist & Umrah Visit Visa (eVisa, KSA Visa, Package Visa and consular routes)
+
+stages:
+  - sequence: 1
+    code: applicant_filing
+    actor: applicant
+
+intake:
+  questions:
+    # --- Section 1: Personal & Identity ---
+    - key: full_name
+      section: Personal & Identity
+      prompt: What is your full name as it appears on your passport?
+      type: string
+      min_length: 2
+      max_length: 200
+      required: true
+      citation: &ksa_visa
+        authority: Ministry of Foreign Affairs (MOFA) — KSA Visa platform
+        title: KSA Visa (ksavisa.sa) — unified national visa platform, visit visa application
+        url: https://ksavisa.sa
+        source_version: "2026-11"
+
+    - key: nationality
+      section: Personal & Identity
+      prompt: What is your nationality (passport country)?
+      type: enum
+      options:
+        - BD
+        - IN
+        - PK
+        - ID
+        - EG
+        - JO
+        - MX
+        - US
+        - GB
+        - CA
+        - AU
+        - DE
+        - FR
+        - IT
+        - ES
+        - SG
+        - MY
+        - JP
+        - KR
+        - CN
+        - TH
+        - TR
+        - AE
+        - KW
+        - QA
+        - OM
+        - BH
+        - LK
+        - NP
+        - PH
+        - VN
+        - other
+      required: true
+      citation: &sa_evisa_terms
+        authority: Ministry of Tourism — Saudi eVisa
+        title: eVisa Terms and Conditions (§3.3 Permitted Country list, §3.1 applicant must be 18+)
+        url: https://visa.visitsaudi.com/Home/TermsConditions
+        source_version: "2026-11"
+
+    - key: nationality_other
+      section: Personal & Identity
+      prompt: Which country issued your passport?
+      type: string
+      min_length: 2
+      max_length: 64
+      required: true
+      show_when:
+        key: nationality
+        equals: other
+      citation: *ksa_visa
+
+    - key: residence_country
+      section: Personal & Identity
+      prompt: Which country do you currently live in?
+      type: enum
+      options:
+        - BD
+        - IN
+        - PK
+        - ID
+        - EG
+        - JO
+        - MX
+        - US
+        - GB
+        - CA
+        - AU
+        - DE
+        - FR
+        - IT
+        - ES
+        - SG
+        - MY
+        - JP
+        - KR
+        - CN
+        - TH
+        - TR
+        - AE
+        - KW
+        - QA
+        - OM
+        - BH
+        - LK
+        - NP
+        - PH
+        - VN
+        - other
+      required: true
+      citation: &sa_visa_regs
+        authority: Visit Saudi (Saudi Tourism Authority)
+        title: Visa Regulations — eVisa and visa-on-arrival routes by nationality and residence
+        url: https://www.visitsaudi.com/en/plan-your-trip/visa-regulations
+        source_version: "2026-11"
+
+    - key: date_of_birth
+      section: Personal & Identity
+      prompt: What is your date of birth (YYYY-MM-DD)?
+      type: date
+      required: true
+      citation: *ksa_visa
+
+    - key: passport_number
+      section: Personal & Identity
+      prompt: What is your passport number?
+      type: string
+      min_length: 5
+      max_length: 32
+      required: true
+      citation: *ksa_visa
+
+    - key: passport_expiry_date
+      section: Personal & Identity
+      prompt: What is your passport expiry date (YYYY-MM-DD)?
+      type: date
+      required: true
+      citation: *sa_evisa_terms
+
+    - key: passport_valid_six_months
+      section: Personal & Identity
+      prompt: Will your passport still be valid at least 6 months after the date you plan to enter Saudi Arabia?
+      type: boolean
+      required: true
+      hint: Saudi Arabia requires 6 months of passport validity from the date of entry on every route — eVisa, consular and Umrah alike.
+      citation: *sa_evisa_terms
+
+    # --- Section 2: Trip Details ---
+    - key: purpose_of_visit
+      section: Trip Details
+      prompt: What is the primary purpose of your trip to Saudi Arabia?
+      type: enum
+      options:
+        - tourism
+        - umrah
+        - visiting_family
+      required: true
+      hint: The tourist eVisa is granted for tourist purposes or for performing Umrah. It never covers Hajj or work.
+      citation: *sa_evisa_terms
+
+    - key: planned_arrival_date
+      section: Trip Details
+      prompt: What is your planned date of arrival in Saudi Arabia (YYYY-MM-DD)?
+      type: date
+      required: true
+      citation: *ksa_visa
+
+    - key: intended_length_of_stay_days
+      section: Trip Details
+      prompt: How many days do you plan to stay in Saudi Arabia (e.g. 10, 30, 90)?
+      type: integer
+      min_value: 1
+      max_value: 90
+      required: true
+      citation: *sa_evisa_terms
+
+    - key: accommodation_name
+      section: Trip Details
+      prompt: Where will you stay in Saudi Arabia (hotel name, or the city and host if staying with family)?
+      type: string
+      min_length: 2
+      max_length: 200
+      required: true
+      citation: *sa_evisa_terms
+
+    - key: has_return_ticket
+      section: Trip Details
+      prompt: Do you hold (or will you book before applying) a confirmed return or onward flight ticket?
+      type: boolean
+      required: true
+      hint: A confirmed round-trip ticket is mandatory for the Package Visa and for Umrah packages, and is part of the in-person Tasheer file.
+      citation: &tasheer
+        authority: Tasheer — Saudi Visa Service Centre
+        title: Saudi Visa Service Centre (Tasheer) — appointment booking and in-person submission
+        url: https://vc.tasheer.com
+        source_version: "2026-11"
+
+    # --- Section 3: Contact ---
+    - key: email_address
+      section: Contact
+      prompt: What email address should your visa be delivered to?
+      type: string
+      min_length: 3
+      max_length: 200
+      required: true
+      hint: The eVisa is sent as an email attachment — use an inbox you check daily.
+      citation: *sa_evisa_terms
+
+    - key: phone_number
+      section: Contact
+      prompt: What is your mobile phone number (with country code)?
+      type: string
+      min_length: 5
+      max_length: 32
+      required: true
+      citation: *ksa_visa
+
+    # --- Section 4: Your Route to Saudi Arabia ---
+    - key: has_used_us_uk_schengen_visa
+      section: Your Route to Saudi Arabia
+      prompt: Do you hold a US, UK or Schengen tourist or business visa that you have already used to enter that country or zone at least once?
+      type: boolean
+      required: true
+      hint: The visa must still be valid and carry an entry stamp from the issuing country — digital entry stamps are not accepted. A "yes" opens the online eVisa and visa-on-arrival routes for any passport.
+      citation: *sa_visa_regs
+
+    - key: western_permanent_residence
+      section: Your Route to Saudi Arabia
+      prompt: Do you hold permanent residence in the United States, the United Kingdom, or the European Union?
+      type: boolean
+      required: true
+      hint: A permanent residence permit — a temporary residence visa does not count. A "yes" opens the online eVisa and visa-on-arrival routes for any passport.
+      citation: *sa_visa_regs
+
+    - key: gcc_residence
+      section: Your Route to Saudi Arabia
+      prompt: Do you hold a residence permit for a GCC country (UAE, Bahrain, Kuwait, Oman or Qatar) that stays valid at least 3 months after you enter Saudi Arabia?
+      type: boolean
+      required: true
+      hint: A "yes" opens the online eVisa route (apply before travel — there is no visa on arrival on this route), including applications for first-degree relatives.
+      citation: *sa_visa_regs
+
+    # --- Section 5: Work & Funds ---
+    - key: employment_status
+      section: Work & Funds
+      prompt: What is your employment status in your home country?
+      type: enum
+      options:
+        - employed
+        - self_employed
+        - student
+        - not_working
+      required: true
+      citation: *tasheer
+
+    - key: occupation
+      section: Work & Funds
+      prompt: What is your current profession or occupation?
+      type: string
+      min_length: 2
+      max_length: 100
+      required: true
+      citation: *tasheer
+
+    - key: has_sufficient_funds
+      section: Work & Funds
+      prompt: Do you have sufficient funds for this trip that you can evidence with bank statements if asked?
+      type: boolean
+      required: true
+      hint: The in-person Tasheer file is judged on the last 6 months of bank statements and a solvency certificate. The online eVisa does not ask for statements up front, but the trip must be funded.
+      citation: *tasheer
+
+eligibility:
+  rules:
+    - key: nationality
+      operator: nationality_in
+      value:
+        - AL
+        - AD
+        - AU
+        - AT
+        - AZ
+        - BS
+        - BB
+        - BR
+        - BN
+        - BG
+        - CA
+        - CN
+        - HK
+        - MO
+        - HR
+        - CY
+        - CZ
+        - DK
+        - EE
+        - FI
+        - FR
+        - GE
+        - DE
+        - GR
+        - GD
+        - GY
+        - HU
+        - IS
+        - IE
+        - IT
+        - JP
+        - KZ
+        - KR
+        - XK
+        - KG
+        - LV
+        - LI
+        - LT
+        - LU
+        - MY
+        - MV
+        - MT
+        - MU
+        - MC
+        - ME
+        - NL
+        - NZ
+        - NO
+        - PA
+        - PL
+        - PT
+        - RO
+        - RU
+        - KN
+        - SM
+        - SC
+        - SG
+        - SK
+        - SI
+        - ZA
+        - ES
+        - SE
+        - CH
+        - TJ
+        - TH
+        - TR
+        - UA
+        - GB
+        - US
+        - UZ
+        - BA
+        - RS
+        - MX
+        - MK
+      failure_status: at_risk
+      message: >
+        Your passport is not on the Saudi eVisa permitted-country list, so the standard online
+        eVisa is not open to you by nationality alone — this does not end your application. You
+        can still apply online via KSA Visa if you hold a used US/UK/Schengen visa, US/UK/EU
+        permanent residence, or GCC residence; Bangladesh, Egypt, India, Indonesia, Jordan,
+        Mexico and Pakistan passport holders can also buy an electronic Package Visa. Otherwise
+        your route is an in-person consular visa (for Bangladesh, the Tasheer centre in Dhaka)
+        or, for Umrah, a Ministry-licensed agent.
+      pass_message: Your passport is on the Saudi eVisa permitted-country list — you can apply and pay fully online, and the visa is delivered by email.
+      citation: *sa_evisa_terms
+
+    - key: passport_expiry_date
+      operator: not_empty
+      value: null
+      failure_status: fail
+      message: A passport expiry date is required — every Saudi route checks the passport before anything else.
+      citation: *sa_evisa_terms
+
+    - key: passport_valid_six_months
+      operator: equals
+      value: true
+      failure_status: fail
+      message: >
+        Saudi Arabia requires a passport valid for at least six months from your date of entry
+        (§4 of the eVisa Terms; the same standard is applied at Tasheer). Renew your passport
+        first — no route can be filed on a passport inside six months.
+      citation: *sa_evisa_terms
+
+    - key: intended_length_of_stay_days
+      operator: max
+      value: 90
+      failure_status: at_risk
+      message: The tourist eVisa allows a maximum stay of 3 months (90 days) and cannot be extended. Shorten the trip or plan a different visa category.
+      citation: *sa_evisa_terms
+
+    - key: has_used_us_uk_schengen_visa
+      operator: equals
+      value: true
+      failure_status: at_risk
+      message: >
+        You do not hold a used US/UK/Schengen visa, so that particular online route is closed.
+        Check the permanent-residence and GCC-residence routes below, then the Package Visa and
+        in-person routes — one of them is your channel.
+      pass_message: >
+        A used US/UK/Schengen tourist or business visa opens the online eVisa via KSA Visa
+        (ksavisa.sa) and visa on arrival for any passport. Keep the visa page and its entry
+        stamp ready to upload — digital entry stamps are not accepted.
+      citation: *sa_visa_regs
+
+    - key: western_permanent_residence
+      operator: equals
+      value: true
+      failure_status: at_risk
+      message: >
+        You do not hold US/UK/EU permanent residence, so that online route is closed. The
+        used-visa and GCC-residence routes, the Package Visa, and in-person filing remain.
+      pass_message: US/UK/EU permanent residence opens the online eVisa via KSA Visa (ksavisa.sa) and visa on arrival for any passport. Keep your residence permit ready to upload.
+      citation: *sa_visa_regs
+
+    - key: gcc_residence
+      operator: equals
+      value: true
+      failure_status: at_risk
+      message: >
+        You do not hold GCC residence, so the GCC-resident online route is closed. The used-visa
+        and permanent-residence routes, the Package Visa, and in-person filing remain.
+      pass_message: >
+        GCC residence valid at least 3 months beyond entry opens the online eVisa — apply
+        before you travel, as this route has no visa on arrival. You may also apply for
+        first-degree relatives (spouse, parents, children) from the same account.
+      citation: *sa_visa_regs
+
+    - key: has_sufficient_funds
+      operator: equals
+      value: true
+      failure_status: at_risk
+      message: >
+        Funds evidence decides the in-person route: Tasheer expects the last 6 months of bank
+        statements and a solvency certificate, and the Package Visa has a minimum package
+        value of SAR 4,000 per adult. Arrange the evidence before your appointment or booking.
+      pass_message: You have funds you can evidence — keep the last 6 months of bank statements ready if your route files in person at Tasheer.
+      citation: *tasheer
+
+documents:
+  items:
+    - code: passport_scan
+      name:
+        en: Passport scan — valid at least 6 months from entry, with at least two blank pages
+      how_to_obtain:
+        en: Scan the biographic page of your passport itself. Renew it first if it expires within
+          6 months of your entry date or has no blank pages left.
+      why_required:
+        en: Every route — eVisa, KSA Visa, Package Visa and Tasheer — is filed against this
+          passport, and §4 of the eVisa Terms sets the 6-month validity standard.
+      is_required: true
+      citation: *sa_evisa_terms
+
+    - code: digital_photo
+      name:
+        en: Digital passport photo, 200x200 px, white background
+      how_to_obtain:
+        en: Take or scan a recent passport-style photograph at 200x200 pixels on a plain white
+          background, facing the camera, no glasses glare or head covering except for religious
+          reasons.
+      why_required:
+        en: The online application on the KSA Visa platform is submitted with this photograph;
+          the same photograph is used on the issued eVisa.
+      is_required: true
+      citation: *ksa_visa
+
+    - code: accommodation_confirmation
+      name:
+        en: Accommodation confirmation in Saudi Arabia for the whole stay
+      how_to_obtain:
+        en: A hotel booking confirmation, or your host's address in Saudi Arabia if you are
+          staying with family. Package Visa travellers book a Ministry-licensed hotel of 4
+          stars or above as part of the package; Umrah packages book through Nusuk Masar.
+      why_required:
+        en: The application asks where you will stay, and the Package Visa and Umrah routes only
+          issue against verified bookings.
+      is_required: true
+      citation: *sa_evisa_terms
+
+    - code: return_flight_itinerary
+      name:
+        en: Confirmed return or onward flight itinerary
+      how_to_obtain:
+        en: A confirmed round-trip booking from your airline or agency, with dates matching
+          your accommodation. The inbound leg alone is not enough.
+      why_required:
+        en: A confirmed round-trip ticket is a condition of the Package Visa and of Umrah
+          packages, and forms part of the in-person Tasheer file.
+      is_required: true
+      citation: *tasheer
+
+    - code: qualifying_visa_copy
+      name:
+        en: Copy of your used US / UK / Schengen visa, showing the entry stamp
+      how_to_obtain:
+        en: Scan the visa page of your passport and the page carrying the entry stamp from the
+          issuing country. Digital entry stamps are not accepted on this route.
+      why_required:
+        en: This visa is the entire basis of your online eligibility — KSA Visa checks the visa
+          and its stamp, not your nationality.
+      is_required: true
+      show_when:
+        key: has_used_us_uk_schengen_visa
+        equals: true
+      citation: *sa_visa_regs
+
+    - code: western_residence_permit_copy
+      name:
+        en: Copy of your US / UK / EU permanent residence permit
+      how_to_obtain:
+        en: Scan both sides of your permanent residence card or permit. A temporary residence
+          visa does not qualify on this route.
+      why_required:
+        en: Permanent residence is the basis of your online eligibility via KSA Visa and for
+          visa on arrival.
+      is_required: true
+      show_when:
+        key: western_permanent_residence
+        equals: true
+      citation: *sa_visa_regs
+
+    - code: gcc_residence_permit_copy
+      name:
+        en: Copy of your GCC residence permit, valid 3+ months beyond entry
+      how_to_obtain:
+        en: Scan your residence permit or ID for the UAE, Bahrain, Kuwait, Oman or Qatar, and
+          check its expiry — it must still be valid at least 3 months after you enter Saudi
+          Arabia.
+      why_required:
+        en: GCC residence is the basis of your online eligibility, and the 3-month validity
+          window is checked on the application.
+      is_required: true
+      show_when:
+        key: gcc_residence
+        equals: true
+      citation: *sa_visa_regs
+
+    - code: umrah_package_bookings
+      name:
+        en: Umrah package bookings verified in Nusuk Masar (hotel + ground transport + ticket)
+      how_to_obtain:
+        en: Book through a travel agent licensed by the Saudi Ministry of Hajj and Umrah. The
+          agent files on Nusuk Masar with a licensed-hotel booking for the whole stay,
+          pre-booked ground transport, and your confirmed round-trip ticket — since June 2025
+          no Umrah visa is issued without all three.
+      why_required:
+        en: Pilgrims whose passport is not eVisa-eligible cannot self-apply for a standalone
+          Umrah visa on Nusuk; the licensed-agent package is the application.
+      is_required: true
+      show_when:
+        key: purpose_of_visit
+        equals: umrah
+      citation: &nusuk
+        authority: Ministry of Hajj and Umrah — Nusuk
+        title: Nusuk Umrah platform — Umrah visas and packages for pilgrims outside the Kingdom
+        url: https://umrah.nusuk.sa
+        source_version: "2026-11"
+
+    - code: bank_statement_six_months
+      name:
+        en: Bank statements for the last six months, with a bank solvency certificate
+      how_to_obtain:
+        en: Ask your bank for printed statements covering the last six months plus a solvency
+          certificate. The statements matter as much as the balance — a sum deposited days
+          before filing reads as borrowed.
+      why_required:
+        en: This is the core funds evidence of the in-person Tasheer file, and supports your
+          funds answer on every other route.
+      is_required: true
+      citation: *tasheer
+
+    - code: national_id_copy
+      name:
+        en: National ID card copy (or birth certificate)
+      how_to_obtain:
+        en: A clear copy of both sides of your national ID card. If you have no NID, use your
+          birth certificate instead.
+      why_required:
+        en: Part of the standard in-person file at the Tasheer Saudi Visa Service Centre, tying
+          the application to your civil identity record.
+      is_required: true
+      citation: *tasheer
+
+    - code: employer_noc
+      name:
+        en: Employer NOC and approved leave letter
+      how_to_obtain:
+        en: Ask your employer for a no-objection letter on company letterhead naming your
+          position, length of service, and the approved leave dates for the trip.
+      why_required:
+        en: Part of the in-person Tasheer file — a job to return to is what shows the visit
+          ends when it says it will.
+      is_required: true
+      show_when:
+        key: employment_status
+        equals: employed
+      citation: *tasheer
+
+    - code: trade_licence_copy
+      name:
+        en: Trade licence copy for your business
+      how_to_obtain:
+        en: A copy of the current trade licence or business registration in your own name.
+      why_required:
+        en: A self-employed applicant has no employer to certify the job, so the licence does
+          it instead in the in-person Tasheer file.
+      is_required: true
+      show_when:
+        key: employment_status
+        equals: self_employed
+      citation: *tasheer
+
+forms:
+  - code: ksa_visa_application
+    version: "2026-11"
+    official_title: KSA Visa (MOFA) unified visa platform — visit visa application
+    citation: *ksa_visa
+    field_mappings:
+      - form_field: applicant.full_name
+        answer_key: full_name
+        required: true
+      - form_field: applicant.nationality
+        answer_key: nationality
+        required: true
+      - form_field: applicant.date_of_birth
+        answer_key: date_of_birth
+        required: true
+      - form_field: applicant.passport_number
+        answer_key: passport_number
+        required: true
+      - form_field: applicant.passport_expiry
+        answer_key: passport_expiry_date
+        required: true
+      - form_field: applicant.residence_country
+        answer_key: residence_country
+        required: true
+      - form_field: visit.purpose
+        answer_key: purpose_of_visit
+        required: true
+      - form_field: visit.arrival_date
+        answer_key: planned_arrival_date
+        required: true
+      - form_field: visit.length_of_stay_days
+        answer_key: intended_length_of_stay_days
+        required: true
+      - form_field: contact.email
+        answer_key: email_address
+        required: true
+      - form_field: contact.phone
+        answer_key: phone_number
+        required: true
+
+sources:
+  - title: Saudi eVisa Terms and Conditions (Ministry of Tourism)
+    url: https://visa.visitsaudi.com/Home/TermsConditions
+    retrieved: "2026-11-04"
+  - title: Visit Saudi — Visa Regulations
+    url: https://www.visitsaudi.com/en/plan-your-trip/visa-regulations
+    retrieved: "2026-11-04"
+  - title: Visit Saudi — Package Visa
+    url: https://www.visitsaudi.com/en/campaigns/package-visa
+    retrieved: "2026-11-04"
+  - title: KSA Visa — unified national visa platform (MOFA)
+    url: https://ksavisa.sa
+    retrieved: "2026-11-04"
+  - title: Nusuk Umrah platform (Ministry of Hajj and Umrah)
+    url: https://umrah.nusuk.sa
+    retrieved: "2026-11-04"
+  - title: Tasheer — Saudi Visa Service Centre
+    url: https://vc.tasheer.com
+    retrieved: "2026-11-04"

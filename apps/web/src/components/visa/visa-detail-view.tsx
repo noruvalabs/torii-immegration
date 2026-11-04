@@ -34,6 +34,8 @@ import { useAuth } from "@/lib/auth-context";
 import { useCorridorCheckQuery } from "@/lib/queries/corridors";
 import { type DestinationInfo, type DestinationVisa } from "@/lib/destinations-data";
 import { ALL_COUNTRIES, type Country } from "@/lib/countries";
+import { ApplyRouteChecker } from "@/components/visa/apply-route-checker";
+import { ROUTE_DETECTION_DESTINATIONS } from "@/lib/apply-route";
 import { CountryFlag } from "@/components/landing/country-flag";
 import { cn } from "@/lib/utils";
 
@@ -456,6 +458,14 @@ export function VisaDetailView({ destination }: { destination: DestinationInfo }
           </div>
         </div>
       </section>
+
+      {/* Apply-route detection: online vs in-person, from the passport country */}
+      {ROUTE_DETECTION_DESTINATIONS.has(destination.code) && (
+        <ApplyRouteChecker
+          passportCountry={passportCountry}
+          onStartApplication={handleStartApplication}
+        />
+      )}
 
       {/* 3-Step "How It Works" Roadmap tailored to the exact model */}
       <section className="border-b border-border bg-card/60 py-6">
