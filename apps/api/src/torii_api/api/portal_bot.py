@@ -128,4 +128,3 @@ async def admin_list_jobs(
 
     jobs = await list_recent_jobs(session, limit=limit)
     return [PortalJobOut.model_validate(j) for j in jobs]
-

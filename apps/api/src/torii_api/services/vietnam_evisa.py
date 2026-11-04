@@ -169,7 +169,9 @@ def normalize_sex(value: str) -> str:
     return value.strip()
 
 
-def build_payload(intake: dict[str, Any] | None, *, email_fallback: str = "") -> VietnamEvisaPayload:
+def build_payload(
+    intake: dict[str, Any] | None, *, email_fallback: str = ""
+) -> VietnamEvisaPayload:
     answers = intake or {}
     full_name = _first_str(answers, "full_name", "applicant_name", "name")
     surname = _first_str(answers, "surname", "family_name", "last_name")
@@ -182,9 +184,7 @@ def build_payload(intake: dict[str, Any] | None, *, email_fallback: str = "") ->
     values = {
         "surname": surname,
         "given_names": given,
-        "date_of_birth": to_vn_date(
-            _first_str(answers, "date_of_birth", "dob", "birth_date")
-        ),
+        "date_of_birth": to_vn_date(_first_str(answers, "date_of_birth", "dob", "birth_date")),
         "sex": normalize_sex(_first_str(answers, "sex", "gender")),
         "nationality": _first_str(answers, "nationality", "citizenship", "passport_nationality"),
         "email": _first_str(answers, "email", "applicant_email") or email_fallback.strip(),
@@ -251,7 +251,10 @@ def extract_confirmation_code(html: str) -> str | None:
         if not match:
             continue
         code = match.group(1).strip().upper()
-        if any(code.startswith(prefix.rstrip("-")) or code.startswith(prefix) for prefix in _FORBIDDEN_REFERENCE_PREFIXES):
+        if any(
+            code.startswith(prefix.rstrip("-")) or code.startswith(prefix)
+            for prefix in _FORBIDDEN_REFERENCE_PREFIXES
+        ):
             continue
         if code.startswith("VN-EVISA"):
             continue

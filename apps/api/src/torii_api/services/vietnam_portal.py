@@ -120,9 +120,11 @@ class PlaywrightPortalSession:
         self._playwright = playwright
 
     @classmethod
-    async def launch(cls, *, headless: bool = True, timeout_ms: int = 45_000) -> PlaywrightPortalSession:
+    async def launch(
+        cls, *, headless: bool = True, timeout_ms: int = 45_000
+    ) -> PlaywrightPortalSession:
         try:
-            from playwright.async_api import async_playwright
+            from playwright.async_api import async_playwright  # type: ignore[import-untyped]
         except ImportError as exc:
             raise RuntimeError(
                 "Playwright is not installed. From apps/api run: "
@@ -173,8 +175,8 @@ class PlaywrightPortalSession:
                 self._page.get_by_placeholder(regex),  # type: ignore[attr-defined]
             )
             for locator in candidates:
+                first = locator.first  # assigned once per locator, always bound in try
                 try:
-                    first = locator.first
                     if await first.count() == 0:
                         continue
                     await first.fill(value, timeout=2_000)

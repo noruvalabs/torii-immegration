@@ -47,19 +47,14 @@ def upgrade() -> None:
             sa.Column("created_at", sa.DateTime(), server_default=sa.func.now(), nullable=False),
             sa.Column("updated_at", sa.DateTime(), server_default=sa.func.now(), nullable=False),
         )
-        op.create_index(
-            "ix_portal_submission_jobs_case_id", "portal_submission_jobs", ["case_id"]
-        )
+        op.create_index("ix_portal_submission_jobs_case_id", "portal_submission_jobs", ["case_id"])
         op.create_index(
             "ix_portal_submission_jobs_jurisdiction_code",
             "portal_submission_jobs",
             ["jurisdiction_code"],
         )
-        op.create_index(
-            "ix_portal_submission_jobs_status", "portal_submission_jobs", ["status"]
-        )
+        op.create_index("ix_portal_submission_jobs_status", "portal_submission_jobs", ["status"])
 
 
 def downgrade() -> None:
     op.drop_table("portal_submission_jobs")
-

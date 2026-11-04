@@ -37,7 +37,9 @@ def upgrade() -> None:
             sa.UniqueConstraint("code", name="uq_concierge_products_code"),
         )
         op.create_index("ix_concierge_products_code", "concierge_products", ["code"])
-        op.create_index("ix_concierge_products_product_type", "concierge_products", ["product_type"])
+        op.create_index(
+            "ix_concierge_products_product_type", "concierge_products", ["product_type"]
+        )
 
     if "concierge_orders" not in existing_tables:
         op.create_table(
@@ -149,4 +151,3 @@ def upgrade() -> None:
 def downgrade() -> None:
     op.drop_table("concierge_orders")
     op.drop_table("concierge_products")
-

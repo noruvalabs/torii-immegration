@@ -233,4 +233,3 @@ async def fulfill(
 
     await session.commit()
     return OrderOut.model_validate(order)
-

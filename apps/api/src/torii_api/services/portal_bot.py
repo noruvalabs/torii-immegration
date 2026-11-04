@@ -334,8 +334,6 @@ async def list_recent_jobs(
 ) -> list[PortalSubmissionJob]:
     """Admin dashboard: list recent bot submission jobs."""
     result = await session.scalars(
-        select(PortalSubmissionJob)
-        .order_by(PortalSubmissionJob.id.desc())
-        .limit(limit)
+        select(PortalSubmissionJob).order_by(PortalSubmissionJob.id.desc()).limit(limit)
     )
     return list(result.all())

@@ -22,9 +22,7 @@ def upgrade() -> None:
     bind = op.get_bind()
     insp = sa.inspect(bind)
 
-    if "submission_track" not in {
-        column["name"] for column in insp.get_columns("jurisdictions")
-    }:
+    if "submission_track" not in {column["name"] for column in insp.get_columns("jurisdictions")}:
         with op.batch_alter_table("jurisdictions") as batch_op:
             batch_op.add_column(
                 sa.Column(
@@ -35,9 +33,7 @@ def upgrade() -> None:
                 )
             )
 
-    if "submission_track" not in {
-        column["name"] for column in insp.get_columns("visa_categories")
-    }:
+    if "submission_track" not in {column["name"] for column in insp.get_columns("visa_categories")}:
         with op.batch_alter_table("visa_categories") as batch_op:
             batch_op.add_column(
                 sa.Column(
@@ -52,13 +48,17 @@ def upgrade() -> None:
         sa.text("UPDATE jurisdictions SET submission_track = 'hybrid' WHERE UPPER(code) = 'IN'")
     )
     op.execute(
-        sa.text("UPDATE jurisdictions SET submission_track = 'digital' WHERE UPPER(code) IN ('SA', 'VN', 'EG', 'BH', 'KH', 'JO', 'QA', 'LK', 'TR', 'MY')")
+        sa.text(
+            "UPDATE jurisdictions SET submission_track = 'digital' WHERE UPPER(code) IN ('SA', 'VN', 'EG', 'BH', 'KH', 'JO', 'QA', 'LK', 'TR', 'MY')"
+        )
     )
     op.execute(
         sa.text("UPDATE jurisdictions SET submission_track = 'hybrid' WHERE UPPER(code) = 'CA'")
     )
     op.execute(
-        sa.text("UPDATE jurisdictions SET submission_track = 'consular' WHERE UPPER(code) IN ('JP', 'US', 'GB', 'UK', 'FR', 'DE', 'ES', 'KR')")
+        sa.text(
+            "UPDATE jurisdictions SET submission_track = 'consular' WHERE UPPER(code) IN ('JP', 'US', 'GB', 'UK', 'FR', 'DE', 'ES', 'KR')"
+        )
     )
 
 
@@ -66,15 +66,10 @@ def downgrade() -> None:
     bind = op.get_bind()
     insp = sa.inspect(bind)
 
-    if "submission_track" in {
-        column["name"] for column in insp.get_columns("visa_categories")
-    }:
+    if "submission_track" in {column["name"] for column in insp.get_columns("visa_categories")}:
         with op.batch_alter_table("visa_categories") as batch_op:
             batch_op.drop_column("submission_track")
 
-    if "submission_track" in {
-        column["name"] for column in insp.get_columns("jurisdictions")
-    }:
+    if "submission_track" in {column["name"] for column in insp.get_columns("jurisdictions")}:
         with op.batch_alter_table("jurisdictions") as batch_op:
             batch_op.drop_column("submission_track")
-

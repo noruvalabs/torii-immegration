@@ -51,23 +51,21 @@ KNOWN_TRACKS: dict[str, SubmissionTrack] = {
     "RW": SubmissionTrack.DIGITAL,  # Rwanda
     "KE": SubmissionTrack.DIGITAL,  # Kenya
     "OM": SubmissionTrack.DIGITAL,  # Oman
-
     # Hybrid (Online registration + Counter / IVAC drop-off)
-    "IN": SubmissionTrack.HYBRID,   # India (Medical Visa MED-1 via IVAC)
-    "CA": SubmissionTrack.HYBRID,   # Canada (IRCC portal submission + VFS biometrics)
-
+    "IN": SubmissionTrack.HYBRID,  # India (Medical Visa MED-1 via IVAC)
+    "CA": SubmissionTrack.HYBRID,  # Canada (IRCC portal submission + VFS biometrics)
     # Consular / VFS (Walk-in ready dossier kit)
-    "JP": SubmissionTrack.CONSULAR, # Japan (MOFA form + VFS submission)
-    "US": SubmissionTrack.CONSULAR, # USA (DS-160 + Consular interview)
-    "GB": SubmissionTrack.CONSULAR, # UK (gov.uk form + VFS biometrics)
-    "UK": SubmissionTrack.CONSULAR, # UK alias
-    "FR": SubmissionTrack.CONSULAR, # France (France-Visas + VFS)
-    "DE": SubmissionTrack.CONSULAR, # Germany (VIDEX + Embassy/VFS)
-    "ES": SubmissionTrack.CONSULAR, # Spain (BLS International)
-    "KR": SubmissionTrack.CONSULAR, # South Korea (Embassy counter)
-    "IT": SubmissionTrack.CONSULAR, # Italy (VFS)
-    "CH": SubmissionTrack.CONSULAR, # Switzerland (VFS)
-    "AU": SubmissionTrack.CONSULAR, # Australia biometrics / VFS
+    "JP": SubmissionTrack.CONSULAR,  # Japan (MOFA form + VFS submission)
+    "US": SubmissionTrack.CONSULAR,  # USA (DS-160 + Consular interview)
+    "GB": SubmissionTrack.CONSULAR,  # UK (gov.uk form + VFS biometrics)
+    "UK": SubmissionTrack.CONSULAR,  # UK alias
+    "FR": SubmissionTrack.CONSULAR,  # France (France-Visas + VFS)
+    "DE": SubmissionTrack.CONSULAR,  # Germany (VIDEX + Embassy/VFS)
+    "ES": SubmissionTrack.CONSULAR,  # Spain (BLS International)
+    "KR": SubmissionTrack.CONSULAR,  # South Korea (Embassy counter)
+    "IT": SubmissionTrack.CONSULAR,  # Italy (VFS)
+    "CH": SubmissionTrack.CONSULAR,  # Switzerland (VFS)
+    "AU": SubmissionTrack.CONSULAR,  # Australia biometrics / VFS
 }
 
 
@@ -95,7 +93,9 @@ def build_track_summary(
         )
 
     if t == SubmissionTrack.HYBRID:
-        center = "IVAC (Indian Visa Application Center)" if j_code == "IN" else "Visa Application Center"
+        center = (
+            "IVAC (Indian Visa Application Center)" if j_code == "IN" else "Visa Application Center"
+        )
         return TrackSummary(
             track=t,
             badge_label="Hybrid (Online Filing + Center Drop-Off)",
@@ -108,11 +108,7 @@ def build_track_summary(
         )
 
     # Consular default
-    center = (
-        "VFS Global / Embassy of Japan"
-        if j_code == "JP"
-        else "VFS Global / Consular Section"
-    )
+    center = "VFS Global / Embassy of Japan" if j_code == "JP" else "VFS Global / Consular Section"
     return TrackSummary(
         track=t,
         badge_label="Consular / VFS Dossier Preparation",
@@ -152,9 +148,13 @@ def resolve_submission_track(
     # 2. Specific route exceptions (e.g. India tourist eVisa vs India medical)
     if j_code == "IN":
         if v_code in ("tourist", "evisa"):
-            return build_track_summary(SubmissionTrack.DIGITAL, jurisdiction_code=j_code, visa_category_code=v_code)
+            return build_track_summary(
+                SubmissionTrack.DIGITAL, jurisdiction_code=j_code, visa_category_code=v_code
+            )
         # Medical & other standard Indian visas are hybrid (IVAC)
-        return build_track_summary(SubmissionTrack.HYBRID, jurisdiction_code=j_code, visa_category_code=v_code)
+        return build_track_summary(
+            SubmissionTrack.HYBRID, jurisdiction_code=j_code, visa_category_code=v_code
+        )
 
     # 3. Explicit jurisdiction-level track
     if explicit_jurisdiction_track:
@@ -169,12 +169,17 @@ def resolve_submission_track(
 
     # 4. Agentic research clues
     if research_route in ("evisa", "eta", "visa_free"):
-        return build_track_summary(SubmissionTrack.DIGITAL, jurisdiction_code=j_code, visa_category_code=v_code)
+        return build_track_summary(
+            SubmissionTrack.DIGITAL, jurisdiction_code=j_code, visa_category_code=v_code
+        )
 
     # 5. Known country mapping
     if j_code in KNOWN_TRACKS:
-        return build_track_summary(KNOWN_TRACKS[j_code], jurisdiction_code=j_code, visa_category_code=v_code)
+        return build_track_summary(
+            KNOWN_TRACKS[j_code], jurisdiction_code=j_code, visa_category_code=v_code
+        )
 
     # 6. Fallback to consular
-    return build_track_summary(SubmissionTrack.CONSULAR, jurisdiction_code=j_code, visa_category_code=v_code)
-
+    return build_track_summary(
+        SubmissionTrack.CONSULAR, jurisdiction_code=j_code, visa_category_code=v_code
+    )

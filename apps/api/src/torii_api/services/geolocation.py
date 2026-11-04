@@ -44,24 +44,9 @@ COUNTRY_META: dict[str, dict[str, str]] = {
     "ES": {"name": "Spain", "currency": "EUR", "flag": "🇪🇸"},
 }
 
-OFFERED_DESTINATIONS: tuple[str, ...] = (
-    "JP",
-    "UK",
-    "GB",
-    "IN",
-    "SA",
-    "MY",
-    "TR",
-    "VN",
-    "EG",
-    "BH",
-    "US",
-    "CA",
-    "KR",
-    "FR",
-    "DE",
-    "ES",
-)
+# Which of those are actually offered without a database session (i.e. have
+# offline content packs in docs/jurisdictions/). US is parked.
+OFFERED_DESTINATIONS: tuple[str, ...] = ("JP", "UK", "GB", "IN")
 
 # Retained under its original name for callers that only need the country labels.
 SUPPORTED_DESTINATIONS = COUNTRY_META

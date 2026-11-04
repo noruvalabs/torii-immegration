@@ -63,4 +63,3 @@ def test_jurisdiction_meta_loads_submission_track() -> None:
     meta_jp = load_jurisdiction_meta("JP")
     assert meta_jp is not None
     assert meta_jp.submission_track == "consular"
-

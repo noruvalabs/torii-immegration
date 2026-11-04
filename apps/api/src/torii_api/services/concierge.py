@@ -21,9 +21,7 @@ from torii_api.db.models import (
 )
 
 
-def _code_matches_pattern(
-    checklist_code: str, pattern: str, checklist_name: str = ""
-) -> bool:
+def _code_matches_pattern(checklist_code: str, pattern: str, checklist_name: str = "") -> bool:
     """Check if a checklist item code or name matches any fragment in a pattern.
 
     >>> _code_matches_pattern("travel_itinerary", "flight,itinerary,booking")
@@ -125,7 +123,9 @@ async def match_products_to_checklist(
                 "price_cents": existing_order.price_cents,
                 "currency": existing_order.currency,
                 "fulfilled_document_id": existing_order.fulfilled_document_id,
-                "created_at": existing_order.created_at.isoformat() if existing_order.created_at else None,
+                "created_at": existing_order.created_at.isoformat()
+                if existing_order.created_at
+                else None,
             }
 
         matches.append(
@@ -181,9 +181,7 @@ async def create_concierge_order(
         )
     )
     if existing is not None:
-        raise ValueError(
-            f"An active order already exists for checklist item {checklist_item_id}"
-        )
+        raise ValueError(f"An active order already exists for checklist item {checklist_item_id}")
 
     order = ConciergeOrder(
         case_id=case_id,
@@ -267,4 +265,3 @@ async def auto_fulfill_order(
         document_id=doc.id,
         notes=f"Instantly delivered via Torii {prod_name} integration",
     )
-
