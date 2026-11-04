@@ -139,6 +139,11 @@ class Settings(BaseSettings):
     # entitlement (US-22.2). Off in unit tests unless explicitly enabled.
     require_packet_entitlement: bool = True
 
+    # Vietnam eVisa worker (evisa.gov.vn). Captcha and card payment stay manual.
+    vn_evisa_headless: bool = True
+    vn_evisa_allow_submit: bool = False
+    vn_evisa_timeout_ms: int = 45_000
+
     # --- Deployment guard -----------------------------------------------------
     # `database_url` defaults to SQLite so the API runs with zero infrastructure locally.
     # That default is a liability anywhere real: if the environment goes missing, the service

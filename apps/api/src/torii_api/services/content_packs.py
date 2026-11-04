@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 import yaml
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from torii_api.config import get_settings
 
@@ -213,8 +213,23 @@ class JurisdictionMeta(BaseModel):
     filing_mode: FilingMode = "official_form_pdf"
     # Where the applicant actually files, when filing is online.
     apply_url: str | None = None
+    submission_track: str = "consular"
     categories: list[dict[str, Any]] = Field(default_factory=list)
     actions: list[dict[str, Any]] = Field(default_factory=list)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _infer_submission_track(cls, data: Any) -> Any:
+        if isinstance(data, dict) and not data.get("submission_track"):
+            fm = data.get("filing_mode")
+            code = str(data.get("code", "")).upper()
+            if code == "IN" or fm == "hybrid":
+                data["submission_track"] = "hybrid"
+            elif fm == "online_portal" or data.get("efile_enabled"):
+                data["submission_track"] = "digital"
+            else:
+                data["submission_track"] = "consular"
+        return data
 
 
 def resolve_packs_dir(explicit: str | Path | None = None) -> Path:

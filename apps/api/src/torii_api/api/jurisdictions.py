@@ -77,12 +77,14 @@ class JurisdictionIn(BaseModel):
     name: str = Field(min_length=1, max_length=128, examples=["Japan"])
     is_live: bool = False
     is_enabled: bool = True
+    submission_track: str = "consular"
 
 
 class JurisdictionUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=128)
     is_live: bool | None = None
     is_enabled: bool | None = None
+    submission_track: str | None = None
 
 
 class JurisdictionOut(BaseModel):
@@ -93,6 +95,7 @@ class JurisdictionOut(BaseModel):
     name: str
     is_live: bool
     is_enabled: bool
+    submission_track: str = "consular"
 
 
 # Visa categories and case actions carry the same columns, so the three payload shapes are
@@ -107,6 +110,7 @@ class _ScopeIn(BaseModel):
     is_enabled: bool = True
     research_enabled: bool = False
     description: str = Field(default="", max_length=512)
+    submission_track: str | None = None
 
 
 class _ScopeUpdate(BaseModel):
@@ -121,6 +125,7 @@ class _ScopeUpdate(BaseModel):
     is_enabled: bool | None = None
     research_enabled: bool | None = None
     description: str | None = Field(default=None, max_length=512)
+    submission_track: str | None = None
 
 
 class _ScopeOut(BaseModel):
@@ -136,6 +141,7 @@ class _ScopeOut(BaseModel):
     description: str
     source: str
     citation: dict[str, Any] = Field(default_factory=dict)
+    submission_track: str | None = None
 
 
 class VisaCategoryIn(_ScopeIn):

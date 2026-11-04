@@ -15,6 +15,7 @@ from torii_api.api.admin_ops import router as admin_ops_router
 from torii_api.api.auth import router as auth_router
 from torii_api.api.case_workflow import router as case_workflow_router
 from torii_api.api.cases import router as cases_router
+from torii_api.api.concierge import router as concierge_router
 from torii_api.api.corridors import router as corridors_router
 from torii_api.api.credits import router as credits_router
 from torii_api.api.docs import build_docs_router
@@ -22,6 +23,7 @@ from torii_api.api.geolocation import router as geo_router
 from torii_api.api.health import router as health_router
 from torii_api.api.jurisdictions import router as jurisdictions_router
 from torii_api.api.payments import router as payments_router
+from torii_api.api.portal_bot import router as portal_bot_router
 from torii_api.api.wallet import router as wallet_router
 from torii_api.config import Settings, get_settings
 from torii_api.db.engine import create_engine, create_session_factory
@@ -151,6 +153,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(jurisdictions_router)
     app.include_router(corridors_router)
     app.include_router(cases_router)
+    app.include_router(concierge_router)
+    app.include_router(portal_bot_router)
     app.include_router(case_workflow_router)
     app.include_router(payments_router)
     app.include_router(geo_router)

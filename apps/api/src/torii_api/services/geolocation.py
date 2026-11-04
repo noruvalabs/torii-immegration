@@ -31,12 +31,21 @@ COUNTRY_META: dict[str, dict[str, str]] = {
     "UK": {"name": "United Kingdom", "currency": "GBP", "flag": "🇬🇧"},
     "GB": {"name": "United Kingdom", "currency": "GBP", "flag": "🇬🇧"},
     "IN": {"name": "India", "currency": "INR", "flag": "🇮🇳"},
+    "SA": {"name": "Saudi Arabia", "currency": "SAR", "flag": "🇸🇦"},
+    "MY": {"name": "Malaysia", "currency": "MYR", "flag": "🇲🇾"},
+    "TR": {"name": "Turkey", "currency": "TRY", "flag": "🇹🇷"},
+    "VN": {"name": "Vietnam", "currency": "VND", "flag": "🇻🇳"},
+    "EG": {"name": "Egypt", "currency": "EGP", "flag": "🇪🇬"},
+    "BH": {"name": "Bahrain", "currency": "BHD", "flag": "🇧🇭"},
+    "CA": {"name": "Canada", "currency": "CAD", "flag": "🇨🇦"},
+    "KR": {"name": "South Korea", "currency": "KRW", "flag": "🇰🇷"},
+    "FR": {"name": "France", "currency": "EUR", "flag": "🇫🇷"},
+    "DE": {"name": "Germany", "currency": "EUR", "flag": "🇩🇪"},
+    "ES": {"name": "Spain", "currency": "EUR", "flag": "🇪🇸"},
 }
 
-# Which of those are actually offered. US is parked (see
-# docs/jurisdictions/us/_jurisdiction.yml); listing it here would put it back in the
-# destination picker even though no live content pack backs it, so the applicant would
-# pick a country and then hit an empty scope.
+# Which of those are actually offered without a database session (i.e. have
+# offline content packs in docs/jurisdictions/). US is parked.
 OFFERED_DESTINATIONS: tuple[str, ...] = ("JP", "UK", "GB", "IN")
 
 # Retained under its original name for callers that only need the country labels.

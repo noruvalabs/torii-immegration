@@ -43,6 +43,29 @@ const statusConfig: Record<string, { label: string; tone: "default" | "success" 
   submitted: { label: "Submitted", tone: "success" },
 };
 
+function TrackBadge({ item }: { item: Case }) {
+  const track = item.submission_track || (item.jurisdiction_code?.toUpperCase() === "IN" ? "hybrid" : item.jurisdiction_code?.toUpperCase() === "SA" ? "digital" : "consular");
+  if (track === "digital") {
+    return (
+      <Badge tone="success" className="text-[10px] py-0 px-1.5 font-medium">
+        Digital eVisa
+      </Badge>
+    );
+  }
+  if (track === "hybrid") {
+    return (
+      <Badge tone="warning" className="text-[10px] py-0 px-1.5 font-medium">
+        Hybrid (IVAC)
+      </Badge>
+    );
+  }
+  return (
+    <Badge tone="info" className="text-[10px] py-0 px-1.5 font-medium">
+      Consular Dossier
+    </Badge>
+  );
+}
+
 export default function CasesListPage() {
   const { token } = useAuth();
   const { data: cases = [], isLoading } = useCasesListQuery(token);
@@ -279,6 +302,7 @@ export default function CasesListPage() {
                               <Badge tone={sc.tone} className="text-[10px] sm:text-xs">
                                 {sc.label}
                               </Badge>
+                              <TrackBadge item={c} />
                               {c.is_archived && (
                                 <Badge tone="muted" className="text-[10px] sm:text-xs">
                                   Archived
@@ -375,6 +399,7 @@ export default function CasesListPage() {
                         <Badge tone={sc.tone} className="shrink-0 text-[10px] sm:text-xs">
                           {sc.label}
                         </Badge>
+                        <TrackBadge item={c} />
                         {c.is_archived && (
                           <Badge tone="muted" className="shrink-0 text-[10px] sm:text-xs">
                             Archived

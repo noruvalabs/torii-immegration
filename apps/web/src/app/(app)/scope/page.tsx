@@ -1,9 +1,17 @@
 "use client";
 
-import { Suspense, useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, Check, Loader2, ArrowRight, Search, X } from "lucide-react";
+import {
+  ArrowLeft,
+  Check,
+  Loader2,
+  ArrowRight,
+  Search,
+  X,
+  ChevronDown,
+} from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/lib/auth-context";
@@ -27,15 +35,30 @@ import {
 } from "@/lib/api/cases";
 import { CountrySelector } from "@/components/ui/country-selector";
 import { CountryFlag } from "@/components/landing/country-flag";
-import { matchCountry } from "@/lib/countries";
-import { formatScopeLabel } from "@/lib/utils";
+import { ALL_COUNTRIES, matchCountry, isSameCountry } from "@/lib/countries";
+import { cn, formatScopeLabel } from "@/lib/utils";
 
 type CaseResult = Case;
 
-/** Combined residence + nationality, then destination → visa → app → review */
-type Step = "identity" | "destination" | "visa_type" | "app_type" | "review";
+const POPULAR_PASSPORTS = [
+  { code: "BD", name: "Bangladesh" },
+  { code: "IN", name: "India" },
+  { code: "PH", name: "Philippines" },
+  { code: "US", name: "United States" },
+  { code: "GB", name: "United Kingdom" },
+  { code: "CA", name: "Canada" },
+  { code: "AU", name: "Australia" },
+  { code: "PK", name: "Pakistan" },
+  { code: "SG", name: "Singapore" },
+  { code: "AE", name: "United Arab Emirates" },
+  { code: "MY", name: "Malaysia" },
+  { code: "DE", name: "Germany" },
+];
 
-const STEP_ORDER: Step[] = ["identity", "destination", "visa_type", "app_type", "review"];
+/** Destination (with Nationality & Residence), then visa → app → review */
+type Step = "destination" | "visa_type" | "app_type" | "review";
+
+const STEP_ORDER: Step[] = ["destination", "visa_type", "app_type", "review"];
 
 /**
  * True when a description adds something the name has not already said.
@@ -53,7 +76,6 @@ function isExtraDetail(description: string, name: string): boolean {
 }
 
 const STEP_LABELS: Record<Step, string> = {
-  identity: "Residence & Nationality",
   destination: "Destination",
   visa_type: "Visa type",
   app_type: "Application",
@@ -67,18 +89,29 @@ function ScopePageInner() {
   const destinationParam = searchParams.get("destination");
   const seededDestinationRef = useRef(false);
   const queryClient = useQueryClient();
-  const [step, setStep] = useState<Step>("identity");
+  const [step, setStep] = useState<Step>("destination");
   const [error, setError] = useState<string | null>(null);
-  const [savingIdentity, setSavingIdentity] = useState(false);
 
   const [residenceCountry, setResidenceCountry] = useState<string>("");
   const [nationality, setNationality] = useState<string>("");
+  const [differentResidence, setDifferentResidence] = useState<boolean>(false);
   const [selectedDestination, setSelectedDestination] = useState<Destination | null>(null);
   const [selectedVisaType, setSelectedVisaType] = useState<VisaType | null>(null);
   const [selectedAppType, setSelectedAppType] = useState<ApplicationType | null>(null);
 
   const [submitting, setSubmitting] = useState(false);
   const [visaFilter, setVisaFilter] = useState("");
+
+  const barRef = useRef<HTMLDivElement>(null);
+  const [passportOpen, setPassportOpen] = useState(false);
+  const [destinationOpen, setDestinationOpen] = useState(false);
+  const [passportSearch, setPassportSearch] = useState("");
+  const [destinationSearch, setDestinationSearch] = useState("");
+
+  const originParam =
+    searchParams.get("origin") || searchParams.get("from") || searchParams.get("passport");
+  const seededOriginRef = useRef(false);
+  const seededFromProfileRef = useRef(false);
 
   const { data: geoData = null, isLoading: geoLoading } = useGeoDataQuery(Boolean(token));
   const { data: dynamicVisaTypes = null, isLoading: loadingVisaTypes } = useVisaTypesQuery(
@@ -88,6 +121,18 @@ function ScopePageInner() {
     selectedDestination?.code,
     selectedVisaType?.code,
   );
+
+  // Close dropdowns on click outside
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (barRef.current && !barRef.current.contains(e.target as Node)) {
+        setPassportOpen(false);
+        setDestinationOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   const { data: corridorReview } = useCorridorCheckQuery(
     step === "review" && selectedDestination && selectedVisaType && selectedAppType
@@ -102,52 +147,67 @@ function ScopePageInner() {
     token,
   );
 
-  const loading = geoLoading && !geoData;
-
-  // Auto-select from profile if saved in profile.
-  // If not saved in profile, leave empty (do not default to BD or any other country).
-  const seededFromProfileRef = useRef(false);
-
-  useEffect(() => {
-    if (!seededFromProfileRef.current && user) {
-      if (user.current_country && user.current_country.trim()) {
-        const matched = matchCountry(user.current_country);
-        if (matched?.code) {
-          setResidenceCountry(matched.code);
-        }
-      }
-      if (user.nationality && user.nationality.trim()) {
-        const matched = matchCountry(user.nationality);
-        if (matched?.code) {
-          setNationality(matched.code);
-        }
-      }
-      seededFromProfileRef.current = true;
-    }
-  }, [user]);
-
-  const originParam = searchParams.get("origin") || searchParams.get("from") || searchParams.get("passport");
-  const seededOriginRef = useRef(false);
-
-  // Pre-seed nationality / residence if passed via URL (e.g. ?origin=US or ?from=US)
+  // Pre-seed nationality / residence if passed via URL (e.g. ?origin=PH or ?from=PH).
+  // Explicit URL query parameters override profile defaults. This runs BEFORE profile seeding.
   useEffect(() => {
     if (!seededOriginRef.current && originParam) {
       const matched = matchCountry(originParam);
       if (matched?.code) {
-        setNationality((prev) => prev || matched.code);
-        setResidenceCountry((prev) => prev || matched.code);
+        setNationality(matched.code);
+        setResidenceCountry(matched.code);
         seededOriginRef.current = true;
       }
     }
   }, [originParam]);
 
-  // Pre-seed destination if passed via URL (e.g., ?destination=JP or ?destination=IN)
+  // Auto-select from user profile only if NOT specified via URL query parameter.
+  // Wait until seededOriginRef is settled (URL param takes precedence).
+  useEffect(() => {
+    if (!seededFromProfileRef.current && user) {
+      // If a URL origin param is present, skip profile seeding entirely.
+      if (originParam) {
+        seededFromProfileRef.current = true;
+        return;
+      }
+      let natCode = "";
+      let resCode = "";
+      if (user.nationality && user.nationality.trim()) {
+        const matched = matchCountry(user.nationality);
+        if (matched?.code) {
+          natCode = matched.code;
+          setNationality(matched.code);
+        }
+      }
+      if (user.current_country && user.current_country.trim()) {
+        const matched = matchCountry(user.current_country);
+        if (matched?.code) {
+          resCode = matched.code;
+          setResidenceCountry(matched.code);
+        }
+      }
+      if (natCode && resCode && natCode !== resCode) {
+        setDifferentResidence(true);
+      } else if (natCode && !resCode) {
+        setResidenceCountry(natCode);
+      } else if (!natCode && resCode) {
+        setNationality(resCode);
+      }
+      seededFromProfileRef.current = true;
+    }
+  }, [user, originParam]);
+
+  const loading = geoLoading && !geoData;
+
+  // Pre-seed destination if passed via URL (e.g., ?destination=GB or ?destination=UK or ?destination=JP)
   useEffect(() => {
     if (!seededDestinationRef.current && destinationParam && geoData?.destinations) {
+      const cleanParam = destinationParam.trim();
       const matched = geoData.destinations.find(
         (d) =>
-          d.code.toUpperCase() === destinationParam.toUpperCase() ||
-          d.name.toLowerCase() === destinationParam.toLowerCase(),
+          d.code.toUpperCase() === cleanParam.toUpperCase() ||
+          isSameCountry(d.code, cleanParam) ||
+          d.name.toLowerCase() === cleanParam.toLowerCase() ||
+          d.name.toLowerCase().replace(/\s+/g, "-") === cleanParam.toLowerCase(),
       );
       if (matched) {
         setSelectedDestination(matched);
@@ -186,18 +246,27 @@ function ScopePageInner() {
     setStep(target);
   }
 
-  async function confirmIdentity() {
-    if (!residenceCountry || !nationality || savingIdentity) return;
+  function selectDestination(d: Destination) {
+    if (!nationality) {
+      setError("Please select your passport country / nationality first.");
+      return;
+    }
+    const finalResidence = differentResidence ? (residenceCountry || nationality) : nationality;
+    if (!residenceCountry || !differentResidence) {
+      setResidenceCountry(finalResidence);
+    }
     setError(null);
-    setSavingIdentity(true);
-    // If destination was pre-seeded from URL, jump directly to visa_type
-    setStep(selectedDestination ? "visa_type" : "destination");
+    setSelectedDestination(d);
+    setSelectedVisaType(null);
+    setSelectedAppType(null);
+    setVisaFilter("");
+    setStep("visa_type");
+
     if (token) {
       try {
         const natName = matchCountry(nationality).name;
-        const resName = matchCountry(residenceCountry).name;
-        // Do not call setAuth here — updating global user re-triggered this page previously.
-        await updateProfile(token, {
+        const resName = matchCountry(finalResidence).name;
+        void updateProfile(token, {
           nationality: natName,
           current_country: resName,
         });
@@ -205,16 +274,6 @@ function ScopePageInner() {
         // Profile save is best-effort; scoping can continue.
       }
     }
-    setSavingIdentity(false);
-  }
-
-  function selectDestination(d: Destination) {
-    setError(null);
-    setSelectedDestination(d);
-    setSelectedVisaType(null);
-    setSelectedAppType(null);
-    setVisaFilter("");
-    setStep("visa_type");
   }
 
   function selectVisaType(v: VisaType) {
@@ -260,6 +319,35 @@ function ScopePageInner() {
   const residenceLabel = residenceCountry ? matchCountry(residenceCountry).name : "";
   const nationalityLabel = nationality ? matchCountry(nationality).name : "";
 
+  const destinations = useMemo(
+    () => geoData?.destinations ?? [],
+    [geoData?.destinations],
+  );
+
+  const filteredPassports = useMemo(() => {
+    const q = passportSearch.trim().toLowerCase();
+    if (!q) {
+      const popularCodes = new Set(POPULAR_PASSPORTS.map((p) => p.code));
+      const popularList = POPULAR_PASSPORTS.map((p) => matchCountry(p.code));
+      const rest = ALL_COUNTRIES.filter((c) => !popularCodes.has(c.code));
+      return [...popularList, ...rest];
+    }
+    return ALL_COUNTRIES.filter(
+      (c) => c.name.toLowerCase().includes(q) || c.code.toLowerCase() === q,
+    );
+  }, [passportSearch]);
+
+  const filteredDestinations = useMemo(() => {
+    const q = destinationSearch.trim().toLowerCase();
+    if (!q) return destinations;
+    return destinations.filter(
+      (d) =>
+        d.name.toLowerCase().includes(q) ||
+        d.code.toLowerCase() === q ||
+        d.currency.toLowerCase().includes(q),
+    );
+  }, [destinations, destinationSearch]);
+
   if (loading) {
     return (
       <div className="mx-auto max-w-lg space-y-6 py-12 text-center">
@@ -269,7 +357,6 @@ function ScopePageInner() {
     );
   }
 
-  const destinations = geoData?.destinations ?? [];
   // Only the bootstrap payload's generic list may stand in before a destination is picked.
   // After one is, offering tourist/student/work for a country whose rows do not include
   // them walks the applicant to a refusal on the last click.
@@ -295,9 +382,11 @@ function ScopePageInner() {
           Start a new application
         </h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          {residenceLabel
-            ? `Apply for a visa from ${residenceLabel} to our supported destinations.`
-            : "Apply for a visa to our supported destinations worldwide."}
+          {residenceLabel && selectedDestination
+            ? `Apply for a visa from ${residenceLabel} to ${selectedDestination.name}.`
+            : residenceLabel
+              ? `Apply for a visa from ${residenceLabel} to our supported destinations.`
+              : "Apply for a visa to our supported destinations worldwide."}
         </p>
       </div>
 
@@ -345,123 +434,326 @@ function ScopePageInner() {
         </p>
       )}
 
-      {/* Combined residence + nationality */}
-      {/* Combined residence + nationality in 2 columns */}
-      {step === "identity" && (
+      {/* Sleek Atlys-style Unified Route Bar (Passport + Destination) */}
+      {step === "destination" && (
         <div className="space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-            {/* Column 1: Country of residence */}
-            <div className="space-y-3 rounded-xl border bg-card p-5 shadow-xs flex flex-col relative">
-              <div className="flex items-start justify-between gap-2">
-                <div>
-                  <h3 className="text-sm font-semibold text-foreground">
-                    Country of Residence
-                  </h3>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Where you currently reside or have legal residency.
-                  </p>
-                </div>
-                {user?.current_country &&
-                  residenceCountry &&
-                  residenceCountry === matchCountry(user.current_country).code && (
-                    <span className="text-[11px] font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-full shrink-0">
-                      Profile prefilled
-                    </span>
-                  )}
-              </div>
+          <div ref={barRef} className="space-y-2">
+            {/* Main Rounded Bar Container (matches image) */}
+            <div className="relative z-30 rounded-2xl border border-border/80 bg-card p-1.5 sm:p-2 shadow-xl backdrop-blur-xl dark:border-white/10 dark:bg-[#101424]">
+              <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr_auto] gap-2 items-center">
+                {/* 1. Passport Country Segment */}
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPassportOpen(!passportOpen);
+                      setDestinationOpen(false);
+                    }}
+                    className={cn(
+                      "w-full flex items-center justify-between py-2 px-3 rounded-xl text-left transition-all hover:bg-muted/50 cursor-pointer",
+                      passportOpen && "bg-muted/70 ring-1 ring-primary/50",
+                    )}
+                  >
+                    <div className="flex flex-col space-y-0.5 min-w-0">
+                      <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                        Passport Country
+                      </span>
+                      <div className="flex items-center gap-2 truncate">
+                        {nationality ? (
+                          <>
+                            <CountryFlag code={nationality} className="size-4.5 shrink-0 rounded-xs shadow-xs" />
+                            <span className="font-bold text-sm text-foreground truncate">
+                              {matchCountry(nationality).name}
+                            </span>
+                          </>
+                        ) : (
+                          <span className="text-sm font-medium text-muted-foreground">
+                            Select passport country...
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <ChevronDown
+                      className={cn(
+                        "size-4 text-muted-foreground shrink-0 transition-transform duration-200 ml-2",
+                        passportOpen && "rotate-180 text-foreground",
+                      )}
+                    />
+                  </button>
 
-              <CountrySelector
-                valueType="code"
-                value={residenceCountry}
-                onChange={(code) => setResidenceCountry(code)}
-                placeholder="Select country of residence..."
-              />
+                  {/* Passport Dropdown Menu */}
+                  {passportOpen && (
+                    <div className="absolute left-0 top-full mt-2 w-80 max-w-[calc(100vw-2rem)] z-50 rounded-xl border border-border/80 bg-popover text-popover-foreground p-2 shadow-2xl backdrop-blur-2xl animate-in fade-in slide-in-from-top-1 duration-150 text-left">
+                      <div className="relative mb-2">
+                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
+                        <input
+                          type="text"
+                          value={passportSearch}
+                          onChange={(e) => setPassportSearch(e.target.value)}
+                          placeholder="Search passport country..."
+                          className="w-full rounded-lg bg-muted/50 pl-8 pr-3 py-1.5 text-xs text-foreground placeholder:text-muted-foreground border border-border outline-none focus:ring-1 focus:ring-primary"
+                          autoFocus
+                        />
+                      </div>
+                      <div className="px-2 py-1 text-[10px] font-bold uppercase text-muted-foreground tracking-wider">
+                        {passportSearch.trim() ? "Search Results" : "Countries"}
+                      </div>
+                      <div className="max-h-60 overflow-y-auto space-y-0.5 pr-1">
+                        {filteredPassports.map((p) => {
+                          const isSelected = p.code === nationality;
+                          return (
+                            <button
+                              key={p.code}
+                              type="button"
+                              onClick={() => {
+                                setNationality(p.code);
+                                if (!differentResidence) {
+                                  setResidenceCountry(p.code);
+                                }
+                                setPassportOpen(false);
+                                setPassportSearch("");
+                              }}
+                              className={cn(
+                                "w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-colors cursor-pointer",
+                                isSelected
+                                  ? "bg-primary text-primary-foreground font-semibold"
+                                  : "text-foreground hover:bg-muted",
+                              )}
+                            >
+                              <div className="flex items-center gap-2.5 truncate">
+                                <CountryFlag code={p.code} className="size-4 shrink-0 rounded-xs" />
+                                <span className="truncate">{p.name}</span>
+                              </div>
+                              {isSelected && <Check className="size-3.5 shrink-0" />}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Vertical Divider */}
+                <div className="hidden md:block h-8 w-px bg-border/60 dark:bg-white/10" />
+
+                {/* 2. Destination Country Segment */}
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDestinationOpen(!destinationOpen);
+                      setPassportOpen(false);
+                    }}
+                    className={cn(
+                      "w-full flex items-center justify-between py-2 px-3 rounded-xl text-left transition-all hover:bg-muted/50 cursor-pointer",
+                      destinationOpen && "bg-muted/70 ring-1 ring-primary/50",
+                    )}
+                  >
+                    <div className="flex flex-col space-y-0.5 min-w-0">
+                      <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                        Destination Country
+                      </span>
+                      <div className="flex items-center gap-2 truncate">
+                        {selectedDestination ? (
+                          <>
+                            <CountryFlag code={selectedDestination.code} className="size-4.5 shrink-0 rounded-xs shadow-xs" />
+                            <span className="font-bold text-sm text-foreground truncate">
+                              {selectedDestination.name}
+                            </span>
+                          </>
+                        ) : (
+                          <span className="text-sm font-medium text-muted-foreground">
+                            Select destination country...
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <ChevronDown
+                      className={cn(
+                        "size-4 text-muted-foreground shrink-0 transition-transform duration-200 ml-2",
+                        destinationOpen && "rotate-180 text-foreground",
+                      )}
+                    />
+                  </button>
+
+                  {/* Destination Dropdown Menu */}
+                  {destinationOpen && (
+                    <div className="absolute left-0 md:left-auto md:right-0 top-full mt-2 w-80 max-w-[calc(100vw-2rem)] z-50 rounded-xl border border-border/80 bg-popover text-popover-foreground p-2 shadow-2xl backdrop-blur-2xl animate-in fade-in slide-in-from-top-1 duration-150 text-left">
+                      {destinations.length > 5 && (
+                        <div className="relative mb-2">
+                          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
+                          <input
+                            type="text"
+                            value={destinationSearch}
+                            onChange={(e) => setDestinationSearch(e.target.value)}
+                            placeholder="Search destination..."
+                            className="w-full rounded-lg bg-muted/50 pl-8 pr-3 py-1.5 text-xs text-foreground placeholder:text-muted-foreground border border-border outline-none focus:ring-1 focus:ring-primary"
+                            autoFocus
+                          />
+                        </div>
+                      )}
+                      <div className="px-2 py-1 text-[10px] font-bold uppercase text-muted-foreground tracking-wider">
+                        Supported Destinations ({filteredDestinations.length})
+                      </div>
+                      <div className="max-h-60 overflow-y-auto space-y-0.5 pr-1">
+                        {filteredDestinations.length === 0 ? (
+                          <p className="px-3 py-2 text-xs text-muted-foreground">No destinations found</p>
+                        ) : (
+                          filteredDestinations.map((d) => {
+                            const isSelected = selectedDestination?.code === d.code;
+                            return (
+                              <button
+                                key={d.code}
+                                type="button"
+                                onClick={() => {
+                                  setSelectedDestination(d);
+                                  setDestinationOpen(false);
+                                  setDestinationSearch("");
+                                }}
+                                className={cn(
+                                  "w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-colors cursor-pointer",
+                                  isSelected
+                                    ? "bg-primary text-primary-foreground font-semibold"
+                                    : "text-foreground hover:bg-muted",
+                                )}
+                              >
+                                <div className="flex items-center gap-2.5 truncate">
+                                  <CountryFlag code={d.code} className="size-4 shrink-0 rounded-xs" />
+                                  <span className="truncate">{d.name}</span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <span className={cn("text-[11px]", isSelected ? "text-primary-foreground/80" : "text-muted-foreground")}>
+                                    {d.currency}
+                                  </span>
+                                  {isSelected && <Check className="size-3.5 shrink-0" />}
+                                </div>
+                              </button>
+                            );
+                          })
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* 3. Apply for Visa Solid Pill Button */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!nationality) {
+                      setPassportOpen(true);
+                      setError("Please select your passport country first.");
+                      return;
+                    }
+                    if (!selectedDestination) {
+                      setDestinationOpen(true);
+                      setError("Please select a destination country.");
+                      return;
+                    }
+                    selectDestination(selectedDestination);
+                  }}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-6 py-3.5 text-sm font-semibold text-primary-foreground shadow-sm transition-all hover:opacity-90 active:scale-[0.98] shrink-0 cursor-pointer"
+                >
+                  Apply for Visa
+                  <ArrowRight className="size-4" />
+                </button>
+              </div>
             </div>
 
-            {/* Column 2: Nationality */}
-            <div className="space-y-3 rounded-xl border bg-card p-5 shadow-xs flex flex-col relative">
-              <div className="flex items-start justify-between gap-2">
-                <div>
-                  <h3 className="text-sm font-semibold text-foreground">
-                    Nationality (Passport Country)
-                  </h3>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Some visas differ by nationality. We use this to tailor official requirements.
-                  </p>
-                </div>
-                {user?.nationality &&
-                  nationality &&
-                  nationality === matchCountry(user.nationality).code && (
-                    <span className="text-[11px] font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-full shrink-0">
-                      Profile prefilled
-                    </span>
-                  )}
-              </div>
-
-              <CountrySelector
-                valueType="code"
-                value={nationality}
-                onChange={(code) => setNationality(code)}
-                placeholder="Select nationality / passport country..."
-              />
+            {/* Living in different country toggle */}
+            <div className="flex items-center justify-between px-2 pt-1">
+              <label className="inline-flex items-center gap-2 cursor-pointer text-xs font-medium text-muted-foreground hover:text-foreground select-none">
+                <input
+                  type="checkbox"
+                  checked={differentResidence}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setDifferentResidence(checked);
+                    if (!checked && nationality) {
+                      setResidenceCountry(nationality);
+                    }
+                  }}
+                  className="size-3.5 rounded border-border text-primary focus:ring-primary/20 accent-primary cursor-pointer"
+                />
+                <span>Living in a different country than your passport?</span>
+              </label>
+              {nationality && (
+                <span className="text-xs text-muted-foreground hidden sm:inline">
+                  Current Residence: <strong className="text-foreground">{residenceLabel}</strong>
+                </span>
+              )}
             </div>
+
+            {/* Residence country selector dropdown if living abroad */}
+            {differentResidence && (
+              <div className="rounded-xl border bg-card p-4 shadow-xs space-y-2 animate-in fade-in duration-150">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-foreground">
+                    Current Country of Residence
+                  </span>
+                  {user?.current_country &&
+                    residenceCountry &&
+                    residenceCountry === matchCountry(user.current_country).code && (
+                      <span className="text-[10px] font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-full">
+                        Profile prefilled
+                      </span>
+                    )}
+                </div>
+                <CountrySelector
+                  valueType="code"
+                  value={residenceCountry}
+                  onChange={(code) => setResidenceCountry(code)}
+                  placeholder="Select country of residence..."
+                />
+              </div>
+            )}
           </div>
 
-          <button
-            type="button"
-            onClick={() => void confirmIdentity()}
-            disabled={!residenceCountry || !nationality || savingIdentity}
-            className="inline-flex w-full items-center justify-center gap-2 rounded-[var(--radius)] bg-primary px-4 py-3.5 text-sm font-medium text-primary-foreground transition-colors hover:opacity-90 disabled:pointer-events-none disabled:opacity-50 shadow-sm"
-          >
-            {savingIdentity ? (
-              <>
-                <Loader2 className="size-4 animate-spin" /> Continuing…
-              </>
-            ) : residenceCountry && nationality ? (
-              <>
-                Continue with {residenceLabel} · {nationalityLabel}
-                <ArrowRight className="size-4" />
-              </>
-            ) : (
-              <>
-                Select residence & nationality to continue
-                <ArrowRight className="size-4" />
-              </>
-            )}
-          </button>
-        </div>
-      )}
+          {/* Quick-Pick Supported Destinations Grid */}
+          <div className="pt-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-semibold text-foreground">
+                  Explore Destinations
+                </h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Or select a destination directly to get started
+                </p>
+              </div>
+              <span className="text-xs text-muted-foreground">
+                {destinations.length} destinations
+              </span>
+            </div>
 
-      {step === "destination" && (
-        <div className="space-y-3">
-          <button onClick={goBack} className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
-            <ArrowLeft className="size-3.5" /> Back
-          </button>
-          <h3 className="text-sm font-medium text-muted-foreground">
-            Where are you applying to?
-          </h3>
-          {destinations.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No destinations available.
-            </p>
-          ) : (
-            destinations.map((d) => {
-              return (
-                <button
-                  key={d.code}
-                  onClick={() => selectDestination(d)}
-                  className="flex w-full items-center gap-4 rounded-[var(--radius)] border bg-card p-4 text-left transition-colors hover:bg-accent"
-                >
-                  <CountryFlag code={d.code} className="size-8 shrink-0 shadow-xs" />
-                  <div className="flex-1">
-                    <p className="font-medium">{d.name}</p>
-                    <p className="text-xs text-muted-foreground">{d.currency}</p>
-                  </div>
-                  <ArrowRight className="size-4 text-muted-foreground" />
-                </button>
-              );
-            })
-          )}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {destinations.map((d) => {
+                const isSelected = selectedDestination?.code === d.code;
+                return (
+                  <button
+                    key={d.code}
+                    type="button"
+                    onClick={() => {
+                      setSelectedDestination(d);
+                      selectDestination(d);
+                    }}
+                    className={cn(
+                      "flex items-center gap-3.5 rounded-xl border bg-card p-4 text-left transition-all hover:bg-accent hover:border-primary/40 group cursor-pointer",
+                      isSelected && "border-primary/60 bg-primary/5 ring-1 ring-primary/40",
+                    )}
+                  >
+                    <CountryFlag code={d.code} className="size-8 shrink-0 shadow-xs rounded-xs" />
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-sm text-foreground group-hover:text-primary transition-colors truncate">
+                        {d.name}
+                      </p>
+                      <p className="text-xs text-muted-foreground">{d.currency}</p>
+                    </div>
+                    <ArrowRight className="size-4 text-muted-foreground group-hover:text-primary transition-colors shrink-0" />
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         </div>
       )}
 

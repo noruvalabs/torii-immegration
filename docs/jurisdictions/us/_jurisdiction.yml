@@ -5,6 +5,7 @@ host_locale: en
 # true to re-enable — the packs below are kept intact and describe what US offers.
 is_live: false
 efile_enabled: false
+submission_track: consular
 self_filing_allowed: null
 notes: >
   From Japan, most nonimmigrant routes are consular (DS-160 + interview at

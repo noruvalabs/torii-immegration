@@ -40,6 +40,7 @@ import {
   STEPS, phaseToStep, canVisitStep, nextWorkflowStep,
   type Step,
 } from "@/components/applicant/steps";
+import { RouteClarityBanner } from "@/components/applicant/RouteClarityBanner";
 
 export default function CaseDetailPage() {
   const params = useParams();
@@ -465,6 +466,13 @@ export default function CaseDetailPage() {
           </div>
         </div>
       </div>
+
+      {/* Route Clarity: What Torii Does vs What You Do */}
+      <RouteClarityBanner
+        trackSummary={caseData.track_summary || guidance?.track_summary}
+        submissionTrack={caseData.submission_track || guidance?.submission_track}
+        jurisdictionCode={caseData.jurisdiction_code}
+      />
 
       {/* Filing deadlines surface whenever guidance carries them (residence expiry known). */}
       {guidance && guidance.deadlines && (

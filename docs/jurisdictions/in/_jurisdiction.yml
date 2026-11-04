@@ -5,6 +5,7 @@ is_live: true
 efile_enabled: false
 self_filing_allowed: true
 filing_mode: hybrid
+submission_track: hybrid
 apply_url: https://indianvisaonline.gov.in/visa/registration
 notes: Official Bureau of Immigration & Ministry of Home Affairs, Government of India medical visa workflows.
 categories:

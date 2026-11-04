@@ -22,6 +22,7 @@ export type DestinationInfo = {
   tagline: string;
   shortDescription: string;
   overview?: string;
+  submissionTrack: "digital" | "hybrid" | "consular";
   filingModeLabel: string;
   processingDays: string;
   serviceModel?: "portal_payment_concierge" | "official_dossier_kit";
@@ -43,6 +44,7 @@ export const DESTINATIONS: Record<string, DestinationInfo> = {
     shortDescription: "Short-stay tourist and family visit visa preparation for Tokyo, Kyoto, and beyond.",
     overview:
       "Planning to visit Japan for tourism, cherry blossom season, or meeting family and friends? Torii prepares your official Ministry of Foreign Affairs (MOFA) 2-page application form, day-by-day Schedule of Stay (滞在予定表), and formal Consular Cover Letter. Print, sign, and submit at VFS Global / Embassy of Japan with zero hassle.",
+    submissionTrack: "consular",
     filingModeLabel: "Official MOFA Form & Dossier (VFS Submission)",
     processingDays: "5–7 Days",
     serviceModel: "official_dossier_kit",
@@ -125,6 +127,7 @@ export const DESTINATIONS: Record<string, DestinationInfo> = {
     shortDescription: "Specialized Medical Visa (MED-1/MED-2) & Tourist Visa preparation for Indian Missions worldwide.",
     overview:
       "Applying for medical treatment in Kolkata, Chennai, Delhi, or touring India? Torii generates your formal Consular Embassy Cover Letter addressed to the Indian Mission, verifies all attendant and hospital invite requirements, and gives you the exact direct links to the official government registration and fee payment portals.",
+    submissionTrack: "hybrid",
     filingModeLabel: "Online Registration + IVAC Submission",
     processingDays: "3–5 Days",
     serviceModel: "portal_payment_concierge",
@@ -207,6 +210,7 @@ export const DESTINATIONS: Record<string, DestinationInfo> = {
     shortDescription: "Instant Tourist & Umrah eVisa guidance, requirements verification, and portal assistance.",
     overview:
       "Travel to Makkah, Madinah, Riyadh, and Al-Ula with ease. Saudi Arabia offers streamlined 1-Year Multiple Entry Tourist eVisas that allow tourism and performing Umrah (outside Hajj season). Torii verifies your eligibility, formats your passport scan, and guides you through the official KSA visa portal.",
+    submissionTrack: "digital",
     filingModeLabel: "Instant Electronic Visa (KSA Portal)",
     processingDays: "24–48 Hours",
     serviceModel: "portal_payment_concierge",
@@ -268,6 +272,7 @@ export const DESTINATIONS: Record<string, DestinationInfo> = {
     shortDescription: "Complete DS-160 electronic filing preparation, consular cover letter, and embassy interview binder.",
     overview:
       "Applying for a US B1/B2 Visitor Visa? Torii helps you prepare your DS-160 application form without errors, generates your formal travel plan, and structures your interview documentation to establish strong economic and familial ties to your home country.",
+    submissionTrack: "consular",
     filingModeLabel: "DS-160 Form + Consular Interview",
     processingDays: "Interview Appointment",
     visas: [
@@ -324,6 +329,7 @@ export const DESTINATIONS: Record<string, DestinationInfo> = {
     shortDescription: "Temporary Resident Visa (TRV) application, IMM 5257 form preparation, and IRCC portal filing.",
     overview:
       "Planning to visit Canada for leisure, tourism, or visiting family? Torii formats your official IRCC IMM 5257 application, prepares your Purpose of Travel statement, and organizes your financial and employment documentation for biometric submission at VFS Dhaka.",
+    submissionTrack: "hybrid",
     filingModeLabel: "IRCC Online Portal + VFS Dhaka Biometrics",
     processingDays: "15–30 Days",
     visas: [
@@ -379,6 +385,7 @@ export const DESTINATIONS: Record<string, DestinationInfo> = {
     shortDescription: "Short-stay Schengen Tourist Visa (Type C) preparation, France-Visas form, and VFS dossier.",
     overview:
       "Travel to France and all 29 Schengen member states. Torii auto-generates your official Cerfa Schengen application form, day-by-day travel itinerary, and consular cover letter formatted according to the Embassy of France in Dhaka guidelines.",
+    submissionTrack: "consular",
     filingModeLabel: "France-Visas + VFS Global Submission",
     processingDays: "10–15 Days",
     visas: [
@@ -435,6 +442,7 @@ export const DESTINATIONS: Record<string, DestinationInfo> = {
     shortDescription: "Spain Tourist Schengen Visa (Type C) preparation and BLS International Dhaka submission kit.",
     overview:
       "Planning a holiday to Spain? Torii organizes your official Schengen application form, hotel bookings, flight route itinerary, and cover letter for submission at BLS International in Dhaka with complete accuracy.",
+    submissionTrack: "consular",
     filingModeLabel: "Schengen Form + BLS International Dhaka",
     processingDays: "10–15 Days",
     visas: [
@@ -491,6 +499,7 @@ export const DESTINATIONS: Record<string, DestinationInfo> = {
     shortDescription: "Official VIDEX electronic Schengen form generation and German Embassy Dhaka submission file.",
     overview:
       "Visiting Germany for tourism, trade fairs, or visiting family? Torii prepares your official VIDEX electronic form, Day-by-Day schedule, and consular declaration according to the German Embassy in Dhaka.",
+    submissionTrack: "consular",
     filingModeLabel: "VIDEX Electronic Form + German Embassy Submission",
     processingDays: "10–15 Days",
     visas: [
@@ -547,6 +556,7 @@ export const DESTINATIONS: Record<string, DestinationInfo> = {
     shortDescription: "Short-Term General Tourist Visa (C-3-9) preparation for the Embassy of the Republic of Korea.",
     overview:
       "Explore Seoul, Busan, and Jeju Island. Torii formats your official Republic of Korea visa application form, prepares your travel itinerary and financial capability binder, and ensures compliance with Korean consular standards in Dhaka.",
+    submissionTrack: "consular",
     filingModeLabel: "Official Form + Embassy of Korea Dhaka Submission",
     processingDays: "7–10 Days",
     visas: [
@@ -591,12 +601,320 @@ export const DESTINATIONS: Record<string, DestinationInfo> = {
       },
     ],
   },
+
+  "united-kingdom": {
+    slug: "united-kingdom",
+    code: "GB",
+    name: "United Kingdom",
+    flag: "🇬🇧",
+    heroImage: "/destinations/united-kingdom.jpg",
+    bannerTag: "UKVI Standard Visitor Dossier",
+    tagline: "Visit London, Scotland & Beyond",
+    shortDescription: "UK Standard Visitor Visa, Student, and Skilled Worker document preparation.",
+    overview:
+      "Travel to London, Edinburgh, and across Great Britain. Torii organizes your UKVI online application, prepares your financial evidence binder, and generates a tailored consular cover letter establishing strong ties to your home country.",
+    submissionTrack: "consular",
+    filingModeLabel: "UKVI Online + VFS Global Biometrics",
+    processingDays: "10–15 Working Days",
+    visas: [
+      {
+        id: "standard-visitor-uk",
+        name: "Standard Visitor Visa (6 Months)",
+        duration: "Up to 6 Months per stay",
+        entries: "Multiple Entry",
+        validity: "6 Months",
+        processingTime: "3 Weeks standard (Priority available)",
+        governmentFee: "৳18,500 (£115 statutory fee)",
+        toriiFee: "৳2,500",
+        totalDisplay: "৳21,000",
+        requiredDocuments: [
+          "Current Passport with at least one blank page on both sides",
+          "Bank Statement (Last 6 months) & Solvency Certificate",
+          "Employment NOC, Salary Slips & Tax Returns",
+          "Detailed Day-by-Day Travel Itinerary",
+          "Torii Structured Consular Cover Letter",
+        ],
+        description: "For holidaymakers, visiting friends and family, and attending business meetings in the UK.",
+      },
+    ],
+    requiredSummary: [
+      "Original passport with 6+ months validity",
+      "6-month bank statement proving adequate financial means",
+      "Employment NOC / Student ID / Trade license",
+      "Round-trip flight and accommodation reservation",
+    ],
+    faqs: [
+      {
+        question: "Do I need to attend an appointment in person?",
+        answer:
+          "Yes, all UK visa applicants must provide biometrics (fingerprints and digital photo) at an authorized VFS Global visa application centre.",
+      },
+    ],
+  },
+
+  malaysia: {
+    slug: "malaysia",
+    code: "MY",
+    name: "Malaysia",
+    flag: "🇲🇾",
+    heroImage: "/destinations/malaysia.jpg",
+    bannerTag: "Official eVisa / MDAC Portal",
+    tagline: "Explore Kuala Lumpur, Penang & Langkawi",
+    shortDescription: "Fast electronic tourist visa (eVisa) filing with direct immigration portal submission.",
+    overview:
+      "Planning a holiday to Malaysia? Torii prepares and submits your eVisa directly to the Immigration Department of Malaysia portal. Quick digital processing with zero embassy visits.",
+    submissionTrack: "digital",
+    filingModeLabel: "Instant eVisa (Official Immigration Portal)",
+    processingDays: "2–3 Working Days",
+    serviceModel: "portal_payment_concierge",
+    serviceHeadline: "Automated eVisa submission on the official Malaysian portal.",
+    visas: [
+      {
+        id: "tourist-evisa-my",
+        name: "Single Entry Tourist eVisa",
+        duration: "Up to 30 Days",
+        entries: "Single Entry",
+        validity: "3 Months from issue date",
+        processingTime: "48 to 72 Hours",
+        governmentFee: "৳4,500 (MYR 160 including portal fee)",
+        toriiFee: "৳1,500",
+        totalDisplay: "৳6,000",
+        requiredDocuments: [
+          "Valid Passport (6+ months validity)",
+          "Studio Digital Passport Photo (35x50mm, white background)",
+          "Confirmed Return Flight Ticket",
+          "Hotel Reservation in Malaysia",
+          "Last 3 Months Bank Statement",
+        ],
+        description: "For leisure, vacation, and short sightseeing trips across Malaysia.",
+      },
+    ],
+    requiredSummary: [
+      "Passport scan with 6+ months validity",
+      "Recent passport-size photo (white background)",
+      "Confirmed round-trip flight booking",
+      "Hotel reservation or host accommodation proof",
+    ],
+    faqs: [
+      {
+        question: "Do I need to visit an embassy for a Malaysian eVisa?",
+        answer:
+          "No, the entire process is 100% digital. Torii submits your application online and delivers the approved eVisa PDF directly to your email.",
+      },
+    ],
+  },
+
+  turkey: {
+    slug: "turkey",
+    code: "TR",
+    name: "Turkey",
+    flag: "🇹🇷",
+    heroImage: "/destinations/turkey.jpg",
+    bannerTag: "Official Turkish eVisa System",
+    tagline: "Experience Istanbul, Cappadocia & the Mediterranean",
+    shortDescription: "Instant Turkish Electronic Visa (e-Visa) filing and conditional eligibility verification.",
+    overview:
+      "Travel to Istanbul, Cappadocia, and Antalya. Eligible travelers can obtain an instant Turkish eVisa online in minutes through Torii.",
+    submissionTrack: "digital",
+    filingModeLabel: "Instant Electronic Visa (e-Visa Portal)",
+    processingDays: "Under 24 Hours",
+    serviceModel: "portal_payment_concierge",
+    serviceHeadline: "Direct filing on the Republic of Turkey Electronic Visa Application System.",
+    visas: [
+      {
+        id: "tourist-evisa-tr",
+        name: "Turkish Tourist Electronic Visa",
+        duration: "Up to 30 Days stay",
+        entries: "Single Entry",
+        validity: "180 Days",
+        processingTime: "Under 24 Hours",
+        governmentFee: "৳6,500 ($50 statutory fee)",
+        toriiFee: "৳1,500",
+        totalDisplay: "৳8,000",
+        requiredDocuments: [
+          "Valid Passport (6+ months validity beyond stay)",
+          "Supporting Visa / Residence Permit (US, UK, Ireland, or Schengen if required)",
+          "Return Flight Booking with an approved carrier",
+          "Hotel Reservation & Proof of Sufficient Funds",
+        ],
+        description: "For holidaymakers and business travelers visiting the Republic of Turkey.",
+      },
+    ],
+    requiredSummary: [
+      "Valid passport with 6+ months validity",
+      "Supporting US, UK, or Schengen visa (if required by nationality)",
+      "Confirmed return flight booking and hotel reservation",
+    ],
+    faqs: [
+      {
+        question: "How quickly is the Turkish eVisa approved?",
+        answer:
+          "The electronic visa is usually processed and issued within a few hours after submission and payment.",
+      },
+    ],
+  },
+
+  vietnam: {
+    slug: "vietnam",
+    code: "VN",
+    name: "Vietnam",
+    flag: "🇻🇳",
+    heroImage: "/destinations/vietnam.jpg",
+    bannerTag: "Official Vietnam Immigration eVisa",
+    tagline: "Discover Hanoi, Ha Long Bay & Da Nang",
+    shortDescription: "Official 90-day multiple or single entry Vietnam eVisa submission.",
+    overview:
+      "Explore Vietnam from north to south. Torii files your official electronic visa directly with the Vietnam Immigration Department, ensuring accurate passport OCR and prompt issuance.",
+    submissionTrack: "digital",
+    filingModeLabel: "Vietnam Immigration Department eVisa",
+    processingDays: "3–4 Working Days",
+    serviceModel: "portal_payment_concierge",
+    serviceHeadline: "Direct portal submission to the Vietnam Immigration Department.",
+    visas: [
+      {
+        id: "tourist-evisa-vn",
+        name: "Vietnam Tourist eVisa (30–90 Days)",
+        duration: "30 to 90 Days",
+        entries: "Single / Multiple Entry",
+        validity: "Up to 90 Days",
+        processingTime: "3 to 4 Working Days",
+        governmentFee: "৳3,200 ($25 single entry statutory fee)",
+        toriiFee: "৳1,500",
+        totalDisplay: "৳4,700",
+        requiredDocuments: [
+          "Clear Passport Bio-Page Scan (valid 6+ months)",
+          "Straight-facing Portrait Photo (4x6cm, white background)",
+          "Intended Entry and Exit checkpoints in Vietnam",
+          "Temporary residential address in Vietnam (Hotel)",
+        ],
+        description: "Official government eVisa for tourism and vacation across all Vietnamese provinces.",
+      },
+    ],
+    requiredSummary: [
+      "Clear passport bio-page scan with 6+ months validity",
+      "Digital passport-style portrait photo",
+      "Entry & exit airport/port details and hotel address",
+    ],
+    faqs: [
+      {
+        question: "Can I enter through any border checkpoint in Vietnam?",
+        answer:
+          "You can enter through any of the 33 designated international airports, seaports, or land border checkpoints.",
+      },
+    ],
+  },
+
+  egypt: {
+    slug: "egypt",
+    code: "EG",
+    name: "Egypt",
+    flag: "🇪🇬",
+    heroImage: "/destinations/egypt.jpg",
+    bannerTag: "Official Egypt eVisa Portal",
+    tagline: "Visit the Pyramids of Giza, Cairo & the Nile",
+    shortDescription: "Official electronic tourist visa for holiday and cultural exploration in Egypt.",
+    overview:
+      "Marvel at ancient wonders and cruise the Nile River. Torii submits your eVisa directly to the Arab Republic of Egypt portal with guaranteed document compliance.",
+    submissionTrack: "digital",
+    filingModeLabel: "Official Egyptian eVisa Portal",
+    processingDays: "3–5 Working Days",
+    serviceModel: "portal_payment_concierge",
+    serviceHeadline: "Direct filing on the official Egypt e-Visa portal.",
+    visas: [
+      {
+        id: "tourist-evisa-eg",
+        name: "Tourist Single Entry eVisa",
+        duration: "Up to 30 Days stay",
+        entries: "Single Entry",
+        validity: "3 Months from issue",
+        processingTime: "3 to 5 Working Days",
+        governmentFee: "৳3,200 ($25 statutory fee)",
+        toriiFee: "৳1,500",
+        totalDisplay: "৳4,700",
+        requiredDocuments: [
+          "Original Passport scan (at least 6 months validity from arrival)",
+          "Confirmed Hotel Bookings / Itinerary details in Egypt",
+          "Return Flight Booking",
+        ],
+        description: "For tourism, sightseeing, and historical exploration in Cairo, Luxor, and Aswan.",
+      },
+    ],
+    requiredSummary: [
+      "Passport scan with 6+ months validity",
+      "Confirmed round-trip flight booking",
+      "Hotel reservations across Egyptian cities",
+    ],
+    faqs: [
+      {
+        question: "How long is the Egypt eVisa valid?",
+        answer:
+          "A single-entry tourist eVisa is valid for 90 days from the date of issue, permitting a maximum stay of 30 days.",
+      },
+    ],
+  },
+
+  bahrain: {
+    slug: "bahrain",
+    code: "BH",
+    name: "Bahrain",
+    flag: "🇧🇭",
+    heroImage: "/destinations/bahrain.jpg",
+    bannerTag: "Kingdom of Bahrain NPRA eVisa",
+    tagline: "Experience Manama & the Kingdom of Bahrain",
+    shortDescription: "Official electronic visitor visa through the Kingdom of Bahrain NPRA portal.",
+    overview:
+      "Travel to Manama for business, leisure, or family visits. Torii files your application directly through the Nationality, Passports and Residence Affairs (NPRA) electronic visa system.",
+    submissionTrack: "digital",
+    filingModeLabel: "Official Bahrain NPRA eVisa",
+    processingDays: "3–5 Working Days",
+    serviceModel: "portal_payment_concierge",
+    serviceHeadline: "Direct NPRA portal filing for the Kingdom of Bahrain.",
+    visas: [
+      {
+        id: "visitor-evisa-bh",
+        name: "Bahrain 2-Week Tourist / Business eVisa",
+        duration: "Up to 14 Days stay",
+        entries: "Single Entry",
+        validity: "30 Days from issue",
+        processingTime: "3 to 5 Working Days",
+        governmentFee: "৳3,500 (BHD 9 statutory fee)",
+        toriiFee: "৳1,500",
+        totalDisplay: "৳5,000",
+        requiredDocuments: [
+          "Passport copy with at least 6 months validity",
+          "Confirmed Return Air Ticket",
+          "Hotel Reservation or Bahraini relative/sponsor CPR copy",
+          "Recent Bank Statement in applicant's name",
+        ],
+        description: "Official electronic visa for holiday, transit, and commercial visits in Bahrain.",
+      },
+    ],
+    requiredSummary: [
+      "Valid passport with 6+ months validity",
+      "Confirmed return flight booking",
+      "Hotel reservation or host address",
+      "Recent bank statement",
+    ],
+    faqs: [
+      {
+        question: "Can this visa be extended while in Bahrain?",
+        answer:
+          "Yes, the 2-week tourist eVisa can generally be extended for another 2 weeks upon applying at the NPRA office in Manama.",
+      },
+    ],
+  },
 };
 
 export const POPULAR_DESTINATIONS = [
   DESTINATIONS.japan,
   DESTINATIONS.india,
+  DESTINATIONS["united-kingdom"],
   DESTINATIONS["saudi-arabia"],
+  DESTINATIONS.malaysia,
+  DESTINATIONS.turkey,
+  DESTINATIONS.vietnam,
+  DESTINATIONS.egypt,
+  DESTINATIONS.bahrain,
   DESTINATIONS["united-states"],
   DESTINATIONS.canada,
   DESTINATIONS.france,

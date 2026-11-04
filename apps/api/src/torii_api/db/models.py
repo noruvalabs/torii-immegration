@@ -93,6 +93,9 @@ class Jurisdiction(TimestampMixin, Base):
     # through it would be switched back on by the next deploy. Nothing seeds this column.
     is_enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1")
     efile_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    submission_track: Mapped[str] = mapped_column(
+        String(32), default="consular", server_default="consular"
+    )
 
     cases: Mapped[list[Case]] = relationship(back_populates="jurisdiction")
     visa_categories: Mapped[list[VisaCategory]] = relationship(back_populates="jurisdiction")
@@ -128,6 +131,8 @@ class VisaCategory(TimestampMixin, Base):
     # Where this route came from: "pack" (docs/jurisdictions), "discovered" (read off an
     # official page by scope discovery), or "manual" (typed in by an admin).
     source: Mapped[str] = mapped_column(String(16), default="manual", server_default="manual")
+    # Route-level submission track override (e.g. India tourist eVisa vs India Medical IVAC)
+    submission_track: Mapped[str | None] = mapped_column(String(32), nullable=True)
     # The official page a discovered route was read off, so every route can answer where it
     # came from (NF-2). Empty ``{}`` for pack and manual rows — and a server default, not
     # only a Python one, so a raw-SQL writer cannot leave it NULL and make readers nullable.
@@ -647,3 +652,136 @@ class CreditTransaction(TimestampMixin, Base):
 
     user: Mapped[User] = relationship(back_populates="credit_transactions")
     case: Mapped[Case | None] = relationship()
+
+
+# ---------------------------------------------------------------------------
+# Concierge – purchasable document-procurement services (Thing 2)
+# ---------------------------------------------------------------------------
+
+
+class ConciergeProductType(StrEnum):
+    """Types of document-procurement services Torii offers."""
+
+    DUMMY_FLIGHT = "dummy_flight"
+    TRAVEL_INSURANCE = "travel_insurance"
+    DOCTOR_REFERRAL = "doctor_referral"
+    HOTEL_RESERVATION = "hotel_reservation"
+    INVITATION_LETTER = "invitation_letter"
+
+
+class ConciergeOrderStatus(StrEnum):
+    """Lifecycle states for a concierge order."""
+
+    PENDING = "pending"
+    PROCESSING = "processing"
+    FULFILLED = "fulfilled"
+    FAILED = "failed"
+    REFUNDED = "refunded"
+
+
+class ConciergeProduct(TimestampMixin, Base):
+    """A purchasable document-procurement service (e.g. dummy flight reservation).
+
+    Matched to checklist items by code pattern (comma-separated substrings that are
+    tested against the checklist item ``code``).
+    """
+
+    __tablename__ = "concierge_products"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    code: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    name: Mapped[str] = mapped_column(String(256))
+    description: Mapped[str] = mapped_column(Text, default="")
+    product_type: Mapped[str] = mapped_column(String(32), index=True)
+    # Pricing
+    price_cents: Mapped[int] = mapped_column(Integer, default=0)
+    currency: Mapped[str] = mapped_column(String(8), default="USD", server_default="USD")
+    # Which checklist codes this product can fulfil (comma-separated substrings)
+    checklist_code_pattern: Mapped[str] = mapped_column(String(512), default="")
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1")
+
+    orders: Mapped[list[ConciergeOrder]] = relationship(back_populates="product")
+
+
+class ConciergeOrder(TimestampMixin, Base):
+    """A user's purchase of a concierge document-procurement service for a case."""
+
+    __tablename__ = "concierge_orders"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    case_id: Mapped[int] = mapped_column(ForeignKey("cases.id"), index=True)
+    checklist_item_id: Mapped[int] = mapped_column(
+        ForeignKey("case_checklist_items.id"), index=True
+    )
+    product_id: Mapped[int] = mapped_column(ForeignKey("concierge_products.id"), index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    # Snapshot of price at order time
+    price_cents: Mapped[int] = mapped_column(Integer, default=0)
+    currency: Mapped[str] = mapped_column(String(8), default="USD", server_default="USD")
+    # Status tracking
+    status: Mapped[str] = mapped_column(
+        String(16),
+        default=ConciergeOrderStatus.PENDING,
+        server_default=ConciergeOrderStatus.PENDING,
+    )
+    # Fulfilled document link
+    fulfilled_document_id: Mapped[int | None] = mapped_column(
+        ForeignKey("case_documents.id"), nullable=True
+    )
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    case: Mapped[Case] = relationship()
+    checklist_item: Mapped[CaseChecklistItem] = relationship()
+    product: Mapped[ConciergeProduct] = relationship(back_populates="orders")
+    user: Mapped[User] = relationship()
+    fulfilled_document: Mapped[CaseDocument | None] = relationship()
+
+
+# ---------------------------------------------------------------------------
+# eVisa Submission Bot – automated portal filing engine (Thing 3)
+# ---------------------------------------------------------------------------
+
+
+class SubmissionJobStatus(StrEnum):
+    """Lifecycle states of an automated portal submission job."""
+
+    QUEUED = "queued"
+    CONNECTING_PROXY = "connecting_proxy"
+    NAVIGATING = "navigating"
+    FILLING_FORM = "filling_form"
+    SOLVING_CAPTCHA = "solving_captcha"
+    UPLOADING_DOCS = "uploading_docs"
+    SUBMITTING_PAYMENT = "submitting_payment"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+    MANUAL_TAKEOVER = "manual_takeover"
+
+
+class PortalSubmissionJob(TimestampMixin, Base):
+    """An execution run of the automated eVisa submission robot for a case."""
+
+    __tablename__ = "portal_submission_jobs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    case_id: Mapped[int] = mapped_column(ForeignKey("cases.id"), index=True)
+    jurisdiction_code: Mapped[str] = mapped_column(String(8), index=True)
+    portal_name: Mapped[str] = mapped_column(String(128))
+    portal_url: Mapped[str] = mapped_column(String(512))
+    status: Mapped[str] = mapped_column(
+        String(32),
+        default=SubmissionJobStatus.QUEUED,
+        server_default=SubmissionJobStatus.QUEUED,
+        index=True,
+    )
+    attempt_count: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
+    portal_reference: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    receipt_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    screenshot_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    steps_log: Mapped[list[dict[str, Any]]] = mapped_column(SAJSON, default=list)
+    proxy_used: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    captcha_solved: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    dispatched_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+
+    case: Mapped[Case] = relationship()
