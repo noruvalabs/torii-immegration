@@ -163,13 +163,9 @@ def test_classify_route_matrix():
         == "online_conditional"
     )
     # String booleans, as a form round-trip might store them.
-    assert (
-        classify_route(_intake(has_used_us_uk_schengen_visa="true")) == "online_conditional"
-    )
+    assert classify_route(_intake(has_used_us_uk_schengen_visa="true")) == "online_conditional"
     # Package Visa passports, plain tourism: online, but NOT via ksavisa.sa.
-    assert (
-        classify_route(_intake(has_used_us_uk_schengen_visa=False)) == "online_package"
-    )
+    assert classify_route(_intake(has_used_us_uk_schengen_visa=False)) == "online_package"
     assert classify_route({"nationality": "IN"}) == "online_package"
     # Non-package, non-eligible, plain tourism: in person.
     assert classify_route({"nationality": "NG"}) == "in_person"
@@ -291,9 +287,7 @@ async def test_visa_free_route_fails_closed(session):
 
 @pytest.mark.asyncio
 async def test_online_route_missing_intake_fails_without_reference(session):
-    seeded = await _seed_case(
-        session, intake={"full_name": "JANE DOE", "nationality": "US"}
-    )
+    seeded = await _seed_case(session, intake={"full_name": "JANE DOE", "nationality": "US"})
     job = await create_submission_job(session, seeded["case"].id)
     executed = await run_submission_job(session, job.id)
     assert executed.status == "failed"
@@ -310,9 +304,7 @@ async def test_login_wall_hands_off_to_human(session):
     job = await create_submission_job(session, seeded["case"].id)
 
     async def factory() -> FakePortalSession:
-        return FakePortalSession(
-            ["<html><h1>Sign in</h1><p>تسجيل الدخول إلى حسابك</p></html>"]
-        )
+        return FakePortalSession(["<html><h1>Sign in</h1><p>تسجيل الدخول إلى حسابك</p></html>"])
 
     executed = await run_submission_job(session, job.id, portal_session_factory=factory)
     assert executed.status == "manual_takeover"

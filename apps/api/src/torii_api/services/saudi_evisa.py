@@ -42,22 +42,87 @@ _FORBIDDEN_REFERENCE_PREFIXES = ("TORII-", "SA-EVISA-")
 # pack's eligibility rule and the web route checker).
 EVISA_ELIGIBLE_PASSPORTS: frozenset[str] = frozenset(
     {
-        "AL", "AD", "AU", "AT", "AZ", "BS", "BB", "BR", "BN", "BG", "CA", "CN",
-        "HK", "MO", "HR", "CY", "CZ", "DK", "EE", "FI", "FR", "GE", "DE", "GR",
-        "GD", "GY", "HU", "IS", "IE", "IT", "JP", "KZ", "KR", "XK", "KG", "LV",
-        "LI", "LT", "LU", "MY", "MV", "MT", "MU", "MC", "ME", "NL", "NZ", "NO",
-        "PA", "PL", "PT", "RO", "RU", "KN", "SM", "SC", "SG", "SK", "SI", "ZA",
-        "ES", "SE", "CH", "TJ", "TH", "TR", "UA", "GB", "US", "UZ", "BA", "RS",
-        "MX", "MK",
+        "AL",
+        "AD",
+        "AU",
+        "AT",
+        "AZ",
+        "BS",
+        "BB",
+        "BR",
+        "BN",
+        "BG",
+        "CA",
+        "CN",
+        "HK",
+        "MO",
+        "HR",
+        "CY",
+        "CZ",
+        "DK",
+        "EE",
+        "FI",
+        "FR",
+        "GE",
+        "DE",
+        "GR",
+        "GD",
+        "GY",
+        "HU",
+        "IS",
+        "IE",
+        "IT",
+        "JP",
+        "KZ",
+        "KR",
+        "XK",
+        "KG",
+        "LV",
+        "LI",
+        "LT",
+        "LU",
+        "MY",
+        "MV",
+        "MT",
+        "MU",
+        "MC",
+        "ME",
+        "NL",
+        "NZ",
+        "NO",
+        "PA",
+        "PL",
+        "PT",
+        "RO",
+        "RU",
+        "KN",
+        "SM",
+        "SC",
+        "SG",
+        "SK",
+        "SI",
+        "ZA",
+        "ES",
+        "SE",
+        "CH",
+        "TJ",
+        "TH",
+        "TR",
+        "UA",
+        "GB",
+        "US",
+        "UZ",
+        "BA",
+        "RS",
+        "MX",
+        "MK",
     }
 )
 
 # Passports in the Package Visa pilot: electronic visa bundled with a
 # qualifying flight + hotel package bought from Ministry-approved providers —
 # a provider checkout, not a ksavisa.sa filing.
-PACKAGE_VISA_PASSPORTS: frozenset[str] = frozenset(
-    {"BD", "EG", "IN", "ID", "JO", "MX", "PK"}
-)
+PACKAGE_VISA_PASSPORTS: frozenset[str] = frozenset({"BD", "EG", "IN", "ID", "JO", "MX", "PK"})
 
 # GCC member-state passports: visa-free entry to Saudi Arabia.
 GCC_PASSPORTS: frozenset[str] = frozenset({"AE", "BH", "KW", "OM", "QA"})
@@ -277,9 +342,7 @@ ROUTE_BLOCK_DETAILS: dict[str, str] = {
 }
 
 
-def build_payload(
-    intake: dict[str, Any] | None, *, email_fallback: str = ""
-) -> SaudiEvisaPayload:
+def build_payload(intake: dict[str, Any] | None, *, email_fallback: str = "") -> SaudiEvisaPayload:
     answers = intake or {}
     full_name = _first_str(answers, "full_name", "applicant_name", "name")
     surname = _first_str(answers, "surname", "family_name", "last_name")
@@ -289,9 +352,7 @@ def build_payload(
         surname = surname or split_surname
         given = given or split_given
 
-    stay = _first_str(
-        answers, "intended_length_of_stay_days", "length_of_stay", "stay_days"
-    )
+    stay = _first_str(answers, "intended_length_of_stay_days", "length_of_stay", "stay_days")
     values = {
         "full_name": full_name,
         "surname": surname,
@@ -315,9 +376,7 @@ def build_payload(
             answers, "planned_arrival_date", "arrival_date", "intended_entry_date"
         ),
         "length_of_stay": stay,
-        "accommodation": _first_str(
-            answers, "accommodation_name", "accommodation", "hotel_name"
-        ),
+        "accommodation": _first_str(answers, "accommodation_name", "accommodation", "hotel_name"),
         "occupation": _first_str(answers, "occupation", "profession"),
         "employment_status": _first_str(answers, "employment_status"),
     }
@@ -325,9 +384,7 @@ def build_payload(
     missing = [key for key in REQUIRED_PAYLOAD_KEYS if not values.get(key)]
     notes: list[str] = []
     if not values["passport_expiry"]:
-        notes.append(
-            "passport_expiry is blank; ksavisa.sa checks the 6-month validity rule."
-        )
+        notes.append("passport_expiry is blank; ksavisa.sa checks the 6-month validity rule.")
     if not values["accommodation"]:
         notes.append("accommodation is blank; the application asks where you will stay.")
     if not values["phone"]:

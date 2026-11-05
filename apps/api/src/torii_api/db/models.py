@@ -438,7 +438,7 @@ class Case(TimestampMixin, Base):
     stage_research: Mapped[list[CaseStageResearch]] = relationship(
         back_populates="case", cascade="all, delete-orphan"
     )
-    appointments: Mapped[list["CaseAppointment"]] = relationship(
+    appointments: Mapped[list[CaseAppointment]] = relationship(
         back_populates="case", cascade="all, delete-orphan"
     )
     payments: Mapped[list[Payment]] = relationship(back_populates="case")

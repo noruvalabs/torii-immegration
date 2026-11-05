@@ -1135,9 +1135,7 @@ def generate_dossier_packet_pdf(
             ]
             if audit_checks:
                 story.append(Spacer(1, 4))
-                story.append(
-                    Paragraph("<b>Checks needing attention:</b>", styles["body_bold"])
-                )
+                story.append(Paragraph("<b>Checks needing attention:</b>", styles["body_bold"]))
                 for check in audit_checks:
                     label = "FAIL" if check.get("status") == "fail" else "WARN"
                     story.append(
@@ -1148,14 +1146,10 @@ def generate_dossier_packet_pdf(
                     )
                     story.append(Spacer(1, 2))
             else:
-                story.append(
-                    Paragraph("All consistency checks passed.", styles["body"])
-                )
+                story.append(Paragraph("All consistency checks passed.", styles["body"]))
         if appointment:
             story.append(Spacer(1, 6))
-            story.append(
-                Paragraph("<b>Visa-centre appointment (booked):</b>", styles["body_bold"])
-            )
+            story.append(Paragraph("<b>Visa-centre appointment (booked):</b>", styles["body_bold"]))
             appointment_rows = [
                 ("Appointment date", str(appointment.get("appointment_date") or "—")),
                 ("Appointment time", str(appointment.get("appointment_time") or "—")),

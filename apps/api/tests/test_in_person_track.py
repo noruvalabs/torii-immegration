@@ -16,13 +16,14 @@ from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from torii_api.services.case_audit import (
+    DocumentAudit,
+    IntakeAudit,
     assemble_audit,
     build_instructions,
     consistency_checks,
 )
 from torii_api.services.content_packs import load_pack_by_scope
 from torii_api.services.eligibility import EligibilityResult
-from torii_api.services.case_audit import DocumentAudit, IntakeAudit
 
 
 async def _seed_sa(engine: AsyncEngine) -> None:
@@ -249,7 +250,9 @@ def test_assemble_audit_ready_only_when_everything_passes() -> None:
         reference="SA-TEST-1",
         jurisdiction_code="SA",
         route="in_person",
-        intake=IntakeAudit(total_required=3, answered_required=3, missing_required=[], complete=True),
+        intake=IntakeAudit(
+            total_required=3, answered_required=3, missing_required=[], complete=True
+        ),
         eligibility=EligibilityResult(result="pass", findings=[]),
         documents=DocumentAudit(total_items=2, required_total=2, required_satisfied=2),
         uploaded=[],
@@ -262,7 +265,9 @@ def test_assemble_audit_ready_only_when_everything_passes() -> None:
         reference="SA-TEST-1",
         jurisdiction_code="SA",
         route="in_person",
-        intake=IntakeAudit(total_required=3, answered_required=3, missing_required=[], complete=True),
+        intake=IntakeAudit(
+            total_required=3, answered_required=3, missing_required=[], complete=True
+        ),
         eligibility=None,
         documents=DocumentAudit(total_items=2, required_total=2, required_satisfied=2),
         uploaded=[],
@@ -340,7 +345,9 @@ def test_instructions_per_route() -> None:
 
     umrah = build_instructions("agent_umrah")
     assert any("Nusuk Masar" in step.detail for step in umrah)
-    assert any("licensed" in step.title.lower() or "licensed" in step.detail.lower() for step in umrah)
+    assert any(
+        "licensed" in step.title.lower() or "licensed" in step.detail.lower() for step in umrah
+    )
 
     online = build_instructions("online_evisa")
     assert len(online) == 1
@@ -391,9 +398,7 @@ async def test_appointment_flow_in_person(client: AsyncClient, engine: AsyncEngi
     factory = create_session_factory(engine)
     async with factory() as session:
         rows = (
-            await session.scalars(
-                select(CaseAppointment).where(CaseAppointment.case_id == case_id)
-            )
+            await session.scalars(select(CaseAppointment).where(CaseAppointment.case_id == case_id))
         ).all()
     assert sorted(row.status for row in rows) == ["requested", "superseded"]
 
@@ -481,9 +486,7 @@ async def test_appointment_rejected_for_umrah_agent_route(
 ) -> None:
     await _seed_sa(engine)
     headers, case_id = await _register_and_scope(client, "appt-umrah@example.com")
-    await _answer_all(
-        client, headers, case_id, {"nationality": "BD", "purpose_of_visit": "umrah"}
-    )
+    await _answer_all(client, headers, case_id, {"nationality": "BD", "purpose_of_visit": "umrah"})
     resp = await client.post(
         f"/v1/cases/{case_id}/appointment/request",
         json={"preferred_date": "2026-11-16"},
@@ -531,7 +534,9 @@ async def test_dossier_pdf_carries_audit_and_appointment(
         from pypdf import PdfReader
     except ImportError:
         pytest.skip("pypdf not available for text-level dossier assertions")
-    text_out = "\n".join(page.extract_text() or "" for page in PdfReader(io.BytesIO(resp.content)).pages)
+    text_out = "\n".join(
+        page.extract_text() or "" for page in PdfReader(io.BytesIO(resp.content)).pages
+    )
     assert "READINESS AUDIT" in text_out
     assert "TSH-TEST-001" in text_out
     assert "Tasheer" in text_out

@@ -153,9 +153,7 @@ def _is_answered(value: Any) -> bool:
     return True
 
 
-def intake_completeness(
-    questions: list[IntakeQuestion], answers: dict[str, Any]
-) -> IntakeAudit:
+def intake_completeness(questions: list[IntakeQuestion], answers: dict[str, Any]) -> IntakeAudit:
     """Answered vs required among the questions visible for the current branch."""
     required = [q for q in visible_questions(questions, answers) if q.required]
     missing = [q.key for q in required if not _is_answered(answers.get(q.key))]
@@ -226,7 +224,9 @@ def consistency_checks(
     checks: list[AuditCheck] = []
 
     # Passport valid at least 6 months beyond planned arrival.
-    arrival = _parse_date(_first(answers, "planned_arrival_date", "arrival_date", "intended_entry_date"))
+    arrival = _parse_date(
+        _first(answers, "planned_arrival_date", "arrival_date", "intended_entry_date")
+    )
     expiry = _parse_date(_first(answers, "passport_expiry_date", "passport_expiry", "expiry_date"))
     if arrival is not None and expiry is not None:
         required_until = _add_months(arrival, 6)
@@ -329,7 +329,9 @@ def consistency_checks(
 
     # Return/departure not before arrival.
     departure = _parse_date(
-        _first(answers, "return_date", "departure_date", "planned_departure_date", "return_flight_date")
+        _first(
+            answers, "return_date", "departure_date", "planned_departure_date", "return_flight_date"
+        )
     )
     if departure is not None and arrival is not None:
         if departure < arrival:
@@ -418,14 +420,16 @@ def consistency_checks(
         )
     else:
         mismatches: list[str] = []
-        if profile_full_name and str(profile_full_name).strip().lower() != str(full_name).strip().lower():
+        if (
+            profile_full_name
+            and str(profile_full_name).strip().lower() != str(full_name).strip().lower()
+        ):
             mismatches.append(
                 f"full name differs between profile ('{profile_full_name}') and intake ('{full_name}')"
             )
         if (
             profile_passport_number
-            and str(profile_passport_number).strip().upper()
-            != str(passport_number).strip().upper()
+            and str(profile_passport_number).strip().upper() != str(passport_number).strip().upper()
         ):
             mismatches.append("passport number differs between profile and intake")
         if mismatches:

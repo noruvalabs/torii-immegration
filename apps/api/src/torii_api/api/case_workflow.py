@@ -591,9 +591,7 @@ async def _build_audit(session: AsyncSession, case: Case) -> CaseAudit:
 
 
 @router.get("/{case_id}/audit", response_model=CaseAudit)
-async def get_case_audit(
-    case_id: int, session: SessionDep, user: CurrentUserDep
-) -> CaseAudit:
+async def get_case_audit(case_id: int, session: SessionDep, user: CurrentUserDep) -> CaseAudit:
     """One readiness report: route, intake, eligibility, documents, checks."""
     case = await _owned_case(session, case_id, user)
     return await _build_audit(session, case)
@@ -641,8 +639,7 @@ async def _appointment_route_or_400(session: AsyncSession, case: Case) -> str:
         raise HTTPException(
             status_code=400,
             detail=(
-                "Visa-centre appointments are currently supported for Saudi Arabia "
-                "cases only."
+                "Visa-centre appointments are currently supported for Saudi Arabia cases only."
             ),
         )
     if route not in APPOINTMENT_ROUTES:
@@ -655,18 +652,14 @@ async def _appointment_route_or_400(session: AsyncSession, case: Case) -> str:
     return route
 
 
-async def _current_appointment(
-    session: AsyncSession, case_id: int
-) -> CaseAppointment | None:
+async def _current_appointment(session: AsyncSession, case_id: int) -> CaseAppointment | None:
     """The case's active appointment: the booked one, else the latest request."""
     rows = (
         await session.scalars(
             select(CaseAppointment)
             .where(
                 CaseAppointment.case_id == case_id,
-                CaseAppointment.status.in_(
-                    [AppointmentStatus.REQUESTED, AppointmentStatus.BOOKED]
-                ),
+                CaseAppointment.status.in_([AppointmentStatus.REQUESTED, AppointmentStatus.BOOKED]),
             )
             .order_by(CaseAppointment.id.desc())
         )
