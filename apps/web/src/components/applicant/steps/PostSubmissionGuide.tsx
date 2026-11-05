@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
+  Bot,
   CheckCircle2,
   Clock,
   ShieldCheck,
@@ -14,6 +15,7 @@ import {
   Copy,
   Check,
   Download,
+  KeyRound,
   Loader2,
   ArrowRight,
   ExternalLink,
@@ -23,6 +25,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { SUPPORT_CONFIG } from "@/lib/support";
+import { PortalBotConsole } from "@/components/applicant/PortalBotConsole";
+import { getLatestPortalJob, dispatchPortalBot, type PortalJob } from "@/lib/api/portal-bot";
 import type { Case } from "./types";
 
 type PostSubmissionGuideProps = {
@@ -43,6 +47,42 @@ export function PostSubmissionGuide({
   const [copiedRef, setCopiedRef] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isDownloadingDirect, setIsDownloadingDirect] = useState(false);
+  const [botJob, setBotJob] = useState<PortalJob | null>(null);
+  const [botConsoleOpen, setBotConsoleOpen] = useState(false);
+  const [botRunning, setBotRunning] = useState(false);
+
+  const jCode = (caseData.jurisdiction_code || "").toUpperCase();
+  const refCode = (caseData.reference || "").toUpperCase();
+  const isDigitalCorridor =
+    caseData.submission_track === "digital" ||
+    jCode === "SA" ||
+    jCode === "VN" ||
+    refCode.startsWith("SA-") ||
+    refCode.startsWith("VN-");
+  const portalName = jCode === "SA" ? "ksavisa.sa (Saudi MOFA)" : jCode === "VN" ? "evisa.gov.vn" : "Official Portal";
+  const isOtpWaiting = botJob?.status === "manual_takeover" || botJob?.status === "awaiting_otp";
+
+  useEffect(() => {
+    if (!token || !caseData.id || !isDigitalCorridor) return;
+    void getLatestPortalJob(token, caseData.id).then((job) => {
+      if (job) setBotJob(job);
+    });
+  }, [token, caseData.id, isDigitalCorridor]);
+
+  async function handleLaunchOrViewBot() {
+    setBotConsoleOpen(true);
+    if (!botJob && token) {
+      setBotRunning(true);
+      try {
+        const job = await dispatchPortalBot(token, caseData.id);
+        setBotJob(job);
+      } catch (err: unknown) {
+        toast.error(err instanceof Error ? err.message : "Failed to launch portal bot");
+      } finally {
+        setBotRunning(false);
+      }
+    }
+  }
 
   const isIndia =
     caseData.reference.startsWith("IN-") ||
@@ -248,14 +288,20 @@ export function PostSubmissionGuide({
               </div>
 
               {/* Step 2 */}
-              <div className="rounded-xl border-2 border-primary bg-primary/[0.04] p-4 space-y-2 ring-2 ring-primary/20 shadow-xs">
+              <div className="rounded-xl border-2 border-primary bg-primary/[0.04] p-4 space-y-3 ring-2 ring-primary/20 shadow-xs">
                 <div className="flex items-center justify-between">
                   <span className="flex size-7 items-center justify-center rounded-lg bg-primary text-primary-foreground font-bold text-xs shadow-xs">
                     2
                   </span>
-                  <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold text-primary animate-pulse">
-                    <Clock className="size-3" /> In Progress
-                  </span>
+                  {isOtpWaiting ? (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/20 px-2 py-0.5 text-[10px] font-bold text-amber-500 animate-pulse border border-amber-500/30">
+                      <KeyRound className="size-3" /> OTP Required
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold text-primary animate-pulse">
+                      <Clock className="size-3" /> In Progress
+                    </span>
+                  )}
                 </div>
                 <div>
                   <h5 className="text-xs sm:text-sm font-bold text-foreground flex items-center gap-1">
@@ -263,9 +309,41 @@ export function PostSubmissionGuide({
                     2. Official Portal Filing
                   </h5>
                   <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">
-                    Our operations officer is entering your dossier into the {destinationName} portal &amp; paying consular fees.
+                    {isDigitalCorridor
+                      ? `Automated portal bot filing on ${portalName}.`
+                      : `Our operations officer is entering your dossier into the ${destinationName} portal & paying consular fees.`}
                   </p>
                 </div>
+
+                {isDigitalCorridor && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={handleLaunchOrViewBot}
+                    className={`w-full text-xs h-8 font-bold gap-1.5 cursor-pointer ${
+                      isOtpWaiting
+                        ? "bg-amber-600 hover:bg-amber-500 text-white border-amber-500 shadow-sm animate-pulse"
+                        : "border-primary/40 hover:bg-primary/10 text-primary"
+                    }`}
+                  >
+                    {isOtpWaiting ? (
+                      <>
+                        <KeyRound className="size-3.5" />
+                        <span>Enter Verification Code (OTP)</span>
+                      </>
+                    ) : botRunning ? (
+                      <>
+                        <Loader2 className="size-3.5 animate-spin" />
+                        <span>Bot Filing in Progress…</span>
+                      </>
+                    ) : (
+                      <>
+                        <Bot className="size-3.5" />
+                        <span>{botJob ? "View Bot Console" : "Launch Submission Bot"}</span>
+                      </>
+                    )}
+                  </Button>
+                )}
               </div>
 
               {/* Step 3 */}
@@ -397,6 +475,22 @@ export function PostSubmissionGuide({
           </div>
         </CardContent>
       </Card>
+
+      {/* Live Portal Submission Bot Console */}
+      <PortalBotConsole
+        isOpen={botConsoleOpen}
+        onClose={() => setBotConsoleOpen(false)}
+        job={botJob}
+        loading={botRunning}
+        caseId={caseData.id}
+        onJobUpdated={(updated) => {
+          setBotJob(updated);
+          if (updated.status === "succeeded") {
+            toast.success(`Government registration captured: ${updated.portal_reference}`);
+            if (onRefresh) onRefresh();
+          }
+        }}
+      />
     </div>
   );
 }
