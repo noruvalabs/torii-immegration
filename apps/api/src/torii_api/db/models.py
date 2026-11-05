@@ -18,12 +18,12 @@ case pipeline grows from:
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from enum import StrEnum
 from typing import Any
 
 from sqlalchemy import JSON as SAJSON
-from sqlalchemy import Boolean, Float, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, Date, Float, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from torii_api.db.base import Base, TimestampMixin, UTCDateTime
@@ -438,6 +438,9 @@ class Case(TimestampMixin, Base):
     stage_research: Mapped[list[CaseStageResearch]] = relationship(
         back_populates="case", cascade="all, delete-orphan"
     )
+    appointments: Mapped[list[CaseAppointment]] = relationship(
+        back_populates="case", cascade="all, delete-orphan"
+    )
     payments: Mapped[list[Payment]] = relationship(back_populates="case")
 
 
@@ -785,3 +788,49 @@ class PortalSubmissionJob(TimestampMixin, Base):
     completed_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
 
     case: Mapped[Case] = relationship()
+
+
+class AppointmentStatus(StrEnum):
+    """Lifecycle states of a visa-centre appointment record."""
+
+    REQUESTED = "requested"
+    BOOKED = "booked"
+    SUPERSEDED = "superseded"
+
+
+class CaseAppointment(TimestampMixin, Base):
+    """An embassy / visa-centre appointment for the in-person filing track.
+
+    The flow is request → confirm: the applicant (or ops on their behalf)
+    records a preferred slot; an ops user then completes the real booking
+    on the Tasheer portal (vc.tasheer.com) and confirms the slot here with
+    the centre-issued reference. Torii manages the request, the record,
+    and the dossier — it does not scrape or automate the Tasheer site.
+
+    Behaviour: a case has at most one *active* appointment. A new request
+    supersedes a still-``requested`` row (kept for the audit trail); a
+    ``booked`` row blocks new requests until it is dealt with by ops.
+    """
+
+    __tablename__ = "case_appointments"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    case_id: Mapped[int] = mapped_column(ForeignKey("cases.id"), index=True)
+    status: Mapped[str] = mapped_column(
+        String(16),
+        default=AppointmentStatus.REQUESTED,
+        server_default=AppointmentStatus.REQUESTED,
+        index=True,
+    )
+    centre: Mapped[str] = mapped_column(String(256))
+    preferred_date: Mapped[date] = mapped_column(Date)
+    preferred_time_window: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    appointment_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    appointment_time: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    # Centre-issued booking reference, recorded by ops at confirm time.
+    reference: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    requested_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    confirmed_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+
+    case: Mapped[Case] = relationship(back_populates="appointments")

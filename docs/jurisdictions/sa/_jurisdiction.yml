@@ -1,0 +1,52 @@
+code: SA
+name: Saudi Arabia
+host_locale: en
+is_live: true
+efile_enabled: true
+self_filing_allowed: true
+filing_mode: online_portal
+submission_track: digital
+apply_url: https://ksavisa.sa
+notes: >
+  Saudi visit visas are filed online, but not by everyone on the same portal.
+  The standard tourist eVisa (visa.visitsaudi.com, Ministry of Tourism) is open
+  only to the permitted-country list in the eVisa Terms — Bangladesh is not on
+  it. Other nationalities reach an online eVisa through the MOFA KSA Visa
+  platform (ksavisa.sa) when they hold a used US/UK/Schengen tourist or
+  business visa, US/UK/EU permanent residence, or GCC residence, and seven
+  pilot countries (including Bangladesh) can buy an electronic Package Visa.
+  Everyone else files a consular visit visa in person — for Bangladesh, at the
+  Tasheer Saudi Visa Service Centre in Dhaka — and Umrah from a non-eligible
+  passport goes through a Ministry-licensed agent filing on Nusuk Masar. One
+  tourist scope serves all of these routes; the route questions in intake
+  decide which channel a case follows.
+categories:
+  - code: tourist
+    name: Tourist / Visitor
+    description: Tourist and Umrah visit visas — eVisa, KSA Visa conditional routes, Package Visa, or consular filing.
+    is_live: true
+  - code: student
+    name: Student
+    description: Study in Saudi Arabia with an admitting institution.
+    is_live: true
+  - code: work
+    name: Work
+    description: Employment in Saudi Arabia with a sponsoring employer.
+    is_live: true
+actions:
+  - code: new_application
+    name: New application
+    description: First-time application for a Saudi visit visa.
+    is_live: true
+  - code: new
+    name: New Visa
+    description: First-time application for a Saudi visit visa.
+    is_live: true
+  - code: renewal
+    name: Renewal / Extension
+    description: Renew or extend an existing Saudi visa or stay.
+    is_live: true
+  - code: change_of_status
+    name: Change of status
+    description: Switch to a different Saudi visa or residence status.
+    is_live: true

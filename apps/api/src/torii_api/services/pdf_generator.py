@@ -994,6 +994,8 @@ def generate_dossier_packet_pdf(
     checklist: list[dict[str, Any]],
     submission_kit: Any | None = None,
     scope_label: str = "Japan",
+    audit_summary: dict[str, Any] | None = None,
+    appointment: dict[str, Any] | None = None,
 ) -> bytes:
     """The whole packet in one document: index, stacking order, roadmap, and a snapshot.
 
@@ -1100,6 +1102,68 @@ def generate_dossier_packet_pdf(
         for note in getattr(submission_kit, "notes", ()) or ():
             story.append(Paragraph(f"<i>{_cjk_safe(note)}</i>", styles["body"]))
             story.append(Spacer(1, 4))
+
+    # Readiness audit + booked visa-centre appointment (Phase 3 in-person
+    # track). Both blocks render only when the caller supplies them, so
+    # packets for scopes without audit/appointment data are unchanged.
+    if audit_summary or appointment:
+        story.append(Spacer(1, 10))
+        story.append(
+            Paragraph(_cjk_safe("READINESS AUDIT & APPOINTMENT"), styles["section_heading"])
+        )
+        if audit_summary:
+            overall = str(audit_summary.get("overall") or "").upper()
+            story.append(
+                Paragraph(
+                    f"<b>Overall readiness:</b> {_cjk_safe(overall)} — "
+                    f"{_cjk_safe(str(audit_summary.get('summary') or ''))}",
+                    styles["body"],
+                )
+            )
+            eligibility_result = audit_summary.get("eligibility_result")
+            if eligibility_result:
+                story.append(
+                    Paragraph(
+                        f"<b>Eligibility evaluation:</b> {_cjk_safe(str(eligibility_result))}",
+                        styles["body"],
+                    )
+                )
+            audit_checks = [
+                check
+                for check in audit_summary.get("checks") or []
+                if check.get("status") in ("fail", "warn")
+            ]
+            if audit_checks:
+                story.append(Spacer(1, 4))
+                story.append(Paragraph("<b>Checks needing attention:</b>", styles["body_bold"]))
+                for check in audit_checks:
+                    label = "FAIL" if check.get("status") == "fail" else "WARN"
+                    story.append(
+                        Paragraph(
+                            f"• [{label}] {_cjk_safe(str(check.get('message') or ''))}",
+                            styles["body"],
+                        )
+                    )
+                    story.append(Spacer(1, 2))
+            else:
+                story.append(Paragraph("All consistency checks passed.", styles["body"]))
+        if appointment:
+            story.append(Spacer(1, 6))
+            story.append(Paragraph("<b>Visa-centre appointment (booked):</b>", styles["body_bold"]))
+            appointment_rows = [
+                ("Appointment date", str(appointment.get("appointment_date") or "—")),
+                ("Appointment time", str(appointment.get("appointment_time") or "—")),
+                ("Centre", str(appointment.get("centre") or "—")),
+                ("Booking reference", str(appointment.get("reference") or "—")),
+            ]
+            story.append(_build_key_value_table(appointment_rows, styles))
+            story.append(
+                Paragraph(
+                    "Bring your passport, the originals of every checklist document, "
+                    "and a printed copy of this packet to the appointment.",
+                    styles["body"],
+                )
+            )
 
     # ==================== PAGE 2: APPLICATION FORM ====================
     story.append(PageBreak())

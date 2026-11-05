@@ -13,12 +13,19 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from torii_api.api.cases import _owned_case, _research_for_case, _scope_label
-from torii_api.auth.deps import CurrentUserDep
+from torii_api.api.cases import (
+    _intake_questions_for_case,
+    _owned_case,
+    _research_for_case,
+    _scope_label,
+)
+from torii_api.auth.deps import CurrentUserDep, require_roles
 from torii_api.config import get_settings
 from torii_api.db.models import (
+    AppointmentStatus,
     Case,
     CaseAction,
+    CaseAppointment,
     CaseChecklistItem,
     CaseDocument,
     CaseEscalation,
@@ -29,6 +36,7 @@ from torii_api.db.models import (
     Jurisdiction,
     PackOverride,
     User,
+    UserRole,
 )
 from torii_api.db.session import get_session
 from torii_api.services.agentic import (
@@ -37,6 +45,20 @@ from torii_api.services.agentic import (
     scope_key,
     stage_is_usable,
     stage_items,
+)
+from torii_api.services.case_audit import (
+    APPOINTMENT_BLOCK_MESSAGES,
+    APPOINTMENT_ROUTES,
+    TASHEER_BOOKING_URL,
+    TASHEER_CENTRE_DEFAULT,
+    AuditStep,
+    CaseAudit,
+    assemble_audit,
+    build_instructions,
+    consistency_checks,
+    document_audit,
+    intake_completeness,
+    route_for_case,
 )
 from torii_api.services.case_plan import build_payload, request_plan
 from torii_api.services.checklist import ChecklistStatus, update_status, visible_requirement_items
@@ -55,6 +77,7 @@ from torii_api.services.eligibility import (
 from torii_api.services.forms import fill_form
 from torii_api.services.guidance import next_status_for_phase
 from torii_api.services.i18n import localized
+from torii_api.services.intake import parse_questions
 from torii_api.services.journey import build_journey
 from torii_api.services.jp_official_forms import forms_for_scope
 from torii_api.services.official_form_service import (
@@ -441,16 +464,16 @@ async def patch_locale(
     return LocaleOut(locale=case.locale, host_locale=case.host_locale)
 
 
-@router.post("/{case_id}/eligibility/evaluate", response_model=EligibilityResult)
-async def evaluate_case_eligibility(
-    case_id: int, session: SessionDep, user: CurrentUserDep
-) -> EligibilityResult:
-    case = await _owned_case(session, case_id, user)
+async def _run_evaluation(session: AsyncSession, case: Case) -> EligibilityResult | None:
+    """Run the scope's eligibility evaluation and store the snapshot.
+
+    Returns ``None`` when the scope has no rules — callers that require an
+    evaluation (the evaluate endpoint) turn that into a 404, while the
+    audit reports eligibility as not-yet-evaluated instead.
+    """
     rules = await _effective_rules(session, case)
     if not rules:
-        raise HTTPException(
-            status_code=404, detail="no eligibility rules available for this case scope"
-        )
+        return None
     # Evaluate against the rules in force on the day the application was received,
     # not today — a fee or requirement change mid-processing must not retroactively
     # affect a filing (e.g. the ISA's tiered fees effective 2026-10-01).
@@ -479,10 +502,24 @@ async def evaluate_case_eligibility(
         context=context,
     )
     case.eligibility_snapshot = result.model_dump(mode="json")
+    await session.flush()
+    return result
+
+
+@router.post("/{case_id}/eligibility/evaluate", response_model=EligibilityResult)
+async def evaluate_case_eligibility(
+    case_id: int, session: SessionDep, user: CurrentUserDep
+) -> EligibilityResult:
+    case = await _owned_case(session, case_id, user)
+    result = await _run_evaluation(session, case)
+    if result is None:
+        raise HTTPException(
+            status_code=404, detail="no eligibility rules available for this case scope"
+        )
     new_status = next_status_for_phase("checklist", case.status)
     if new_status is not None:
         case.status = new_status
-    await session.flush()
+        await session.flush()
     return result
 
 
@@ -494,6 +531,289 @@ async def get_case_eligibility(
     if case.eligibility_snapshot is None:
         raise HTTPException(status_code=404, detail="eligibility has not been evaluated")
     return EligibilityResult.model_validate(case.eligibility_snapshot)
+
+
+# ── Readiness audit + in-person appointments (Phase 3) ───────────────────────
+
+
+async def _build_audit(session: AsyncSession, case: Case) -> CaseAudit:
+    """Assemble the readiness audit for a case from its live workflow data."""
+    j_code, v_code, _a_code, _label = await _scope_label(session, case)
+    answers = dict(case.intake_answers or {})
+    questions = parse_questions(
+        await _intake_questions_for_case(session, case),
+        jurisdiction_code=j_code or "",
+        visa_category=v_code or "",
+    )
+    owner = await session.get(User, case.user_id) if case.user_id else None
+    contact_email = (
+        answers.get("email_address")
+        or answers.get("email")
+        or case.applicant_email
+        or (owner.email if owner is not None else None)
+    )
+    checklist_dicts = [
+        {
+            "code": item.code,
+            "name": item.name,
+            "is_required": item.is_required,
+            "status": item.status,
+            "document_id": item.document_id,
+        }
+        for item in await _checklist(session, case.id)
+    ]
+    document_dicts = [
+        {
+            "id": doc.id,
+            "doc_type": doc.doc_type,
+            "filename": doc.filename,
+            "confirmed": doc.confirmed,
+        }
+        for doc in await _documents(session, case.id)
+    ]
+    documents, uploaded = document_audit(checklist_dicts, document_dicts)
+    return assemble_audit(
+        case_id=case.id,
+        reference=case.reference or f"CASE-{case.id}",
+        jurisdiction_code=j_code,
+        route=route_for_case(j_code, answers),
+        intake=intake_completeness(questions, answers),
+        eligibility=await _run_evaluation(session, case),
+        documents=documents,
+        uploaded=uploaded,
+        checks=consistency_checks(
+            answers,
+            profile_full_name=owner.full_name if owner is not None else None,
+            profile_passport_number=owner.passport_number if owner is not None else None,
+            contact_email=str(contact_email) if contact_email else None,
+        ),
+    )
+
+
+@router.get("/{case_id}/audit", response_model=CaseAudit)
+async def get_case_audit(case_id: int, session: SessionDep, user: CurrentUserDep) -> CaseAudit:
+    """One readiness report: route, intake, eligibility, documents, checks."""
+    case = await _owned_case(session, case_id, user)
+    return await _build_audit(session, case)
+
+
+class AppointmentRequestIn(BaseModel):
+    preferred_date: date
+    preferred_time_window: str | None = Field(default=None, max_length=64)
+    centre: str = Field(default=TASHEER_CENTRE_DEFAULT, min_length=1, max_length=256)
+    notes: str | None = Field(default=None, max_length=2000)
+
+
+class AppointmentConfirmIn(BaseModel):
+    appointment_date: date
+    appointment_time: str = Field(min_length=1, max_length=32)
+    centre: str = Field(default=TASHEER_CENTRE_DEFAULT, min_length=1, max_length=256)
+    reference: str = Field(min_length=1, max_length=128)
+
+
+class AppointmentOut(BaseModel):
+    id: int | None = None
+    case_id: int
+    status: str  # "none" | "requested" | "booked"
+    centre: str | None = None
+    preferred_date: date | None = None
+    preferred_time_window: str | None = None
+    appointment_date: date | None = None
+    appointment_time: str | None = None
+    reference: str | None = None
+    notes: str | None = None
+    booking_url: str = TASHEER_BOOKING_URL
+    prefill: dict[str, Any] = Field(default_factory=dict)
+    instructions: list[AuditStep] = Field(default_factory=list)
+
+
+OpsDep = Annotated[User, Depends(require_roles(UserRole.ADMIN, UserRole.OPS))]
+
+
+async def _appointment_route_or_400(session: AsyncSession, case: Case) -> str:
+    """The appointment flow exists only for routes that file in person."""
+    j_code, _v, _a, _label = await _scope_label(session, case)
+    answers = dict(case.intake_answers or {})
+    route = route_for_case(j_code, answers)
+    if route is None:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Visa-centre appointments are currently supported for Saudi Arabia cases only."
+            ),
+        )
+    if route not in APPOINTMENT_ROUTES:
+        raise HTTPException(
+            status_code=400,
+            detail=APPOINTMENT_BLOCK_MESSAGES.get(
+                route, "This route does not file in person, so no appointment is available."
+            ),
+        )
+    return route
+
+
+async def _current_appointment(session: AsyncSession, case_id: int) -> CaseAppointment | None:
+    """The case's active appointment: the booked one, else the latest request."""
+    rows = (
+        await session.scalars(
+            select(CaseAppointment)
+            .where(
+                CaseAppointment.case_id == case_id,
+                CaseAppointment.status.in_([AppointmentStatus.REQUESTED, AppointmentStatus.BOOKED]),
+            )
+            .order_by(CaseAppointment.id.desc())
+        )
+    ).all()
+    for row in rows:
+        if row.status == AppointmentStatus.BOOKED:
+            return row
+    return rows[0] if rows else None
+
+
+async def _booked_appointment(session: AsyncSession, case_id: int) -> CaseAppointment | None:
+    return (
+        await session.scalars(
+            select(CaseAppointment)
+            .where(
+                CaseAppointment.case_id == case_id,
+                CaseAppointment.status == AppointmentStatus.BOOKED,
+            )
+            .order_by(CaseAppointment.id.desc())
+        )
+    ).first()
+
+
+async def _appointment_out(
+    session: AsyncSession, case: Case, appointment: CaseAppointment | None
+) -> AppointmentOut:
+    answers = dict(case.intake_answers or {})
+    owner = await session.get(User, case.user_id) if case.user_id else None
+    prefill: dict[str, Any] = {
+        "full_name": answers.get("full_name") or (owner.full_name if owner else None),
+        "passport_number": answers.get("passport_number")
+        or (owner.passport_number if owner else None),
+        "nationality": answers.get("nationality") or case.origin_country,
+        "purpose_of_visit": answers.get("purpose_of_visit"),
+        "preferred_date": (
+            appointment.preferred_date.isoformat() if appointment is not None else None
+        ),
+    }
+    route = route_for_case((await _scope_label(session, case))[0], answers)
+    if appointment is None:
+        return AppointmentOut(case_id=case.id, status="none", prefill=prefill)
+    return AppointmentOut(
+        id=appointment.id,
+        case_id=case.id,
+        status=appointment.status,
+        centre=appointment.centre,
+        preferred_date=appointment.preferred_date,
+        preferred_time_window=appointment.preferred_time_window,
+        appointment_date=appointment.appointment_date,
+        appointment_time=appointment.appointment_time,
+        reference=appointment.reference,
+        notes=appointment.notes,
+        prefill=prefill,
+        instructions=build_instructions(route),
+    )
+
+
+def _audit_pdf_summary(audit: CaseAudit) -> dict[str, Any]:
+    """Compact audit block for the printed dossier packet."""
+    return {
+        "overall": audit.overall,
+        "summary": audit.summary,
+        "eligibility_result": audit.eligibility.result if audit.eligibility else None,
+        "checks": [
+            {"key": check.key, "status": check.status, "message": check.message}
+            for check in audit.checks
+        ],
+    }
+
+
+def _appointment_pdf_dict(appointment: CaseAppointment) -> dict[str, Any]:
+    return {
+        "status": appointment.status,
+        "appointment_date": (
+            appointment.appointment_date.isoformat() if appointment.appointment_date else None
+        ),
+        "appointment_time": appointment.appointment_time,
+        "centre": appointment.centre,
+        "reference": appointment.reference,
+    }
+
+
+@router.post("/{case_id}/appointment/request", response_model=AppointmentOut)
+async def request_case_appointment(
+    case_id: int, payload: AppointmentRequestIn, session: SessionDep, user: CurrentUserDep
+) -> AppointmentOut:
+    """Record a preferred Tasheer slot for an in-person-route case.
+
+    One active appointment per case: a new request supersedes a pending
+    (not yet booked) one; a booked appointment must be resolved by ops
+    before another request is taken.
+    """
+    case = await _owned_case(session, case_id, user)
+    await _appointment_route_or_400(session, case)
+    current = await _current_appointment(session, case.id)
+    if current is not None and current.status == AppointmentStatus.BOOKED:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "An appointment is already booked for this case "
+                f"(reference {current.reference or 'n/a'}). Ask ops to change it "
+                "on the Tasheer portal instead of requesting a new slot."
+            ),
+        )
+    if current is not None:
+        current.status = AppointmentStatus.SUPERSEDED
+    appointment = CaseAppointment(
+        case_id=case.id,
+        status=AppointmentStatus.REQUESTED,
+        centre=payload.centre,
+        preferred_date=payload.preferred_date,
+        preferred_time_window=payload.preferred_time_window,
+        notes=payload.notes,
+        requested_by=user.id,
+    )
+    session.add(appointment)
+    await session.flush()
+    return await _appointment_out(session, case, appointment)
+
+
+@router.post("/{case_id}/appointment/confirm", response_model=AppointmentOut)
+async def confirm_case_appointment(
+    case_id: int, payload: AppointmentConfirmIn, session: SessionDep, user: OpsDep
+) -> AppointmentOut:
+    """Ops-only: record the slot actually booked on vc.tasheer.com.
+
+    Torii does not book on the Tasheer site itself — ops complete the
+    booking there and confirm it here with the centre-issued reference,
+    which lands the appointment in the audit trail and the dossier.
+    """
+    case = await _owned_case(session, case_id, user)
+    await _appointment_route_or_400(session, case)
+    current = await _current_appointment(session, case.id)
+    if current is None or current.status != AppointmentStatus.REQUESTED:
+        raise HTTPException(
+            status_code=400,
+            detail="No appointment request is pending for this case — request one first.",
+        )
+    current.status = AppointmentStatus.BOOKED
+    current.appointment_date = payload.appointment_date
+    current.appointment_time = payload.appointment_time
+    current.centre = payload.centre
+    current.reference = payload.reference
+    current.confirmed_by = user.id
+    await session.flush()
+    return await _appointment_out(session, case, current)
+
+
+@router.get("/{case_id}/appointment", response_model=AppointmentOut)
+async def get_case_appointment(
+    case_id: int, session: SessionDep, user: CurrentUserDep
+) -> AppointmentOut:
+    case = await _owned_case(session, case_id, user)
+    return await _appointment_out(session, case, await _current_appointment(session, case.id))
 
 
 @router.get("/{case_id}/deadlines", response_model=dict[str, Any])
@@ -1705,11 +2025,19 @@ async def download_dossier_packet_pdf(
         ChecklistItemOut.model_validate(item).model_dump(mode="json")
         for item in await _checklist(session, case.id)
     ]
-    _j_code, _v_code, _a_code, scope_label = await _scope_label(session, case)
+    j_code, _v_code, _a_code, scope_label = await _scope_label(session, case)
     safe_ref = "".join(
         c for c in (case.reference or f"CASE-{case.id}") if c.isalnum() or c in ("-", "_", ".")
     )
     filename = f"{safe_ref or f'Case-{case_id}'}_Complete_Dossier_Packet.pdf"
+    # Phase 3: the printed packet carries the readiness audit and the booked
+    # Tasheer appointment for the in-person track. Saudi-scoped so other
+    # jurisdictions' packets keep their existing structure; the appointment
+    # block only exists for cases that can book one anyway.
+    audit_summary: dict[str, Any] | None = None
+    if (j_code or "").upper() == "SA":
+        audit_summary = _audit_pdf_summary(await _build_audit(session, case))
+    booked = await _booked_appointment(session, case.id)
     pdf_bytes = generate_dossier_packet_pdf(
         case.reference or f"CASE-{case.id}",
         answers,
@@ -1717,6 +2045,8 @@ async def download_dossier_packet_pdf(
         checklist,
         submission_kit=await _submission_kit(session, case),
         scope_label=scope_label or "Immigration Filing Dossier",
+        audit_summary=audit_summary,
+        appointment=_appointment_pdf_dict(booked) if booked is not None else None,
     )
     if format in ("base64", "json") or "application/json" in request.headers.get("accept", ""):
         return JSONResponse(
