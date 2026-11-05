@@ -165,22 +165,23 @@ export function VisaDetailView({ destination }: { destination: DestinationInfo }
 
   const isPortalConcierge = destination.serviceModel === "portal_payment_concierge";
 
+  const startOriginParam = passportCountry?.code ? `&origin=${passportCountry.code}` : "";
+  const startCategoryCode = selectedVisa.id.includes("medical")
+    ? "medical"
+    : selectedVisa.id.includes("tourist")
+      ? "tourist"
+      : selectedVisa.id.includes("student")
+        ? "student"
+        : "";
+  const startCategoryParam = startCategoryCode ? `&category=${startCategoryCode}` : "";
+  const scopeUrl = `/scope?destination=${destination.code}${startOriginParam}${startCategoryParam}`;
+  // Plain link href (not just an onClick) so the Start buttons navigate even
+  // before React hydration finishes — a not-signed-in visitor goes to the
+  // login page, a signed-in user goes straight to the scope page.
+  const startHref = user ? scopeUrl : `/login?redirect=${encodeURIComponent(scopeUrl)}`;
+
   function handleStartApplication() {
-    const originParam = passportCountry?.code ? `&origin=${passportCountry.code}` : "";
-    const categoryCode = selectedVisa.id.includes("medical")
-      ? "medical"
-      : selectedVisa.id.includes("tourist")
-        ? "tourist"
-        : selectedVisa.id.includes("student")
-          ? "student"
-          : "";
-    const categoryParam = categoryCode ? `&category=${categoryCode}` : "";
-    const targetUrl = `/scope?destination=${destination.code}${originParam}${categoryParam}`;
-    if (user) {
-      router.push(targetUrl);
-    } else {
-      router.push(`/login?redirect=${encodeURIComponent(targetUrl)}`);
-    }
+    router.push(startHref);
   }
 
   function scrollToSection(id: string) {
@@ -335,9 +336,8 @@ export function VisaDetailView({ destination }: { destination: DestinationInfo }
 
               {/* Direct Hero Call To Action */}
               <div className="pt-2 flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-                <button
-                  type="button"
-                  onClick={handleStartApplication}
+                <Link
+                  href={startHref}
                   className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-6 py-3.5 text-sm font-bold text-primary-foreground shadow-lg shadow-primary/25 hover:bg-primary/90 transition-all cursor-pointer group"
                 >
                   <span>
@@ -346,7 +346,7 @@ export function VisaDetailView({ destination }: { destination: DestinationInfo }
                       : `Start ${destination.name} Application`}
                   </span>
                   <ArrowRight className="size-4 transition-transform group-hover:translate-x-1" />
-                </button>
+                </Link>
 
                 <button
                   type="button"
@@ -797,16 +797,15 @@ export function VisaDetailView({ destination }: { destination: DestinationInfo }
 
               {/* Primary Call to Action Button */}
               <div className="space-y-2">
-                <button
-                  type="button"
-                  onClick={handleStartApplication}
+                <Link
+                  href={startHref}
                   className="w-full flex items-center justify-center gap-2 rounded-xl bg-primary px-5 py-3.5 text-sm font-bold text-primary-foreground shadow-lg shadow-primary/20 hover:bg-primary/90 transition-all cursor-pointer group"
                 >
                   <span>
                     {isPortalConcierge ? "Start Online Application" : "Start Application Now"}
                   </span>
                   <ArrowRight className="size-4 transition-transform group-hover:translate-x-1" />
-                </button>
+                </Link>
 
                 <p className="text-center text-[11px] text-muted-foreground">
                   {isPortalConcierge
@@ -854,14 +853,13 @@ export function VisaDetailView({ destination }: { destination: DestinationInfo }
           </span>
         </div>
 
-        <button
-          type="button"
-          onClick={handleStartApplication}
+        <Link
+          href={startHref}
           className="flex-1 flex items-center justify-center gap-1.5 rounded-lg bg-primary py-2.5 px-4 text-xs font-bold text-primary-foreground shadow-md hover:bg-primary/90 transition-colors"
         >
           <span>Start Application</span>
           <ArrowRight className="size-3.5" />
-        </button>
+        </Link>
       </div>
     </div>
   );
