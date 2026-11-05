@@ -61,3 +61,15 @@ export function getAdminPortalJobs(token: string | null, limit = 50): Promise<Po
   return req<PortalJob[]>(`/admin/portal-bot/jobs?limit=${limit}`, token);
 }
 
+export function submitPortalOtp(
+  token: string | null,
+  caseId: number,
+  otpCode: string
+): Promise<PortalJob> {
+  return req<PortalJob>(`/cases/${caseId}/portal-bot/otp`, token, {
+    method: "POST",
+    body: JSON.stringify({ otp_code: otpCode }),
+  });
+}
+
+

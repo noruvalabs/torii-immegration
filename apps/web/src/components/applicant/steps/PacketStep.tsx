@@ -734,6 +734,14 @@ export function PacketStep({
         }}
         job={botJob}
         loading={botRunning}
+        caseId={caseData.id}
+        onJobUpdated={(updated) => {
+          setBotJob(updated);
+          if (updated.status === "succeeded" && updated.portal_reference) {
+            toast.success(`Application verified & captured: ${updated.portal_reference}`);
+            onSubmit();
+          }
+        }}
       />
     </div>
   );

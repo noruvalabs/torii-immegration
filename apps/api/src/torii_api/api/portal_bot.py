@@ -12,7 +12,7 @@ from datetime import datetime
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from torii_api.auth.deps import CurrentUserDep
@@ -22,6 +22,7 @@ from torii_api.services.portal_bot import (
     create_submission_job,
     get_latest_job_for_case,
     list_recent_jobs,
+    resume_job_with_otp,
     run_submission_job,
 )
 
@@ -59,6 +60,10 @@ class PortalJobOut(BaseModel):
     captcha_solved: bool = False
     dispatched_at: datetime | None = None
     completed_at: datetime | None = None
+
+
+class PortalOtpIn(BaseModel):
+    otp_code: str = Field(min_length=4, max_length=16, description="4 to 12 digit OTP code")
 
 
 # ---------------------------------------------------------------------------
@@ -111,6 +116,31 @@ async def get_latest_job(
     if job is None:
         return None
     return PortalJobOut.model_validate(job)
+
+
+@router.post(
+    "/v1/cases/{case_id}/portal-bot/otp",
+    response_model=PortalJobOut,
+)
+async def submit_portal_otp(
+    case_id: int,
+    payload: PortalOtpIn,
+    session: SessionDep,
+    user: CurrentUserDep,
+) -> PortalJobOut:
+    """Submit applicant OTP verification code to complete a paused portal submission."""
+    case = await session.get(Case, case_id)
+    if case is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Case not found")
+    if case.user_id != user.id and user.role not in (UserRole.ADMIN, UserRole.OPS):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Not your case")
+
+    try:
+        job = await resume_job_with_otp(session, case_id, payload.otp_code)
+        await session.commit()
+        return PortalJobOut.model_validate(job)
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
 
 
 @router.get(

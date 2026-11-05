@@ -16,6 +16,7 @@ from torii_api.services.portal_bot import (
     create_submission_job,
     get_latest_job_for_case,
     get_portal_config,
+    resume_job_with_otp,
     run_submission_job,
 )
 from torii_api.services.saudi_evisa import (
@@ -313,6 +314,30 @@ async def test_login_wall_hands_off_to_human(session):
     assert executed.captcha_solved is False
     await session.refresh(seeded["case"])
     assert seeded["case"].submission_reference is None
+
+
+@pytest.mark.asyncio
+async def test_resume_job_with_otp_succeeds(session):
+    seeded = await _seed_case(session)
+    job = await create_submission_job(session, seeded["case"].id)
+
+    async def factory() -> FakePortalSession:
+        return FakePortalSession(["<html><h1>Sign in</h1><p>Enter OTP</p></html>"])
+
+    executed = await run_submission_job(session, job.id, portal_session_factory=factory)
+    assert executed.status == "manual_takeover"
+
+    # User submits their 6-digit OTP code through the interactive dialog
+    resumed = await resume_job_with_otp(session, seeded["case"].id, "123456")
+    assert resumed.status == "succeeded"
+    assert resumed.portal_reference is not None
+    assert resumed.portal_reference.startswith("KSA-V")
+    assert resumed.captcha_solved is True
+
+    await session.refresh(seeded["case"])
+    assert seeded["case"].status == "submitted"
+    assert seeded["case"].submission_reference == resumed.portal_reference
+
 
 
 @pytest.mark.asyncio
