@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import {
+  AlertCircle,
   Bot,
   CheckCircle2,
   Clock,
@@ -10,6 +11,7 @@ import {
   Globe2,
   KeyRound,
   Loader2,
+  RotateCcw,
   ShieldCheck,
   Terminal,
   Upload,
@@ -27,6 +29,7 @@ type PortalBotConsoleProps = {
   loading: boolean;
   caseId?: number;
   onJobUpdated?: (updatedJob: PortalJob) => void;
+  onRetry?: () => void;
 };
 
 const STEP_ICONS: Record<string, typeof Bot> = {
@@ -49,6 +52,7 @@ export function PortalBotConsole({
   loading: _loading,
   caseId,
   onJobUpdated,
+  onRetry,
 }: PortalBotConsoleProps) {
   const { token } = useAuth();
   const [otp, setOtp] = useState("");
@@ -157,6 +161,37 @@ export function PortalBotConsole({
               </div>
               <p className="text-[11px] text-slate-300 leading-relaxed">
                 This confirmation code was verified and read directly from the official portal.
+              </p>
+            </div>
+          )}
+
+          {/* Failed Banner with Retry */}
+          {isFailed && (
+            <div className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 space-y-2.5 animate-in fade-in duration-200">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <AlertCircle className="size-5 text-rose-400 shrink-0" />
+                  <span className="text-sm font-bold text-white">Bot Worker Encountered an Error</span>
+                </div>
+                {onRetry && (
+                  <Button
+                    size="sm"
+                    type="button"
+                    disabled={_loading}
+                    onClick={onRetry}
+                    className="bg-rose-600 hover:bg-rose-500 text-white text-xs h-7 px-3 font-semibold gap-1.5 cursor-pointer rounded-lg shadow-xs"
+                  >
+                    {_loading ? (
+                      <Loader2 className="size-3 animate-spin" />
+                    ) : (
+                      <RotateCcw className="size-3" />
+                    )}
+                    <span>Retry Bot</span>
+                  </Button>
+                )}
+              </div>
+              <p className="text-xs text-rose-200 font-mono leading-relaxed bg-black/30 p-2.5 rounded-lg border border-rose-500/20">
+                {job?.error_message || "The automated portal worker encountered an error."}
               </p>
             </div>
           )}
@@ -273,14 +308,32 @@ export function PortalBotConsole({
             <ShieldCheck className="size-3.5 text-emerald-400" />
             Encrypted session · Official government gateway
           </span>
-          <Button
-            type="button"
-            size="sm"
-            onClick={onClose}
-            className="cursor-pointer bg-emerald-600 hover:bg-emerald-500 text-white font-semibold px-5"
-          >
-            {isCompleted ? "Done" : "Close"}
-          </Button>
+          <div className="flex items-center gap-2">
+            {isFailed && onRetry && (
+              <Button
+                type="button"
+                size="sm"
+                disabled={_loading}
+                onClick={onRetry}
+                className="cursor-pointer bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 font-semibold px-4 text-xs gap-1.5"
+              >
+                {_loading ? (
+                  <Loader2 className="size-3.5 animate-spin" />
+                ) : (
+                  <RotateCcw className="size-3.5" />
+                )}
+                <span>Retry Bot</span>
+              </Button>
+            )}
+            <Button
+              type="button"
+              size="sm"
+              onClick={onClose}
+              className="cursor-pointer bg-emerald-600 hover:bg-emerald-500 text-white font-semibold px-5 text-xs"
+            >
+              {isCompleted ? "Done" : "Close"}
+            </Button>
+          </div>
         </div>
       </div>
     </div>

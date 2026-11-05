@@ -743,6 +743,7 @@ export function PacketStep({
             onSubmit();
           }
         }}
+        onRetry={handleLaunchPortalBot}
       />
     </div>
   );

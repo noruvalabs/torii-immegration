@@ -19,6 +19,7 @@ import {
   Loader2,
   ArrowRight,
   ExternalLink,
+  RotateCcw,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -69,18 +70,38 @@ export function PostSubmissionGuide({
     });
   }, [token, caseData.id, isDigitalCorridor]);
 
+  // Periodic status poll when console is open or bot is running
+  useEffect(() => {
+    if (!token || !caseData.id || !isDigitalCorridor) return;
+    if (!botConsoleOpen && !botRunning) return;
+
+    const interval = setInterval(() => {
+      void getLatestPortalJob(token, caseData.id).then((job) => {
+        if (job) setBotJob(job);
+      });
+    }, 2500);
+
+    return () => clearInterval(interval);
+  }, [token, caseData.id, isDigitalCorridor, botConsoleOpen, botRunning]);
+
+  async function handleRerunBot() {
+    if (!token || !caseData.id) return;
+    setBotRunning(true);
+    try {
+      const job = await dispatchPortalBot(token, caseData.id);
+      setBotJob(job);
+      toast.success("Portal worker dispatched!");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to launch portal bot");
+    } finally {
+      setBotRunning(false);
+    }
+  }
+
   async function handleLaunchOrViewBot() {
     setBotConsoleOpen(true);
-    if (!botJob && token) {
-      setBotRunning(true);
-      try {
-        const job = await dispatchPortalBot(token, caseData.id);
-        setBotJob(job);
-      } catch (err: unknown) {
-        toast.error(err instanceof Error ? err.message : "Failed to launch portal bot");
-      } finally {
-        setBotRunning(false);
-      }
+    if ((!botJob || botJob.status === "failed") && token) {
+      await handleRerunBot();
     }
   }
 
@@ -323,7 +344,9 @@ export function PostSubmissionGuide({
                     className={`w-full text-xs h-8 font-bold gap-1.5 cursor-pointer ${
                       isOtpWaiting
                         ? "bg-amber-600 hover:bg-amber-500 text-white border-amber-500 shadow-sm animate-pulse"
-                        : "border-primary/40 hover:bg-primary/10 text-primary"
+                        : botJob?.status === "failed"
+                          ? "bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border-rose-500/40"
+                          : "border-primary/40 hover:bg-primary/10 text-primary"
                     }`}
                   >
                     {isOtpWaiting ? (
@@ -335,6 +358,11 @@ export function PostSubmissionGuide({
                       <>
                         <Loader2 className="size-3.5 animate-spin" />
                         <span>Bot Filing in Progress…</span>
+                      </>
+                    ) : botJob?.status === "failed" ? (
+                      <>
+                        <RotateCcw className="size-3.5" />
+                        <span>Retry Submission Bot</span>
                       </>
                     ) : (
                       <>
@@ -490,6 +518,7 @@ export function PostSubmissionGuide({
             if (onRefresh) onRefresh();
           }
         }}
+        onRetry={handleRerunBot}
       />
     </div>
   );
