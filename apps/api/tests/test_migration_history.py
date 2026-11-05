@@ -38,6 +38,7 @@ def _assert_complete_schema(db_path: str) -> None:
         assert "concierge_products" in schema.get_table_names()
         assert "concierge_orders" in schema.get_table_names()
         assert "portal_submission_jobs" in schema.get_table_names()
+        assert "case_appointments" in schema.get_table_names()
         assert "uq_visa_categories_jurisdiction_code" in {
             index["name"] for index in schema.get_indexes("visa_categories")
         }
@@ -45,14 +46,14 @@ def _assert_complete_schema(db_path: str) -> None:
             revision = connection.execute(
                 text("SELECT version_num FROM alembic_version")
             ).scalar_one()
-        assert revision == "0022"
+        assert revision == "0023"
     finally:
         engine.dispose()
 
 
 def test_migration_history_has_one_head() -> None:
     script = ScriptDirectory.from_config(Config("alembic.ini"))
-    assert script.get_heads() == ["0022"]
+    assert script.get_heads() == ["0023"]
 
 
 def test_fresh_database_upgrades_to_head(tmp_path) -> None:
