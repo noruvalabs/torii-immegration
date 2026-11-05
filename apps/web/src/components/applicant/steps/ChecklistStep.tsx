@@ -764,8 +764,8 @@ export function ChecklistStep({
                       )}
                     </div>
                   ) : (
-                    <div className="flex items-center justify-between gap-2 w-full">
-                      <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center justify-between gap-2 w-full">
+                      <div className="flex flex-wrap items-center gap-2">
                         <input
                           id={`file-upload-${item.id}`}
                           type="file"
@@ -787,7 +787,7 @@ export function ChecklistStep({
                               input.click();
                             }
                           }}
-                          className="h-8 text-xs gap-1.5 px-3.5 font-semibold rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 shadow-2xs cursor-pointer"
+                          className="h-8 text-xs gap-1.5 px-3 font-semibold rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 shadow-2xs whitespace-nowrap cursor-pointer shrink-0"
                         >
                           {busy ? (
                             <Loader2 className="size-3.5 animate-spin" />
@@ -804,14 +804,14 @@ export function ChecklistStep({
                             onClick={() =>
                               setShowPicker(showPicker === item.id ? null : item.id)
                             }
-                            className="h-8 text-xs gap-1.5 px-2.5 rounded-lg border-border/90 dark:border-slate-700 bg-background/60 hover:bg-muted/60 text-foreground cursor-pointer"
+                            className="h-8 text-xs gap-1.5 px-2.5 rounded-xl border-border/80 hover:bg-muted text-foreground whitespace-nowrap cursor-pointer shrink-0"
                           >
                             <FolderOpen className="size-3.5 text-primary" />
                             <span>Saved ({matchingDocs.length})</span>
                           </Button>
                         )}
 
-                        {/* Thing 2: Concierge procurement button */}
+                        {/* Travel / Booking: Get It (Coming Soon) */}
                         {primaryProduct && !existingOrder ? (
                           <Button
                             type="button"
@@ -819,7 +819,7 @@ export function ChecklistStep({
                             onClick={() =>
                               setConciergeModalState({ item, product: primaryProduct })
                             }
-                            className="h-8 text-xs gap-1.5 px-3 font-semibold rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs cursor-pointer"
+                            className="h-8 text-xs gap-1.5 px-3 font-semibold rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs whitespace-nowrap cursor-pointer shrink-0"
                           >
                             <Sparkles className="size-3.5" />
                             <span>
@@ -832,17 +832,18 @@ export function ChecklistStep({
                         ) : isTravelOrBookingDoc && !existingOrder ? (
                           <Button
                             type="button"
+                            variant="outline"
                             size="sm"
                             onClick={() => {
                               setWaitlistJoined(false);
                               setComingSoonModalItem(item);
                             }}
-                            className="h-8 text-xs gap-1.5 px-3 font-semibold rounded-lg bg-gradient-to-r from-amber-500/15 to-amber-600/15 hover:from-amber-500/25 hover:to-amber-600/25 text-amber-600 dark:text-amber-400 border border-amber-500/35 shadow-2xs cursor-pointer"
+                            className="h-8 text-xs gap-1.5 px-2.5 font-medium rounded-xl border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/15 text-amber-600 dark:text-amber-400 whitespace-nowrap cursor-pointer shrink-0"
                           >
-                            <Sparkles className="size-3.5 text-amber-500" />
+                            <Sparkles className="size-3 text-amber-500 shrink-0" />
                             <span>Get It</span>
-                            <span className="text-[9px] uppercase font-bold tracking-wider px-1.5 py-0.2 rounded-full bg-amber-500/20 text-amber-600 dark:text-amber-300">
-                              Coming Soon
+                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-600 dark:text-amber-300">
+                              Soon
                             </span>
                           </Button>
                         ) : null}
@@ -851,9 +852,10 @@ export function ChecklistStep({
                       <button
                         type="button"
                         onClick={() => onStatusChange(item.id, "gathered")}
-                        className="text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded-md transition-colors cursor-pointer"
+                        title="Click if you have the physical paper copy ready and do not need to upload a digital scan"
+                        className="text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded-lg transition-colors whitespace-nowrap cursor-pointer hover:bg-muted/50 ml-auto"
                       >
-                        Mark done
+                        Have physical copy
                       </button>
                     </div>
                   )}
