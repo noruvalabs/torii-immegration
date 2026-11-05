@@ -12,7 +12,7 @@ import { register as registerApi, resendVerification } from "@/lib/api/auth";
 import { initiateGoogleLogin } from "@/lib/auth/google";
 import { useAuth } from "@/lib/auth-context";
 import { useI18n } from "@/lib/i18n";
-import { GoogleLogo } from "../login/page";
+import { GoogleLogo } from "@/components/brand/GoogleLogo";
 import { ToriiLogo } from "@/components/brand/ToriiLogo";
 import { registerSchema, type RegisterFormData } from "@/lib/schemas/auth";
 
