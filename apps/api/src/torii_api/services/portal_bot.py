@@ -1,7 +1,12 @@
-"""Portal submission jobs — Vietnam eVisa is live; other corridors fail closed.
+"""Portal submission jobs — Vietnam eVisa and Saudi KSA Visa are live; other
+corridors fail closed.
 
 Vietnam: stock Playwright fills public fields on evisa.gov.vn.
-Captcha and government-fee payment are never automated. Confirmation numbers are
+Saudi Arabia: stock Playwright fills public fields on ksavisa.sa, but only for
+cases whose route guard classifies them online (eVisa-eligible passports, or a
+used US/UK/Schengen visa / Western permanent residence / GCC residence). The
+portal files only inside the applicant's own account, so sign-in/OTP, captcha
+and government-fee payment are never automated. Confirmation numbers are
 stored only when extracted from the portal page — never generated here.
 """
 
@@ -21,6 +26,15 @@ from torii_api.db.models import (
     PortalSubmissionJob,
     SubmissionJobStatus,
 )
+from torii_api.services.saudi_evisa import (
+    ONLINE_ROUTES,
+    ROUTE_BLOCK_DETAILS,
+    SA_PORTAL_NAME,
+    SA_PORTAL_URL,
+)
+from torii_api.services.saudi_evisa import build_payload as build_saudi_payload
+from torii_api.services.saudi_evisa import classify_route as classify_saudi_route
+from torii_api.services.saudi_portal import run_saudi_portal
 from torii_api.services.vietnam_evisa import (
     VN_PORTAL_NAME,
     VN_PORTAL_URL,
@@ -40,6 +54,13 @@ PORTAL_CONFIGS: dict[str, dict[str, str]] = {
         "portal_name": VN_PORTAL_NAME,
         "portal_url": VN_PORTAL_URL,
         "fee_usd": "25.00",
+    },
+    "SA": {
+        "portal_name": SA_PORTAL_NAME,
+        "portal_url": SA_PORTAL_URL,
+        # SAR 395 incl. mandatory medical insurance ≈ USD 105 (eVisa Terms fix
+        # no price; the portal checkout total is authoritative).
+        "fee_usd": "105.00",
     },
 }
 
@@ -80,6 +101,13 @@ async def create_submission_job(
     j_code = await _resolve_jurisdiction_code(session, case)
     cfg = get_portal_config(j_code)
 
+    if j_code == "VN":
+        queued_detail = "Waiting for the Vietnam eVisa worker (evisa.gov.vn)."
+    elif j_code == "SA":
+        queued_detail = "Waiting for the Saudi KSA Visa worker (ksavisa.sa)."
+    else:
+        queued_detail = f"Waiting for a portal worker ({j_code})."
+
     job = PortalSubmissionJob(
         case_id=case.id,
         jurisdiction_code=j_code,
@@ -90,7 +118,7 @@ async def create_submission_job(
             {
                 "step": SubmissionJobStatus.QUEUED,
                 "label": "Job queued",
-                "detail": "Waiting for the Vietnam eVisa worker (evisa.gov.vn).",
+                "detail": queued_detail,
                 "timestamp": _now_iso(),
             }
         ],
@@ -146,7 +174,7 @@ async def _store_screenshot(
 ) -> None:
     if not png:
         return
-    filename = f"vn_evisa_job_{job.id}.png"
+    filename = f"{job.jurisdiction_code.lower()}_evisa_job_{job.id}.png"
     storage_key = f"portal_screenshots/{case.id}/{filename}"
     save_document_content(storage_key, png)
     doc = CaseDocument(
@@ -162,6 +190,160 @@ async def _store_screenshot(
     await session.flush()
     job.screenshot_url = f"/backend/v1/cases/{case.id}/documents"
     await session.flush()
+
+
+async def _run_saudi_submission(
+    session: AsyncSession,
+    job: PortalSubmissionJob,
+    case: Case,
+    *,
+    portal_session_factory: PortalSessionFactory | None = None,
+    allow_submit: bool | None = None,
+) -> PortalSubmissionJob:
+    """Run one Saudi job. Route guard first: only online routes may file.
+
+    Package Visa, in-person consular, licensed-agent Umrah, visa-free and
+    citizen profiles fail closed with a route-specific explanation — the
+    ksavisa.sa worker never files them.
+    """
+    answers = case.intake_answers or {}
+    route = classify_saudi_route(answers)
+    if route not in ONLINE_ROUTES:
+        detail = ROUTE_BLOCK_DETAILS.get(
+            route, "This profile does not apply online via ksavisa.sa."
+        )
+        return await _finish(
+            job,
+            session,
+            status=SubmissionJobStatus.FAILED,
+            label="Route is not an online KSA Visa application",
+            detail=detail,
+            error=f"route_not_online:{route}",
+        )
+
+    settings = get_settings()
+    submit = settings.sa_evisa_allow_submit if allow_submit is None else allow_submit
+    payload = build_saudi_payload(
+        answers,
+        email_fallback=case.applicant_email or "",
+    )
+    if not payload.is_complete:
+        missing = ", ".join(payload.missing_required)
+        return await _finish(
+            job,
+            session,
+            status=SubmissionJobStatus.FAILED,
+            label="Intake incomplete",
+            detail=f"Cannot open ksavisa.sa until these fields exist on the case: {missing}.",
+            error=f"missing_fields:{missing}",
+        )
+
+    await _add_step(
+        job,
+        session,
+        SubmissionJobStatus.NAVIGATING,
+        "Opening ksavisa.sa",
+        "Stock Chromium, no proxy and no captcha solver. The portal files only "
+        "inside the applicant's own account: a sign-in wall, OTP prompt, "
+        "challenge page or payment step stops the job for manual takeover.",
+    )
+
+    browser: PortalSession | None = None
+    try:
+        if portal_session_factory is not None:
+            browser = await portal_session_factory()
+        else:
+            browser = await PlaywrightPortalSession.launch(
+                headless=settings.sa_evisa_headless,
+                timeout_ms=settings.sa_evisa_timeout_ms,
+            )
+
+        await _add_step(
+            job,
+            session,
+            SubmissionJobStatus.FILLING_FORM,
+            "Filling public form fields",
+            f"Mapped {len(payload.values)} intake fields onto KSA Visa portal labels.",
+        )
+        fill = await run_saudi_portal(
+            browser,
+            payload,
+            portal_url=job.portal_url or SA_PORTAL_URL,
+            allow_submit=submit,
+        )
+        await _store_screenshot(session, job, case, fill.screenshot)
+
+        filled = ", ".join(fill.filled) or "(none)"
+        unfilled = ", ".join(fill.unfilled) or "(none)"
+        await _add_step(
+            job,
+            session,
+            SubmissionJobStatus.FILLING_FORM,
+            "Field write result",
+            f"Filled: {filled}. Not found on page: {unfilled}.",
+        )
+
+        if fill.challenge:
+            job.captcha_solved = False
+            return await _finish(
+                job,
+                session,
+                status=SubmissionJobStatus.MANUAL_TAKEOVER,
+                label="Stopped at security checkpoint",
+                detail=(
+                    "The portal presented an account sign-in wall, an OTP prompt, "
+                    "a captcha or a bot-check. Torii never creates portal "
+                    "accounts, enters one-time codes, or solves those. The "
+                    "applicant or an operator must sign in and finish the "
+                    "application in a real browser."
+                ),
+                error="portal_challenge",
+            )
+
+        if fill.confirmation_code:
+            job.portal_reference = fill.confirmation_code
+            case.status = "submitted"
+            case.submission_reference = fill.confirmation_code
+            await session.flush()
+            return await _finish(
+                job,
+                session,
+                status=SubmissionJobStatus.SUCCEEDED,
+                label="Portal confirmation captured",
+                detail=f"Application number taken from the page: {fill.confirmation_code}",
+            )
+
+        reason = (
+            "Fields were written where labels matched. Account sign-in/OTP, "
+            "captcha and the government card payment are not automated, so this "
+            "is not a filed visa. Finish on ksavisa.sa and save the real "
+            "application number."
+        )
+        if payload.notes:
+            reason += " Notes: " + "; ".join(payload.notes)
+        return await _finish(
+            job,
+            session,
+            status=SubmissionJobStatus.MANUAL_TAKEOVER,
+            label="Human finish required",
+            detail=reason,
+            error="awaiting_human_captcha_or_payment",
+        )
+    except Exception as exc:
+        return await _finish(
+            job,
+            session,
+            status=SubmissionJobStatus.FAILED,
+            label="Worker error",
+            detail=str(exc),
+            error=str(exc),
+        )
+    finally:
+        if browser is not None:
+            try:
+                await browser.close()
+            except Exception:
+                pass
 
 
 async def run_submission_job(
@@ -182,6 +364,15 @@ async def run_submission_job(
     if case is None:
         raise ValueError(f"Case {job.case_id} not found")
 
+    if job.jurisdiction_code.upper() == "SA":
+        return await _run_saudi_submission(
+            session,
+            job,
+            case,
+            portal_session_factory=portal_session_factory,
+            allow_submit=allow_submit,
+        )
+
     if job.jurisdiction_code.upper() != "VN":
         return await _finish(
             job,
@@ -190,7 +381,8 @@ async def run_submission_job(
             label="Corridor not automated",
             detail=(
                 f"{job.jurisdiction_code} is not supported by the portal worker. "
-                "Only Vietnam (evisa.gov.vn) is implemented."
+                "Only Vietnam (evisa.gov.vn) and Saudi Arabia (ksavisa.sa, "
+                "online routes only) are implemented."
             ),
             error=f"unsupported_jurisdiction:{job.jurisdiction_code}",
         )

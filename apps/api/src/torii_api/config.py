@@ -144,6 +144,12 @@ class Settings(BaseSettings):
     vn_evisa_allow_submit: bool = False
     vn_evisa_timeout_ms: int = 45_000
 
+    # Saudi KSA Visa worker (ksavisa.sa). The portal files only inside the
+    # applicant's own account: sign-in/OTP, captcha and card payment stay manual.
+    sa_evisa_headless: bool = True
+    sa_evisa_allow_submit: bool = False
+    sa_evisa_timeout_ms: int = 45_000
+
     # --- Deployment guard -----------------------------------------------------
     # `database_url` defaults to SQLite so the API runs with zero infrastructure locally.
     # That default is a liability anywhere real: if the environment goes missing, the service
