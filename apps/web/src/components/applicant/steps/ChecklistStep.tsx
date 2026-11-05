@@ -16,10 +16,14 @@ import {
   FileText,
   Sparkles,
   Clock,
+  Plane,
+  Building2,
+  Bell,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 import { useAuth } from "@/lib/auth-context";
 import { useCredits } from "@/lib/credits-context";
 import { useQueryClient } from "@tanstack/react-query";
@@ -207,6 +211,8 @@ export function ChecklistStep({
     item: ChecklistItem;
     product: MatchedProduct;
   } | null>(null);
+  const [comingSoonModalItem, setComingSoonModalItem] = useState<ChecklistItem | null>(null);
+  const [waitlistJoined, setWaitlistJoined] = useState(false);
   const [attaching, setAttaching] = useState<number | null>(null);
   const [showPicker, setShowPicker] = useState<number | null>(null);
   const [uploading, setUploading] = useState<number | null>(null);
@@ -528,6 +534,20 @@ export function ChecklistStep({
             );
             const primaryProduct = conciergeMatch?.products?.[0];
             const existingOrder = conciergeMatch?.existing_order;
+            const itemCodeLower = item.code.toLowerCase();
+            const itemNameLower = item.name.toLowerCase();
+            const isTravelOrBookingDoc =
+              itemCodeLower.includes("flight") ||
+              itemCodeLower.includes("hotel") ||
+              itemCodeLower.includes("accommodation") ||
+              itemCodeLower.includes("itinerary") ||
+              itemCodeLower.includes("ticket") ||
+              itemCodeLower.includes("booking") ||
+              itemNameLower.includes("flight") ||
+              itemNameLower.includes("hotel") ||
+              itemNameLower.includes("accommodation") ||
+              itemNameLower.includes("ticket") ||
+              itemNameLower.includes("booking");
 
             return (
               <div
@@ -792,7 +812,7 @@ export function ChecklistStep({
                         )}
 
                         {/* Thing 2: Concierge procurement button */}
-                        {primaryProduct && !existingOrder && (
+                        {primaryProduct && !existingOrder ? (
                           <Button
                             type="button"
                             size="sm"
@@ -809,7 +829,23 @@ export function ChecklistStep({
                                 : `$${(primaryProduct.price_cents / 100).toFixed(0)}`}
                             </span>
                           </Button>
-                        )}
+                        ) : isTravelOrBookingDoc && !existingOrder ? (
+                          <Button
+                            type="button"
+                            size="sm"
+                            onClick={() => {
+                              setWaitlistJoined(false);
+                              setComingSoonModalItem(item);
+                            }}
+                            className="h-8 text-xs gap-1.5 px-3 font-semibold rounded-lg bg-gradient-to-r from-amber-500/15 to-amber-600/15 hover:from-amber-500/25 hover:to-amber-600/25 text-amber-600 dark:text-amber-400 border border-amber-500/35 shadow-2xs cursor-pointer"
+                          >
+                            <Sparkles className="size-3.5 text-amber-500" />
+                            <span>Get It</span>
+                            <span className="text-[9px] uppercase font-bold tracking-wider px-1.5 py-0.2 rounded-full bg-amber-500/20 text-amber-600 dark:text-amber-300">
+                              Coming Soon
+                            </span>
+                          </Button>
+                        ) : null}
                       </div>
 
                       <button
@@ -1098,6 +1134,116 @@ export function ChecklistStep({
         product={conciergeModalState?.product ?? null}
         onConfirm={handleConciergeConfirm}
       />
+
+      {/* Travel & Booking Document Concierge — Coming Soon Modal */}
+      {comingSoonModalItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-200">
+          <div className="bg-card w-full max-w-lg rounded-2xl border border-border shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-150">
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-border bg-muted/20">
+              <div className="flex items-center gap-2.5">
+                <div className="size-9 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 flex items-center justify-center">
+                  <Plane className="size-4.5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-sm font-bold text-foreground">
+                      Document Concierge
+                    </h3>
+                    <Badge tone="warning" className="text-[10px] px-2 py-0">
+                      Coming Soon
+                    </Badge>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">
+                    Automated Booking &amp; Itinerary Proofs
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setComingSoonModalItem(null)}
+                className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-colors cursor-pointer"
+              >
+                <X className="size-4" />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-6 space-y-5">
+              <div className="p-4 rounded-xl border border-border/80 bg-muted/30 space-y-2">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <h4 className="text-sm font-bold text-foreground">
+                      {comingSoonModalItem.name}
+                    </h4>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Verifiable embassy-compliant booking reservation for your visa application
+                    </p>
+                  </div>
+                  <span className="text-xs font-bold text-amber-500 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full shrink-0">
+                    In Development
+                  </span>
+                </div>
+              </div>
+
+              <div className="space-y-3 text-xs text-muted-foreground leading-relaxed">
+                <p>
+                  We are partnering with major global travel GDS providers to generate confirmed, embassy-compliant flight reservations and hotel bookings with live PNRs — without requiring you to pay full ticket prices upfront.
+                </p>
+                <div className="p-3 rounded-xl bg-primary/5 border border-primary/20 space-y-1 text-foreground">
+                  <span className="font-semibold block text-primary">For this application:</span>
+                  <p className="text-muted-foreground text-[11px]">
+                    If you already have your flight or hotel reservation, please click <strong>Upload File</strong> to attach it. If not, you can join the priority waitlist below.
+                  </p>
+                </div>
+              </div>
+
+              {waitlistJoined ? (
+                <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 flex items-center gap-2.5 text-xs font-semibold">
+                  <Check className="size-4 shrink-0 text-emerald-500" />
+                  <span>You have joined the priority notification waitlist for this service!</span>
+                </div>
+              ) : null}
+
+              {/* Actions */}
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-border">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setComingSoonModalItem(null)}
+                  className="text-xs font-medium cursor-pointer"
+                >
+                  Close
+                </Button>
+                {!waitlistJoined ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => {
+                      setWaitlistJoined(true);
+                      toast.success("Added to waitlist! We will notify you when booking procurement goes live.");
+                    }}
+                    className="text-xs font-bold bg-amber-600 hover:bg-amber-500 text-white gap-1.5 cursor-pointer shadow-xs"
+                  >
+                    <Bell className="size-3.5" />
+                    <span>Notify Me When Live</span>
+                  </Button>
+                ) : (
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => setComingSoonModalItem(null)}
+                    className="text-xs font-bold bg-primary text-primary-foreground cursor-pointer shadow-xs"
+                  >
+                    Done
+                  </Button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

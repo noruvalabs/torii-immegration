@@ -20,6 +20,7 @@ import {
   ArrowRight,
   ExternalLink,
   RotateCcw,
+  Archive,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -48,6 +49,7 @@ export function PostSubmissionGuide({
   const [copiedRef, setCopiedRef] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isDownloadingDirect, setIsDownloadingDirect] = useState(false);
+  const [isDownloadingZip, setIsDownloadingZip] = useState(false);
   const [botJob, setBotJob] = useState<PortalJob | null>(null);
   const [botConsoleOpen, setBotConsoleOpen] = useState(false);
   const [botRunning, setBotRunning] = useState(false);
@@ -186,6 +188,56 @@ export function PostSubmissionGuide({
       toast.error(err instanceof Error ? err.message : "Download failed. Please try again.");
     } finally {
       setIsDownloadingDirect(false);
+    }
+  };
+
+  const handleDownloadZip = async () => {
+    const activeToken =
+      token || (typeof window !== "undefined" ? localStorage.getItem("torii_token") : null);
+    if (!activeToken) {
+      toast.error("Please sign in again to download documents.");
+      return;
+    }
+
+    setIsDownloadingZip(true);
+    try {
+      const res = await fetch(
+        `/backend/v1/cases/${caseData.id}/export/filing-kit-zip?format=base64`,
+        {
+          headers: {
+            Authorization: `Bearer ${activeToken}`,
+            Accept: "application/json",
+          },
+        }
+      );
+      if (!res.ok) {
+        throw new Error(`Export failed (${res.status})`);
+      }
+      const data = await res.json();
+      if (!data?.data_base64) {
+        throw new Error("Missing ZIP file data.");
+      }
+      const binaryString = atob(data.data_base64);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      const blob = new Blob([bytes], { type: "application/zip" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = data.filename || `${caseData.reference}-Complete-Filing-Kit.zip`;
+      document.body.appendChild(link);
+      link.click();
+      toast.success("Complete filing kit (ZIP) downloaded successfully! Includes all official forms, cover letter, and supporting documents.");
+      setTimeout(() => {
+        link.remove();
+        URL.revokeObjectURL(url);
+      }, 10000);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Download failed. Please try again.");
+    } finally {
+      setIsDownloadingZip(false);
     }
   };
 
@@ -431,20 +483,41 @@ export function PostSubmissionGuide({
           {/* ── ACTIONS BAR ── */}
           <div className="pt-2 border-t flex flex-col sm:flex-row items-center justify-between gap-3">
             <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto">
+              {/* Primary Complete Filing Kit ZIP Download (All Forms + Documents) */}
               <Button
-                onClick={handleDownload}
-                disabled={downloading}
-                className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold px-5 h-10 text-xs gap-2 shadow-md w-full sm:w-auto"
+                onClick={handleDownloadZip}
+                disabled={isDownloadingZip}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-5 h-10 text-xs gap-2 shadow-md w-full sm:w-auto cursor-pointer"
               >
-                {downloading ? (
+                {isDownloadingZip ? (
                   <>
                     <Loader2 className="size-4 animate-spin" />
-                    <span>Preparing Document...</span>
+                    <span>Archiving All Documents (ZIP)...</span>
                   </>
                 ) : (
                   <>
-                    <Download className="size-4" />
-                    <span>Download Application Copy (PDF)</span>
+                    <Archive className="size-4" />
+                    <span>Download Complete Filing Kit (ZIP)</span>
+                  </>
+                )}
+              </Button>
+
+              {/* Single PDF Export */}
+              <Button
+                variant="outline"
+                onClick={handleDownload}
+                disabled={downloading}
+                className="font-semibold px-4 h-10 text-xs gap-2 border-border/80 hover:bg-muted text-foreground w-full sm:w-auto cursor-pointer"
+              >
+                {downloading ? (
+                  <>
+                    <Loader2 className="size-3.5 animate-spin" />
+                    <span>Preparing PDF...</span>
+                  </>
+                ) : (
+                  <>
+                    <Download className="size-3.5" />
+                    <span>Download Cover Letter (PDF)</span>
                   </>
                 )}
               </Button>
@@ -453,7 +526,7 @@ export function PostSubmissionGuide({
                 variant="outline"
                 onClick={handleRefreshClick}
                 disabled={isRefreshing}
-                className="h-10 text-xs font-semibold gap-1.5 w-full sm:w-auto text-muted-foreground hover:text-foreground"
+                className="h-10 text-xs font-semibold gap-1.5 w-full sm:w-auto text-muted-foreground hover:text-foreground cursor-pointer"
               >
                 <RefreshCw className={`size-3.5 ${isRefreshing ? "animate-spin" : ""}`} />
                 <span>Refresh Status</span>
