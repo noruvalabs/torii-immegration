@@ -24,6 +24,7 @@ import { Badge } from "@/components/ui/badge";
 import { ALL_COUNTRIES, matchCountry, searchCountries, type Country } from "@/lib/countries";
 import { CountryFlag } from "@/components/landing/country-flag";
 import { getWallet, syncProfileFromWallet, type WalletDocument } from "@/lib/api/wallet";
+import { PassportAutofillDropzone } from "./PassportAutofillDropzone";
 import type { IntakeState, IntakeQuestion, User } from "./types";
 import { findQuestionByKey } from "./types";
 
@@ -786,6 +787,59 @@ export function IntakeStep({
     }
   }
 
+  function handleFieldsExtracted(fields: Record<string, string>, docName: string) {
+    const toAutoFill: Record<string, unknown> = {};
+    const newSources: Record<string, string> = {};
+
+    const syntheticDoc: WalletDocument = {
+      id: Date.now(),
+      doc_type: "passport",
+      name: docName,
+      version: 1,
+      filename: docName,
+      content_type: "application/pdf",
+      file_size: null,
+      issued_date: null,
+      expiry_date: null,
+      extracted_fields: fields,
+      status: "verified",
+      created_at: null,
+    };
+
+    for (const q of state.questions) {
+      const match = getAutofillValueForQuestion(q.key, q.prompt, profile, [
+        syntheticDoc,
+        ...walletDocs,
+      ]);
+
+      if (match) {
+        let val: string | null = match.value;
+        if (q.type === "enum" && q.options?.length) {
+          val = matchEnumOption(val, q.options);
+        }
+        if (val) {
+          toAutoFill[q.key] = val;
+          newSources[q.key] = `Passport (${docName})`;
+        }
+      }
+    }
+
+    if (Object.keys(toAutoFill).length > 0) {
+      setDrafts((prev) => ({ ...prev, ...toAutoFill }));
+      setAutofilledSources((prev) => ({ ...prev, ...newSources }));
+      for (const [key, val] of Object.entries(toAutoFill)) {
+        if (val !== undefined) {
+          autoSubmittedRef.current.add(key);
+          void onAnswerRef.current(key, val);
+        }
+      }
+    }
+
+    if (token) {
+      void getWallet(token).then((docs) => setWalletDocs(docs)).catch(() => {});
+    }
+  }
+
   // Group questions by section if present, or assign defaults
   const sectionsMap = useMemo(() => {
     const map = new Map<string, IntakeQuestion[]>();
@@ -1495,6 +1549,15 @@ export function IntakeStep({
           <div className="h-full bg-primary transition-all duration-300" style={{ width: `${pct}%` }} />
         </div>
       </div>
+
+      {/* Smart Passport & ID Auto-Fill Dropzone */}
+      <PassportAutofillDropzone
+        token={token}
+        caseId={caseId}
+        onFieldsExtracted={handleFieldsExtracted}
+        onRefresh={onRefresh}
+        autofilledCount={Object.keys(autofilledSources).length}
+      />
 
       {/* Document Autofill Active Banner */}
       {Object.keys(autofilledSources).length > 0 && (
