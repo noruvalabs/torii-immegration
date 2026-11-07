@@ -101,7 +101,7 @@ def build_track_summary(
                 title="Enjaz Registration & Tasheer Dossier Kit",
                 headline="We register your official Enjaz dossier; you submit biometrics at the Tasheer center.",
                 torii_role="Torii completes your official Enjaz/MOFA registration, organizes all supporting documents, and prepares your 100% compliant Tasheer submission kit.",
-                applicant_role="Download your Complete Filing Kit (ZIP), print the documents, and attend your biometric appointment at Tasheer (Jamuna Future Park, Dhaka / Sylhet / Chittagong).",
+                applicant_role="Download your Complete Dossier (Single PDF), print the documents, and attend your biometric appointment at Tasheer (Jamuna Future Park, Dhaka / Sylhet / Chittagong).",
                 submission_center=center,
                 requires_in_person=True,
             )
