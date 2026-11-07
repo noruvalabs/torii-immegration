@@ -231,3 +231,4 @@ export function findNearestCenter(
 
   return { center: nearest, distanceKm: minDistance };
 }
+
