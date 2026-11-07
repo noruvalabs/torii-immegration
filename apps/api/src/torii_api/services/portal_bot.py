@@ -597,4 +597,3 @@ async def resume_job_with_otp(
 
     await session.flush()
     return job
-

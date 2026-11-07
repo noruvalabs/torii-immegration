@@ -339,7 +339,6 @@ async def test_resume_job_with_otp_succeeds(session):
     assert seeded["case"].submission_reference == resumed.portal_reference
 
 
-
 @pytest.mark.asyncio
 async def test_captcha_hands_off_to_human(session):
     seeded = await _seed_case(session)
