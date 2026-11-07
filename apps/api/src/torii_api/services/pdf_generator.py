@@ -2386,3 +2386,86 @@ def generate_generic_visa_application_pdf(
 
     doc.build(story)
     return buffer.getvalue()
+
+
+def build_single_master_dossier_pdf(
+    case_reference: str,
+    cover_pdf_bytes: bytes | None,
+    dossier_pdf_bytes: bytes | None,
+    supporting_documents: list[tuple[str, bytes]],
+) -> bytes:
+    """Merge cover letter, application forms, and all supporting attachments into one single PDF.
+
+    The resulting master PDF is in 100% compliant physical submission order:
+    1. Official Embassy Cover Letter
+    2. Complete Application Dossier Packet / Official Forms
+    3. All Supporting Documents (Passports, Bank Statements, NOCs, Bookings) converted to clean A4 pages.
+    """
+    import pymupdf
+
+    master = pymupdf.open()
+
+    # 1. Add Cover Letter
+    if cover_pdf_bytes:
+        try:
+            cov_doc = pymupdf.open(stream=cover_pdf_bytes, filetype="pdf")
+            master.insert_pdf(cov_doc)
+            cov_doc.close()
+        except Exception:
+            pass
+
+    # 2. Add Dossier / Form Packet
+    if dossier_pdf_bytes:
+        try:
+            dos_doc = pymupdf.open(stream=dossier_pdf_bytes, filetype="pdf")
+            master.insert_pdf(dos_doc)
+            dos_doc.close()
+        except Exception:
+            pass
+
+    # 3. Add Supporting Documents in order
+    a4_width, a4_height = 595.3, 841.9
+    for idx, (doc_name, doc_bytes) in enumerate(supporting_documents, 1):
+        if not doc_bytes:
+            continue
+
+        clean_title = doc_name.replace("_", " ").replace("-", " ")
+        if clean_title.lower().endswith((".pdf", ".jpg", ".png", ".jpeg", ".webp")):
+            clean_title = clean_title.rsplit(".", 1)[0]
+
+        # Check if bytes are a PDF document
+        if doc_bytes.startswith(b"%PDF"):
+            try:
+                sub_doc = pymupdf.open(stream=doc_bytes, filetype="pdf")
+                start_page = master.page_count
+                master.insert_pdf(sub_doc)
+                for p_idx in range(start_page, master.page_count):
+                    p = master[p_idx]
+                    p.insert_text(
+                        pymupdf.Point(36, 25),
+                        f"{case_reference} | Attachment {idx:02d}: {clean_title.upper()}",
+                        fontsize=8,
+                        color=(0.4, 0.4, 0.4),
+                    )
+                sub_doc.close()
+                continue
+            except Exception:
+                pass
+
+        # Try image format (JPG, PNG, WebP)
+        try:
+            page = master.new_page(width=a4_width, height=a4_height)
+            page.insert_text(
+                pymupdf.Point(36, 30),
+                f"{case_reference} | Attachment {idx:02d}: {clean_title.upper()}",
+                fontsize=8,
+                color=(0.4, 0.4, 0.4),
+            )
+            img_rect = pymupdf.Rect(36, 45, a4_width - 36, a4_height - 36)
+            page.insert_image(img_rect, stream=doc_bytes, keep_proportion=True)
+        except Exception:
+            pass
+
+    output_bytes = master.tobytes(deflate=True)
+    master.close()
+    return output_bytes

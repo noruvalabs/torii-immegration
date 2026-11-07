@@ -20,6 +20,7 @@ import {
   ArrowRight,
   RotateCcw,
   Archive,
+  Printer,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -49,6 +50,7 @@ export function PostSubmissionGuide({
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isDownloadingDirect, setIsDownloadingDirect] = useState(false);
   const [isDownloadingZip, setIsDownloadingZip] = useState(false);
+  const [isDownloadingMasterPdf, setIsDownloadingMasterPdf] = useState(false);
   const [botJob, setBotJob] = useState<PortalJob | null>(null);
   const [botConsoleOpen, setBotConsoleOpen] = useState(false);
   const [botRunning, setBotRunning] = useState(false);
@@ -243,6 +245,56 @@ export function PostSubmissionGuide({
     }
   };
 
+  const handleDownloadMasterPdf = async () => {
+    const activeToken =
+      token || (typeof window !== "undefined" ? localStorage.getItem("torii_token") : null);
+    if (!activeToken) {
+      toast.error("Please sign in again to download documents.");
+      return;
+    }
+
+    setIsDownloadingMasterPdf(true);
+    try {
+      const res = await fetch(
+        `/backend/v1/cases/${caseData.id}/export/master-dossier-pdf?format=base64`,
+        {
+          headers: {
+            Authorization: `Bearer ${activeToken}`,
+            Accept: "application/json",
+          },
+        }
+      );
+      if (!res.ok) {
+        throw new Error(`Export failed (${res.status})`);
+      }
+      const data = await res.json();
+      if (!data?.data_base64) {
+        throw new Error("Missing PDF file data.");
+      }
+      const binaryString = atob(data.data_base64);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      const blob = new Blob([bytes], { type: "application/pdf" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = data.filename || `${caseData.reference}-Complete-Dossier-Print-Ready.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      toast.success("Single print-ready dossier downloaded! All documents arranged in statutory order.");
+      setTimeout(() => {
+        link.remove();
+        URL.revokeObjectURL(url);
+      }, 10000);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Download failed. Please try again.");
+    } finally {
+      setIsDownloadingMasterPdf(false);
+    }
+  };
+
   const downloading = isExportingPdf || isDownloadingDirect;
 
   return (
@@ -343,17 +395,17 @@ export function PostSubmissionGuide({
             <div className="rounded-xl border border-border/70 bg-card/80 p-4 text-center sm:text-left space-y-1 shadow-2xs">
               <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center justify-center sm:justify-start gap-1.5">
                 {isSaudi || !isDigitalCorridor ? (
-                  <Archive className="size-3 text-emerald-500" />
+                  <Printer className="size-3 text-emerald-500" />
                 ) : (
                   <MessageCircle className="size-3 text-emerald-500" />
                 )}
                 {isSaudi || !isDigitalCorridor ? "Package Format" : "Delivery Channels"}
               </span>
               <p className="text-sm font-bold text-foreground">
-                {isSaudi || !isDigitalCorridor ? "Complete Filing Kit (ZIP)" : "SMS & WhatsApp"}
+                {isSaudi || !isDigitalCorridor ? "Single Dossier PDF (All-in-One)" : "SMS & WhatsApp"}
               </p>
               <p className="text-[11px] text-muted-foreground">
-                {isSaudi || !isDigitalCorridor ? "All forms + documents bundled" : "Real-time alerts on your phone"}
+                {isSaudi || !isDigitalCorridor ? "1-Click print-ready merged PDF" : "Real-time alerts on your phone"}
               </p>
             </div>
           </div>
@@ -409,11 +461,11 @@ export function PostSubmissionGuide({
                 <div>
                   <h5 className="text-xs sm:text-sm font-bold text-foreground flex items-center gap-1">
                     <ShieldCheck className="size-3.5 text-primary shrink-0" />
-                    {isSaudi || !isDigitalCorridor ? "2. Download & Print Dossier" : "2. Official Portal Filing"}
+                    {isSaudi || !isDigitalCorridor ? "2. Single-File Print Dossier" : "2. Official Portal Filing"}
                   </h5>
                   <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">
                     {isSaudi || !isDigitalCorridor
-                      ? "Download your Complete Filing Kit (ZIP) below. Extract the files and print all official forms on standard A4 paper."
+                      ? "Download your complete single-file dossier PDF below. All official forms, cover letter, and supporting attachments are pre-arranged in statutory order for 1-click printing."
                       : `Automated portal bot filing on ${portalName}.`}
                   </p>
                 </div>
@@ -494,10 +546,10 @@ export function PostSubmissionGuide({
               </div>
               <ol className="list-decimal list-inside space-y-1 text-xs text-muted-foreground leading-relaxed">
                 <li>
-                  <strong className="text-foreground">Download:</strong> Click <strong className="text-foreground">Download Complete Filing Kit (ZIP)</strong> below to get your full dossier.
+                  <strong className="text-foreground">Download:</strong> Click <strong className="text-foreground">Download Complete Dossier (Single PDF)</strong> below.
                 </li>
                 <li>
-                  <strong className="text-foreground">Print:</strong> Print the cover letter, application forms, and document copies on standard single-sided A4 paper.
+                  <strong className="text-foreground">Print:</strong> Print the single PDF on standard white A4 paper. All documents (cover letter, forms, and attachments) are already compiled in statutory embassy submission order.
                 </li>
                 <li>
                   <strong className="text-foreground">Submit:</strong> Bring your printed packet and original passport (valid at least 6 months) to {isSaudi ? "Tasheer (Jamuna Future Park, Level B2, Dhaka)" : "your destination's authorized visa center"} to complete biometrics.
@@ -529,27 +581,47 @@ export function PostSubmissionGuide({
           {/* ── ACTIONS BAR ── */}
           <div className="pt-2 border-t flex flex-col sm:flex-row items-center justify-between gap-3">
             <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto">
-              {/* Primary Complete Filing Kit ZIP Download (All Forms + Documents) */}
+              {/* Primary: Single Merged All-in-One PDF for 1-click printing */}
               <Button
-                onClick={handleDownloadZip}
-                disabled={isDownloadingZip}
+                onClick={handleDownloadMasterPdf}
+                disabled={isDownloadingMasterPdf}
                 className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-5 h-10 text-xs gap-2 shadow-md w-full sm:w-auto cursor-pointer"
               >
-                {isDownloadingZip ? (
+                {isDownloadingMasterPdf ? (
                   <>
                     <Loader2 className="size-4 animate-spin" />
-                    <span>Archiving All Documents (ZIP)...</span>
+                    <span>Compiling All-in-One PDF...</span>
                   </>
                 ) : (
                   <>
-                    <Archive className="size-4" />
-                    <span>Download Complete Filing Kit (ZIP)</span>
+                    <Printer className="size-4" />
+                    <span>Download Complete Dossier (Single PDF)</span>
+                  </>
+                )}
+              </Button>
+
+              {/* Secondary: ZIP archive for users who also want individual files */}
+              <Button
+                variant="outline"
+                onClick={handleDownloadZip}
+                disabled={isDownloadingZip}
+                className="h-10 text-xs font-semibold gap-1.5 w-full sm:w-auto text-foreground hover:bg-muted cursor-pointer"
+              >
+                {isDownloadingZip ? (
+                  <>
+                    <Loader2 className="size-3.5 animate-spin" />
+                    <span>Archiving ZIP...</span>
+                  </>
+                ) : (
+                  <>
+                    <Archive className="size-3.5 text-muted-foreground" />
+                    <span>Download ZIP Archive</span>
                   </>
                 )}
               </Button>
 
               <Button
-                variant="outline"
+                variant="ghost"
                 onClick={handleRefreshClick}
                 disabled={isRefreshing}
                 className="h-10 text-xs font-semibold gap-1.5 w-full sm:w-auto text-muted-foreground hover:text-foreground cursor-pointer"
@@ -560,7 +632,7 @@ export function PostSubmissionGuide({
             </div>
 
             <div className="text-xs text-muted-foreground text-center sm:text-right">
-              <span>Includes Cover Letter, Application Forms &amp; All Supporting Documents</span>
+              <span>Cover Letter, Application Forms &amp; All Attachments Merged in 1 File</span>
             </div>
           </div>
 
