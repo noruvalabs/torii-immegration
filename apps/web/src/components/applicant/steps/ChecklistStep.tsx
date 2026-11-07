@@ -982,12 +982,9 @@ export function ChecklistStep({
               ))}
             </div>
             <div className="flex gap-2 pt-1">
-              <Button onClick={handleConfirmExtracted}>
+              <Button size="sm" onClick={() => setOcrResult(null)}>
                 <Check className="size-3" />
-                Confirm &amp; attach
-              </Button>
-              <Button variant="outline" onClick={() => setOcrResult(null)}>
-                Dismiss
+                Done
               </Button>
             </div>
           </CardContent>

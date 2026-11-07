@@ -37,7 +37,6 @@ class TrackSummary(BaseModel):
 # Well-known country defaults according to the Torii business plan and implementation roadmap
 KNOWN_TRACKS: dict[str, SubmissionTrack] = {
     # Digital / eVisa (Sit back & relax track)
-    "SA": SubmissionTrack.DIGITAL,  # Saudi Arabia
     "VN": SubmissionTrack.DIGITAL,  # Vietnam
     "EG": SubmissionTrack.DIGITAL,  # Egypt
     "BH": SubmissionTrack.DIGITAL,  # Bahrain
@@ -51,7 +50,8 @@ KNOWN_TRACKS: dict[str, SubmissionTrack] = {
     "RW": SubmissionTrack.DIGITAL,  # Rwanda
     "KE": SubmissionTrack.DIGITAL,  # Kenya
     "OM": SubmissionTrack.DIGITAL,  # Oman
-    # Hybrid (Online registration + Counter / IVAC drop-off)
+    # Hybrid (Online registration + Counter / IVAC / Tasheer drop-off)
+    "SA": SubmissionTrack.HYBRID,  # Saudi Arabia (Enjaz registration + Tasheer biometrics)
     "IN": SubmissionTrack.HYBRID,  # India (Medical Visa MED-1 via IVAC)
     "CA": SubmissionTrack.HYBRID,  # Canada (IRCC portal submission + VFS biometrics)
     # Consular / VFS (Walk-in ready dossier kit)
@@ -93,6 +93,18 @@ def build_track_summary(
         )
 
     if t == SubmissionTrack.HYBRID:
+        if j_code == "SA":
+            center = "Tasheer (Saudi Visa Application Center)"
+            return TrackSummary(
+                track=t,
+                badge_label="Tasheer VAC Submission (Hybrid)",
+                title="Enjaz Registration & Tasheer Dossier Kit",
+                headline="We register your official Enjaz dossier; you submit biometrics at the Tasheer center.",
+                torii_role="Torii completes your official Enjaz/MOFA registration, organizes all supporting documents, and prepares your 100% compliant Tasheer submission kit.",
+                applicant_role="Download your Complete Filing Kit (ZIP), print the documents, and attend your biometric appointment at Tasheer (Jamuna Future Park, Dhaka / Sylhet / Chittagong).",
+                submission_center=center,
+                requires_in_person=True,
+            )
         center = (
             "IVAC (Indian Visa Application Center)" if j_code == "IN" else "Visa Application Center"
         )

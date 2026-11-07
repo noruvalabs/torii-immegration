@@ -56,13 +56,16 @@ export function PostSubmissionGuide({
 
   const jCode = (caseData.jurisdiction_code || "").toUpperCase();
   const refCode = (caseData.reference || "").toUpperCase();
-  const isDigitalCorridor =
-    caseData.submission_track === "digital" ||
+  const isSaudi =
     jCode === "SA" ||
-    jCode === "VN" ||
     refCode.startsWith("SA-") ||
-    refCode.startsWith("VN-");
-  const portalName = jCode === "SA" ? "ksavisa.sa (Saudi MOFA)" : jCode === "VN" ? "evisa.gov.vn" : "Official Portal";
+    (caseData.scope_label && caseData.scope_label.toLowerCase().includes("saudi"));
+  const isDigitalCorridor =
+    !isSaudi &&
+    (caseData.submission_track === "digital" ||
+      jCode === "VN" ||
+      refCode.startsWith("VN-"));
+  const portalName = jCode === "VN" ? "evisa.gov.vn" : "Official Portal";
   const isOtpWaiting = botJob?.status === "manual_takeover" || botJob?.status === "awaiting_otp";
 
   useEffect(() => {
@@ -379,14 +382,36 @@ export function PostSubmissionGuide({
                 <div>
                   <h5 className="text-xs sm:text-sm font-bold text-foreground flex items-center gap-1">
                     <ShieldCheck className="size-3.5 text-primary shrink-0" />
-                    2. Official Portal Filing
+                    {isSaudi ? "2. Tasheer Dossier Preparation" : "2. Official Portal Filing"}
                   </h5>
                   <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">
-                    {isDigitalCorridor
+                    {isSaudi
+                      ? "Our concierge operations team prepares your official Enjaz/MOFA registration and compiles your verified filing kit for the Tasheer visa center."
+                      : isDigitalCorridor
                       ? `Automated portal bot filing on ${portalName}.`
                       : `Our operations officer is entering your dossier into the ${destinationName} portal & paying consular fees.`}
                   </p>
                 </div>
+
+                {isSaudi && (
+                  <div className="space-y-2 pt-1">
+                    <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 p-2.5 text-[11px] text-foreground">
+                      <span className="font-bold text-emerald-600 dark:text-emerald-400">Tasheer Biometrics Route:</span>
+                      <p className="mt-0.5 text-muted-foreground">
+                        Download your Complete Filing Kit (ZIP) below, print the documents, and visit the Tasheer Visa Service Center (Dhaka Jamuna Future Park, Sylhet, or Chittagong) for biometrics.
+                      </p>
+                    </div>
+                    <a
+                      href="https://vc.tasheer.com"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center justify-center gap-1.5 w-full rounded-lg border border-primary/40 bg-primary/10 hover:bg-primary/20 text-primary text-xs font-semibold py-1.5 px-3 transition-colors cursor-pointer"
+                    >
+                      <ExternalLink className="size-3.5" />
+                      <span>Book Tasheer Appointment (vc.tasheer.com)</span>
+                    </a>
+                  </div>
+                )}
 
                 {isDigitalCorridor && (
                   <Button
@@ -439,10 +464,12 @@ export function PostSubmissionGuide({
                 <div>
                   <h5 className="text-xs sm:text-sm font-bold text-foreground flex items-center gap-1">
                     <Calendar className="size-3.5 text-muted-foreground shrink-0" />
-                    3. Appointment &amp; Web File
+                    {isSaudi ? "3. Tasheer Submission & Visa Slip" : "3. Appointment & Web File"}
                   </h5>
                   <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">
-                    Your official appointment slip and government ARN/Web File # will be delivered to your WhatsApp.
+                    {isSaudi
+                      ? "Submit your physical passport and printed filing kit at Tasheer. Your visa slip & tracking number will be delivered to your WhatsApp."
+                      : "Your official appointment slip and government ARN/Web File # will be delivered to your WhatsApp."}
                   </p>
                 </div>
               </div>
@@ -452,9 +479,13 @@ export function PostSubmissionGuide({
             <div className="rounded-lg bg-muted/40 p-3.5 flex items-start sm:items-center gap-3 text-xs text-muted-foreground border">
               <Sparkles className="size-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5 sm:mt-0" />
               <div>
-                <span className="font-semibold text-foreground">No further action is required from you. </span>
+                <span className="font-semibold text-foreground">
+                  {isSaudi ? "Your complete dossier is ready. " : "No further action is required from you. "}
+                </span>
                 <span>
-                  You do not need to visit any other website. We will notify you via SMS &amp; WhatsApp the moment your government appointment slip is ready.
+                  {isSaudi
+                    ? "Download your Complete Filing Kit (ZIP) below. It contains your filled application form, photo specifications, and all organized supporting documents ready for Tasheer submission."
+                    : "You do not need to visit any other website. We will notify you via SMS & WhatsApp the moment your government appointment slip is ready."}
                 </span>
               </div>
             </div>
