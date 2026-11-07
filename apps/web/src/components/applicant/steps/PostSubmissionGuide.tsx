@@ -28,6 +28,7 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { SUPPORT_CONFIG } from "@/lib/support";
 import { PortalBotConsole } from "@/components/applicant/PortalBotConsole";
+import { NearestCenterLocator } from "@/components/applicant/NearestCenterLocator";
 import { getLatestPortalJob, dispatchPortalBot, type PortalJob } from "@/lib/api/portal-bot";
 import type { Case } from "./types";
 
@@ -385,7 +386,7 @@ export function PostSubmissionGuide({
               </p>
               <p className="text-[11px] text-muted-foreground">
                 {isSaudi
-                  ? "Dhaka, Chittagong, or Sylhet"
+                  ? "Jamuna Future Park, Dhaka"
                   : !isDigitalCorridor
                     ? "Official Visa Center"
                     : "Prompt processing guaranteed"}
@@ -529,7 +530,7 @@ export function PostSubmissionGuide({
                   </h5>
                   <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">
                     {isSaudi
-                      ? "Attend your biometric appointment with your printed dossier, original passport, and photos at your selected Tasheer center."
+                      ? "Bring your printed dossier, original passport, and photos to the Tasheer Center (Jamuna Future Park, Level B2, Dhaka) for biometrics."
                       : !isDigitalCorridor
                         ? "Bring your printed filing kit and original passport to the visa application center for biometric enrollment."
                         : "Your official appointment slip and government ARN/Web File # will be delivered to your WhatsApp."}
@@ -552,10 +553,15 @@ export function PostSubmissionGuide({
                   <strong className="text-foreground">Print:</strong> Print the single PDF on standard white A4 paper. All documents (cover letter, forms, and attachments) are already compiled in statutory embassy submission order.
                 </li>
                 <li>
-                  <strong className="text-foreground">Submit:</strong> Bring your printed dossier and original passport (valid at least 6 months) to {isSaudi ? "your nearest Tasheer center" : "your destination's authorized visa center"} to complete biometric enrollment.
+                  <strong className="text-foreground">Submit:</strong> Bring your printed packet and original passport (valid at least 6 months) to {isSaudi ? "Tasheer (Jamuna Future Park, Level B2, Dhaka)" : "your destination's authorized visa center"} to complete biometrics.
                 </li>
               </ol>
             </div>
+
+            {/* Nearest Submission Center Finder for In-Person Corridors */}
+            {(isSaudi || !isDigitalCorridor) && (
+              <NearestCenterLocator jurisdictionCode={jCode} className="mt-1" />
+            )}
           </div>
 
           {/* Official ARN Banner (when assigned) */}

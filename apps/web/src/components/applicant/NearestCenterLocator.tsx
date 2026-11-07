@@ -39,18 +39,15 @@ export function NearestCenterLocator({
 
   const storageKey = `torii_center_${corridor.jurisdictionCode}`;
 
-  const [selectedCenterId, setSelectedCenterId] = useState<string>(corridor.defaultCenterId);
-
-  useEffect(() => {
-    try {
+  const [selectedCenterId, setSelectedCenterId] = useState<string>(() => {
+    if (typeof window !== "undefined") {
       const saved = localStorage.getItem(storageKey);
       if (saved && centers.some((c) => c.id === saved)) {
-        setSelectedCenterId(saved);
+        return saved;
       }
-    } catch {
-      // ignore
     }
-  }, [storageKey, centers]);
+    return corridor.defaultCenterId;
+  });
 
   const [isDetecting, setIsDetecting] = useState(false);
   const [detectedDistance, setDetectedDistance] = useState<number | null>(null);
@@ -261,4 +258,3 @@ export function NearestCenterLocator({
     </div>
   );
 }
-
