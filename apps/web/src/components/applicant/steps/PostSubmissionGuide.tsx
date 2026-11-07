@@ -548,26 +548,6 @@ export function PostSubmissionGuide({
                 )}
               </Button>
 
-              {/* Single PDF Export */}
-              <Button
-                variant="outline"
-                onClick={handleDownload}
-                disabled={downloading}
-                className="font-semibold px-4 h-10 text-xs gap-2 border-border/80 hover:bg-muted text-foreground w-full sm:w-auto cursor-pointer"
-              >
-                {downloading ? (
-                  <>
-                    <Loader2 className="size-3.5 animate-spin" />
-                    <span>Preparing PDF...</span>
-                  </>
-                ) : (
-                  <>
-                    <Download className="size-3.5" />
-                    <span>Download Cover Letter (PDF)</span>
-                  </>
-                )}
-              </Button>
-
               <Button
                 variant="outline"
                 onClick={handleRefreshClick}
@@ -580,7 +560,7 @@ export function PostSubmissionGuide({
             </div>
 
             <div className="text-xs text-muted-foreground text-center sm:text-right">
-              <span>Status updates automatically in real-time</span>
+              <span>Includes Cover Letter, Application Forms &amp; All Supporting Documents</span>
             </div>
           </div>
 
