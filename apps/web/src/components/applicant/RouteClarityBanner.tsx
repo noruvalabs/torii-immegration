@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { NearestCenterLocator } from "@/components/applicant/NearestCenterLocator";
 import type { TrackSummary, SubmissionTrack } from "@/lib/api/cases";
 
 interface RouteClarityBannerProps {
@@ -183,6 +184,13 @@ export function RouteClarityBanner({
             </div>
           </div>
         </div>
+
+        {/* Interactive Nearest Application Center Locator */}
+        {config.requiresInPerson && (
+          <div className="mt-3.5 pt-3.5 border-t border-border/50">
+            <NearestCenterLocator jurisdictionCode={code} />
+          </div>
+        )}
       </CardContent>
     </Card>
   );

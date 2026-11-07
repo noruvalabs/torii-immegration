@@ -28,6 +28,7 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { SUPPORT_CONFIG } from "@/lib/support";
 import { PortalBotConsole } from "@/components/applicant/PortalBotConsole";
+import { NearestCenterLocator } from "@/components/applicant/NearestCenterLocator";
 import { getLatestPortalJob, dispatchPortalBot, type PortalJob } from "@/lib/api/portal-bot";
 import type { Case } from "./types";
 
@@ -556,6 +557,11 @@ export function PostSubmissionGuide({
                 </li>
               </ol>
             </div>
+
+            {/* Nearest Submission Center Finder for In-Person Corridors */}
+            {(isSaudi || !isDigitalCorridor) && (
+              <NearestCenterLocator jurisdictionCode={jCode} className="mt-1" />
+            )}
           </div>
 
           {/* Official ARN Banner (when assigned) */}
