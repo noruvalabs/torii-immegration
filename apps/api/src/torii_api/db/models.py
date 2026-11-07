@@ -758,6 +758,8 @@ class SubmissionJobStatus(StrEnum):
     SUCCEEDED = "succeeded"
     FAILED = "failed"
     MANUAL_TAKEOVER = "manual_takeover"
+    AWAITING_OTP = "awaiting_otp"
+    SUBMITTING_OTP = "submitting_otp"
 
 
 class PortalSubmissionJob(TimestampMixin, Base):

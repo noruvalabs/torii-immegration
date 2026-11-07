@@ -84,8 +84,8 @@ export function DestinationCards() {
                       className="object-cover transition-transform duration-700 ease-out group-hover:scale-105"
                       priority
                     />
-                    {/* High contrast gradient overlay */}
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/50 to-black/20 group-hover:from-black transition-colors" />
+                    {/* Clean vibrant gradient overlay: dark bottom for legibility, clear top for scenery */}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/35 via-45% to-transparent group-hover:from-black/90 transition-colors" />
                   </div>
 
                   {/* Top Badges */}

@@ -41,10 +41,18 @@ def test_japan_resolves_to_consular() -> None:
 
 
 def test_digital_countries_resolve_properly() -> None:
-    for code in ["SA", "VN", "EG", "BH", "KH", "JO", "QA", "LK", "TR", "MY"]:
+    for code in ["VN", "EG", "BH", "KH", "JO", "QA", "LK", "TR", "MY"]:
         track = resolve_submission_track(jurisdiction_code=code)
         assert track.track == SubmissionTrack.DIGITAL, f"Expected {code} to be digital"
         assert track.requires_in_person is False
+
+
+def test_saudi_resolves_to_hybrid_tasheer() -> None:
+    track = resolve_submission_track(jurisdiction_code="SA")
+    assert track.track == SubmissionTrack.HYBRID
+    assert track.requires_in_person is True
+    assert "Tasheer" in track.applicant_role
+    assert "Tasheer" in track.submission_center
 
 
 def test_research_evisa_route_infers_digital() -> None:

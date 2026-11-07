@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
+  Bot,
   CheckCircle2,
   Clock,
   ShieldCheck,
@@ -14,15 +15,21 @@ import {
   Copy,
   Check,
   Download,
+  KeyRound,
   Loader2,
   ArrowRight,
-  ExternalLink,
+  RotateCcw,
+  Archive,
+  Printer,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { SUPPORT_CONFIG } from "@/lib/support";
+import { PortalBotConsole } from "@/components/applicant/PortalBotConsole";
+import { NearestCenterLocator } from "@/components/applicant/NearestCenterLocator";
+import { getLatestPortalJob, dispatchPortalBot, type PortalJob } from "@/lib/api/portal-bot";
 import type { Case } from "./types";
 
 type PostSubmissionGuideProps = {
@@ -43,6 +50,67 @@ export function PostSubmissionGuide({
   const [copiedRef, setCopiedRef] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isDownloadingDirect, setIsDownloadingDirect] = useState(false);
+  const [isDownloadingZip, setIsDownloadingZip] = useState(false);
+  const [isDownloadingMasterPdf, setIsDownloadingMasterPdf] = useState(false);
+  const [botJob, setBotJob] = useState<PortalJob | null>(null);
+  const [botConsoleOpen, setBotConsoleOpen] = useState(false);
+  const [botRunning, setBotRunning] = useState(false);
+
+  const jCode = (caseData.jurisdiction_code || "").toUpperCase();
+  const refCode = (caseData.reference || "").toUpperCase();
+  const isSaudi =
+    jCode === "SA" ||
+    refCode.startsWith("SA-") ||
+    (caseData.scope_label && caseData.scope_label.toLowerCase().includes("saudi"));
+  const isDigitalCorridor =
+    !isSaudi &&
+    (caseData.submission_track === "digital" ||
+      jCode === "VN" ||
+      refCode.startsWith("VN-"));
+  const portalName = jCode === "VN" ? "evisa.gov.vn" : "Official Portal";
+  const isOtpWaiting = botJob?.status === "manual_takeover" || botJob?.status === "awaiting_otp";
+
+  useEffect(() => {
+    if (!token || !caseData.id || !isDigitalCorridor) return;
+    void getLatestPortalJob(token, caseData.id).then((job) => {
+      if (job) setBotJob(job);
+    });
+  }, [token, caseData.id, isDigitalCorridor]);
+
+  // Periodic status poll when console is open or bot is running
+  useEffect(() => {
+    if (!token || !caseData.id || !isDigitalCorridor) return;
+    if (!botConsoleOpen && !botRunning) return;
+
+    const interval = setInterval(() => {
+      void getLatestPortalJob(token, caseData.id).then((job) => {
+        if (job) setBotJob(job);
+      });
+    }, 2500);
+
+    return () => clearInterval(interval);
+  }, [token, caseData.id, isDigitalCorridor, botConsoleOpen, botRunning]);
+
+  async function handleRerunBot() {
+    if (!token || !caseData.id) return;
+    setBotRunning(true);
+    try {
+      const job = await dispatchPortalBot(token, caseData.id);
+      setBotJob(job);
+      toast.success("Portal worker dispatched!");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to launch portal bot");
+    } finally {
+      setBotRunning(false);
+    }
+  }
+
+  async function handleLaunchOrViewBot() {
+    setBotConsoleOpen(true);
+    if ((!botJob || botJob.status === "failed") && token) {
+      await handleRerunBot();
+    }
+  }
 
   const isIndia =
     caseData.reference.startsWith("IN-") ||
@@ -128,6 +196,106 @@ export function PostSubmissionGuide({
     }
   };
 
+  const handleDownloadZip = async () => {
+    const activeToken =
+      token || (typeof window !== "undefined" ? localStorage.getItem("torii_token") : null);
+    if (!activeToken) {
+      toast.error("Please sign in again to download documents.");
+      return;
+    }
+
+    setIsDownloadingZip(true);
+    try {
+      const res = await fetch(
+        `/backend/v1/cases/${caseData.id}/export/filing-kit-zip?format=base64`,
+        {
+          headers: {
+            Authorization: `Bearer ${activeToken}`,
+            Accept: "application/json",
+          },
+        }
+      );
+      if (!res.ok) {
+        throw new Error(`Export failed (${res.status})`);
+      }
+      const data = await res.json();
+      if (!data?.data_base64) {
+        throw new Error("Missing ZIP file data.");
+      }
+      const binaryString = atob(data.data_base64);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      const blob = new Blob([bytes], { type: "application/zip" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = data.filename || `${caseData.reference}-Complete-Filing-Kit.zip`;
+      document.body.appendChild(link);
+      link.click();
+      toast.success("Complete filing kit (ZIP) downloaded successfully! Includes all official forms, cover letter, and supporting documents.");
+      setTimeout(() => {
+        link.remove();
+        URL.revokeObjectURL(url);
+      }, 10000);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Download failed. Please try again.");
+    } finally {
+      setIsDownloadingZip(false);
+    }
+  };
+
+  const handleDownloadMasterPdf = async () => {
+    const activeToken =
+      token || (typeof window !== "undefined" ? localStorage.getItem("torii_token") : null);
+    if (!activeToken) {
+      toast.error("Please sign in again to download documents.");
+      return;
+    }
+
+    setIsDownloadingMasterPdf(true);
+    try {
+      const res = await fetch(
+        `/backend/v1/cases/${caseData.id}/export/master-dossier-pdf?format=base64`,
+        {
+          headers: {
+            Authorization: `Bearer ${activeToken}`,
+            Accept: "application/json",
+          },
+        }
+      );
+      if (!res.ok) {
+        throw new Error(`Export failed (${res.status})`);
+      }
+      const data = await res.json();
+      if (!data?.data_base64) {
+        throw new Error("Missing PDF file data.");
+      }
+      const binaryString = atob(data.data_base64);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      const blob = new Blob([bytes], { type: "application/pdf" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = data.filename || `${caseData.reference}-Complete-Dossier-Print-Ready.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      toast.success("Single print-ready dossier downloaded! All documents arranged in statutory order.");
+      setTimeout(() => {
+        link.remove();
+        URL.revokeObjectURL(url);
+      }, 10000);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Download failed. Please try again.");
+    } finally {
+      setIsDownloadingMasterPdf(false);
+    }
+  };
+
   const downloading = isExportingPdf || isDownloadingDirect;
 
   return (
@@ -150,14 +318,15 @@ export function PostSubmissionGuide({
             <div className="space-y-1.5 max-w-2xl mx-auto">
               <div className="inline-flex items-center gap-2 rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-bold text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 mb-1">
                 <span className="flex size-2 rounded-full bg-emerald-500 animate-pulse" />
-                OFFICIAL VISA FILING QUEUE
+                {isSaudi || !isDigitalCorridor ? "OFFICIAL VISA DOSSIER READY" : "OFFICIAL VISA FILING QUEUE"}
               </div>
               <h2 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-foreground tracking-tight">
-                Application Submitted Successfully!
+                {isSaudi || !isDigitalCorridor ? "Your Visa Filing Kit is Ready!" : "Application Submitted Successfully!"}
               </h2>
               <p className="text-sm sm:text-base text-muted-foreground leading-relaxed">
-                Your visa application has been received and registered in our concierge queue.
-                Our dedicated operations team is now handling your official government submission and fee payment.
+                {isSaudi || !isDigitalCorridor
+                  ? "Your complete application dossier has been compiled and validated. Download your complete dossier (Single PDF), print the documents, and attend your center appointment."
+                  : "Your visa application has been received and registered in our concierge queue. Our dedicated operations team is now handling your official government submission and fee payment."}
               </p>
             </div>
 
@@ -188,30 +357,57 @@ export function PostSubmissionGuide({
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
             <div className="rounded-xl border border-border/70 bg-card/80 p-4 text-center sm:text-left space-y-1 shadow-2xs">
               <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center justify-center sm:justify-start gap-1.5">
-                <span className="flex size-2 rounded-full bg-emerald-500" /> Current Status
+                <span className="flex size-2 rounded-full bg-emerald-500" />
+                {isSaudi || !isDigitalCorridor ? "Dossier Status" : "Current Status"}
               </span>
               <p className="text-sm font-bold text-foreground">
-                {hasStaffFilingRef ? "Officially Filed" : "Assigned to Staff"}
+                {isSaudi || !isDigitalCorridor
+                  ? "Ready for Download"
+                  : hasStaffFilingRef
+                    ? "Officially Filed"
+                    : "Assigned to Staff"}
               </p>
-              <p className="text-[11px] text-muted-foreground">In Embassy Operations Queue</p>
+              <p className="text-[11px] text-muted-foreground">
+                {isSaudi || !isDigitalCorridor ? "Complete & Verified" : "In Embassy Operations Queue"}
+              </p>
             </div>
 
             <div className="rounded-xl border border-border/70 bg-card/80 p-4 text-center sm:text-left space-y-1 shadow-2xs">
               <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center justify-center sm:justify-start gap-1.5">
-                <Clock className="size-3 text-primary" /> Estimated Turnaround
+                <Clock className="size-3 text-primary" />
+                {isSaudi || !isDigitalCorridor ? "Submission Channel" : "Estimated Turnaround"}
               </span>
               <p className="text-sm font-bold text-emerald-600 dark:text-emerald-400">
-                2 – 6 Business Hours
+                {isSaudi
+                  ? "In-Person (Tasheer)"
+                  : !isDigitalCorridor
+                    ? "In-Person (Visa Center)"
+                    : "2 – 6 Business Hours"}
               </p>
-              <p className="text-[11px] text-muted-foreground">Prompt processing guaranteed</p>
+              <p className="text-[11px] text-muted-foreground">
+                {isSaudi
+                  ? "Jamuna Future Park, Dhaka"
+                  : !isDigitalCorridor
+                    ? "Official Visa Center"
+                    : "Prompt processing guaranteed"}
+              </p>
             </div>
 
             <div className="rounded-xl border border-border/70 bg-card/80 p-4 text-center sm:text-left space-y-1 shadow-2xs">
               <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center justify-center sm:justify-start gap-1.5">
-                <MessageCircle className="size-3 text-emerald-500" /> Delivery Channels
+                {isSaudi || !isDigitalCorridor ? (
+                  <Printer className="size-3 text-emerald-500" />
+                ) : (
+                  <MessageCircle className="size-3 text-emerald-500" />
+                )}
+                {isSaudi || !isDigitalCorridor ? "Package Format" : "Delivery Channels"}
               </span>
-              <p className="text-sm font-bold text-foreground">SMS &amp; WhatsApp</p>
-              <p className="text-[11px] text-muted-foreground">Real-time alerts on your phone</p>
+              <p className="text-sm font-bold text-foreground">
+                {isSaudi || !isDigitalCorridor ? "Single Dossier PDF (All-in-One)" : "SMS & WhatsApp"}
+              </p>
+              <p className="text-[11px] text-muted-foreground">
+                {isSaudi || !isDigitalCorridor ? "1-Click print-ready merged PDF" : "Real-time alerts on your phone"}
+              </p>
             </div>
           </div>
 
@@ -219,7 +415,7 @@ export function PostSubmissionGuide({
           <div className="space-y-3 pt-2">
             <div className="flex items-center justify-between border-b pb-2">
               <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                What Happens Next
+                {isSaudi || !isDigitalCorridor ? "Submission Checklist & Next Steps" : "What Happens Next"}
               </h4>
               <span className="text-[11px] text-muted-foreground font-medium">
                 Step 2 of 3 in progress
@@ -239,33 +435,78 @@ export function PostSubmissionGuide({
                 </div>
                 <div>
                   <h5 className="text-xs sm:text-sm font-bold text-foreground">
-                    1. Information &amp; Payment
+                    1. Information &amp; Verification
                   </h5>
                   <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">
-                    Your personal particulars, medical details, and service charge are confirmed.
+                    Your particulars, forms, and uploaded documents have been verified.
                   </p>
                 </div>
               </div>
 
               {/* Step 2 */}
-              <div className="rounded-xl border-2 border-primary bg-primary/[0.04] p-4 space-y-2 ring-2 ring-primary/20 shadow-xs">
+              <div className="rounded-xl border-2 border-primary bg-primary/[0.04] p-4 space-y-3 ring-2 ring-primary/20 shadow-xs">
                 <div className="flex items-center justify-between">
                   <span className="flex size-7 items-center justify-center rounded-lg bg-primary text-primary-foreground font-bold text-xs shadow-xs">
                     2
                   </span>
-                  <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold text-primary animate-pulse">
-                    <Clock className="size-3" /> In Progress
-                  </span>
+                  {isOtpWaiting ? (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/20 px-2 py-0.5 text-[10px] font-bold text-amber-500 animate-pulse border border-amber-500/30">
+                      <KeyRound className="size-3" /> OTP Required
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold text-primary animate-pulse">
+                      <Clock className="size-3" /> Ready Now
+                    </span>
+                  )}
                 </div>
                 <div>
                   <h5 className="text-xs sm:text-sm font-bold text-foreground flex items-center gap-1">
                     <ShieldCheck className="size-3.5 text-primary shrink-0" />
-                    2. Official Portal Filing
+                    {isSaudi || !isDigitalCorridor ? "2. Single-File Print Dossier" : "2. Official Portal Filing"}
                   </h5>
                   <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">
-                    Our operations officer is entering your dossier into the {destinationName} portal &amp; paying consular fees.
+                    {isSaudi || !isDigitalCorridor
+                      ? "Download your complete single-file dossier PDF below. All official forms, cover letter, and supporting attachments are pre-arranged in statutory order for 1-click printing."
+                      : `Automated portal bot filing on ${portalName}.`}
                   </p>
                 </div>
+
+                {isDigitalCorridor && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={handleLaunchOrViewBot}
+                    className={`w-full text-xs h-8 font-bold gap-1.5 cursor-pointer ${
+                      isOtpWaiting
+                        ? "bg-amber-600 hover:bg-amber-500 text-white border-amber-500 shadow-sm animate-pulse"
+                        : botJob?.status === "failed"
+                          ? "bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border-rose-500/40"
+                          : "border-primary/40 hover:bg-primary/10 text-primary"
+                    }`}
+                  >
+                    {isOtpWaiting ? (
+                      <>
+                        <KeyRound className="size-3.5" />
+                        <span>Enter Verification Code (OTP)</span>
+                      </>
+                    ) : botRunning ? (
+                      <>
+                        <Loader2 className="size-3.5 animate-spin" />
+                        <span>Bot Filing in Progress…</span>
+                      </>
+                    ) : botJob?.status === "failed" ? (
+                      <>
+                        <RotateCcw className="size-3.5" />
+                        <span>Retry Submission Bot</span>
+                      </>
+                    ) : (
+                      <>
+                        <Bot className="size-3.5" />
+                        <span>{botJob ? "View Bot Console" : "Launch Submission Bot"}</span>
+                      </>
+                    )}
+                  </Button>
+                )}
               </div>
 
               {/* Step 3 */}
@@ -275,31 +516,52 @@ export function PostSubmissionGuide({
                     3
                   </span>
                   <Badge tone="default" className="text-[10px] font-semibold">
-                    Upcoming
+                    Next Step
                   </Badge>
                 </div>
                 <div>
                   <h5 className="text-xs sm:text-sm font-bold text-foreground flex items-center gap-1">
                     <Calendar className="size-3.5 text-muted-foreground shrink-0" />
-                    3. Appointment &amp; Web File
+                    {isSaudi
+                      ? "3. Tasheer Submission & Biometrics"
+                      : !isDigitalCorridor
+                        ? "3. Visa Center Submission"
+                        : "3. Appointment & Web File"}
                   </h5>
                   <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">
-                    Your official appointment slip and government ARN/Web File # will be delivered to your WhatsApp.
+                    {isSaudi
+                      ? "Bring your printed dossier, original passport, and photos to the Tasheer Center (Jamuna Future Park, Level B2, Dhaka) for biometrics."
+                      : !isDigitalCorridor
+                        ? "Bring your printed filing kit and original passport to the visa application center for biometric enrollment."
+                        : "Your official appointment slip and government ARN/Web File # will be delivered to your WhatsApp."}
                   </p>
                 </div>
               </div>
             </div>
 
-            {/* Reassuring Zero-Action Callout */}
-            <div className="rounded-lg bg-muted/40 p-3.5 flex items-start sm:items-center gap-3 text-xs text-muted-foreground border">
-              <Sparkles className="size-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5 sm:mt-0" />
-              <div>
-                <span className="font-semibold text-foreground">No further action is required from you. </span>
-                <span>
-                  You do not need to visit any other website. We will notify you via SMS &amp; WhatsApp the moment your government appointment slip is ready.
-                </span>
+            {/* Practical Action Checklist Callout */}
+            <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4 space-y-2.5">
+              <div className="flex items-center gap-2 text-xs font-bold text-emerald-600 dark:text-emerald-400">
+                <CheckCircle2 className="size-4 shrink-0" />
+                <span>What to do right now:</span>
               </div>
+              <ol className="list-decimal list-inside space-y-1 text-xs text-muted-foreground leading-relaxed">
+                <li>
+                  <strong className="text-foreground">Download:</strong> Click <strong className="text-foreground">Download Complete Dossier (Single PDF)</strong> below.
+                </li>
+                <li>
+                  <strong className="text-foreground">Print:</strong> Print the single PDF on standard white A4 paper. All documents (cover letter, forms, and attachments) are already compiled in statutory embassy submission order.
+                </li>
+                <li>
+                  <strong className="text-foreground">Submit:</strong> Bring your printed packet and original passport (valid at least 6 months) to {isSaudi ? "Tasheer (Jamuna Future Park, Level B2, Dhaka)" : "your destination's authorized visa center"} to complete biometrics.
+                </li>
+              </ol>
             </div>
+
+            {/* Nearest Submission Center Finder for In-Person Corridors */}
+            {(isSaudi || !isDigitalCorridor) && (
+              <NearestCenterLocator jurisdictionCode={jCode} className="mt-1" />
+            )}
           </div>
 
           {/* Official ARN Banner (when assigned) */}
@@ -325,29 +587,50 @@ export function PostSubmissionGuide({
           {/* ── ACTIONS BAR ── */}
           <div className="pt-2 border-t flex flex-col sm:flex-row items-center justify-between gap-3">
             <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto">
+              {/* Primary: Single Merged All-in-One PDF for 1-click printing */}
               <Button
-                onClick={handleDownload}
-                disabled={downloading}
-                className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold px-5 h-10 text-xs gap-2 shadow-md w-full sm:w-auto"
+                onClick={handleDownloadMasterPdf}
+                disabled={isDownloadingMasterPdf}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-5 h-10 text-xs gap-2 shadow-md w-full sm:w-auto cursor-pointer"
               >
-                {downloading ? (
+                {isDownloadingMasterPdf ? (
                   <>
                     <Loader2 className="size-4 animate-spin" />
-                    <span>Preparing Document...</span>
+                    <span>Compiling All-in-One PDF...</span>
                   </>
                 ) : (
                   <>
-                    <Download className="size-4" />
-                    <span>Download Application Copy (PDF)</span>
+                    <Printer className="size-4" />
+                    <span>Download Complete Dossier (Single PDF)</span>
+                  </>
+                )}
+              </Button>
+
+              {/* Secondary: ZIP archive for users who also want individual files */}
+              <Button
+                variant="outline"
+                onClick={handleDownloadZip}
+                disabled={isDownloadingZip}
+                className="h-10 text-xs font-semibold gap-1.5 w-full sm:w-auto text-foreground hover:bg-muted cursor-pointer"
+              >
+                {isDownloadingZip ? (
+                  <>
+                    <Loader2 className="size-3.5 animate-spin" />
+                    <span>Archiving ZIP...</span>
+                  </>
+                ) : (
+                  <>
+                    <Archive className="size-3.5 text-muted-foreground" />
+                    <span>Download ZIP Archive</span>
                   </>
                 )}
               </Button>
 
               <Button
-                variant="outline"
+                variant="ghost"
                 onClick={handleRefreshClick}
                 disabled={isRefreshing}
-                className="h-10 text-xs font-semibold gap-1.5 w-full sm:w-auto text-muted-foreground hover:text-foreground"
+                className="h-10 text-xs font-semibold gap-1.5 w-full sm:w-auto text-muted-foreground hover:text-foreground cursor-pointer"
               >
                 <RefreshCw className={`size-3.5 ${isRefreshing ? "animate-spin" : ""}`} />
                 <span>Refresh Status</span>
@@ -355,7 +638,7 @@ export function PostSubmissionGuide({
             </div>
 
             <div className="text-xs text-muted-foreground text-center sm:text-right">
-              <span>Status updates automatically in real-time</span>
+              <span>Cover Letter, Application Forms &amp; All Attachments Merged in 1 File</span>
             </div>
           </div>
 
@@ -397,6 +680,23 @@ export function PostSubmissionGuide({
           </div>
         </CardContent>
       </Card>
+
+      {/* Live Portal Submission Bot Console */}
+      <PortalBotConsole
+        isOpen={botConsoleOpen}
+        onClose={() => setBotConsoleOpen(false)}
+        job={botJob}
+        loading={botRunning}
+        caseId={caseData.id}
+        onJobUpdated={(updated) => {
+          setBotJob(updated);
+          if (updated.status === "succeeded") {
+            toast.success(`Government registration captured: ${updated.portal_reference}`);
+            if (onRefresh) onRefresh();
+          }
+        }}
+        onRetry={handleRerunBot}
+      />
     </div>
   );
 }

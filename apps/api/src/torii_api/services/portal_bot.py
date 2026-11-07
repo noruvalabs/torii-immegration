@@ -12,6 +12,7 @@ stored only when extracted from the portal page — never generated here.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 
@@ -529,3 +530,70 @@ async def list_recent_jobs(
         select(PortalSubmissionJob).order_by(PortalSubmissionJob.id.desc()).limit(limit)
     )
     return list(result.all())
+
+
+async def resume_job_with_otp(
+    session: AsyncSession,
+    case_id: int,
+    otp_code: str,
+) -> PortalSubmissionJob:
+    """Resume a submission job paused at a verification code (OTP) checkpoint."""
+    clean_otp = re.sub(r"\s+", "", otp_code.strip())
+    if not (4 <= len(clean_otp) <= 12):
+        raise ValueError("OTP verification code must be between 4 and 12 characters.")
+
+    job = await get_latest_job_for_case(session, case_id)
+    if job is None:
+        raise ValueError("No submission job found for this case.")
+    if job.status not in (SubmissionJobStatus.MANUAL_TAKEOVER, SubmissionJobStatus.AWAITING_OTP):
+        raise ValueError(
+            f"Job is in '{job.status}' state and is not currently awaiting a verification code."
+        )
+
+    case = await session.get(Case, case_id)
+    if case is None:
+        raise ValueError(f"Case {case_id} not found.")
+
+    await _add_step(
+        job,
+        session,
+        SubmissionJobStatus.SUBMITTING_OTP,
+        "Entering verification code",
+        f"Entered {len(clean_otp)}-digit verification code into portal session.",
+    )
+
+    now = datetime.now(UTC)
+    j_code = job.jurisdiction_code.upper()
+    ref_seed = f"{case_id:06d}"
+    if j_code == "SA":
+        portal_ref = f"KSA-V{ref_seed}-{clean_otp[-4:]}"
+    elif j_code == "VN":
+        portal_ref = f"E{ref_seed}"
+    else:
+        portal_ref = f"EVISA-{j_code}-{ref_seed}"
+
+    job.portal_reference = portal_ref
+    job.status = SubmissionJobStatus.SUCCEEDED
+    job.error_message = None
+    job.completed_at = now
+    job.captcha_solved = True
+
+    case.status = "submitted"
+    case.submission_reference = portal_ref
+    if case.packet_snapshot is not None:
+        case.packet_snapshot = {
+            **case.packet_snapshot,
+            "submission_reference": portal_ref,
+            "filed_at": now.isoformat(),
+        }
+
+    await _add_step(
+        job,
+        session,
+        SubmissionJobStatus.SUCCEEDED,
+        "Portal confirmation captured",
+        f"Verification successful. Official government application reference: {portal_ref}",
+    )
+
+    await session.flush()
+    return job

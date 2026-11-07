@@ -1,5 +1,5 @@
 version = 1
-revision = 5
+revision = 3
 requires-python = ">=3.12"
 
 [[package]]
@@ -1361,6 +1361,7 @@ dependencies = [
     { name = "fastapi" },
     { name = "httpx" },
     { name = "openai" },
+    { name = "playwright" },
     { name = "pydantic-settings" },
     { name = "pyjwt" },
     { name = "pymupdf" },
@@ -1399,6 +1400,7 @@ requires-dist = [
     { name = "fastapi", specifier = ">=0.115" },
     { name = "httpx", specifier = ">=0.28" },
     { name = "openai", specifier = ">=1.60" },
+    { name = "playwright", specifier = ">=1.64.1" },
     { name = "playwright", marker = "extra == 'portal-bot'", specifier = ">=1.49" },
     { name = "pydantic-settings", specifier = ">=2.7" },
     { name = "pyjwt", specifier = ">=2.13.0" },
