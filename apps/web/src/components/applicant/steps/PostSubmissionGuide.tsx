@@ -504,7 +504,6 @@ export function PostSubmissionGuide({
                 </li>
               </ol>
             </div>
-            </div>
           </div>
 
           {/* Official ARN Banner (when assigned) */}
