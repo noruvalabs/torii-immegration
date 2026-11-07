@@ -51,7 +51,7 @@ KNOWN_TRACKS: dict[str, SubmissionTrack] = {
     "KE": SubmissionTrack.DIGITAL,  # Kenya
     "OM": SubmissionTrack.DIGITAL,  # Oman
     # Hybrid (Online registration + Counter / IVAC / Tasheer drop-off)
-    "SA": SubmissionTrack.HYBRID,  # Saudi Arabia (Enjaz registration + Tasheer biometrics)
+    "SA": SubmissionTrack.HYBRID,  # Saudi Arabia (Tasheer in-person filing & biometrics)
     "IN": SubmissionTrack.HYBRID,  # India (Medical Visa MED-1 via IVAC)
     "CA": SubmissionTrack.HYBRID,  # Canada (IRCC portal submission + VFS biometrics)
     # Consular / VFS (Walk-in ready dossier kit)
@@ -98,9 +98,9 @@ def build_track_summary(
             return TrackSummary(
                 track=t,
                 badge_label="Tasheer VAC Submission (Hybrid)",
-                title="Enjaz Registration & Tasheer Dossier Kit",
-                headline="We register your official Enjaz dossier; you submit biometrics at the Tasheer center.",
-                torii_role="Torii completes your official Enjaz/MOFA registration, organizes all supporting documents, and prepares your 100% compliant Tasheer submission kit.",
+                title="Tasheer Verified Dossier & Filing Kit",
+                headline="We compile your complete verified filing dossier; you submit it with biometrics at the Tasheer center.",
+                torii_role="Torii prepares your official typed application forms, organizes all supporting documents, and compiles your 100% compliant print-ready Tasheer submission dossier.",
                 applicant_role="Download your Complete Dossier (Single PDF), print the documents, and attend your biometric appointment at Tasheer (Jamuna Future Park, Dhaka / Sylhet / Chittagong).",
                 submission_center=center,
                 requires_in_person=True,

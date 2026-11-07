@@ -634,7 +634,7 @@ export function PacketStep({
                 {canSubmit
                   ? isAutomatedPortalTrack
                     ? `${jCode === "SA" ? "Saudi Arabia eVisa" : "Vietnam eVisa"} — fill ${portalName} from this case`
-                    : "Ready to Submit to Torii Operations & Government Console"
+                    : "Ready to Finalize Your Verified Submission Dossier"
                   : "Required Documents Must Be Uploaded"}
               </h3>
             </div>
@@ -642,7 +642,7 @@ export function PacketStep({
               {canSubmit
                 ? isAutomatedPortalTrack
                   ? `This opens the official government portal (${portalName}) and fills matching fields from your case. When an OTP verification is requested, you can enter it directly in the console.`
-                  : "Your dossier, questionnaire particulars, and required documents are compiled. Click below to submit your application directly to the Torii concierge operations team for official embassy portal filing."
+                  : "Your official typed forms, embassy cover letter, and supporting documents are verified. Click below to finalize your filing kit and download your print-ready dossier."
                 : `You cannot submit this application yet because ${missingDocsCount} required document(s) have not been uploaded. All required documents must be uploaded before final submission.`}
             </p>
           </div>

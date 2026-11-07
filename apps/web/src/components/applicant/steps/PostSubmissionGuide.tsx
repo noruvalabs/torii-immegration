@@ -324,7 +324,7 @@ export function PostSubmissionGuide({
               </h2>
               <p className="text-sm sm:text-base text-muted-foreground leading-relaxed">
                 {isSaudi || !isDigitalCorridor
-                  ? "Your complete application dossier has been compiled and validated. Download your filing kit (ZIP), print the documents, and attend your center appointment."
+                  ? "Your complete application dossier has been compiled and validated. Download your complete dossier (Single PDF), print the documents, and attend your center appointment."
                   : "Your visa application has been received and registered in our concierge queue. Our dedicated operations team is now handling your official government submission and fee payment."}
               </p>
             </div>
