@@ -265,14 +265,15 @@ export function PostSubmissionGuide({
             <div className="space-y-1.5 max-w-2xl mx-auto">
               <div className="inline-flex items-center gap-2 rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-bold text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 mb-1">
                 <span className="flex size-2 rounded-full bg-emerald-500 animate-pulse" />
-                OFFICIAL VISA FILING QUEUE
+                {isSaudi || !isDigitalCorridor ? "OFFICIAL VISA DOSSIER READY" : "OFFICIAL VISA FILING QUEUE"}
               </div>
               <h2 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-foreground tracking-tight">
-                Application Submitted Successfully!
+                {isSaudi || !isDigitalCorridor ? "Your Visa Filing Kit is Ready!" : "Application Submitted Successfully!"}
               </h2>
               <p className="text-sm sm:text-base text-muted-foreground leading-relaxed">
-                Your visa application has been received and registered in our concierge queue.
-                Our dedicated operations team is now handling your official government submission and fee payment.
+                {isSaudi || !isDigitalCorridor
+                  ? "Your complete application dossier has been compiled and validated. Download your filing kit (ZIP), print the documents, and attend your center appointment."
+                  : "Your visa application has been received and registered in our concierge queue. Our dedicated operations team is now handling your official government submission and fee payment."}
               </p>
             </div>
 
@@ -303,30 +304,57 @@ export function PostSubmissionGuide({
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
             <div className="rounded-xl border border-border/70 bg-card/80 p-4 text-center sm:text-left space-y-1 shadow-2xs">
               <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center justify-center sm:justify-start gap-1.5">
-                <span className="flex size-2 rounded-full bg-emerald-500" /> Current Status
+                <span className="flex size-2 rounded-full bg-emerald-500" />
+                {isSaudi || !isDigitalCorridor ? "Dossier Status" : "Current Status"}
               </span>
               <p className="text-sm font-bold text-foreground">
-                {hasStaffFilingRef ? "Officially Filed" : "Assigned to Staff"}
+                {isSaudi || !isDigitalCorridor
+                  ? "Ready for Download"
+                  : hasStaffFilingRef
+                    ? "Officially Filed"
+                    : "Assigned to Staff"}
               </p>
-              <p className="text-[11px] text-muted-foreground">In Embassy Operations Queue</p>
+              <p className="text-[11px] text-muted-foreground">
+                {isSaudi || !isDigitalCorridor ? "Complete & Verified" : "In Embassy Operations Queue"}
+              </p>
             </div>
 
             <div className="rounded-xl border border-border/70 bg-card/80 p-4 text-center sm:text-left space-y-1 shadow-2xs">
               <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center justify-center sm:justify-start gap-1.5">
-                <Clock className="size-3 text-primary" /> Estimated Turnaround
+                <Clock className="size-3 text-primary" />
+                {isSaudi || !isDigitalCorridor ? "Submission Channel" : "Estimated Turnaround"}
               </span>
               <p className="text-sm font-bold text-emerald-600 dark:text-emerald-400">
-                2 – 6 Business Hours
+                {isSaudi
+                  ? "In-Person (Tasheer)"
+                  : !isDigitalCorridor
+                    ? "In-Person (Visa Center)"
+                    : "2 – 6 Business Hours"}
               </p>
-              <p className="text-[11px] text-muted-foreground">Prompt processing guaranteed</p>
+              <p className="text-[11px] text-muted-foreground">
+                {isSaudi
+                  ? "Jamuna Future Park, Dhaka"
+                  : !isDigitalCorridor
+                    ? "Official Visa Center"
+                    : "Prompt processing guaranteed"}
+              </p>
             </div>
 
             <div className="rounded-xl border border-border/70 bg-card/80 p-4 text-center sm:text-left space-y-1 shadow-2xs">
               <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center justify-center sm:justify-start gap-1.5">
-                <MessageCircle className="size-3 text-emerald-500" /> Delivery Channels
+                {isSaudi || !isDigitalCorridor ? (
+                  <Archive className="size-3 text-emerald-500" />
+                ) : (
+                  <MessageCircle className="size-3 text-emerald-500" />
+                )}
+                {isSaudi || !isDigitalCorridor ? "Package Format" : "Delivery Channels"}
               </span>
-              <p className="text-sm font-bold text-foreground">SMS &amp; WhatsApp</p>
-              <p className="text-[11px] text-muted-foreground">Real-time alerts on your phone</p>
+              <p className="text-sm font-bold text-foreground">
+                {isSaudi || !isDigitalCorridor ? "Complete Filing Kit (ZIP)" : "SMS & WhatsApp"}
+              </p>
+              <p className="text-[11px] text-muted-foreground">
+                {isSaudi || !isDigitalCorridor ? "All forms + documents bundled" : "Real-time alerts on your phone"}
+              </p>
             </div>
           </div>
 
@@ -334,7 +362,7 @@ export function PostSubmissionGuide({
           <div className="space-y-3 pt-2">
             <div className="flex items-center justify-between border-b pb-2">
               <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                What Happens Next
+                {isSaudi || !isDigitalCorridor ? "Submission Checklist & Next Steps" : "What Happens Next"}
               </h4>
               <span className="text-[11px] text-muted-foreground font-medium">
                 Step 2 of 3 in progress
@@ -354,10 +382,10 @@ export function PostSubmissionGuide({
                 </div>
                 <div>
                   <h5 className="text-xs sm:text-sm font-bold text-foreground">
-                    1. Information &amp; Payment
+                    1. Information &amp; Verification
                   </h5>
                   <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">
-                    Your personal particulars, medical details, and service charge are confirmed.
+                    Your particulars, forms, and uploaded documents have been verified.
                   </p>
                 </div>
               </div>
@@ -374,34 +402,21 @@ export function PostSubmissionGuide({
                     </span>
                   ) : (
                     <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold text-primary animate-pulse">
-                      <Clock className="size-3" /> In Progress
+                      <Clock className="size-3" /> Ready Now
                     </span>
                   )}
                 </div>
                 <div>
                   <h5 className="text-xs sm:text-sm font-bold text-foreground flex items-center gap-1">
                     <ShieldCheck className="size-3.5 text-primary shrink-0" />
-                    {isSaudi ? "2. Tasheer Dossier Preparation" : "2. Official Portal Filing"}
+                    {isSaudi || !isDigitalCorridor ? "2. Download & Print Dossier" : "2. Official Portal Filing"}
                   </h5>
                   <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">
-                    {isSaudi
-                      ? "Our concierge operations team prepares your official Enjaz/MOFA registration and compiles your verified filing kit for the Tasheer visa center."
-                      : isDigitalCorridor
-                      ? `Automated portal bot filing on ${portalName}.`
-                      : `Our operations officer is entering your dossier into the ${destinationName} portal & paying consular fees.`}
+                    {isSaudi || !isDigitalCorridor
+                      ? "Download your Complete Filing Kit (ZIP) below. Extract the files and print all official forms on standard A4 paper."
+                      : `Automated portal bot filing on ${portalName}.`}
                   </p>
                 </div>
-
-                {isSaudi && (
-                  <div className="pt-1">
-                    <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 p-2.5 text-[11px] text-foreground">
-                      <span className="font-bold text-emerald-600 dark:text-emerald-400">Tasheer Concierge Filing:</span>
-                      <p className="mt-0.5 text-muted-foreground">
-                        Our operations team registers your official Enjaz file and coordinates your Tasheer appointment slot. Your official appointment slip and dossier tracking number will be delivered directly to your WhatsApp &amp; SMS.
-                      </p>
-                    </div>
-                  </div>
-                )}
 
                 {isDigitalCorridor && (
                   <Button
@@ -448,36 +463,47 @@ export function PostSubmissionGuide({
                     3
                   </span>
                   <Badge tone="default" className="text-[10px] font-semibold">
-                    Upcoming
+                    Next Step
                   </Badge>
                 </div>
                 <div>
                   <h5 className="text-xs sm:text-sm font-bold text-foreground flex items-center gap-1">
                     <Calendar className="size-3.5 text-muted-foreground shrink-0" />
-                    {isSaudi ? "3. Tasheer Submission & Visa Slip" : "3. Appointment & Web File"}
+                    {isSaudi
+                      ? "3. Tasheer Submission & Biometrics"
+                      : !isDigitalCorridor
+                        ? "3. Visa Center Submission"
+                        : "3. Appointment & Web File"}
                   </h5>
                   <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">
                     {isSaudi
-                      ? "Submit your physical passport and printed filing kit at Tasheer. Your visa slip & tracking number will be delivered to your WhatsApp."
-                      : "Your official appointment slip and government ARN/Web File # will be delivered to your WhatsApp."}
+                      ? "Bring your printed dossier, original passport, and photos to the Tasheer Center (Jamuna Future Park, Level B2, Dhaka) for biometrics."
+                      : !isDigitalCorridor
+                        ? "Bring your printed filing kit and original passport to the visa application center for biometric enrollment."
+                        : "Your official appointment slip and government ARN/Web File # will be delivered to your WhatsApp."}
                   </p>
                 </div>
               </div>
             </div>
 
-            {/* Reassuring Zero-Action Callout */}
-            <div className="rounded-lg bg-muted/40 p-3.5 flex items-start sm:items-center gap-3 text-xs text-muted-foreground border">
-              <Sparkles className="size-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5 sm:mt-0" />
-              <div>
-                <span className="font-semibold text-foreground">
-                  {isSaudi ? "Your complete dossier is ready. " : "No further action is required from you. "}
-                </span>
-                <span>
-                  {isSaudi
-                    ? "Download your Complete Filing Kit (ZIP) below. It contains your filled application form, photo specifications, and all organized supporting documents ready for Tasheer submission."
-                    : "You do not need to visit any other website. We will notify you via SMS & WhatsApp the moment your government appointment slip is ready."}
-                </span>
+            {/* Practical Action Checklist Callout */}
+            <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4 space-y-2.5">
+              <div className="flex items-center gap-2 text-xs font-bold text-emerald-600 dark:text-emerald-400">
+                <CheckCircle2 className="size-4 shrink-0" />
+                <span>What to do right now:</span>
               </div>
+              <ol className="list-decimal list-inside space-y-1 text-xs text-muted-foreground leading-relaxed">
+                <li>
+                  <strong className="text-foreground">Download:</strong> Click <strong className="text-foreground">Download Complete Filing Kit (ZIP)</strong> below to get your full dossier.
+                </li>
+                <li>
+                  <strong className="text-foreground">Print:</strong> Print the cover letter, application forms, and document copies on standard single-sided A4 paper.
+                </li>
+                <li>
+                  <strong className="text-foreground">Submit:</strong> Bring your printed packet and original passport (valid at least 6 months) to {isSaudi ? "Tasheer (Jamuna Future Park, Level B2, Dhaka)" : "your destination's authorized visa center"} to complete biometrics.
+                </li>
+              </ol>
+            </div>
             </div>
           </div>
 
