@@ -18,7 +18,6 @@ import {
   KeyRound,
   Loader2,
   ArrowRight,
-  ExternalLink,
   RotateCcw,
   Archive,
 } from "lucide-react";
@@ -394,22 +393,13 @@ export function PostSubmissionGuide({
                 </div>
 
                 {isSaudi && (
-                  <div className="space-y-2 pt-1">
+                  <div className="pt-1">
                     <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 p-2.5 text-[11px] text-foreground">
-                      <span className="font-bold text-emerald-600 dark:text-emerald-400">Tasheer Biometrics Route:</span>
+                      <span className="font-bold text-emerald-600 dark:text-emerald-400">Tasheer Concierge Filing:</span>
                       <p className="mt-0.5 text-muted-foreground">
-                        Download your Complete Filing Kit (ZIP) below, print the documents, and visit the Tasheer Visa Service Center (Dhaka Jamuna Future Park, Sylhet, or Chittagong) for biometrics.
+                        Our operations team registers your official Enjaz file and coordinates your Tasheer appointment slot. Your official appointment slip and dossier tracking number will be delivered directly to your WhatsApp &amp; SMS.
                       </p>
                     </div>
-                    <a
-                      href="https://vc.tasheer.com"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center justify-center gap-1.5 w-full rounded-lg border border-primary/40 bg-primary/10 hover:bg-primary/20 text-primary text-xs font-semibold py-1.5 px-3 transition-colors cursor-pointer"
-                    >
-                      <ExternalLink className="size-3.5" />
-                      <span>Book Tasheer Appointment (vc.tasheer.com)</span>
-                    </a>
                   </div>
                 )}
 
